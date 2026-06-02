@@ -103,7 +103,9 @@
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
   .pp-qr-wrap { justify-self: center; }
-  .pp-qr { width: 82px; height: 82px; display: block; object-fit: contain; }
+  /* QR target: white background + quiet zone padding; no CSS scaling of canvas */
+  #pp-qr-target { background: #ffffff; padding: 4px; display: inline-block; line-height: 0; }
+  #pp-qr-target canvas, #pp-qr-target img { display: block; width: 110px !important; height: 110px !important; }
   .pp-title-block { justify-self: end; text-align: right; }
   .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
   .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 400; color: #6B6B67; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
@@ -428,8 +430,11 @@ async function openDoc(index) {
       } catch(e) {
         console.error('[Daftra QR] Failed to parse qr_code_url:', e.message);
       }
+      console.log('[Daftra QR] invoice no:', invoice.no || invoice.id);
       console.log('[Daftra QR] qr_code_url:', qrUrl);
-      console.log('[Daftra QR] d64 extracted:', !!qrPayload, '— length:', qrPayload.length);
+      console.log('[Daftra QR] d64 raw (first 60):', new URL(qrUrl).searchParams.get('d64')?.slice(0, 60));
+      console.log('[Daftra QR] decoded payload length:', qrPayload.length);
+      console.log('[Daftra QR] decoded payload (first 80 chars):', qrPayload.slice(0, 80));
     } else {
       console.warn('[Daftra QR] qr_code_url not found on this invoice.');
       console.log('[Daftra QR] All invoice keys:', Object.keys(invoice).join(', '));
@@ -696,15 +701,20 @@ function renderQR(targetId, payload) {
   if (!el) { console.warn('[QR] target element not found:', targetId); return; }
   if (typeof QRCode === 'undefined') { console.error('[QR] QRCode library not loaded'); return; }
   el.innerHTML = '';
+  // Generate at final display size — no CSS scaling after render
+  // CorrectLevel.H = highest error correction (30% recovery), improves scan reliability
   new QRCode(el, {
     text: payload,
-    width: 82,
-    height: 82,
-    colorDark:  '#1C1C1A',
+    width: 110,
+    height: 110,
+    colorDark:  '#000000',
     colorLight: '#ffffff',
-    correctLevel: QRCode.CorrectLevel.M
+    correctLevel: QRCode.CorrectLevel.H
   });
-  console.log('[Daftra QR] Rendered inline canvas from d64 payload. Scan to verify content matches Daftra QR.');
+  // Store payload on element so downloadPDF can verify it hasn't changed
+  el.dataset.qrPayload = payload;
+  console.log('[Daftra QR] Rendered 110px canvas. correctLevel=H. Payload length:', payload.length);
+  console.log('[Daftra QR] Payload passed to QRCode.js (first 80):', payload.slice(0, 80));
 }
 
 async function downloadPDF() {
@@ -716,11 +726,22 @@ async function downloadPDF() {
     if (!el) throw new Error('PDF export element #pdfPage not found');
     if (typeof html2pdf === 'undefined') throw new Error('html2pdf is not loaded');
 
-    // ── PDF target diagnostics ──────────────────────────────────────────
+    // ── PDF target diagnostics — verify payload integrity before export ──
+    const qrTarget = el.querySelector('#pp-qr-target');
     const qrCanvas = el.querySelector('#pp-qr-target canvas');
     const qrImg    = el.querySelector('#pp-qr-target img');
-    console.log('[PDF] QR canvas in target:', !!qrCanvas, qrCanvas ? `${qrCanvas.width}x${qrCanvas.height}` : '');
-    console.log('[PDF] QR img in target:', !!qrImg, qrImg ? qrImg.src.slice(0, 60) : '');
+    const storedPayload  = qrTarget?.dataset?.qrPayload || '';
+    const expectedPayload = currentDoc?.doc?._qrPayload || '';
+    console.log('[PDF] invoice no:', currentDoc?.doc?.no || currentDoc?.doc?.id);
+    console.log('[PDF] QR canvas:', !!qrCanvas, qrCanvas ? `${qrCanvas.width}x${qrCanvas.height}px` : '');
+    console.log('[PDF] QR img:', !!qrImg);
+    console.log('[PDF] stored payload length:', storedPayload.length);
+    console.log('[PDF] expected payload length:', expectedPayload.length);
+    console.log('[PDF] payload match:', storedPayload === expectedPayload ? '✅ MATCH' : '❌ MISMATCH');
+    if (storedPayload !== expectedPayload) {
+      console.warn('[PDF] MISMATCH — stored:', storedPayload.slice(0, 60));
+      console.warn('[PDF] MISMATCH — expected:', expectedPayload.slice(0, 60));
+    }
 
     // ── Wait for all images to fully load before export ─────────────────
     await waitForImages(el);
