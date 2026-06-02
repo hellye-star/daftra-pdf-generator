@@ -88,7 +88,7 @@
     font-family: 'Jost', sans-serif; color: #1C1C1A;
     display: flex; flex-direction: column;
   }
-  .pp-body { flex: 1; padding-bottom: 24px; }
+  .pp-body { flex: 1; flex-shrink: 0; padding-bottom: 24px; }
   .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
   .pp-logo-row { display: flex; align-items: center; gap: 10px; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
@@ -121,7 +121,7 @@
   .pp-t-final .val { font-size: 9.5px; font-weight: 600; color: #1C1C1A; }
   .pp-terms { margin-top: 18px; padding: 9px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.85; }
   .pp-terms strong { font-weight: 500; color: #1C1C1A; display: block; margin-bottom: 2px; font-size: 6.5px; }
-  .pp-footer { border-top: 0.5px solid #D8D5CF; padding: 10px 58px 28px; display: flex; justify-content: space-between; margin-top: auto; }
+  .pp-footer { border-top: 0.5px solid #D8D5CF; padding: 10px 0 28px; display: flex; justify-content: space-between; margin-top: auto; flex-shrink: 0; }
   .pp-footer-brand { font-size: 5.5px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: #1C1C1A; margin-bottom: 3px; }
   .pp-footer-detail { font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
   .pp-footer-right { text-align: right; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
@@ -346,12 +346,16 @@ async function openDoc(index) {
     // Single doc response: { data: { Invoice: {...}, InvoiceItem: [...] } }
     const payload = d.data || d;
     const fullDoc = payload[docKey] || payload;
+    // extract client object — Daftra nests it as payload.Client
+    const clientObj = payload.Client || payload.client || {};
+    console.log('[Daftra] Client object:', JSON.stringify(clientObj, null, 2));
     // items may be under the model key or directly on data as an array
     items = payload[itemsKey] || fullDoc[itemsKey] || fullDoc.items || [];
     console.log('[Daftra] extracted items:', items);
     // merge full doc fields back in (single fetch has more detail)
     Object.assign(doc, fullDoc);
     doc._items = items;
+    doc._client = clientObj;
   } catch(e) {
     console.error('[Daftra] openDoc error:', e);
     status(e.message || 'Failed to load document details.', 'error');
@@ -375,9 +379,9 @@ function renderPreview() {
   const addr1  = doc.client_address1 || '';
   const city   = doc.client_city || '';
   const postal = doc.client_postal_code || '';
-  console.log('[Daftra] full doc fields:', JSON.stringify(doc, null, 2));
-  const clientVat = doc.VAT || doc.client_tax_number || doc.client_vat_number || doc.client_vat || '—';
-  const clientCr  = doc.CR  || doc.client_cr_number  || doc.client_commercial_register || '—';
+  const cl = doc._client || {};
+  const clientVat = cl.vat_number || cl.tax_number || cl.VAT || cl.vat || doc.client_tax_number || doc.client_vat_number || doc.VAT || '—';
+  const clientCr  = cl.cr_number  || cl.commercial_register || cl.CR  || cl.cr  || doc.client_cr_number  || doc.CR  || '—';
   const validUntil = doc.expiry_date || '—';
 
   const subtotal = parseFloat(doc.summary_subtotal || doc.subtotal_amount || 0);
@@ -462,13 +466,13 @@ function renderPreview() {
               <div class="pp-info-label">${toLabel}<span class="ar">${toLabelAr}</span></div>
               <div class="pp-info-name">${client}</div>
               <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia<br><span class="ar">المملكة العربية السعودية</span></div>
-              <div class="pp-reg">VAT Reg. ${clientVat}<br>CR No. ${clientCr}</div>
+              <div class="pp-reg">VAT Reg. ${clientVat} <span class="ar" style="font-size:6px;">الرقم الضريبي</span><br>CR No. ${clientCr} <span class="ar" style="font-size:6px;">السجل التجاري</span></div>
             </div>
             <div class="pp-info-col">
               <div class="pp-info-label">${byLabel}<span class="ar">${byLabelAr}</span></div>
               <div class="pp-info-name">${c.name}</div>
               <div class="pp-info-body">${c.address}<br>${c.website}<br>${c.phone}</div>
-              <div class="pp-reg">VAT Reg. ${c.vat}<br>CR No. ${c.cr}</div>
+              <div class="pp-reg">VAT Reg. ${c.vat} <span class="ar" style="font-size:6px;">الرقم الضريبي</span><br>CR No. ${c.cr} <span class="ar" style="font-size:6px;">السجل التجاري</span></div>
             </div>
             ${thirdCol}
           </div>
@@ -522,7 +526,7 @@ function downloadPDF() {
   html2pdf().set({
     margin: 0, filename,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2.5, useCORS: true, letterRendering: true },
+    html2canvas: { scale: 2.5, useCORS: true, letterRendering: true, width: 595, windowWidth: 595 },
     jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
   }).from(el).save().then(() => {
     wrapper.style.transform = prevTransform;
