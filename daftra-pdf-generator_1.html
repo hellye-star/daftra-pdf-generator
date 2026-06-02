@@ -325,108 +325,55 @@ function switchTab(tab) {
   renderList();
 }
 
-// Scan an object for VAT/CR values, log the exact path where each is found.
-function findVatCr(obj, pathPrefix) {
-  const VAT_KEYS = ['vat_number','tax_number','VAT','vat','TaxNumber','client_tax_number','client_vat_number','taxnumber'];
-  const CR_KEYS  = ['cr_number','commercial_register','CR','cr','CRNumber','client_cr_number','cr_no','crnumber'];
-  let vat = '', cr = '';
-  for (const k of VAT_KEYS) {
-    const v = obj[k];
-    if (v !== undefined && v !== null && String(v).trim() !== '') {
-      vat = String(v).trim();
-      console.log(`[VAT FOUND] path: ${pathPrefix}.${k} = "${vat}"`);
-      break;
-    }
-  }
-  for (const k of CR_KEYS) {
-    const v = obj[k];
-    if (v !== undefined && v !== null && String(v).trim() !== '') {
-      cr = String(v).trim();
-      console.log(`[CR  FOUND] path: ${pathPrefix}.${k} = "${cr}"`);
-      break;
-    }
-  }
-  if (!vat) console.log(`[VAT NOT FOUND] searched in ${pathPrefix}`);
-  if (!cr)  console.log(`[CR  NOT FOUND] searched in ${pathPrefix}`);
-  return { vat, cr };
-}
-
 async function openDoc(index) {
-  const sub = $('subdomain').value.trim();
-  const key = $('apikey').value.trim();
-  const h   = { 'APIKEY': key, 'Accept': 'application/json' };
+  const sub  = $('subdomain').value.trim();
+  const key  = $('apikey').value.trim();
+  const h    = { 'APIKEY': key, 'Accept': 'application/json' };
   const base = `https://${sub}.daftra.com/api2`;
   const docs = currentTab === 'invoices' ? allInvoices : allEstimates;
   const doc  = docs[index];
-  const endpoint = currentTab === 'invoices' ? 'invoices'  : 'estimates';
-  const docKey   = currentTab === 'invoices' ? 'Invoice'   : 'Estimate';
+  const endpoint = currentTab === 'invoices' ? 'invoices'    : 'estimates';
+  const docKey   = currentTab === 'invoices' ? 'Invoice'     : 'Estimate';
   const itemsKey = currentTab === 'invoices' ? 'InvoiceItem' : 'EstimateItem';
 
   status('Loading document...');
-  let clientVat = '', clientCr = '';
 
   try {
-    // ── Step 1: fetch the full invoice / estimate ──────────────────────────
+    // ── Step 1: fetch full invoice / estimate ─────────────────────────────
     const r = await fetch(`${base}/${endpoint}/${doc.id}.json`, { headers: h });
     const d = await r.json();
-    console.log('[Daftra] invoice raw response:', JSON.stringify(d, null, 2));
-
-    const payload = d.data || d;
-    const fullDoc = payload[docKey] || payload;
-    const items   = payload[itemsKey] || fullDoc[itemsKey] || fullDoc.items || [];
-    Object.assign(doc, fullDoc);
+    const invoice = (d.data || d)[docKey] || (d.data || d);
+    const items   = (d.data || d)[itemsKey] || invoice[itemsKey] || [];
+    Object.assign(doc, invoice);
     doc._items = items;
 
-    // ── Step 2: look for VAT / CR inside the invoice response ──────────────
-    console.log('[Daftra] --- Searching invoice object ---');
-    let found = findVatCr(fullDoc, 'invoice');
-    clientVat = found.vat;
-    clientCr  = found.cr;
+    // ── Step 2: read VAT / CR from invoice fields ─────────────────────────
+    // data.Invoice.client_bn1 = VAT,  data.Invoice.client_bn2 = CR
+    let clientVat = invoice.client_bn1 || '';
+    let clientCr  = invoice.client_bn2 || '';
 
-    // Also check an inline Client sub-object if Daftra included it
-    const inlineClient = payload.Client || payload.client || payload.Customer || payload.customer || {};
-    if (Object.keys(inlineClient).length) {
-      console.log('[Daftra] --- Searching inline Client object ---');
-      const fc = findVatCr(inlineClient, 'payload.Client');
-      if (!clientVat && fc.vat) clientVat = fc.vat;
-      if (!clientCr  && fc.cr)  clientCr  = fc.cr;
-    }
-
-    // ── Step 3: if still missing, fetch the client record separately ───────
-    const clientId = doc.client_id || doc.customer_id || doc.contact_id;
+    // ── Step 3: fallback — fetch /clients/{id} if either is missing ───────
+    const clientId = doc.client_id;
     if ((!clientVat || !clientCr) && clientId) {
       status('Fetching client record...');
-      for (const ep of ['clients', 'customers', 'contacts']) {
-        try {
-          const cr2 = await fetch(`${base}/${ep}/${clientId}.json`, { headers: h });
-          if (!cr2.ok) continue;
-          const cd = await cr2.json();
-          console.log(`[Daftra] client response (/${ep}/${clientId}):`, JSON.stringify(cd, null, 2));
-          const cp = cd.data || cd;
-          // unwrap whatever model key Daftra uses
-          const clientRecord = cp.Client || cp.Customer || cp.Contact || cp;
-          console.log(`[Daftra] --- Searching ${ep} record ---`);
-          const fc2 = findVatCr(clientRecord, `${ep}[${clientId}]`);
-          if (!clientVat && fc2.vat) clientVat = fc2.vat;
-          if (!clientCr  && fc2.cr)  clientCr  = fc2.cr;
-          if (clientVat && clientCr) break;
-        } catch(e2) {
-          console.log(`[Daftra] ${ep} fetch failed:`, e2.message);
-        }
+      const cr = await fetch(`${base}/clients/${clientId}.json`, { headers: h });
+      if (cr.ok) {
+        const cd = await cr.json();
+        const clientRecord = (cd.data || cd).Client || (cd.data || cd);
+        // data.Client.bn1 = VAT,  data.Client.bn2 = CR
+        if (!clientVat) clientVat = clientRecord.bn1 || '';
+        if (!clientCr)  clientCr  = clientRecord.bn2 || '';
       }
     }
 
-    // ── Step 4: report result ──────────────────────────────────────────────
-    console.log('[Daftra] RESULT:', JSON.stringify({ client_vat_number: clientVat || null, client_cr_number: clientCr || null }));
     doc._clientVat = clientVat;
     doc._clientCr  = clientCr;
+    console.log('[Daftra]', JSON.stringify({ client_vat_number: clientVat || null, client_cr_number: clientCr || null }));
 
   } catch(e) {
     console.error('[Daftra] openDoc error:', e);
     status(e.message || 'Failed to load document.', 'error');
-    doc._items     = [];
-    doc._clientVat = '';
-    doc._clientCr  = '';
+    doc._items = []; doc._clientVat = ''; doc._clientCr = '';
   }
 
   status('', 'clear');
