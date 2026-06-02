@@ -103,9 +103,8 @@
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
   .pp-qr-wrap { justify-self: center; }
-  /* QR target: white background + quiet zone padding; no CSS scaling of canvas */
-  #pp-qr-target { background: #ffffff; padding: 4px; display: inline-block; line-height: 0; }
-  #pp-qr-target canvas, #pp-qr-target img { display: block; width: 110px !important; height: 110px !important; }
+  #pp-qr-target { width: 96px; height: 96px; background: #fff; padding: 0; box-sizing: content-box; }
+  .pp-qr-img { width: 96px; height: 96px; display: block; object-fit: contain; }
   .pp-title-block { justify-self: end; text-align: right; }
   .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
   .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 400; color: #6B6B67; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
@@ -701,20 +700,32 @@ function renderQR(targetId, payload) {
   if (!el) { console.warn('[QR] target element not found:', targetId); return; }
   if (typeof QRCode === 'undefined') { console.error('[QR] QRCode library not loaded'); return; }
   el.innerHTML = '';
-  // Generate at final display size — no CSS scaling after render
-  // CorrectLevel.H = highest error correction (30% recovery), improves scan reliability
+  el.dataset.qrPayload = payload;
   new QRCode(el, {
     text: payload,
-    width: 110,
-    height: 110,
+    width: 96,
+    height: 96,
     colorDark:  '#000000',
     colorLight: '#ffffff',
-    correctLevel: QRCode.CorrectLevel.H
+    correctLevel: QRCode.CorrectLevel.M
   });
-  // Store payload on element so downloadPDF can verify it hasn't changed
-  el.dataset.qrPayload = payload;
-  console.log('[Daftra QR] Rendered 110px canvas. correctLevel=H. Payload length:', payload.length);
-  console.log('[Daftra QR] Payload passed to QRCode.js (first 80):', payload.slice(0, 80));
+  // After QRCode.js finishes drawing, convert canvas → PNG data URL → <img>
+  // html2canvas reliably captures <img src="data:..."> but can miss live canvas elements
+  setTimeout(() => {
+    const canvas = el.querySelector('canvas');
+    if (!canvas) { console.error('[Daftra QR] canvas not found after render'); return; }
+    const img = document.createElement('img');
+    img.className = 'pp-qr-img';
+    img.alt = 'Tax Invoice QR Code';
+    img.src = canvas.toDataURL('image/png');
+    img.dataset.qrPayload = payload;
+    img.width = 96;
+    img.height = 96;
+    el.innerHTML = '';
+    el.appendChild(img);
+    console.log('[Daftra QR] Canvas → PNG data URL. Payload length:', payload.length);
+    console.log('[Daftra QR] Payload (first 80):', payload.slice(0, 80));
+  }, 0);
 }
 
 async function downloadPDF() {
