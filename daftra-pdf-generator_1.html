@@ -96,14 +96,14 @@
   .pp-body { }
 
   /* Header */
-  .pp-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; column-gap: 32px; margin-bottom: 14px; }
-  .pp-logo-wrap { justify-self: start; }
+  .pp-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; column-gap: 28px; margin-bottom: 14px; width: 100%; }
+  .pp-logo-wrap { justify-self: start; align-self: start; margin-top: 0; }
   .pp-logo { width: 150px; height: auto; display: block; object-fit: contain; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
-  .pp-qr-wrap { justify-self: center; }
-  .pp-qr { width: 88px; height: 88px; object-fit: contain; display: block; }
-  .pp-title-block { justify-self: end; text-align: right; }
+  .pp-qr-wrap { justify-self: center; align-self: start; }
+  .pp-qr { width: 82px; height: 82px; display: block; object-fit: contain; }
+  .pp-title-block { justify-self: end; align-self: start; text-align: right; }
   .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
   .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 400; color: #6B6B67; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
   .pp-doc-meta { font-size: 6.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 4px; }
@@ -357,6 +357,22 @@ function switchTab(tab) {
   renderList();
 }
 
+// Convert an external image URL to a base64 data URL.
+// Required for html2canvas — it cannot load external URLs during PDF export.
+// The QR content/source remains Daftra's official URL; only the format changes.
+async function imageUrlToDataUrl(url) {
+  if (!url) return '';
+  const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+  if (!response.ok) throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+  const blob = await response.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror   = () => reject(new Error('FileReader failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function openDoc(index) {
   const sub  = $('subdomain').value.trim();
   const key  = $('apikey').value.trim();
@@ -380,26 +396,21 @@ async function openDoc(index) {
     doc._items = items;
 
     // ── Step 2a: read official Daftra QR from confirmed path ─────────────
-    // Source: data.Invoice.qr_code_url  (confirmed Daftra field)
+    // Source: invoice.qr_code_url  (data.Invoice.qr_code_url)
     // RULE: Never generate QR locally. Never use QR libraries. Only Daftra's URL.
     const qrUrl = invoice.qr_code_url || '';
     if (qrUrl) {
       console.log('[Daftra QR] Found qr_code_url:', qrUrl);
-      // Fetch and convert to base64 so html2canvas can render it in the PDF
-      // (html2canvas cannot load external URLs without CORS — data URL is safe)
+      // Convert to base64 data URL — required for html2canvas to render in PDF.
+      // (html2canvas cannot load external URLs; data URL is the only safe format.)
       try {
-        const qrResp = await fetch(qrUrl);
-        const qrBlob = await qrResp.blob();
-        const qrDataUrl = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.readAsDataURL(qrBlob);
-        });
+        const qrDataUrl = await imageUrlToDataUrl(qrUrl);
         doc._qrCode = qrDataUrl;
         console.log('[Daftra QR] Converted to base64 data URL for PDF export.');
       } catch(qrErr) {
-        console.warn('[Daftra QR] Could not fetch QR image for base64 conversion:', qrErr.message);
-        doc._qrCode = qrUrl; // fall back to URL — preview may work, PDF may not
+        console.error('[Daftra QR] Failed to convert QR to data URL:', qrErr.message);
+        // Keep raw URL as last resort — preview may show it but PDF will not
+        doc._qrCode = qrUrl;
       }
     } else {
       console.warn('[Daftra QR] qr_code_url not found on this invoice.');

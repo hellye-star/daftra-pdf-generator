@@ -162,28 +162,29 @@ data.Invoice.qr_code_url
 ```
 Example value: `https://vistaunited.daftra.com/qr/?d64=...`
 
-### Detection in `openDoc()`
+### Detection + conversion in `openDoc()`
 ```js
 const qrUrl = invoice.qr_code_url || '';
+const qrDataUrl = await imageUrlToDataUrl(qrUrl); // converts to base64 data URL
+doc._qrCode = qrDataUrl;
 ```
-- If found: fetched and converted to base64 data URL (so html2canvas can render it in PDF without CORS issues)
-- If missing: logs all invoice keys to console and stores empty string — no QR renders
+- **Must convert to base64 data URL** before storing — html2canvas cannot load external URLs during PDF export.
+- `imageUrlToDataUrl()` helper: `fetch(url, {mode:'cors'})` → blob → `FileReader.readAsDataURL` (uses `onloadend` + `reject`).
+- If field missing: logs all invoice keys, stores `''` — no QR renders, no error shown.
 
-Result stored in `doc._qrCode`.
-
-### Placement
-Three-column CSS grid header: `[ Logo ] [ QR 88×88px ] [ Tax Invoice ]`
+### Placement — 3-column CSS grid
 ```css
-.pp-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; }
-.pp-logo-wrap { justify-self: start; }
-.pp-qr-wrap   { justify-self: center; }
-.pp-title-block { justify-self: end; text-align: right; }
-.pp-qr { width: 88px; height: 88px; object-fit: contain; }
+.pp-header      { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; column-gap: 28px; }
+.pp-logo-wrap   { justify-self: start;  align-self: start; margin-top: 0; }
+.pp-qr-wrap     { justify-self: center; align-self: start; }
+.pp-title-block { justify-self: end;    align-self: start; text-align: right; }
+.pp-logo { width: 150px; }
+.pp-qr   { width: 82px; height: 82px; }
 ```
-QR slot is always present in DOM; `<img>` inside is conditional on `doc._qrCode`.
+QR `<img>` inside `.pp-qr-wrap` is conditional on `doc._qrCode`. All three columns always present in DOM.
 
 ### Rule
-**Never generate QR locally. Never use QR libraries. Never construct from ZATCA fields. Only use `invoice.qr_code_url` from Daftra.**
+**Never generate QR locally. Never use QR libraries. Never construct from ZATCA fields. Only use `invoice.qr_code_url` from Daftra. Always convert to base64 data URL for PDF rendering.**
 
 ---
 
