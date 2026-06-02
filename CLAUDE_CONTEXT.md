@@ -153,36 +153,35 @@ To regenerate the base64: `base64 -w 0 logo.png` then prefix with `data:image/pn
 
 ## QR Code
 
-### Rule — Never generate QR locally
-Only use the official QR field returned by Daftra. Do NOT use any QR library, construct ZATCA QR from invoice data, or generate a replacement if the field is missing.
+### Status — FINALIZED ✅
+Implementation verified by scan comparison. PDF QR and Daftra original QR return identical payload.
 
-### QR Source — confirmed Daftra field
+### Source
 ```
-data.Invoice.qr_code_url
+Invoice.qr_code_url
 ```
-Example value: `https://vistaunited.daftra.com/qr/?d64=...`
+Example: `https://vistaunited.daftra.com/qr/?d64=...`
 
-### QR Payload — `d64` parameter
+### Implementation
 ```js
-const qrPayload = new URL(invoice.qr_code_url).searchParams.get('d64');
+// 1. Extract d64 from Daftra URL
+const d64 = new URL(invoice.qr_code_url).searchParams.get('d64') || '';
+
+// 2. Decode base64 to get the actual ZATCA TLV payload
+const qrPayload = d64 ? atob(d64) : '';
 doc._qrPayload = qrPayload;
-```
-`d64` is the ZATCA TLV base64 string that Daftra encodes into the QR image. Passed directly to QRCode.js as-is — no decoding needed. Result is stored in `doc._qrPayload`.
 
-### Rendering — inline canvas via QRCode.js
-```js
-new QRCode(document.getElementById('pp-qr-target'), {
-  text: payload,       // the d64 string from Daftra
-  width: 82, height: 82,
-  colorDark: '#1C1C1A', colorLight: '#ffffff',
-  correctLevel: QRCode.CorrectLevel.M
-});
+// 3. Render inline canvas — html2canvas captures it natively, no CORS
+renderQR('pp-qr-target', qrPayload);
 ```
+
+`atob(d64)` decoding is required — passing raw `d64` produces a different (wrong) QR scan result.
+
+### Rendering
 - Library: `qrcodejs` v1.0.0 via cdnjs CDN
-- QRCode.js renders a `<canvas>` directly into DOM — html2canvas captures inline canvas natively, **zero CORS issue**
-- `renderQR('pp-qr-target', qrPayload)` is called immediately after `renderPreview()` sets `innerHTML`
-- Template contains `<div id="pp-qr-target">` placeholder (only present when `qrPayload` is non-empty)
-- **This approach replaces the failed `fetch`/`imageUrlToDataUrl` approach** which was blocked by CORS on both `file://` and `localhost`
+- Renders a `<canvas>` directly into DOM — html2canvas captures it with zero CORS
+- Template placeholder: `<div id="pp-qr-target">` (present only when `qrPayload` is non-empty)
+- `renderQR()` is called immediately after `$('mainArea').innerHTML` is set
 
 ### Placement — 3-column CSS grid
 ```css
@@ -190,14 +189,13 @@ new QRCode(document.getElementById('pp-qr-target'), {
 .pp-logo-wrap   { justify-self: start;  align-self: start; margin-top: 0; }
 .pp-qr-wrap     { justify-self: center; align-self: start; }
 .pp-title-block { justify-self: end;    align-self: start; text-align: right; }
-.pp-logo { width: 150px; }
 ```
 
-### Rule
-**Never generate QR from invoice fields. Never construct ZATCA TLV manually. Only use the `d64` payload already provided by Daftra inside `invoice.qr_code_url`. The QR content/source is always Daftra's — QRCode.js only changes the rendering format.**
-
-### Verification
-After opening an invoice, scan both the Daftra-generated QR and the inline-rendered QR to confirm identical content.
+### Rules — never change
+- **Never revert to `fetch(qr_code_url)` or `imageUrlToDataUrl()`** — both are blocked by CORS on `file://` and `localhost`
+- **Never pass raw `d64` to QRCode.js** — must decode with `atob()` first
+- **Never generate QR from invoice fields** — only use Daftra's `d64` payload
+- **Never construct ZATCA TLV manually**
 
 ---
 
@@ -216,6 +214,7 @@ After opening an invoice, scan both the Daftra-generated QR and the inline-rende
 | Arabic headings misaligned | Removed `direction: rtl` from label container; Arabic now left-aligned matching English |
 | Summary block splitting across pages | `page-break-inside: avoid` on `.pp-summary-block` and `.pp-totals` |
 | Download PDF button broken after layout/footer changes | Reverted `daftra-pdf-generator_1.html` to commit `c9dc4f8` (last confirmed working state). Root cause: subsequent layout commits corrupted the `downloadPDF()` function. |
+| QR not appearing in PDF | `fetch(qr_code_url)` blocked by CORS on both `file://` and `localhost`. Fix: extract `d64` param from URL, decode with `atob()`, render as inline `<canvas>` via QRCode.js. html2canvas captures inline canvas natively. Scan-verified identical to Daftra QR. |
 
 ---
 
