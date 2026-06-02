@@ -609,13 +609,16 @@ function downloadPDF() {
   // Temporarily remove the preview scale so the PDF captures at true A4 size
   const prevTransform = wrapper.style.transform;
   wrapper.style.transform = 'none';
-  html2pdf().from(el).set({
+  html2pdf().set({
     margin: 0,
-    filename: filename,
-    image:    { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, scrollY: 0, logging: false },
-    jsPDF:    { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).save().then(() => {
+    filename,
+    pagebreak: {
+      mode: ['css', 'legacy'],
+      avoid: ['.pp-footer', '.pp-summary-block', '.pp-info-grid', '.pp-totals']
+    },
+    html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(el).save().then(() => {
     wrapper.style.transform = prevTransform;
   });
 }
