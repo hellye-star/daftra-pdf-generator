@@ -162,15 +162,27 @@ data.Invoice.qr_code_url
 ```
 Example value: `https://vistaunited.daftra.com/qr/?d64=...`
 
-### Detection + conversion in `openDoc()`
+### QR Payload — `d64` parameter
 ```js
-const qrUrl = invoice.qr_code_url || '';
-const qrDataUrl = await imageUrlToDataUrl(qrUrl); // converts to base64 data URL
-doc._qrCode = qrDataUrl;
+const qrPayload = new URL(invoice.qr_code_url).searchParams.get('d64');
+doc._qrPayload = qrPayload;
 ```
-- **Must convert to base64 data URL** before storing — html2canvas cannot load external URLs during PDF export.
-- `imageUrlToDataUrl()` helper: `fetch(url, {mode:'cors'})` → blob → `FileReader.readAsDataURL` (uses `onloadend` + `reject`).
-- If field missing: logs all invoice keys, stores `''` — no QR renders, no error shown.
+`d64` is the ZATCA TLV base64 string that Daftra encodes into the QR image. Passed directly to QRCode.js as-is — no decoding needed. Result is stored in `doc._qrPayload`.
+
+### Rendering — inline canvas via QRCode.js
+```js
+new QRCode(document.getElementById('pp-qr-target'), {
+  text: payload,       // the d64 string from Daftra
+  width: 82, height: 82,
+  colorDark: '#1C1C1A', colorLight: '#ffffff',
+  correctLevel: QRCode.CorrectLevel.M
+});
+```
+- Library: `qrcodejs` v1.0.0 via cdnjs CDN
+- QRCode.js renders a `<canvas>` directly into DOM — html2canvas captures inline canvas natively, **zero CORS issue**
+- `renderQR('pp-qr-target', qrPayload)` is called immediately after `renderPreview()` sets `innerHTML`
+- Template contains `<div id="pp-qr-target">` placeholder (only present when `qrPayload` is non-empty)
+- **This approach replaces the failed `fetch`/`imageUrlToDataUrl` approach** which was blocked by CORS on both `file://` and `localhost`
 
 ### Placement — 3-column CSS grid
 ```css
@@ -179,12 +191,13 @@ doc._qrCode = qrDataUrl;
 .pp-qr-wrap     { justify-self: center; align-self: start; }
 .pp-title-block { justify-self: end;    align-self: start; text-align: right; }
 .pp-logo { width: 150px; }
-.pp-qr   { width: 82px; height: 82px; }
 ```
-QR `<img>` inside `.pp-qr-wrap` is conditional on `doc._qrCode`. All three columns always present in DOM.
 
 ### Rule
-**Never generate QR locally. Never use QR libraries. Never construct from ZATCA fields. Only use `invoice.qr_code_url` from Daftra. Always convert to base64 data URL for PDF rendering.**
+**Never generate QR from invoice fields. Never construct ZATCA TLV manually. Only use the `d64` payload already provided by Daftra inside `invoice.qr_code_url`. The QR content/source is always Daftra's — QRCode.js only changes the rendering format.**
+
+### Verification
+After opening an invoice, scan both the Daftra-generated QR and the inline-rendered QR to confirm identical content.
 
 ---
 

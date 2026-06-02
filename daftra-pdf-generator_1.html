@@ -241,6 +241,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 let allInvoices = [], allEstimates = [];
 let currentTab = 'invoices';
@@ -407,33 +408,25 @@ async function openDoc(index) {
     Object.assign(doc, invoice);
     doc._items = items;
 
-    // ── Step 2a: read official Daftra QR from confirmed path ─────────────
-    // Source: invoice.qr_code_url  (data.Invoice.qr_code_url)
-    // RULE: Never generate QR locally. Never use QR libraries. Only Daftra's URL.
+    // ── Step 2a: extract Daftra QR payload from qr_code_url ─────────────
+    // Source: invoice.qr_code_url → d64 parameter = ZATCA TLV base64 payload
+    // RULE: Never generate QR from invoice fields.
+    //       Only render the d64 payload Daftra already provides.
     const qrUrl = invoice.qr_code_url || '';
+    let qrPayload = '';
     if (qrUrl) {
-      console.log('[Daftra QR] Found qr_code_url:', qrUrl);
-      // Convert to base64 data URL — required for html2canvas to render in PDF.
-      // (html2canvas cannot load external URLs; data URL is the only safe format.)
       try {
-        const qrDataUrl = await imageUrlToDataUrl(qrUrl);
-        doc._qrCode = qrDataUrl;
-        console.log('[Daftra QR] Converted to base64 data URL for PDF export.');
-      } catch(qrErr) {
-        console.error('[Daftra QR] Failed to convert QR to data URL:', qrErr.message);
-        // Keep raw URL as last resort — preview may show it but PDF will not
-        doc._qrCode = qrUrl;
+        qrPayload = new URL(qrUrl).searchParams.get('d64') || '';
+      } catch(e) {
+        console.error('[Daftra QR] Failed to parse qr_code_url:', e.message);
       }
+      console.log('[Daftra QR] qr_code_url:', qrUrl);
+      console.log('[Daftra QR] d64 extracted:', !!qrPayload, '— length:', qrPayload.length);
     } else {
       console.warn('[Daftra QR] qr_code_url not found on this invoice.');
       console.log('[Daftra QR] All invoice keys:', Object.keys(invoice).join(', '));
-      doc._qrCode = '';
     }
-    // ── QR diagnostics ────────────────────────────────────────────────────
-    console.log('[Daftra QR] original URL:', qrUrl);
-    console.log('[Daftra QR] final src starts with:', String(doc._qrCode || '').slice(0, 40));
-    console.log('[Daftra QR] final src length:', String(doc._qrCode || '').length);
-    console.log('[Daftra QR] is data URL:', String(doc._qrCode || '').startsWith('data:image'));
+    doc._qrPayload = qrPayload;
 
     // ── Step 2b: read VAT / CR from invoice fields ────────────────────────
     // data.Invoice.client_bn1 = VAT,  data.Invoice.client_bn2 = CR
@@ -501,7 +494,7 @@ function renderPreview() {
   const prefix    = isInv ? `INV-${no}` : `QUO-${no}`;
   const docLabel  = isInv ? 'Tax Invoice'  : 'Quotation';
   const docLabelAr= isInv ? 'فاتورة ضريبية' : 'عرض سعر';
-  const qrCode    = doc._qrCode || '';
+  const qrPayload = doc._qrPayload || '';
   const byLabel   = isInv ? 'Issued By'    : 'Prepared By';
   const byLabelAr = isInv ? 'صادر من'      : 'معد من قبل';
   const toLabel   = isInv ? 'Issued To'    : 'Prepared For';
@@ -560,7 +553,7 @@ function renderPreview() {
               <img class="pp-logo" src="${LOGO_DATA_URL}" alt="Vista United">
             </div>
             <div class="pp-qr-wrap">
-              ${qrCode ? `<img class="pp-qr" src="${qrCode}" alt="Tax Invoice QR Code">` : ''}
+              ${qrPayload ? '<div id="pp-qr-target"></div>' : ''}
             </div>
             <div class="pp-title-block">
               <div class="pp-doc-heading">${docLabel}</div>
@@ -665,12 +658,14 @@ function renderPreview() {
       </div>
     </div>`;
 
+  // Render Daftra QR payload into inline canvas — html2canvas captures it natively, no CORS
+  if (qrPayload) renderQR('pp-qr-target', qrPayload);
+
   // ── Rendered HTML diagnostics ─────────────────────────────────────────
   setTimeout(() => {
-    console.log('[Preview] All img elements after render:');
-    document.querySelectorAll('img').forEach((img, i) => {
-      console.log(`  [IMG ${i}] class="${img.className}" src starts with: ${img.src.slice(0, 80)}`);
-    });
+    const qrCanvas = document.querySelector('#pp-qr-target canvas');
+    const qrImg    = document.querySelector('#pp-qr-target img');
+    console.log('[Preview] QR canvas found:', !!qrCanvas, '— QR img found:', !!qrImg);
     console.log('[Preview] Header bounding boxes:');
     ['.pp-logo-wrap', '.pp-qr-wrap', '.pp-title-block'].forEach(sel => {
       const node = document.querySelector(sel);
@@ -678,6 +673,24 @@ function renderPreview() {
       console.log(`  ${sel} →`, rect ? `top:${rect.top.toFixed(1)} left:${rect.left.toFixed(1)} w:${rect.width.toFixed(1)} h:${rect.height.toFixed(1)}` : 'NOT FOUND');
     });
   }, 200);
+}
+
+// Render the Daftra-provided d64 QR payload into an inline canvas.
+// QRCode.js draws directly to DOM — html2canvas captures it with no CORS issue.
+function renderQR(targetId, payload) {
+  const el = document.getElementById(targetId);
+  if (!el) { console.warn('[QR] target element not found:', targetId); return; }
+  if (typeof QRCode === 'undefined') { console.error('[QR] QRCode library not loaded'); return; }
+  el.innerHTML = '';
+  new QRCode(el, {
+    text: payload,
+    width: 82,
+    height: 82,
+    colorDark:  '#1C1C1A',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  console.log('[Daftra QR] Rendered inline canvas from d64 payload. Scan to verify content matches Daftra QR.');
 }
 
 async function downloadPDF() {
@@ -690,11 +703,10 @@ async function downloadPDF() {
     if (typeof html2pdf === 'undefined') throw new Error('html2pdf is not loaded');
 
     // ── PDF target diagnostics ──────────────────────────────────────────
-    const qrEl = el.querySelector('.pp-qr');
-    console.log('[PDF] QR element found:', qrEl);
-    console.log('[PDF] QR src starts with:', qrEl?.src?.slice(0, 80) ?? 'n/a');
-    console.log('[PDF] QR complete:', qrEl?.complete);
-    console.log('[PDF] QR natural size:', qrEl?.naturalWidth, 'x', qrEl?.naturalHeight);
+    const qrCanvas = el.querySelector('#pp-qr-target canvas');
+    const qrImg    = el.querySelector('#pp-qr-target img');
+    console.log('[PDF] QR canvas in target:', !!qrCanvas, qrCanvas ? `${qrCanvas.width}x${qrCanvas.height}` : '');
+    console.log('[PDF] QR img in target:', !!qrImg, qrImg ? qrImg.src.slice(0, 60) : '');
 
     // ── Wait for all images to fully load before export ─────────────────
     await waitForImages(el);
