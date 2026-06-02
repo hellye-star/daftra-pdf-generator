@@ -84,65 +84,84 @@
   .pdf-page {
     background: white; width: 595px; min-height: 842px;
     box-shadow: 0 6px 28px rgba(0,0,0,0.15);
-    padding: 36px 58px 0;                   /* #7 reduced top space */
+    padding: 32px 58px 0;
     font-family: 'Jost', sans-serif; color: #1C1C1A;
     display: flex; flex-direction: column;
   }
-  .pp-body { flex: 1; flex-shrink: 0; padding-bottom: 20px; }
-  .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .pp-body { flex: 1; flex-shrink: 0; padding-bottom: 18px; }
+
+  /* Header */
+  .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
   .pp-logo-row { display: flex; align-items: center; gap: 10px; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
   .pp-doc-type { text-align: right; }
-  .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 34px; color: #1C1C1A; line-height: 1; }
-  .pp-doc-meta { font-size: 6.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 5px; }
-  .pp-rule { border: none; border-top: 0.5px solid #D8D5CF; margin-bottom: 18px; }
-  .pp-info-row { display: flex; margin-bottom: 20px; }
-  .pp-info-col { flex: 1; padding-right: 18px; }
+  .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
+  .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 400; color: #6B6B67; direction: rtl; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
+  .pp-doc-meta { font-size: 6.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 4px; }
+  .pp-rule { border: none; border-top: 0.5px solid #D8D5CF; margin-bottom: 16px; }
+
+  /* Info columns — issued to / issued by */
+  .pp-info-row { display: flex; margin-bottom: 18px; }
+  .pp-info-col { flex: 1; padding-right: 20px; }
   .pp-info-col:last-child { padding-right: 0; }
-  .pp-info-label { font-size: 5.5px; font-weight: 400; letter-spacing: 0.2em; color: #ADADAA; text-transform: uppercase; margin-bottom: 6px; }
-  .pp-info-name { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 13px; color: #1C1C1A; line-height: 1.2; margin-bottom: 5px; }
+  /* English label */
+  .pp-info-label-en { font-size: 5.5px; font-weight: 500; letter-spacing: 0.22em; color: #ADADAA; text-transform: uppercase; line-height: 1; }
+  /* Arabic label — always same height block, same margin */
+  .pp-info-label-ar { font-family: 'Cairo', sans-serif; font-size: 7px; font-weight: 400; color: #ADADAA; direction: rtl; display: block; margin-top: 2px; margin-bottom: 8px; letter-spacing: 0; }
+  .pp-info-name { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 13px; color: #1C1C1A; line-height: 1.2; margin-bottom: 4px; }
   .pp-info-body { font-size: 7px; font-weight: 300; color: #6B6B67; line-height: 1.75; }
-  /* #4 improved pp-reg: clean rows, slightly larger, aligned */
-  .pp-reg { margin-top: 6px; padding-top: 6px; border-top: 0.5px solid #D8D5CF; }
-  .pp-reg-row { display: flex; gap: 6px; align-items: baseline; margin-bottom: 2px; }
-  .pp-reg-lbl { font-size: 6px; font-weight: 400; color: #ADADAA; text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; min-width: 42px; }
-  .pp-reg-lbl .ar { font-size: 5.5px; display: inline; text-transform: none; letter-spacing: 0; }
-  .pp-reg-val { font-size: 7px; font-weight: 300; color: #6B6B67; }
-  /* #1 #2 summary block: never split across pages */
+
+  /* VAT / CR registration rows */
+  .pp-reg { margin-top: 8px; padding-top: 7px; border-top: 0.5px solid #D8D5CF; }
+  .pp-reg-row { display: flex; align-items: baseline; margin-bottom: 3px; }
+  .pp-reg-lbl-en { font-size: 6px; font-weight: 500; color: #ADADAA; text-transform: uppercase; letter-spacing: 0.1em; width: 52px; flex-shrink: 0; }
+  .pp-reg-lbl-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 400; color: #C8C5BF; width: 68px; flex-shrink: 0; direction: rtl; }
+  .pp-reg-val { font-size: 7.5px; font-weight: 300; color: #1C1C1A; letter-spacing: 0.01em; }
+
+  /* Summary / totals — never split across pages */
   .pp-summary-block {
-    display: flex; justify-content: flex-end; margin-top: 8px;
+    display: flex; justify-content: flex-end; margin-top: 10px;
     page-break-inside: avoid; break-inside: avoid;
   }
-  .pp-totals { width: 210px; page-break-inside: avoid; break-inside: avoid; }
-  .pp-t-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 7px; font-weight: 300; color: #6B6B67; border-bottom: 0.5px solid #D8D5CF; }
-  .pp-t-final { border-top: 0.7px solid #1C1C1A; border-bottom: none !important; padding-top: 8px; margin-top: 2px; display: flex; justify-content: space-between; align-items: flex-start; }
-  .pp-t-final .lbl { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 12px; color: #1C1C1A; }
-  .pp-t-final .val { font-size: 9.5px; font-weight: 600; color: #1C1C1A; }
+  .pp-totals { width: 220px; page-break-inside: avoid; break-inside: avoid; }
+  .pp-t-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 0.5px solid #D8D5CF; }
+  .pp-t-row-lbl { display: flex; flex-direction: column; gap: 1px; }
+  .pp-t-row-en { font-size: 7px; font-weight: 300; color: #6B6B67; }
+  .pp-t-row-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 300; color: #ADADAA; direction: rtl; }
+  .pp-t-row-amt { font-size: 7.5px; font-weight: 400; color: #1C1C1A; }
+  .pp-t-final { border-top: 0.8px solid #1C1C1A; border-bottom: none !important; padding-top: 9px; margin-top: 3px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .pp-t-final .lbl { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 12px; color: #1C1C1A; line-height: 1.2; }
+  .pp-t-final .lbl-ar { font-family: 'Cairo', sans-serif; font-size: 8px; font-weight: 400; color: #6B6B67; direction: rtl; display: block; margin-top: 2px; }
+  .pp-t-final .val { font-size: 10px; font-weight: 600; color: #1C1C1A; }
+
+  /* Table */
   .pp-table { width: 100%; border-collapse: collapse; }
   .pp-table thead tr { border-bottom: 0.5px solid #D8D5CF; }
-  .pp-table th { font-size: 5.5px; font-weight: 400; letter-spacing: 0.2em; color: #ADADAA; text-transform: uppercase; padding-bottom: 8px; text-align: left; }
+  .pp-table th { font-size: 5.5px; font-weight: 500; letter-spacing: 0.2em; color: #ADADAA; text-transform: uppercase; padding-bottom: 7px; text-align: left; }
+  .th-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 300; color: #ADADAA; display: block; margin-top: 2px; letter-spacing: 0; }
   .pp-table th.r { text-align: right; }
   .pp-table tbody tr { border-bottom: 0.5px solid #D8D5CF; page-break-inside: avoid; break-inside: avoid; }
-  .pp-table td { padding: 10px 0; vertical-align: top; }
+  .pp-table td { padding: 9px 0; vertical-align: top; }
   .pp-item-name { font-size: 7.5px; font-weight: 500; color: #1C1C1A; margin-bottom: 2px; }
   .pp-item-desc { font-size: 6.5px; font-weight: 300; color: #6B6B67; }
   .pp-td-r { text-align: right; font-size: 7.5px; font-weight: 300; color: #1C1C1A; white-space: nowrap; padding-left: 8px; }
-  .pp-terms { margin-top: 16px; padding: 9px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
-  .pp-terms strong { font-weight: 500; color: #1C1C1A; display: block; margin-bottom: 2px; font-size: 6.5px; }
-  /* #6 clean footer: two columns, no overlap */
-  .pp-footer { border-top: 0.5px solid #D8D5CF; padding: 9px 0 24px; display: flex; justify-content: space-between; align-items: flex-start; margin-top: auto; flex-shrink: 0; gap: 16px; }
-  .pp-footer-left { flex: 1; min-width: 0; }
-  .pp-footer-brand { font-size: 5.5px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: #1C1C1A; margin-bottom: 3px; }
-  .pp-footer-detail { font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.6; }
-  .pp-footer-right { text-align: right; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.6; flex-shrink: 0; }
+
+  /* Terms */
+  .pp-terms { margin-top: 14px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
+  .pp-terms strong { font-weight: 600; color: #1C1C1A; display: block; margin-bottom: 2px; font-size: 6.5px; }
+
+  /* Footer — company block left, website right */
+  .pp-footer { border-top: 0.5px solid #D8D5CF; padding: 10px 0 22px; display: flex; justify-content: space-between; align-items: flex-start; margin-top: auto; flex-shrink: 0; gap: 20px; }
+  .pp-footer-left { flex: 1; }
+  .pp-footer-co { font-size: 6px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #1C1C1A; margin-bottom: 4px; }
+  .pp-footer-reg { font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; margin-bottom: 3px; }
+  .pp-footer-contact { font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
+  .pp-footer-right { text-align: right; font-size: 5.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #ADADAA; flex-shrink: 0; margin-top: 2px; }
   .pp-validity-badge { display: inline-block; background: #1C1C1A; color: white; font-size: 5px; font-weight: 300; letter-spacing: 0.14em; text-transform: uppercase; padding: 2.5px 6px; margin-top: 6px; }
 
-  /* ARABIC / BILINGUAL */
+  /* Arabic utility */
   .ar { font-family: 'Cairo', sans-serif; direction: rtl; unicode-bidi: embed; }
-  .pp-info-label .ar { font-size: 5px; display: block; color: #ADADAA; margin-top: 1px; letter-spacing: 0; font-weight: 400; }
-  .pp-table th .ar { font-size: 5px; display: block; font-weight: 400; letter-spacing: 0; color: #ADADAA; }
-  .pp-t-row .ar, .pp-t-final .ar { font-size: 6.5px; font-weight: 300; }
   .pp-doc-heading .ar { font-family: 'Cairo', sans-serif; font-style: normal; font-size: 18px; font-weight: 600; display: block; line-height: 1.1; direction: rtl; color: #6B6B67; }
   .pp-terms .ar-title { font-family: 'Cairo', sans-serif; direction: rtl; font-size: 6.5px; font-weight: 600; display: block; color: #1C1C1A; margin-top: 3px; }
   .pp-footer-detail .ar, .pp-footer-right .ar { font-family: 'Cairo', sans-serif; font-size: 5.5px; direction: rtl; display: block; margin-top: 1px; }
@@ -392,6 +411,12 @@ async function openDoc(index) {
   renderPreview();
 }
 
+// Convert Arabic-Indic digits to Western digits (display only)
+function toEnDigits(str) {
+  if (!str) return '';
+  return String(str).replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660));
+}
+
 function renderPreview() {
   const { doc, type } = currentDoc;
   const c = co();
@@ -404,8 +429,9 @@ function renderPreview() {
   const addr1  = doc.client_address1 || '';
   const city   = doc.client_city || '';
   const postal = doc.client_postal_code || '';
-  const clientVat = doc._clientVat || '';
-  const clientCr  = doc._clientCr  || '';
+  // Arabic-numeral conversion applied to display values only — source data unchanged
+  const clientVat = toEnDigits(doc._clientVat || '');
+  const clientCr  = toEnDigits(doc._clientCr  || '');
   const validUntil = doc.expiry_date || '—';
 
   const subtotal = parseFloat(doc.summary_subtotal || doc.subtotal_amount || 0);
@@ -468,9 +494,11 @@ function renderPreview() {
       <div class="pdf-bg">
         <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
         <div class="pdf-page" id="pdfPage">
+
+          <!-- HEADER -->
           <div class="pp-header">
             <div class="pp-logo-row">
-              <svg width="26" height="26" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+              <svg width="24" height="24" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
                 <polygon points="20,33 3,7 11,7 20,23 29,7 37,7" fill="#1C1C1A"/>
               </svg>
               <div>
@@ -479,7 +507,8 @@ function renderPreview() {
               </div>
             </div>
             <div class="pp-doc-type">
-              <div class="pp-doc-heading">${docLabel}<span class="ar">${docLabelAr}</span></div>
+              <div class="pp-doc-heading">${docLabel}</div>
+              <div class="pp-doc-heading-ar">${docLabelAr}</div>
               <div class="pp-doc-meta">No. ${prefix} &nbsp;&middot;&nbsp; ${date}</div>
             </div>
           </div>
@@ -487,63 +516,91 @@ function renderPreview() {
           <hr class="pp-rule">
 
           <div class="pp-body">
-          <div class="pp-info-row">
-            <div class="pp-info-col">
-              <div class="pp-info-label">${toLabel}<span class="ar">${toLabelAr}</span></div>
-              <div class="pp-info-name">${client}</div>
-              <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia<br><span class="ar">المملكة العربية السعودية</span></div>
-              <div class="pp-reg">
-                <div class="pp-reg-row"><span class="pp-reg-lbl">VAT Reg. <span class="ar">/ الرقم الضريبي</span></span><span class="pp-reg-val">${clientVat}</span></div>
-                <div class="pp-reg-row"><span class="pp-reg-lbl">CR No. <span class="ar">/ السجل التجاري</span></span><span class="pp-reg-val">${clientCr}</span></div>
+
+            <!-- ISSUED TO / ISSUED BY -->
+            <div class="pp-info-row">
+              <div class="pp-info-col">
+                <div class="pp-info-label-en">${toLabel}</div>
+                <div class="pp-info-label-ar">${toLabelAr}</div>
+                <div class="pp-info-name">${client}</div>
+                <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia</div>
+                <div class="pp-reg">
+                  <div class="pp-reg-row">
+                    <span class="pp-reg-lbl-en">VAT Reg.</span>
+                    <span class="pp-reg-lbl-ar">الرقم الضريبي</span>
+                    <span class="pp-reg-val">${clientVat}</span>
+                  </div>
+                  <div class="pp-reg-row">
+                    <span class="pp-reg-lbl-en">CR No.</span>
+                    <span class="pp-reg-lbl-ar">السجل التجاري</span>
+                    <span class="pp-reg-val">${clientCr}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="pp-info-col">
+                <div class="pp-info-label-en">${byLabel}</div>
+                <div class="pp-info-label-ar">${byLabelAr}</div>
+                <div class="pp-info-name">${c.name}</div>
+                <div class="pp-info-body">${c.address}<br>${c.website}<br>${c.phone}</div>
+                <div class="pp-reg">
+                  <div class="pp-reg-row">
+                    <span class="pp-reg-lbl-en">VAT Reg.</span>
+                    <span class="pp-reg-lbl-ar">الرقم الضريبي</span>
+                    <span class="pp-reg-val">${c.vat}</span>
+                  </div>
+                  <div class="pp-reg-row">
+                    <span class="pp-reg-lbl-en">CR No.</span>
+                    <span class="pp-reg-lbl-ar">السجل التجاري</span>
+                    <span class="pp-reg-val">${c.cr}</span>
+                  </div>
+                </div>
+              </div>
+              ${thirdCol}
+            </div>
+
+            <!-- LINE ITEMS TABLE -->
+            <table class="pp-table">
+              <thead><tr>
+                <th style="width:52%;">Description <span class="th-ar">الوصف</span></th>
+                <th class="r" style="width:9%;">Qty <span class="th-ar">الكمية</span></th>
+                <th class="r" style="width:20%;">Unit Price <span class="th-ar">سعر الوحدة</span></th>
+                <th class="r" style="width:19%;">Amount <span class="th-ar">المبلغ</span></th>
+              </tr></thead>
+              <tbody>${itemRows}</tbody>
+            </table>
+
+            <!-- SUMMARY BLOCK — never splits across pages -->
+            <div class="pp-summary-block">
+              <div class="pp-totals">
+                <div class="pp-t-row">
+                  <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع الفرعي</span></div>
+                  <span class="pp-t-row-amt">SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+                </div>
+                <div class="pp-t-row">
+                  <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT 15%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div>
+                  <span class="pp-t-row-amt">SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span>
+                </div>
+                <div class="pp-t-final">
+                  <div><span class="lbl">${totLabel}</span><span class="lbl-ar">${totLabelAr}</span></div>
+                  <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
+                </div>
               </div>
             </div>
-            <div class="pp-info-col">
-              <div class="pp-info-label">${byLabel}<span class="ar">${byLabelAr}</span></div>
-              <div class="pp-info-name">${c.name}</div>
-              <div class="pp-info-body">${c.address}<br>${c.website}<br>${c.phone}</div>
-              <div class="pp-reg">
-                <div class="pp-reg-row"><span class="pp-reg-lbl">VAT Reg. <span class="ar">/ الرقم الضريبي</span></span><span class="pp-reg-val">${c.vat}</span></div>
-                <div class="pp-reg-row"><span class="pp-reg-lbl">CR No. <span class="ar">/ السجل التجاري</span></span><span class="pp-reg-val">${c.cr}</span></div>
-              </div>
-            </div>
-            ${thirdCol}
+
+            ${termsSection}
           </div>
 
-          <table class="pp-table">
-            <thead><tr>
-              <th style="width:52%;">Description<span class="ar">الوصف</span></th>
-              <th class="r" style="width:9%;">Qty<span class="ar">الكمية</span></th>
-              <th class="r" style="width:20%;">Unit Price<span class="ar">سعر الوحدة</span></th>
-              <th class="r" style="width:19%;">Amount<span class="ar">المبلغ</span></th>
-            </tr></thead>
-            <tbody>${itemRows}</tbody>
-          </table>
-
-          <div class="pp-summary-block">
-            <div class="pp-totals">
-              <div class="pp-t-row"><span>Subtotal<br><span class="ar" style="font-size:6px;">المجموع الفرعي</span></span><span>SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span></div>
-              <div class="pp-t-row"><span>VAT 15%<br><span class="ar" style="font-size:6px;">ضريبة القيمة المضافة</span></span><span>SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span></div>
-              <div class="pp-t-final">
-                <span class="lbl">${totLabel}<span class="ar" style="font-family:'Cairo',sans-serif;font-size:9px;display:block;direction:rtl;">${totLabelAr}</span></span>
-                <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
-              </div>
-            </div>
-          </div>
-
-          ${termsSection}
-          </div>
-
+          <!-- FOOTER — company block left, website right -->
           <div class="pp-footer">
             <div class="pp-footer-left">
-              <div class="pp-footer-brand">${c.website.toUpperCase()}</div>
-              <div class="pp-footer-detail">${c.email} &nbsp;&middot;&nbsp; ${c.phone}</div>
-              <div class="pp-footer-detail">${c.address}, Kingdom of Saudi Arabia</div>
+              <div class="pp-footer-co">${c.name}</div>
+              <div class="pp-footer-reg">VAT Reg. ${c.vat} &nbsp;&middot;&nbsp; CR No. ${c.cr}</div>
+              <div class="pp-footer-contact">${c.email} &nbsp;&middot;&nbsp; ${c.phone}</div>
+              <div class="pp-footer-contact">${c.address}, Kingdom of Saudi Arabia</div>
             </div>
-            <div class="pp-footer-right">
-              VAT Reg. ${c.vat}<br>
-              CR No. ${c.cr}
-            </div>
+            <div class="pp-footer-right">${c.website.toUpperCase()}</div>
           </div>
+
         </div>
         </div>
       </div>
