@@ -84,9 +84,11 @@
   .pdf-page {
     background: white; width: 595px; min-height: 842px;
     box-shadow: 0 6px 28px rgba(0,0,0,0.15);
-    padding: 52px 58px 44px; position: relative;
+    padding: 52px 58px 0;
     font-family: 'Jost', sans-serif; color: #1C1C1A;
+    display: flex; flex-direction: column;
   }
+  .pp-body { flex: 1; padding-bottom: 24px; }
   .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
   .pp-logo-row { display: flex; align-items: center; gap: 10px; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
@@ -119,7 +121,7 @@
   .pp-t-final .val { font-size: 9.5px; font-weight: 600; color: #1C1C1A; }
   .pp-terms { margin-top: 18px; padding: 9px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.85; }
   .pp-terms strong { font-weight: 500; color: #1C1C1A; display: block; margin-bottom: 2px; font-size: 6.5px; }
-  .pp-footer { position: absolute; bottom: 28px; left: 58px; right: 58px; border-top: 0.5px solid #D8D5CF; padding-top: 10px; display: flex; justify-content: space-between; }
+  .pp-footer { border-top: 0.5px solid #D8D5CF; padding: 10px 58px 28px; display: flex; justify-content: space-between; margin-top: auto; }
   .pp-footer-brand { font-size: 5.5px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: #1C1C1A; margin-bottom: 3px; }
   .pp-footer-detail { font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
   .pp-footer-right { text-align: right; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
@@ -454,6 +456,7 @@ function renderPreview() {
 
           <hr class="pp-rule">
 
+          <div class="pp-body">
           <div class="pp-info-row">
             <div class="pp-info-col">
               <div class="pp-info-label">${toLabel}<span class="ar">${toLabelAr}</span></div>
@@ -492,6 +495,7 @@ function renderPreview() {
           </div>
 
           ${termsSection}
+          </div>
 
           <div class="pp-footer">
             <div>
@@ -519,7 +523,7 @@ function downloadPDF() {
     margin: 0, filename,
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2.5, useCORS: true, letterRendering: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
   }).from(el).save().then(() => {
     wrapper.style.transform = prevTransform;
   });
