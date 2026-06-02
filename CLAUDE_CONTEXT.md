@@ -156,21 +156,34 @@ To regenerate the base64: `base64 -w 0 logo.png` then prefix with `data:image/pn
 ### Rule — Never generate QR locally
 Only use the official QR field returned by Daftra. Do NOT use any QR library, construct ZATCA QR from invoice data, or generate a replacement if the field is missing.
 
-### Detection
-`openDoc()` scans these candidate keys on both the raw response wrapper and the parsed Invoice object:
-`qr`, `qr_code`, `qr_image`, `qr_url`, `zatca_qr`, `e_invoice_qr`, `barcode`
+### QR Source — confirmed Daftra field
+```
+data.Invoice.qr_code_url
+```
+Example value: `https://vistaunited.daftra.com/qr/?d64=...`
 
-Result is stored in `doc._qrCode` (empty string if not found).
-Console will log either:
-- `[Daftra QR] Found at key: "KEY"` — with the confirmed JSON path
-- `[Daftra QR] No QR field found` — plus a list of all invoice keys for manual inspection
+### Detection in `openDoc()`
+```js
+const qrUrl = invoice.qr_code_url || '';
+```
+- If found: fetched and converted to base64 data URL (so html2canvas can render it in PDF without CORS issues)
+- If missing: logs all invoice keys to console and stores empty string — no QR renders
 
-### Status
-QR field not yet confirmed from a live API response. The header renders a center QR slot **only if** `doc._qrCode` is non-empty. If empty, the header stays two-column (logo | title) with no visible change.
+Result stored in `doc._qrCode`.
 
 ### Placement
-When present: `[ Logo ] [ QR 72×72px ] [ Tax Invoice ]` — three-column flex header.
-CSS class: `.pp-header-qr` — centered flex slot with `image-rendering: pixelated`.
+Three-column CSS grid header: `[ Logo ] [ QR 88×88px ] [ Tax Invoice ]`
+```css
+.pp-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; }
+.pp-logo-wrap { justify-self: start; }
+.pp-qr-wrap   { justify-self: center; }
+.pp-title-block { justify-self: end; text-align: right; }
+.pp-qr { width: 88px; height: 88px; object-fit: contain; }
+```
+QR slot is always present in DOM; `<img>` inside is conditional on `doc._qrCode`.
+
+### Rule
+**Never generate QR locally. Never use QR libraries. Never construct from ZATCA fields. Only use `invoice.qr_code_url` from Daftra.**
 
 ---
 

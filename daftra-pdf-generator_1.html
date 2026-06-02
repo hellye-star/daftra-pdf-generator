@@ -96,14 +96,14 @@
   .pp-body { }
 
   /* Header */
-  .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-  .pp-logo-wrap { margin-top: -35px; margin-left: 12px; }
+  .pp-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; column-gap: 32px; margin-bottom: 14px; }
+  .pp-logo-wrap { justify-self: start; }
   .pp-logo { width: 150px; height: auto; display: block; object-fit: contain; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
-  .pp-doc-type { text-align: right; }
-  .pp-header-qr { display: flex; align-items: flex-start; justify-content: center; flex: 1; padding-top: 0; }
-  .pp-header-qr img { width: 72px; height: 72px; display: block; image-rendering: pixelated; }
+  .pp-qr-wrap { justify-self: center; }
+  .pp-qr { width: 88px; height: 88px; object-fit: contain; display: block; }
+  .pp-title-block { justify-self: end; text-align: right; }
   .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
   .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 400; color: #6B6B67; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
   .pp-doc-meta { font-size: 6.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 4px; }
@@ -379,26 +379,33 @@ async function openDoc(index) {
     Object.assign(doc, invoice);
     doc._items = items;
 
-    // ── Step 2a: locate official Daftra QR code field ────────────────────
-    // Never generate QR locally — only use what Daftra returns.
-    const QR_CANDIDATES = ['qr','qr_code','qr_image','qr_url','zatca_qr','e_invoice_qr','barcode'];
-    let foundQr = '';
-    let foundQrKey = '';
-    // Search the raw response wrapper first, then the parsed invoice object
-    const searchTargets = [ (d.data || d), invoice ];
-    for (const target of searchTargets) {
-      for (const key of QR_CANDIDATES) {
-        if (target[key]) { foundQr = target[key]; foundQrKey = key; break; }
+    // ── Step 2a: read official Daftra QR from confirmed path ─────────────
+    // Source: data.Invoice.qr_code_url  (confirmed Daftra field)
+    // RULE: Never generate QR locally. Never use QR libraries. Only Daftra's URL.
+    const qrUrl = invoice.qr_code_url || '';
+    if (qrUrl) {
+      console.log('[Daftra QR] Found qr_code_url:', qrUrl);
+      // Fetch and convert to base64 so html2canvas can render it in the PDF
+      // (html2canvas cannot load external URLs without CORS — data URL is safe)
+      try {
+        const qrResp = await fetch(qrUrl);
+        const qrBlob = await qrResp.blob();
+        const qrDataUrl = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(qrBlob);
+        });
+        doc._qrCode = qrDataUrl;
+        console.log('[Daftra QR] Converted to base64 data URL for PDF export.');
+      } catch(qrErr) {
+        console.warn('[Daftra QR] Could not fetch QR image for base64 conversion:', qrErr.message);
+        doc._qrCode = qrUrl; // fall back to URL — preview may work, PDF may not
       }
-      if (foundQr) break;
-    }
-    if (foundQr) {
-      console.log(`[Daftra QR] Found at key: "${foundQrKey}" — value preview: ${String(foundQr).slice(0,80)}...`);
     } else {
-      console.warn('[Daftra QR] No QR field found. Checked keys:', QR_CANDIDATES.join(', '));
+      console.warn('[Daftra QR] qr_code_url not found on this invoice.');
       console.log('[Daftra QR] All invoice keys:', Object.keys(invoice).join(', '));
+      doc._qrCode = '';
     }
-    doc._qrCode = foundQr; // empty string if not found
 
     // ── Step 2b: read VAT / CR from invoice fields ────────────────────────
     // data.Invoice.client_bn1 = VAT,  data.Invoice.client_bn2 = CR
@@ -519,13 +526,15 @@ function renderPreview() {
         <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
         <div class="pdf-page" id="pdfPage">
 
-          <!-- HEADER -->
+          <!-- HEADER: logo | QR (Daftra official, conditional) | title -->
           <div class="pp-header">
             <div class="pp-logo-wrap">
               <img class="pp-logo" src="${LOGO_DATA_URL}" alt="Vista United">
             </div>
-            ${qrCode ? `<div class="pp-header-qr"><img src="${qrCode}" alt="QR Code"></div>` : ''}
-            <div class="pp-doc-type">
+            <div class="pp-qr-wrap">
+              ${qrCode ? `<img class="pp-qr" src="${qrCode}" alt="Tax Invoice QR Code">` : ''}
+            </div>
+            <div class="pp-title-block">
               <div class="pp-doc-heading">${docLabel}</div>
               <div class="pp-doc-heading-ar">${docLabelAr}</div>
               <div class="pp-doc-meta">No. ${prefix} &nbsp;&middot;&nbsp; ${date}</div>
