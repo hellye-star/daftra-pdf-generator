@@ -117,19 +117,24 @@ Footer uses `margin-top: 32px`, natural flow, `page-break-inside: avoid`.
 
 ### PDF export (html2pdf settings)
 ```js
+// IMPORTANT: .set() MUST come before .from() — options must be set before element capture
 html2pdf().set({
   margin: 0,
+  filename: filename,
+  image: { type: 'jpeg', quality: 0.98 },
   pagebreak: {
     mode: ['css', 'legacy'],
     avoid: ['.pp-footer', '.pp-summary-block', '.pp-info-grid', '.pp-totals']
   },
-  html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+  html2canvas: { scale: 2, useCORS: true, scrollY: 0, logging: false },
   jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-})
+}).from(el).save()
 ```
 - `scrollY: 0` prevents phantom blank page from scroll offset
 - No `width` or `windowWidth` constraints on html2canvas — caused left-side clipping
 - `unit: 'mm'` matches `210mm` page width
+- **Never reorder `.set()` after `.from()`** — doing so breaks option application and silently corrupts the export
+- **Future layout changes must not touch:** `downloadPDF()` function body, html2pdf options, the `#pdfPage` selector, or the Download PDF button's `onclick` attribute. Isolate all layout work to CSS and the `renderPreview()` HTML template only.
 
 ### Preview scaling
 The on-screen preview wrapper uses `transform: scale(1.8)` for readability.
@@ -156,6 +161,7 @@ CSS: `width: 150px; height: auto; display: block`.
 | Arabic numerals in VAT/CR | `toEnDigits()` converts at display time only |
 | Arabic headings misaligned | Removed `direction: rtl` from label container; Arabic now left-aligned matching English |
 | Summary block splitting across pages | `page-break-inside: avoid` on `.pp-summary-block` and `.pp-totals` |
+| Download PDF button broken after layout/footer changes | Reverted `daftra-pdf-generator_1.html` to commit `c9dc4f8` (last confirmed working state). Root cause: subsequent layout commits corrupted the `downloadPDF()` function. |
 
 ---
 
