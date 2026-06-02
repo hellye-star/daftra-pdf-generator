@@ -141,9 +141,10 @@ The on-screen preview wrapper uses `transform: scale(1.8)` for readability.
 This does **not** affect the exported PDF — html2pdf captures `#pdfPage` directly.
 
 ### Logo
-Replaced inline SVG with `<img class="pp-logo" src="logo.png.png">`.
-File is `logo.png.png` (double extension — Windows artifact from the upload).
-CSS: `width: 150px; height: auto; display: block`.
+`<img class="pp-logo" src="./logo.png" alt="Vista United">`
+File is `logo.png` — copied from `logo.png.png.png` (triple-extension Windows artifact).
+CSS: `width: 145px; height: auto; display: block; object-fit: contain`
+**If logo appears missing:** confirm `logo.png` is in the same folder as the HTML file.
 
 ---
 
@@ -171,8 +172,9 @@ CSS: `width: 150px; height: auto; display: block`.
    not fully verified. `page-break-inside: avoid` on footer is set but html2pdf
    rendering may still vary by browser.
 
-2. **Logo filename** — logo file is `logo.png.png` due to a Windows double-extension
-   artifact. If the file is renamed, update `src` in the `renderPreview` template.
+2. **Logo filename** — logo is `logo.png` (copied from `logo.png.png.png`, a Windows
+   triple-extension artifact). HTML references `./logo.png`. Both files exist in the
+   project folder. Do not delete `logo.png`.
 
 3. **API key in source** — the Daftra API key is hardcoded in the HTML file.
    Acceptable for internal single-user tooling; not suitable for sharing or
