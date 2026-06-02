@@ -151,6 +151,12 @@
   .pp-item-desc { font-size: 6.5px; font-weight: 300; color: #6B6B67; }
   .pp-td-r { text-align: right; font-size: 7.5px; font-weight: 300; color: #1C1C1A; white-space: nowrap; padding-left: 8px; }
 
+  /* Invoice tail — last 2 rows + totals kept together; prevents orphan totals on page 2 */
+  .pp-invoice-tail { page-break-inside: avoid; break-inside: avoid; margin-top: 0; }
+  .pp-table-tail { width: 100%; border-collapse: collapse; margin-top: 0; }
+  .pp-table-tail tbody tr { border-bottom: 0.5px solid #D8D5CF; page-break-inside: avoid; break-inside: avoid; }
+  .pp-table-tail td { padding: 9px 0; vertical-align: top; }
+
   /* Terms */
   .pp-terms { margin-top: 14px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6.5px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
   .pp-terms strong { font-weight: 600; color: #1C1C1A; display: block; margin-bottom: 3px; font-size: 7px; }
@@ -506,21 +512,24 @@ function renderPreview() {
 
   const addrLine = [addr1, city, postal].filter(Boolean).join(', ');
 
-  const itemRows = items.length
-    ? items.map(it => {
-        const name  = it.product_name || it.name || it.item || it.title || '—';
-        const desc  = it.description || it.note || it.notes || '';
-        const qty   = parseFloat(it.quantity || it.qty || 1);
-        const price = parseFloat(it.price || it.unit_price || it.unit_cost || 0);
-        const amt   = parseFloat(it.total || it.total_price || it.amount || (qty * price) || 0);
-        return `<tr>
-          <td><div class="pp-item-name">${name}</div>${desc?`<div class="pp-item-desc">${desc}</div>`:''}</td>
-          <td class="pp-td-r">${qty % 1 === 0 ? qty : qty.toFixed(2)}</td>
-          <td class="pp-td-r">${price.toLocaleString('en',{minimumFractionDigits:2})}</td>
-          <td class="pp-td-r">${amt.toLocaleString('en',{minimumFractionDigits:2})}</td>
-        </tr>`;
-      }).join('')
-    : `<tr><td colspan="4" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items returned</td></tr>`;
+  const renderRow = it => {
+    const name  = it.product_name || it.name || it.item || it.title || '—';
+    const desc  = it.description || it.note || it.notes || '';
+    const qty   = parseFloat(it.quantity || it.qty || 1);
+    const price = parseFloat(it.price || it.unit_price || it.unit_cost || 0);
+    const amt   = parseFloat(it.total || it.total_price || it.amount || (qty * price) || 0);
+    return `<tr>
+      <td><div class="pp-item-name">${name}</div>${desc?`<div class="pp-item-desc">${desc}</div>`:''}</td>
+      <td class="pp-td-r">${qty % 1 === 0 ? qty : qty.toFixed(2)}</td>
+      <td class="pp-td-r">${price.toLocaleString('en',{minimumFractionDigits:2})}</td>
+      <td class="pp-td-r">${amt.toLocaleString('en',{minimumFractionDigits:2})}</td>
+    </tr>`;
+  };
+  // Split: last 2 rows stay with the totals block to prevent orphan totals on page 2
+  const TAIL_ROWS = 2;
+  const allRows   = items.map(renderRow);
+  const headRows  = items.length ? allRows.slice(0, Math.max(0, allRows.length - TAIL_ROWS)).join('') : `<tr><td colspan="4" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items returned</td></tr>`;
+  const tailRows  = items.length ? allRows.slice(-TAIL_ROWS).join('') : '';
 
   const thirdCol = !isInv ? `
     <div class="pp-info-col">
@@ -613,7 +622,7 @@ function renderPreview() {
               ${thirdCol}
             </div>
 
-            <!-- LINE ITEMS TABLE -->
+            <!-- LINE ITEMS TABLE — all rows except last 2 -->
             <table class="pp-table">
               <thead><tr>
                 <th style="width:52%;">Description <span class="th-ar">الوصف</span></th>
@@ -621,23 +630,26 @@ function renderPreview() {
                 <th class="r" style="width:20%;">Unit Price <span class="th-ar">سعر الوحدة</span></th>
                 <th class="r" style="width:19%;">Amount <span class="th-ar">المبلغ</span></th>
               </tr></thead>
-              <tbody>${itemRows}</tbody>
+              <tbody>${headRows}</tbody>
             </table>
 
-            <!-- SUMMARY BLOCK — never splits across pages -->
-            <div class="pp-summary-block">
-              <div class="pp-totals">
-                <div class="pp-t-row">
-                  <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع الفرعي</span></div>
-                  <span class="pp-t-row-amt">SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
-                </div>
-                <div class="pp-t-row">
-                  <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT 15%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div>
-                  <span class="pp-t-row-amt">SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span>
-                </div>
-                <div class="pp-t-final">
-                  <div><span class="lbl">${totLabel}</span><span class="lbl-ar">${totLabelAr}</span></div>
-                  <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            <!-- INVOICE TAIL — last 2 rows + totals kept together; prevents orphan page -->
+            <div class="pp-invoice-tail">
+              ${tailRows ? `<table class="pp-table-tail"><tbody>${tailRows}</tbody></table>` : ''}
+              <div class="pp-summary-block">
+                <div class="pp-totals">
+                  <div class="pp-t-row">
+                    <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع الفرعي</span></div>
+                    <span class="pp-t-row-amt">SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+                  </div>
+                  <div class="pp-t-row">
+                    <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT 15%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div>
+                    <span class="pp-t-row-amt">SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span>
+                  </div>
+                  <div class="pp-t-final">
+                    <div><span class="lbl">${totLabel}</span><span class="lbl-ar">${totLabelAr}</span></div>
+                    <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
+                  </div>
                 </div>
               </div>
             </div>
