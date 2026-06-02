@@ -374,8 +374,8 @@ function renderPreview() {
   const city   = doc.client_city || '';
   const postal = doc.client_postal_code || '';
   console.log('[Daftra] full doc fields:', JSON.stringify(doc, null, 2));
-  const clientVat = doc.client_tax_number || doc.client_vat_number || doc.client_vat || doc.tax_number || '—';
-  const clientCr  = doc.client_cr_number || doc.client_commercial_register || doc.cr_number || doc.client_cr || '—';
+  const clientVat = doc.VAT || doc.client_tax_number || doc.client_vat_number || doc.client_vat || '—';
+  const clientCr  = doc.CR  || doc.client_cr_number  || doc.client_commercial_register || '—';
   const validUntil = doc.expiry_date || '—';
 
   const subtotal = parseFloat(doc.summary_subtotal || doc.subtotal_amount || 0);
