@@ -80,65 +80,68 @@
   .btn-sm-dark:hover { background: #333; }
   .pdf-bg { background: #e5e4e0; padding: 36px 28px; display: flex; justify-content: center; overflow: visible; }
 
-  /* PDF PAGE */
+  /* ── PDF PAGE ── */
+  @page { size: A4; margin: 0; }
   .pdf-page {
-    background: white; width: 595px; min-height: 842px;
-    box-shadow: 0 6px 28px rgba(0,0,0,0.15);
-    padding: 22px 44px 0;
-    font-family: 'Jost', sans-serif; color: #1C1C1A;
-    display: flex; flex-direction: column;
+    width: 210mm;
+    min-height: 297mm;
+    box-sizing: border-box;
+    padding: 28px 38px 34px 38px;
+    margin: 0 auto;
+    overflow: hidden;
+    background: #fff;
+    font-family: 'Jost', sans-serif;
+    color: #1C1C1A;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 6px 28px rgba(0,0,0,0.12);
   }
-  .pp-body { flex: 1; flex-shrink: 0; padding-bottom: 18px; }
+  .pp-body { flex: 1; flex-shrink: 0; }
 
   /* Header */
-  .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
   .pp-logo-row { display: flex; align-items: center; gap: 10px; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
   .pp-doc-type { text-align: right; }
   .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
-  .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 400; color: #6B6B67; direction: rtl; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
+  .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 400; color: #6B6B67; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
   .pp-doc-meta { font-size: 6.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 4px; }
   .pp-rule { border: none; border-top: 0.5px solid #D8D5CF; margin-bottom: 16px; }
 
-  /* Info columns — issued to / issued by */
-  .pp-info-row { display: flex; margin-bottom: 18px; }
-  .pp-info-col { flex: 1; padding-right: 20px; }
-  .pp-info-col:last-child { padding-right: 0; }
-  /* English label */
-  .pp-info-label-en { font-size: 5.5px; font-weight: 500; letter-spacing: 0.22em; color: #ADADAA; text-transform: uppercase; line-height: 1; }
-  /* Arabic label — always same height block, same margin */
-  .pp-info-label-ar { font-family: 'Cairo', sans-serif; font-size: 7px; font-weight: 400; color: #ADADAA; display: block; margin-top: 2px; margin-bottom: 8px; letter-spacing: 0; text-align: left; }
+  /* Issued To / Issued By grid */
+  .pp-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; width: 100%; margin-bottom: 18px; }
+  .pp-info-block { min-width: 0; }
+  .pp-section-heading { margin-bottom: 10px; }
+  .pp-heading-en { font-size: 7px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: #ADADAA; line-height: 1.2; }
+  .pp-heading-ar { font-family: 'Cairo', sans-serif; font-size: 8px; font-weight: 400; color: #C0BDB8; line-height: 1.2; margin-top: 4px; text-align: left; }
   .pp-info-name { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 13px; color: #1C1C1A; line-height: 1.2; margin-bottom: 4px; }
   .pp-info-body { font-size: 7px; font-weight: 300; color: #6B6B67; line-height: 1.75; }
 
-  /* VAT / CR registration rows */
+  /* VAT / CR rows */
   .pp-reg { margin-top: 8px; padding-top: 7px; border-top: 0.5px solid #D8D5CF; }
-  .pp-reg-row { display: flex; align-items: baseline; margin-bottom: 3px; }
-  .pp-reg-lbl-en { font-size: 6px; font-weight: 500; color: #ADADAA; text-transform: uppercase; letter-spacing: 0.1em; width: 52px; flex-shrink: 0; }
-  .pp-reg-lbl-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 400; color: #C8C5BF; width: 68px; flex-shrink: 0; direction: rtl; }
+  .pp-reg-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
+  .pp-reg-lbl-en { font-size: 6px; font-weight: 500; color: #ADADAA; text-transform: uppercase; letter-spacing: 0.1em; width: 48px; flex-shrink: 0; }
+  .pp-reg-lbl-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 400; color: #C8C5BF; width: 64px; flex-shrink: 0; }
   .pp-reg-val { font-size: 7.5px; font-weight: 300; color: #1C1C1A; letter-spacing: 0.01em; }
 
-  /* Summary / totals — never split across pages */
-  .pp-summary-block {
-    display: flex; justify-content: flex-end; margin-top: 10px;
-    page-break-inside: avoid; break-inside: avoid;
-  }
+  /* Summary block — never splits across pages */
+  .pp-summary-block { display: flex; justify-content: flex-end; margin-top: 10px; page-break-inside: avoid; break-inside: avoid; }
   .pp-totals { width: 220px; page-break-inside: avoid; break-inside: avoid; }
   .pp-t-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 0.5px solid #D8D5CF; }
   .pp-t-row-lbl { display: flex; flex-direction: column; gap: 1px; }
   .pp-t-row-en { font-size: 7px; font-weight: 300; color: #6B6B67; }
-  .pp-t-row-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 300; color: #ADADAA; direction: rtl; }
+  .pp-t-row-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 300; color: #ADADAA; }
   .pp-t-row-amt { font-size: 7.5px; font-weight: 400; color: #1C1C1A; }
   .pp-t-final { border-top: 0.8px solid #1C1C1A; border-bottom: none !important; padding-top: 9px; margin-top: 3px; display: flex; justify-content: space-between; align-items: flex-start; }
   .pp-t-final .lbl { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 12px; color: #1C1C1A; line-height: 1.2; }
-  .pp-t-final .lbl-ar { font-family: 'Cairo', sans-serif; font-size: 8px; font-weight: 400; color: #6B6B67; direction: rtl; display: block; margin-top: 2px; }
+  .pp-t-final .lbl-ar { font-family: 'Cairo', sans-serif; font-size: 8px; font-weight: 400; color: #6B6B67; display: block; margin-top: 2px; }
   .pp-t-final .val { font-size: 10px; font-weight: 600; color: #1C1C1A; }
 
   /* Table */
   .pp-table { width: 100%; border-collapse: collapse; }
   .pp-table thead tr { border-bottom: 0.5px solid #D8D5CF; }
-  .pp-table th { font-size: 5.5px; font-weight: 500; letter-spacing: 0.2em; color: #ADADAA; text-transform: uppercase; padding-bottom: 7px; text-align: left; }
+  .pp-table th { font-size: 6px; font-weight: 500; letter-spacing: 0.18em; color: #ADADAA; text-transform: uppercase; padding-bottom: 7px; text-align: left; }
   .th-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 300; color: #ADADAA; display: block; margin-top: 2px; letter-spacing: 0; }
   .pp-table th.r { text-align: right; }
   .pp-table tbody tr { border-bottom: 0.5px solid #D8D5CF; page-break-inside: avoid; break-inside: avoid; }
@@ -148,22 +151,18 @@
   .pp-td-r { text-align: right; font-size: 7.5px; font-weight: 300; color: #1C1C1A; white-space: nowrap; padding-left: 8px; }
 
   /* Terms */
-  .pp-terms { margin-top: 14px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
-  .pp-terms strong { font-weight: 600; color: #1C1C1A; display: block; margin-bottom: 2px; font-size: 6.5px; }
-
-  /* Footer — company block left, website right */
-  .pp-footer { border-top: 0.5px solid #D8D5CF; padding: 9px 0 20px; display: flex; justify-content: space-between; align-items: flex-start; margin-top: auto; flex-shrink: 0; gap: 20px; }
-  .pp-footer-left { flex: 1; }
-  .pp-footer-co { font-size: 6px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #1C1C1A; margin-bottom: 4px; }
-  .pp-footer-contact { font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
-  .pp-footer-right { text-align: right; font-size: 5.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #ADADAA; flex-shrink: 0; margin-top: 2px; }
+  .pp-terms { margin-top: 14px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6.5px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
+  .pp-terms strong { font-weight: 600; color: #1C1C1A; display: block; margin-bottom: 3px; font-size: 7px; }
   .pp-validity-badge { display: inline-block; background: #1C1C1A; color: white; font-size: 5px; font-weight: 300; letter-spacing: 0.14em; text-transform: uppercase; padding: 2.5px 6px; margin-top: 6px; }
 
+  /* Footer */
+  .pp-footer { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #ddd; padding-top: 18px; margin-top: 34px; font-size: 8px; color: #777; line-height: 1.6; flex-shrink: 0; }
+  .pp-footer strong { font-size: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; }
+  .pp-footer-website { text-align: right; font-size: 7px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #ADADAA; flex-shrink: 0; }
+
   /* Arabic utility */
-  .ar { font-family: 'Cairo', sans-serif; direction: rtl; unicode-bidi: embed; }
-  .pp-doc-heading .ar { font-family: 'Cairo', sans-serif; font-style: normal; font-size: 18px; font-weight: 600; display: block; line-height: 1.1; direction: rtl; color: #6B6B67; }
-  .pp-terms .ar-title { font-family: 'Cairo', sans-serif; direction: rtl; font-size: 6.5px; font-weight: 600; display: block; color: #1C1C1A; margin-top: 3px; }
-  .pp-footer-detail .ar, .pp-footer-right .ar { font-family: 'Cairo', sans-serif; font-size: 5.5px; direction: rtl; display: block; margin-top: 1px; }
+  .ar { font-family: 'Cairo', sans-serif; }
+  .pp-terms .ar-title { font-family: 'Cairo', sans-serif; font-size: 6.5px; font-weight: 600; display: block; color: #1C1C1A; margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -517,10 +516,12 @@ function renderPreview() {
           <div class="pp-body">
 
             <!-- ISSUED TO / ISSUED BY -->
-            <div class="pp-info-row">
-              <div class="pp-info-col">
-                <div class="pp-info-label-en">${toLabel}</div>
-                <div class="pp-info-label-ar">${toLabelAr}</div>
+            <div class="pp-info-grid">
+              <div class="pp-info-block">
+                <div class="pp-section-heading">
+                  <div class="pp-heading-en">${toLabel}</div>
+                  <div class="pp-heading-ar">${toLabelAr}</div>
+                </div>
                 <div class="pp-info-name">${client}</div>
                 <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia</div>
                 <div class="pp-reg">
@@ -536,9 +537,11 @@ function renderPreview() {
                   </div>
                 </div>
               </div>
-              <div class="pp-info-col">
-                <div class="pp-info-label-en">${byLabel}</div>
-                <div class="pp-info-label-ar">${byLabelAr}</div>
+              <div class="pp-info-block">
+                <div class="pp-section-heading">
+                  <div class="pp-heading-en">${byLabel}</div>
+                  <div class="pp-heading-ar">${byLabelAr}</div>
+                </div>
                 <div class="pp-info-name">${c.name}</div>
                 <div class="pp-info-body">${c.address}<br>${c.website}<br>${c.phone}</div>
                 <div class="pp-reg">
@@ -589,14 +592,14 @@ function renderPreview() {
             ${termsSection}
           </div>
 
-          <!-- FOOTER -->
+          <!-- FOOTER: contact info only, no VAT or CR -->
           <div class="pp-footer">
-            <div class="pp-footer-left">
-              <div class="pp-footer-co">${c.name}</div>
-              <div class="pp-footer-contact">${c.email} &nbsp;&middot;&nbsp; ${c.phone}</div>
-              <div class="pp-footer-contact">${c.address}, Kingdom of Saudi Arabia</div>
+            <div>
+              <strong>${c.name}</strong><br>
+              ${c.email} &nbsp;&middot;&nbsp; ${c.phone}<br>
+              ${c.address}, Kingdom of Saudi Arabia
             </div>
-            <div class="pp-footer-right">${c.website.toUpperCase()}</div>
+            <div class="pp-footer-website">${c.website.toUpperCase()}</div>
           </div>
 
         </div>
@@ -617,8 +620,8 @@ function downloadPDF() {
   html2pdf().set({
     margin: 0, filename,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2.5, useCORS: true, letterRendering: true, width: 595, windowWidth: 595 },
-    jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   }).from(el).save().then(() => {
     wrapper.style.transform = prevTransform;
   });
