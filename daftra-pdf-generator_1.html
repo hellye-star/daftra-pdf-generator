@@ -416,7 +416,8 @@ async function openDoc(index) {
     let qrPayload = '';
     if (qrUrl) {
       try {
-        qrPayload = new URL(qrUrl).searchParams.get('d64') || '';
+        const d64 = new URL(qrUrl).searchParams.get('d64') || '';
+        qrPayload = d64 ? atob(d64) : '';
       } catch(e) {
         console.error('[Daftra QR] Failed to parse qr_code_url:', e.message);
       }
