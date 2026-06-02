@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vista United — Daftra PDF Generator</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&family=Cairo:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -78,7 +78,7 @@
   .btn-sm-outline:hover { border-color: var(--dark); }
   .btn-sm-dark { background: var(--dark); color: #fff; }
   .btn-sm-dark:hover { background: #333; }
-  .pdf-bg { background: #e5e4e0; padding: 28px; display: flex; justify-content: center; }
+  .pdf-bg { background: #e5e4e0; padding: 36px 28px; display: flex; justify-content: center; overflow: visible; }
 
   /* PDF PAGE — matches the real PDF exactly */
   .pdf-page {
@@ -124,6 +124,15 @@
   .pp-footer-detail { font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
   .pp-footer-right { text-align: right; font-size: 6px; font-weight: 300; color: #6B6B67; line-height: 1.7; }
   .pp-validity-badge { display: inline-block; background: #1C1C1A; color: white; font-size: 5px; font-weight: 300; letter-spacing: 0.14em; text-transform: uppercase; padding: 2.5px 6px; margin-top: 6px; }
+
+  /* ARABIC / BILINGUAL */
+  .ar { font-family: 'Cairo', sans-serif; direction: rtl; unicode-bidi: embed; }
+  .pp-info-label .ar { font-size: 5px; display: block; color: #ADADAA; margin-top: 1px; letter-spacing: 0; font-weight: 400; }
+  .pp-table th .ar { font-size: 5px; display: block; font-weight: 400; letter-spacing: 0; color: #ADADAA; }
+  .pp-t-row .ar, .pp-t-final .ar { font-size: 6.5px; font-weight: 300; }
+  .pp-doc-heading .ar { font-family: 'Cairo', sans-serif; font-style: normal; font-size: 18px; font-weight: 600; display: block; line-height: 1.1; direction: rtl; color: #6B6B67; }
+  .pp-terms .ar-title { font-family: 'Cairo', sans-serif; direction: rtl; font-size: 6.5px; font-weight: 600; display: block; color: #1C1C1A; margin-top: 3px; }
+  .pp-footer-detail .ar, .pp-footer-right .ar { font-family: 'Cairo', sans-serif; font-size: 5.5px; direction: rtl; display: block; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -331,14 +340,19 @@ async function openDoc(index) {
       headers: { 'APIKEY': key, 'Accept': 'application/json' }
     });
     const d = await r.json();
+    console.log('[Daftra] single doc raw response:', JSON.stringify(d, null, 2));
     // Single doc response: { data: { Invoice: {...}, InvoiceItem: [...] } }
     const payload = d.data || d;
     const fullDoc = payload[docKey] || payload;
-    items = payload[itemsKey] || [];
+    // items may be under the model key or directly on data as an array
+    items = payload[itemsKey] || fullDoc[itemsKey] || fullDoc.items || [];
+    console.log('[Daftra] extracted items:', items);
     // merge full doc fields back in (single fetch has more detail)
     Object.assign(doc, fullDoc);
     doc._items = items;
   } catch(e) {
+    console.error('[Daftra] openDoc error:', e);
+    status(e.message || 'Failed to load document details.', 'error');
     doc._items = [];
   }
 
@@ -367,21 +381,25 @@ function renderPreview() {
   const taxAmt   = parseFloat(doc.summary_tax || doc.tax_amount || 0);
   const total    = parseFloat(doc.total_amount || doc.summary_total || 0);
 
-  const prefix   = isInv ? `INV-${no}` : `QUO-${no}`;
-  const docLabel = isInv ? 'Invoice' : 'Quotation';
-  const byLabel  = isInv ? 'Issued By' : 'Prepared By';
-  const toLabel  = isInv ? 'Issued To' : 'Prepared For';
-  const totLabel = isInv ? 'Total Due' : 'Total Estimate';
+  const prefix    = isInv ? `INV-${no}` : `QUO-${no}`;
+  const docLabel  = isInv ? 'Invoice'      : 'Quotation';
+  const docLabelAr= isInv ? 'فاتورة'       : 'عرض سعر';
+  const byLabel   = isInv ? 'Issued By'    : 'Prepared By';
+  const byLabelAr = isInv ? 'صادر من'      : 'معد من قبل';
+  const toLabel   = isInv ? 'Issued To'    : 'Prepared For';
+  const toLabelAr = isInv ? 'صادر إلى'     : 'معد لصالح';
+  const totLabel  = isInv ? 'Total Due'    : 'Total Estimate';
+  const totLabelAr= isInv ? 'إجمالي المستحق' : 'إجمالي التقدير';
 
   const addrLine = [addr1, city, postal].filter(Boolean).join(', ');
 
   const itemRows = items.length
     ? items.map(it => {
-        const name  = it.item || it.product_name || it.name || '—';
-        const desc  = it.description || it.notes || '';
-        const qty   = parseFloat(it.quantity || 1);
-        const price = parseFloat(it.unit_price || 0);
-        const amt   = parseFloat(it.total || (qty * price) || 0);
+        const name  = it.product_name || it.name || it.item || it.title || '—';
+        const desc  = it.description || it.note || it.notes || '';
+        const qty   = parseFloat(it.quantity || it.qty || 1);
+        const price = parseFloat(it.price || it.unit_price || it.unit_cost || 0);
+        const amt   = parseFloat(it.total || it.total_price || it.amount || (qty * price) || 0);
         return `<tr>
           <td><div class="pp-item-name">${name}</div>${desc?`<div class="pp-item-desc">${desc}</div>`:''}</td>
           <td class="pp-td-r">${qty % 1 === 0 ? qty : qty.toFixed(2)}</td>
@@ -402,8 +420,10 @@ function renderPreview() {
   const termsSection = !isInv ? `
     <div class="pp-terms">
       <strong>Terms &amp; Conditions</strong>
+      <span class="ar-title">الشروط والأحكام</span>
       This quotation is valid for 30 days from the date of issue. A 50% deposit is required upon acceptance.
       Final payment is due upon delivery. All amounts include VAT at 15% as per ZATCA regulations.
+      <span class="ar" style="display:block;margin-top:3px;font-size:6px;font-weight:300;line-height:1.8;">هذا العرض صالح لمدة 30 يومًا من تاريخ الإصدار. يُشترط دفع 50% من القيمة عند الموافقة. يستحق الدفع النهائي عند التسليم. جميع المبالغ تشمل ضريبة القيمة المضافة 15% وفق متطلبات هيئة الزكاة والضريبة والجمارك.</span>
     </div>` : '';
 
   $('mainArea').innerHTML = `
@@ -413,6 +433,7 @@ function renderPreview() {
     </div>
     <div class="preview-wrap">
       <div class="pdf-bg">
+        <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
         <div class="pdf-page" id="pdfPage">
           <div class="pp-header">
             <div class="pp-logo-row">
@@ -425,7 +446,7 @@ function renderPreview() {
               </div>
             </div>
             <div class="pp-doc-type">
-              <div class="pp-doc-heading">${docLabel}</div>
+              <div class="pp-doc-heading">${docLabel}<span class="ar">${docLabelAr}</span></div>
               <div class="pp-doc-meta">No. ${prefix} &nbsp;&middot;&nbsp; ${date}</div>
             </div>
           </div>
@@ -434,13 +455,13 @@ function renderPreview() {
 
           <div class="pp-info-row">
             <div class="pp-info-col">
-              <div class="pp-info-label">${toLabel}</div>
+              <div class="pp-info-label">${toLabel}<span class="ar">${toLabelAr}</span></div>
               <div class="pp-info-name">${client}</div>
-              <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia</div>
+              <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia<br><span class="ar">المملكة العربية السعودية</span></div>
               <div class="pp-reg">VAT Reg. ${clientVat}<br>CR No. ${clientCr}</div>
             </div>
             <div class="pp-info-col">
-              <div class="pp-info-label">${byLabel}</div>
+              <div class="pp-info-label">${byLabel}<span class="ar">${byLabelAr}</span></div>
               <div class="pp-info-name">${c.name}</div>
               <div class="pp-info-body">${c.address}<br>${c.website}<br>${c.phone}</div>
               <div class="pp-reg">VAT Reg. ${c.vat}<br>CR No. ${c.cr}</div>
@@ -450,20 +471,20 @@ function renderPreview() {
 
           <table class="pp-table">
             <thead><tr>
-              <th style="width:52%;">Description</th>
-              <th class="r" style="width:9%;">Qty</th>
-              <th class="r" style="width:20%;">Unit Price</th>
-              <th class="r" style="width:19%;">Amount</th>
+              <th style="width:52%;">Description<span class="ar">الوصف</span></th>
+              <th class="r" style="width:9%;">Qty<span class="ar">الكمية</span></th>
+              <th class="r" style="width:20%;">Unit Price<span class="ar">سعر الوحدة</span></th>
+              <th class="r" style="width:19%;">Amount<span class="ar">المبلغ</span></th>
             </tr></thead>
             <tbody>${itemRows}</tbody>
           </table>
 
           <div class="pp-totals-wrap">
             <div class="pp-totals">
-              <div class="pp-t-row"><span>Subtotal</span><span>SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span></div>
-              <div class="pp-t-row"><span>VAT 15%</span><span>SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span></div>
+              <div class="pp-t-row"><span>Subtotal <span class="ar">المجموع الفرعي</span></span><span>SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span></div>
+              <div class="pp-t-row"><span>VAT 15% <span class="ar">ضريبة القيمة المضافة</span></span><span>SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span></div>
               <div class="pp-t-final">
-                <span class="lbl">${totLabel}</span>
+                <span class="lbl">${totLabel}<span class="ar" style="font-family:'Cairo',sans-serif;font-size:10px;display:block;direction:rtl;">${totLabelAr}</span></span>
                 <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
               </div>
             </div>
@@ -474,10 +495,11 @@ function renderPreview() {
           <div class="pp-footer">
             <div>
               <div class="pp-footer-brand">${c.website.toUpperCase()}</div>
-              <div class="pp-footer-detail">${c.email} &nbsp;&middot;&nbsp; ${c.phone}<br>${c.address}, Kingdom of Saudi Arabia</div>
+              <div class="pp-footer-detail">${c.email} &nbsp;&middot;&nbsp; ${c.phone}<br>${c.address}, Kingdom of Saudi Arabia<span class="ar">${c.address}، المملكة العربية السعودية</span></div>
             </div>
-            <div class="pp-footer-right">VAT Reg. ${c.vat}<br>CR No. ${c.cr}</div>
+            <div class="pp-footer-right">VAT Reg. ${c.vat}<br>CR No. ${c.cr}<span class="ar">الرقم الضريبي: ${c.vat}<br>السجل التجاري: ${c.cr}</span></div>
           </div>
+        </div>
         </div>
       </div>
     </div>`;
@@ -485,15 +507,21 @@ function renderPreview() {
 
 function downloadPDF() {
   const el = $('pdfPage');
+  const wrapper = el.parentElement;
   const { doc, type } = currentDoc;
   const no = doc.no || doc.id || '001';
   const filename = `${type === 'invoices' ? 'invoice' : 'quotation'}-${no}.pdf`;
+  // Temporarily remove the preview scale so the PDF captures at true A4 size
+  const prevTransform = wrapper.style.transform;
+  wrapper.style.transform = 'none';
   html2pdf().set({
     margin: 0, filename,
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2.5, useCORS: true, letterRendering: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  }).from(el).save();
+  }).from(el).save().then(() => {
+    wrapper.style.transform = prevTransform;
+  });
 }
 </script>
 </body>
