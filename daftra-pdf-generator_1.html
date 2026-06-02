@@ -157,12 +157,12 @@
       <div style="display:flex;flex-direction:column;gap:10px;">
         <div class="form-group">
           <div class="form-label">Subdomain</div>
-          <input class="form-input" id="subdomain" placeholder="yourcompany">
+          <input class="form-input" id="subdomain" value="vistaunited" placeholder="yourcompany">
           <div class="form-note">The part before .daftra.com</div>
         </div>
         <div class="form-group">
           <div class="form-label">API Key</div>
-          <input class="form-input" id="apikey" type="password" placeholder="Your API Key">
+          <input class="form-input" id="apikey" type="password" value="6643b05a97fbd5dfaca13ccec661f31b9c36889b" placeholder="Your API Key">
           <div class="form-note">Settings → API → API Keys</div>
         </div>
         <button class="btn btn-dark" id="fetchBtn" onclick="fetchDocuments()">Fetch Documents</button>
@@ -176,12 +176,12 @@
       <div style="display:flex;flex-direction:column;gap:9px;">
         <div class="form-group"><div class="form-label">Name</div><input class="form-input" id="coName" value="Vista United Co."></div>
         <div class="form-group"><div class="form-label">Tagline</div><input class="form-input" id="coTagline" value="Brand Experience Studio"></div>
-        <div class="form-group"><div class="form-label">Address</div><input class="form-input" id="coAddress" value="Riyadh, KSA"></div>
+        <div class="form-group"><div class="form-label">Address</div><input class="form-input" id="coAddress" value="Jeddah, KSA, Al Muhammadiya Dist, Muhammad Ibn 23625 Hatib Street"></div>
         <div class="form-group"><div class="form-label">Website</div><input class="form-input" id="coWebsite" value="vistaunited.co"></div>
         <div class="form-group"><div class="form-label">Phone</div><input class="form-input" id="coPhone" value="+966 55 568 4753"></div>
         <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="coEmail" value="youssef@vistaunited.co"></div>
-        <div class="form-group"><div class="form-label">VAT Registration</div><input class="form-input" id="coVat" value="3000-XX-XX-XXX"></div>
-        <div class="form-group"><div class="form-label">CR Number</div><input class="form-input" id="coCr" value="1010-XXXXXX"></div>
+        <div class="form-group"><div class="form-label">VAT Registration</div><input class="form-input" id="coVat" value="314573358300003"></div>
+        <div class="form-group"><div class="form-label">CR Number</div><input class="form-input" id="coCr" value="7053413683"></div>
       </div>
     </div>
   </div>
@@ -220,12 +220,12 @@ const $ = id => document.getElementById(id);
 const co = () => ({
   name:    $('coName').value    || 'Vista United Co.',
   tagline: $('coTagline').value || 'Brand Experience Studio',
-  address: $('coAddress').value || 'Riyadh, KSA',
+  address: $('coAddress').value || 'Jeddah, KSA, Al Muhammadiya Dist, Muhammad Ibn 23625 Hatib Street',
   website: $('coWebsite').value || 'vistaunited.co',
   phone:   $('coPhone').value   || '+966 55 568 4753',
   email:   $('coEmail').value   || 'youssef@vistaunited.co',
-  vat:     $('coVat').value     || '—',
-  cr:      $('coCr').value      || '—',
+  vat:     $('coVat').value     || '314573358300003',
+  cr:      $('coCr').value      || '7053413683',
 });
 
 function status(msg, type='loading') {
@@ -373,8 +373,9 @@ function renderPreview() {
   const addr1  = doc.client_address1 || '';
   const city   = doc.client_city || '';
   const postal = doc.client_postal_code || '';
-  const clientVat = doc.client_vat_number || doc.client_tax_number || '—';
-  const clientCr  = doc.client_cr_number || '—';
+  console.log('[Daftra] full doc fields:', JSON.stringify(doc, null, 2));
+  const clientVat = doc.client_tax_number || doc.client_vat_number || doc.client_vat || doc.tax_number || '—';
+  const clientCr  = doc.client_cr_number || doc.client_commercial_register || doc.cr_number || doc.client_cr || '—';
   const validUntil = doc.expiry_date || '—';
 
   const subtotal = parseFloat(doc.summary_subtotal || doc.subtotal_amount || 0);
@@ -497,7 +498,7 @@ function renderPreview() {
               <div class="pp-footer-brand">${c.website.toUpperCase()}</div>
               <div class="pp-footer-detail">${c.email} &nbsp;&middot;&nbsp; ${c.phone}<br>${c.address}, Kingdom of Saudi Arabia<span class="ar">${c.address}، المملكة العربية السعودية</span></div>
             </div>
-            <div class="pp-footer-right">VAT Reg. ${c.vat}<br>CR No. ${c.cr}<span class="ar">الرقم الضريبي: ${c.vat}<br>السجل التجاري: ${c.cr}</span></div>
+            <div class="pp-footer-right">${c.phone}<br>${c.email}</div>
           </div>
         </div>
         </div>
