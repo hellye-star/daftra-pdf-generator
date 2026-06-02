@@ -84,23 +84,21 @@
   @page { size: A4; margin: 0; }
   .pdf-page {
     width: 210mm;
-    min-height: 297mm;
     box-sizing: border-box;
-    padding: 28px 38px 34px 38px;
+    padding: 28px 38px 24px 38px;
     margin: 0 auto;
-    overflow: hidden;
+    overflow: visible;
     background: #fff;
     font-family: 'Jost', sans-serif;
     color: #1C1C1A;
-    display: flex;
-    flex-direction: column;
     box-shadow: 0 6px 28px rgba(0,0,0,0.12);
   }
-  .pp-body { flex: 1; flex-shrink: 0; }
+  .pp-body { }
 
   /* Header */
   .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
   .pp-logo-row { display: flex; align-items: center; gap: 10px; }
+  .pp-logo { width: 150px; height: auto; display: block; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
   .pp-doc-type { text-align: right; }
@@ -156,7 +154,7 @@
   .pp-validity-badge { display: inline-block; background: #1C1C1A; color: white; font-size: 5px; font-weight: 300; letter-spacing: 0.14em; text-transform: uppercase; padding: 2.5px 6px; margin-top: 6px; }
 
   /* Footer */
-  .pp-footer { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid #ddd; padding-top: 18px; margin-top: 34px; font-size: 8px; color: #777; line-height: 1.6; flex-shrink: 0; }
+  .pp-footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; color: #777; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
   .pp-footer strong { font-size: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; }
   .pp-footer-website { text-align: right; font-size: 7px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #ADADAA; flex-shrink: 0; }
 
@@ -496,13 +494,7 @@ function renderPreview() {
           <!-- HEADER -->
           <div class="pp-header">
             <div class="pp-logo-row">
-              <svg width="24" height="24" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                <polygon points="20,33 3,7 11,7 20,23 29,7 37,7" fill="#1C1C1A"/>
-              </svg>
-              <div>
-                <div class="pp-logo-name">${c.name}</div>
-                <div class="pp-logo-sub">${c.tagline}</div>
-              </div>
+              <img class="pp-logo" src="logo.png" alt="${c.name}">
             </div>
             <div class="pp-doc-type">
               <div class="pp-doc-heading">${docLabel}</div>
@@ -618,9 +610,13 @@ function downloadPDF() {
   const prevTransform = wrapper.style.transform;
   wrapper.style.transform = 'none';
   html2pdf().set({
-    margin: 0, filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+    margin: 0,
+    filename,
+    pagebreak: {
+      mode: ['css', 'legacy'],
+      avoid: ['.pp-footer', '.pp-summary-block', '.pp-info-grid', '.pp-totals']
+    },
+    html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   }).from(el).save().then(() => {
     wrapper.style.transform = prevTransform;
