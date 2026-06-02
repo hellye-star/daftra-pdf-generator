@@ -135,16 +135,19 @@ html2pdf().set({
 - `unit: 'mm'` matches `210mm` page width
 - **Never reorder `.set()` after `.from()`** — doing so breaks option application and silently corrupts the export
 - **Future layout changes must not touch:** `downloadPDF()` function body, html2pdf options, the `#pdfPage` selector, or the Download PDF button's `onclick` attribute. Isolate all layout work to CSS and the `renderPreview()` HTML template only.
+- **Logo must stay as base64 data URL** — do not replace `${LOGO_DATA_URL}` with a file path. Local paths break html2canvas during PDF export.
 
 ### Preview scaling
 The on-screen preview wrapper uses `transform: scale(1.8)` for readability.
 This does **not** affect the exported PDF — html2pdf captures `#pdfPage` directly.
 
 ### Logo
-`<img class="pp-logo" src="./logo.png" alt="Vista United">`
-File is `logo.png` — copied from `logo.png.png.png` (triple-extension Windows artifact).
+Logo is embedded as a base64 data URL in the JS constant `LOGO_DATA_URL` at the top of the script block.
+The `<img>` in `renderPreview()` uses `src="${LOGO_DATA_URL}"` — this works in both the browser preview and html2pdf export.
 CSS: `width: 145px; height: auto; display: block; object-fit: contain`
-**If logo appears missing:** confirm `logo.png` is in the same folder as the HTML file.
+Source file: `logo.png` (copied from `logo.png.png.png`, Windows triple-extension artifact).
+**Never switch back to a local file path (`./logo.png`) in the template** — html2canvas cannot load local file paths, which silently breaks PDF export.
+To regenerate the base64: `base64 -w 0 logo.png` then prefix with `data:image/png;base64,` and update `LOGO_DATA_URL`.
 
 ---
 
