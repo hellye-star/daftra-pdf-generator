@@ -151,6 +151,29 @@ To regenerate the base64: `base64 -w 0 logo.png` then prefix with `data:image/pn
 
 ---
 
+## QR Code
+
+### Rule — Never generate QR locally
+Only use the official QR field returned by Daftra. Do NOT use any QR library, construct ZATCA QR from invoice data, or generate a replacement if the field is missing.
+
+### Detection
+`openDoc()` scans these candidate keys on both the raw response wrapper and the parsed Invoice object:
+`qr`, `qr_code`, `qr_image`, `qr_url`, `zatca_qr`, `e_invoice_qr`, `barcode`
+
+Result is stored in `doc._qrCode` (empty string if not found).
+Console will log either:
+- `[Daftra QR] Found at key: "KEY"` — with the confirmed JSON path
+- `[Daftra QR] No QR field found` — plus a list of all invoice keys for manual inspection
+
+### Status
+QR field not yet confirmed from a live API response. The header renders a center QR slot **only if** `doc._qrCode` is non-empty. If empty, the header stays two-column (logo | title) with no visible change.
+
+### Placement
+When present: `[ Logo ] [ QR 72×72px ] [ Tax Invoice ]` — three-column flex header.
+CSS class: `.pp-header-qr` — centered flex slot with `image-rendering: pixelated`.
+
+---
+
 ## Solved Issues
 
 | Issue | Resolution |

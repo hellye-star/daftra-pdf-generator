@@ -102,6 +102,8 @@
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
   .pp-doc-type { text-align: right; }
+  .pp-header-qr { display: flex; align-items: flex-start; justify-content: center; flex: 1; padding-top: 0; }
+  .pp-header-qr img { width: 72px; height: 72px; display: block; image-rendering: pixelated; }
   .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
   .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 400; color: #6B6B67; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
   .pp-doc-meta { font-size: 6.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 4px; }
@@ -377,12 +379,33 @@ async function openDoc(index) {
     Object.assign(doc, invoice);
     doc._items = items;
 
-    // ── Step 2: read VAT / CR from invoice fields ─────────────────────────
+    // ── Step 2a: locate official Daftra QR code field ────────────────────
+    // Never generate QR locally — only use what Daftra returns.
+    const QR_CANDIDATES = ['qr','qr_code','qr_image','qr_url','zatca_qr','e_invoice_qr','barcode'];
+    let foundQr = '';
+    let foundQrKey = '';
+    // Search the raw response wrapper first, then the parsed invoice object
+    const searchTargets = [ (d.data || d), invoice ];
+    for (const target of searchTargets) {
+      for (const key of QR_CANDIDATES) {
+        if (target[key]) { foundQr = target[key]; foundQrKey = key; break; }
+      }
+      if (foundQr) break;
+    }
+    if (foundQr) {
+      console.log(`[Daftra QR] Found at key: "${foundQrKey}" — value preview: ${String(foundQr).slice(0,80)}...`);
+    } else {
+      console.warn('[Daftra QR] No QR field found. Checked keys:', QR_CANDIDATES.join(', '));
+      console.log('[Daftra QR] All invoice keys:', Object.keys(invoice).join(', '));
+    }
+    doc._qrCode = foundQr; // empty string if not found
+
+    // ── Step 2b: read VAT / CR from invoice fields ────────────────────────
     // data.Invoice.client_bn1 = VAT,  data.Invoice.client_bn2 = CR
     let clientVat = invoice.client_bn1 || '';
     let clientCr  = invoice.client_bn2 || '';
 
-    // ── Step 3: fallback — fetch /clients/{id} if either is missing ───────
+    // ── Step 2c: fallback — fetch /clients/{id} if either is missing ────────
     const clientId = doc.client_id;
     if ((!clientVat || !clientCr) && clientId) {
       status('Fetching client record...');
@@ -441,8 +464,9 @@ function renderPreview() {
                    || Math.max(0, total - subtotal);
 
   const prefix    = isInv ? `INV-${no}` : `QUO-${no}`;
-  const docLabel  = isInv ? 'Invoice'      : 'Quotation';
-  const docLabelAr= isInv ? 'فاتورة'       : 'عرض سعر';
+  const docLabel  = isInv ? 'Tax Invoice'  : 'Quotation';
+  const docLabelAr= isInv ? 'فاتورة ضريبية' : 'عرض سعر';
+  const qrCode    = doc._qrCode || '';
   const byLabel   = isInv ? 'Issued By'    : 'Prepared By';
   const byLabelAr = isInv ? 'صادر من'      : 'معد من قبل';
   const toLabel   = isInv ? 'Issued To'    : 'Prepared For';
@@ -500,6 +524,7 @@ function renderPreview() {
             <div class="pp-logo-wrap">
               <img class="pp-logo" src="${LOGO_DATA_URL}" alt="Vista United">
             </div>
+            ${qrCode ? `<div class="pp-header-qr"><img src="${qrCode}" alt="QR Code"></div>` : ''}
             <div class="pp-doc-type">
               <div class="pp-doc-heading">${docLabel}</div>
               <div class="pp-doc-heading-ar">${docLabelAr}</div>
