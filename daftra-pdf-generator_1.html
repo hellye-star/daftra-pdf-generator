@@ -325,41 +325,108 @@ function switchTab(tab) {
   renderList();
 }
 
+// Scan an object for VAT/CR values, log the exact path where each is found.
+function findVatCr(obj, pathPrefix) {
+  const VAT_KEYS = ['vat_number','tax_number','VAT','vat','TaxNumber','client_tax_number','client_vat_number','taxnumber'];
+  const CR_KEYS  = ['cr_number','commercial_register','CR','cr','CRNumber','client_cr_number','cr_no','crnumber'];
+  let vat = '', cr = '';
+  for (const k of VAT_KEYS) {
+    const v = obj[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') {
+      vat = String(v).trim();
+      console.log(`[VAT FOUND] path: ${pathPrefix}.${k} = "${vat}"`);
+      break;
+    }
+  }
+  for (const k of CR_KEYS) {
+    const v = obj[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') {
+      cr = String(v).trim();
+      console.log(`[CR  FOUND] path: ${pathPrefix}.${k} = "${cr}"`);
+      break;
+    }
+  }
+  if (!vat) console.log(`[VAT NOT FOUND] searched in ${pathPrefix}`);
+  if (!cr)  console.log(`[CR  NOT FOUND] searched in ${pathPrefix}`);
+  return { vat, cr };
+}
+
 async function openDoc(index) {
   const sub = $('subdomain').value.trim();
   const key = $('apikey').value.trim();
+  const h   = { 'APIKEY': key, 'Accept': 'application/json' };
+  const base = `https://${sub}.daftra.com/api2`;
   const docs = currentTab === 'invoices' ? allInvoices : allEstimates;
-  const doc = docs[index];
-  const endpoint = currentTab === 'invoices' ? 'invoices' : 'estimates';
-  const docKey   = currentTab === 'invoices' ? 'Invoice'  : 'Estimate';
+  const doc  = docs[index];
+  const endpoint = currentTab === 'invoices' ? 'invoices'  : 'estimates';
+  const docKey   = currentTab === 'invoices' ? 'Invoice'   : 'Estimate';
   const itemsKey = currentTab === 'invoices' ? 'InvoiceItem' : 'EstimateItem';
 
-  status('Loading document details...');
+  status('Loading document...');
+  let clientVat = '', clientCr = '';
 
-  let items = [];
   try {
-    const r = await fetch(`https://${sub}.daftra.com/api2/${endpoint}/${doc.id}.json`, {
-      headers: { 'APIKEY': key, 'Accept': 'application/json' }
-    });
+    // ── Step 1: fetch the full invoice / estimate ──────────────────────────
+    const r = await fetch(`${base}/${endpoint}/${doc.id}.json`, { headers: h });
     const d = await r.json();
-    console.log('[Daftra] single doc raw response:', JSON.stringify(d, null, 2));
-    // Single doc response: { data: { Invoice: {...}, InvoiceItem: [...] } }
+    console.log('[Daftra] invoice raw response:', JSON.stringify(d, null, 2));
+
     const payload = d.data || d;
     const fullDoc = payload[docKey] || payload;
-    // extract client object — Daftra nests it as payload.Client
-    const clientObj = payload.Client || payload.client || {};
-    console.log('[Daftra] Client object:', JSON.stringify(clientObj, null, 2));
-    // items may be under the model key or directly on data as an array
-    items = payload[itemsKey] || fullDoc[itemsKey] || fullDoc.items || [];
-    console.log('[Daftra] extracted items:', items);
-    // merge full doc fields back in (single fetch has more detail)
+    const items   = payload[itemsKey] || fullDoc[itemsKey] || fullDoc.items || [];
     Object.assign(doc, fullDoc);
     doc._items = items;
-    doc._client = clientObj;
+
+    // ── Step 2: look for VAT / CR inside the invoice response ──────────────
+    console.log('[Daftra] --- Searching invoice object ---');
+    let found = findVatCr(fullDoc, 'invoice');
+    clientVat = found.vat;
+    clientCr  = found.cr;
+
+    // Also check an inline Client sub-object if Daftra included it
+    const inlineClient = payload.Client || payload.client || payload.Customer || payload.customer || {};
+    if (Object.keys(inlineClient).length) {
+      console.log('[Daftra] --- Searching inline Client object ---');
+      const fc = findVatCr(inlineClient, 'payload.Client');
+      if (!clientVat && fc.vat) clientVat = fc.vat;
+      if (!clientCr  && fc.cr)  clientCr  = fc.cr;
+    }
+
+    // ── Step 3: if still missing, fetch the client record separately ───────
+    const clientId = doc.client_id || doc.customer_id || doc.contact_id;
+    if ((!clientVat || !clientCr) && clientId) {
+      status('Fetching client record...');
+      for (const ep of ['clients', 'customers', 'contacts']) {
+        try {
+          const cr2 = await fetch(`${base}/${ep}/${clientId}.json`, { headers: h });
+          if (!cr2.ok) continue;
+          const cd = await cr2.json();
+          console.log(`[Daftra] client response (/${ep}/${clientId}):`, JSON.stringify(cd, null, 2));
+          const cp = cd.data || cd;
+          // unwrap whatever model key Daftra uses
+          const clientRecord = cp.Client || cp.Customer || cp.Contact || cp;
+          console.log(`[Daftra] --- Searching ${ep} record ---`);
+          const fc2 = findVatCr(clientRecord, `${ep}[${clientId}]`);
+          if (!clientVat && fc2.vat) clientVat = fc2.vat;
+          if (!clientCr  && fc2.cr)  clientCr  = fc2.cr;
+          if (clientVat && clientCr) break;
+        } catch(e2) {
+          console.log(`[Daftra] ${ep} fetch failed:`, e2.message);
+        }
+      }
+    }
+
+    // ── Step 4: report result ──────────────────────────────────────────────
+    console.log('[Daftra] RESULT:', JSON.stringify({ client_vat_number: clientVat || null, client_cr_number: clientCr || null }));
+    doc._clientVat = clientVat;
+    doc._clientCr  = clientCr;
+
   } catch(e) {
     console.error('[Daftra] openDoc error:', e);
-    status(e.message || 'Failed to load document details.', 'error');
-    doc._items = [];
+    status(e.message || 'Failed to load document.', 'error');
+    doc._items     = [];
+    doc._clientVat = '';
+    doc._clientCr  = '';
   }
 
   status('', 'clear');
@@ -379,9 +446,8 @@ function renderPreview() {
   const addr1  = doc.client_address1 || '';
   const city   = doc.client_city || '';
   const postal = doc.client_postal_code || '';
-  const cl = doc._client || {};
-  const clientVat = cl.vat_number || cl.tax_number || cl.VAT || cl.vat || doc.client_tax_number || doc.client_vat_number || doc.VAT || '—';
-  const clientCr  = cl.cr_number  || cl.commercial_register || cl.CR  || cl.cr  || doc.client_cr_number  || doc.CR  || '—';
+  const clientVat = doc._clientVat || '';
+  const clientCr  = doc._clientCr  || '';
   const validUntil = doc.expiry_date || '—';
 
   const subtotal = parseFloat(doc.summary_subtotal || doc.subtotal_amount || 0);
@@ -466,7 +532,7 @@ function renderPreview() {
               <div class="pp-info-label">${toLabel}<span class="ar">${toLabelAr}</span></div>
               <div class="pp-info-name">${client}</div>
               <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia<br><span class="ar">المملكة العربية السعودية</span></div>
-              <div class="pp-reg">VAT Reg. ${clientVat} <span class="ar" style="font-size:6px;">الرقم الضريبي</span><br>CR No. ${clientCr} <span class="ar" style="font-size:6px;">السجل التجاري</span></div>
+              <div class="pp-reg">VAT Reg. ${clientVat}<span class="ar" style="font-size:6px;"> · الرقم الضريبي</span><br>CR No. ${clientCr}<span class="ar" style="font-size:6px;"> · السجل التجاري</span></div>
             </div>
             <div class="pp-info-col">
               <div class="pp-info-label">${byLabel}<span class="ar">${byLabelAr}</span></div>
