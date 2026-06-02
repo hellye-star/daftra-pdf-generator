@@ -215,6 +215,66 @@ For any future QR-related change:
 
 ---
 
+## Current Final Polish Tasks
+
+### 1. Invoice Number Formatting
+**Status: pending**
+
+Current display: `NO. INV-INV000021` — double prefix, wrong separator.
+Required display: `NO. INV#000021`
+
+**Normalization rule — strip any existing prefix first, then reformat:**
+```
+INV000021   → INV#000021
+INV-000021  → INV#000021
+INV#000021  → INV#000021
+000021      → INV#000021
+```
+
+Implementation hint:
+```js
+function formatInvoiceNo(raw) {
+  const clean = String(raw).replace(/^INV[#-]?/i, '');
+  return `INV#${clean}`;
+}
+```
+
+Apply to the `prefix` variable in `renderPreview()` for invoices only.
+Quotation prefix (`QUO-`) is unaffected.
+
+---
+
+### 2. Numeric Column Alignment
+**Status: pending**
+
+Current issue: QTY and UNIT PRICE values are not consistently right-aligned under their headers.
+
+Required:
+- `QTY` column: header right-aligned, values right-aligned
+- `UNIT PRICE` column: header right-aligned, values right-aligned
+- `AMOUNT` column: header right-aligned, values right-aligned
+
+These columns already use `.pp-td-r { text-align: right }` for values.
+Check that `<th class="r">` is applied to all three numeric column headers and that no override is misaligning them.
+
+---
+
+### 3. Locked — Do Not Touch
+These items are stable and must not be modified during polish work:
+
+| Item | Reason |
+|------|--------|
+| QR implementation | Locked — verified by scan. See QR section. |
+| QR payload logic | `d64` → `atob()` → QRCode.js → canvas → PNG img |
+| VAT/CR mapping | `client_bn1`/`bn1`, `client_bn2`/`bn2` |
+| Invoice calculations | subtotal, VAT fallback, total |
+| Footer behavior | Single instance, natural flow, no VAT/CR |
+| Logo alignment | `translateY(-48px)` optical correction |
+| Pagination behavior | `pp-invoice-tail` keeps last 2 rows + totals together |
+| `downloadPDF()` logic | html2pdf options, chain order, `waitForImages` |
+
+---
+
 ## Solved Issues
 
 | Issue | Resolution |
