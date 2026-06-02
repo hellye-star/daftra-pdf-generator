@@ -97,8 +97,8 @@
 
   /* Header */
   .pp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-  .pp-logo-row { display: flex; align-items: center; gap: 10px; }
-  .pp-logo { width: 145px; height: auto; display: block; object-fit: contain; }
+  .pp-logo-row { display: flex; align-items: flex-start; gap: 10px; }
+  .pp-logo { width: 145px; height: auto; display: block; object-fit: contain; margin-top: 0; }
   .pp-logo-name { font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #1C1C1A; line-height: 1; }
   .pp-logo-sub { font-weight: 300; font-size: 5.5px; letter-spacing: 0.22em; text-transform: uppercase; color: #6B6B67; margin-top: 3px; }
   .pp-doc-type { text-align: right; }
@@ -207,7 +207,7 @@
         <div class="form-group"><div class="form-label">Address</div><input class="form-input" id="coAddress" value="Jeddah, KSA, Al Muhammadiya Dist, Muhammad Ibn 23625 Hatib Street"></div>
         <div class="form-group"><div class="form-label">Website</div><input class="form-input" id="coWebsite" value="vistaunited.co"></div>
         <div class="form-group"><div class="form-label">Phone</div><input class="form-input" id="coPhone" value="+966 55 568 4753"></div>
-        <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="coEmail" value="youssef@vistaunited.co"></div>
+        <div class="form-group"><div class="form-label">Email</div><input class="form-input" id="coEmail" value="info@vistaunited.co"></div>
         <div class="form-group"><div class="form-label">VAT Registration</div><input class="form-input" id="coVat" value="314573358300003"></div>
         <div class="form-group"><div class="form-label">CR Number</div><input class="form-input" id="coCr" value="7053413683"></div>
       </div>
@@ -255,7 +255,7 @@ const co = () => ({
   address: $('coAddress').value || 'Jeddah, KSA, Al Muhammadiya Dist, Muhammad Ibn 23625 Hatib Street',
   website: $('coWebsite').value || 'vistaunited.co',
   phone:   $('coPhone').value   || '+966 55 568 4753',
-  email:   $('coEmail').value   || 'youssef@vistaunited.co',
+  email:   $('coEmail').value   || 'info@vistaunited.co',
   vat:     $('coVat').value     || '314573358300003',
   cr:      $('coCr').value      || '7053413683',
 });
