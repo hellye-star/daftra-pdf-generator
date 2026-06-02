@@ -357,6 +357,18 @@ function switchTab(tab) {
   renderList();
 }
 
+// Wait for all <img> elements inside root to finish loading before PDF export.
+async function waitForImages(root) {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      img.onload  = resolve;
+      img.onerror = () => reject(new Error('Image failed to load: ' + img.src.slice(0, 80)));
+    });
+  }));
+}
+
 // Convert an external image URL to a base64 data URL.
 // Required for html2canvas — it cannot load external URLs during PDF export.
 // The QR content/source remains Daftra's official URL; only the format changes.
@@ -417,6 +429,11 @@ async function openDoc(index) {
       console.log('[Daftra QR] All invoice keys:', Object.keys(invoice).join(', '));
       doc._qrCode = '';
     }
+    // ── QR diagnostics ────────────────────────────────────────────────────
+    console.log('[Daftra QR] original URL:', qrUrl);
+    console.log('[Daftra QR] final src starts with:', String(doc._qrCode || '').slice(0, 40));
+    console.log('[Daftra QR] final src length:', String(doc._qrCode || '').length);
+    console.log('[Daftra QR] is data URL:', String(doc._qrCode || '').startsWith('data:image'));
 
     // ── Step 2b: read VAT / CR from invoice fields ────────────────────────
     // data.Invoice.client_bn1 = VAT,  data.Invoice.client_bn2 = CR
@@ -647,6 +664,20 @@ function renderPreview() {
         </div>
       </div>
     </div>`;
+
+  // ── Rendered HTML diagnostics ─────────────────────────────────────────
+  setTimeout(() => {
+    console.log('[Preview] All img elements after render:');
+    document.querySelectorAll('img').forEach((img, i) => {
+      console.log(`  [IMG ${i}] class="${img.className}" src starts with: ${img.src.slice(0, 80)}`);
+    });
+    console.log('[Preview] Header bounding boxes:');
+    ['.pp-logo-wrap', '.pp-qr-wrap', '.pp-title-block'].forEach(sel => {
+      const node = document.querySelector(sel);
+      const rect = node ? node.getBoundingClientRect() : null;
+      console.log(`  ${sel} →`, rect ? `top:${rect.top.toFixed(1)} left:${rect.left.toFixed(1)} w:${rect.width.toFixed(1)} h:${rect.height.toFixed(1)}` : 'NOT FOUND');
+    });
+  }, 200);
 }
 
 async function downloadPDF() {
@@ -657,6 +688,18 @@ async function downloadPDF() {
     console.log('[PDF] html2pdf:', typeof html2pdf);
     if (!el) throw new Error('PDF export element #pdfPage not found');
     if (typeof html2pdf === 'undefined') throw new Error('html2pdf is not loaded');
+
+    // ── PDF target diagnostics ──────────────────────────────────────────
+    const qrEl = el.querySelector('.pp-qr');
+    console.log('[PDF] QR element found:', qrEl);
+    console.log('[PDF] QR src starts with:', qrEl?.src?.slice(0, 80) ?? 'n/a');
+    console.log('[PDF] QR complete:', qrEl?.complete);
+    console.log('[PDF] QR natural size:', qrEl?.naturalWidth, 'x', qrEl?.naturalHeight);
+
+    // ── Wait for all images to fully load before export ─────────────────
+    await waitForImages(el);
+    console.log('[PDF] all images loaded, starting export');
+
     const wrapper = el.parentElement;
     const { doc, type } = currentDoc;
     const no = doc.no || doc.id || '001';
