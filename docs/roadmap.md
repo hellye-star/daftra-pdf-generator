@@ -38,7 +38,7 @@ Both use **read-only** Notion integration tokens. Write-back (e.g. marking a tas
 - Media Library tab with manual index (`localStorage`, no signed URLs stored).
 - Nested block detection (images/files inside list items, callouts, toggles).
 - On-demand media loading with fresh signed URLs.
-- Quick-filter chips (All, Attention, Content, Social, Media/Posts, Overdue).
+- Quick-filter chips (All, Attention, Content, Social, Media/Posts, Overdue, **Reviewed** — see Phase 2A note below).
 - Four distinct empty-state messages for task detail media section.
 - Video / File / PDF / Embed / Link type clarity.
 - Font and readability improvements throughout.
@@ -53,6 +53,16 @@ Both use **read-only** Notion integration tokens. Write-back (e.g. marking a tas
 
 ### ✅ Phase 2A — Mark Reviewed (local, no Notion write) — complete 2026-06-04
 See "Mark Reviewed — Local Tracking" section below.
+
+**Reviewed quick-filter chip — added 2026-06-05, corrected 2026-06-05:**
+- Chip placed beside Overdue in the quick-filter strip. No new main tab.
+- Filters Task Tracker to tasks where `isReviewedByMe(task)` is true — review record exists regardless of staleness.
+- **Permanent history:** a task stays in Reviewed until the user manually clicks Remove Review. Notion edits and Done status changes never remove it.
+- Done tasks are always visible under Reviewed regardless of the Include Done toggle.
+- Tasks edited in Notion after review show an amber **Updated Since Review** badge; they may also return to Needs My Attention but remain in Reviewed.
+- Search, Category, and Assignee filters apply. Include Done does not hide reviewed tasks.
+- Live count `· N` reflects all tasks with a review record (regardless of staleness).
+- Empty state: "No reviewed tasks match the current filters."
 
 ### ✅ Phase 2A.5 — Related Supporting Tasks — COMPLETE (2026-06-05)
 

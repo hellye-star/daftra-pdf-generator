@@ -4,7 +4,7 @@
 
 ## Social Media Control Center (`social-dashboard.html`)
 
-### Current Status — Session Save Point 2026-06-05 (Phase 2A.5 complete)
+### Current Status — Session Save Point 2026-06-05 (Reviewed chip added)
 
 This section is the permanent source of truth for the Social Media Control Center. Before starting any new session on this module, read this section first.
 
@@ -22,7 +22,8 @@ This section is the permanent source of truth for the Social Media Control Cente
 - **Nested media detection** — fetches one level of child blocks for toggles, callouts, list items, columns. Confirmed: images nested inside `numbered_list_item` are detected.
 - **Notion table rendering** — `table` blocks in top-level page content have their child rows fetched separately (one API call per table) and rendered as HTML tables in the detail panel. Column header row → `<thead>`. Row header column → `<th>`. Links in cells rendered as `<a target="_blank">`. Table-row fallback message shown without a Notion button (topbar link is sufficient). Tables nested inside containers (toggles, callouts) are not rendered — Notion does not expose nested table rows in a single children response.
 - **On-demand URL fetching** — media URLs are always fetched live when a task is opened. Notion signed URLs expire in ~1 hour and are **never stored in localStorage**.
-- **Quick-filter chips** — All, Needs My Attention, Content, Social, Media/Posts, Overdue.
+- **Quick-filter chips** — All, Needs My Attention, Content, Social, Media/Posts, Overdue, **Reviewed**.
+  - **Reviewed chip** — opens Task Tracker view filtered to tasks where `isReviewedByMe(task)` is true (review record exists regardless of staleness). A task stays in Reviewed until manually removed via "Remove Review" — Notion edits and Done status changes do not eject it. Done tasks are always visible in this view regardless of the Include Done toggle. Search, Category, and Assignee filters still apply. Live count `· N` reflects all tasks with a review record. Tasks edited in Notion after being reviewed show an amber `Updated Since Review` badge in the task row and a highlighted note in the detail panel review bar; they may also reappear in Needs My Attention (via `isReviewedAndFresh` → false) but remain in Reviewed. Empty state: "No reviewed tasks match the current filters."
 - **Sidebar** — Refresh Tasks button, Search box with live filtering and × clear button, Category + Assignee filters, Include Done toggle, Refresh Media Index button with index status.
 - **Search** — live substring search across task name, description, status, assignee, category, due date, due date formula, and media type labels. Applies to all three tabs (Needs My Attention, Task Tracker, Media Library). Stacks additively with chips and sidebar filters.
 - **Search — Completed Matches section** — when a search query is active and `showDone` is off, Done tasks matching the query appear below the active bucket groups under a "Completed Matches · N" header, muted at 65% opacity. Section disappears when the search box is cleared. Tracker badge counts and normal browsing behaviour are unchanged.
@@ -31,44 +32,52 @@ This section is the permanent source of truth for the Social Media Control Cente
 
 #### Related Supporting Tasks — APPROVED AND FINAL (2026-06-05)
 
-**Detection signals (only these two are permitted — no others):**
+**Five ranked tiers (strongest to weakest). Max 5 results. Sorted strongest first. `hasMedia` as tie-breaker within the same tier.**
 
-| Signal | Type | Implementation |
-|---|---|---|
-| Explicit Notion page link | Automatic | `notionLinksFromBlocks()` — scans top-level block rich_text for `app.notion.com/p/` URLs, extracts UUID prefix, matches against `allTasks`. |
-| Linked by You | Manual (local) | User clicks "+ Link Supporting Task", picks a task from the searchable modal. Stored in `localStorage` key `vista_task_relations_v1`. Bidirectional. |
+| Tier | Label | Type | Logic |
+|---|---|---|---|
+| 5 | Linked by You | Manual | User-created link stored in `vista_task_relations_v1`. Bidirectional. |
+| 4 | Explicit Notion Link | Automatic | `notionLinksFromBlocks()` — `app.notion.com/p/` URL in task body blocks. |
+| 3 | Exact Reference | Automatic | Full task name (lowercase) is a substring of the other task's description property, or vice versa. |
+| 2 | Strong Match | Automatic | Same category + shared consecutive-word bigram OR 3+ shared sig words; OR cross-category + shared bigram. |
+| 1 | Possible Match | Automatic | Same category + 2+ shared significant words from task names. |
 
-**Permanently removed (do not restore):**
-- `RELATED_STOP` constant
-- `sigTaskWords()` function
-- `findRelatedByDescription()` function
-- All fuzzy, keyword, word-overlap, bigram, exact-name, and description-scanning logic
+**Stop words excluded from automatic matching (`RELATED_STOP`):**
+User-specified: `task, post, content, update, review, prepare, add, send, publish, final, new, vista, united` + standard short/structural words. Minimum word length: 4 chars.
+
+**Card footer:** "Open Task →" for all cards. "Remove link" only on Tier 5 (manual) cards. No "Open in Notion" in the card footer — the topbar link is always available.
 
 **localStorage schema — `vista_task_relations_v1`:**
 ```json
-{
-  "actionTaskId": [{ "relatedTaskId": "...", "createdAt": 1748000000000 }]
-}
+{ "taskAId": [{ "relatedTaskId": "taskBId", "createdAt": 1748000000000 }] }
 ```
 Both directions stored explicitly. No Notion write permissions required.
 
 **Key functions:**
-- `notionLinksFromBlocks(blocks)` — Signal 1 (unchanged)
-- `loadRelations()`, `saveRelation(a,b)`, `removeRelation(a,b)`, `getManualRelatedIds(taskId)` — Signal 2 store
-- `buildRelatedTasksHTML(related, currentTaskId)` — renders cards with source label + Remove Link for manual links
-- `_refreshRelatedSectionFull(taskId)` — re-renders Related section in-place after add/remove
-- `openTaskSelector(currentTaskId)`, `renderTaskSelectorList(query)`, `selectRelatedTask(id)`, `closeTaskSelector()` — modal
+- `RELATED_STOP` — stop-word set for automatic matching
+- `sigWords(text)`, `sigBigrams(text)` — significant word/bigram extraction
+- `findRelatedTasks(currentTaskId, topBlocks)` — all 5 tiers, sorted, capped at 5
+- `_lastTopBlocks` — cached topBlocks for re-render without re-fetch
+- `notionLinksFromBlocks(blocks)` — Tier 4 signal
+- `loadRelations()`, `saveRelation(a,b)`, `removeRelation(a,b)`, `getManualRelatedIds(taskId)` — Tier 5 store
+- `buildRelatedTasksHTML(related, currentTaskId)` — renders cards with tier label + Remove Link for Tier 5
+- `_refreshRelatedSectionFull(taskId)` — re-renders section using `_lastTopBlocks` after add/remove
+- `openTaskSelector(currentTaskId)`, `renderTaskSelectorList(query)`, `selectRelatedTask(id)`, `closeTaskSelector()` — manual-link modal
+
+**Previously removed and must not be restored:**
+`sigTaskWords()`, `findRelatedByDescription()` (the old fuzzy/description-only version — different from current `sigWords`/`sigBigrams`).
 
 **Validation confirmed (2026-06-05):**
-- "Tag keywords as positive or negative" ↔ "Ad keyword research (not final)" linked manually — Tables and Links badges appear, content loads correctly from both sides.
-- "Research tote bag demand in KSA" does NOT appear unless explicitly linked.
-- No description-based or fuzzy detection remains.
+- False positive eliminated: "Research tote bag demand in KSA" scores 0 against "Ad keyword research (not final)" (different categories, only 1 shared word — below threshold).
+- "Tag keywords as positive or negative" ↔ "Ad keyword research (not final)": requires manual link (plural "keywords" ≠ singular "keyword"; no shared bigrams — confirmed correct, not a defect).
+- Same-category tasks sharing 3+ significant words correctly surface as Strong Match.
 
 #### What is NOT implemented yet
 | Feature | Status | Notes |
 |---|---|---|
 | Comments | ❌ Blocked | Live permission test performed 2026-06-05: all tasks return `403 restricted_resource`. Integration "Youssef" (bot, Saura Agency workspace) does not have Read Comments active. Hussam must enable it on the correct integration. Detail panel shows clear error message. |
 | Mark Reviewed | ✅ Done (Phase 2A) | localStorage only. `vista_reviews_v1`. Staleness auto-reset via `last_edited_time` comparison. |
+| Reviewed quick-filter chip | ✅ Done | Chip beside Overdue. Filters Task Tracker to `isReviewedByMe` tasks (permanent — only removed by manual Remove Review). Done tasks always visible in this view. Stale tasks show amber `Updated Since Review` badge. Search, Category, Assignee apply; Include Done does not hide reviewed tasks. |
 | Related Supporting Tasks | ✅ Done (Phase 2A.5) | Automatic: Notion page links. Manual: "+ Link Supporting Task" button → searchable modal → stored in `vista_task_relations_v1`. No fuzzy/description matching. |
 | Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
 | Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
@@ -93,6 +102,7 @@ Token source:     config.json → notion.personal.token  (git-ignored, never com
 |---|---|
 | `vista_media_index_v1` | Media index metadata. Never stores signed URLs. |
 | `vista_reviews_v1` | Mark Reviewed records (Phase 2A). Stores reviewedAt, taskName, lastEditedTime. |
+| `vista_task_relations_v1` | Manual Related Supporting Task links (Phase 2A.5). Bidirectional. |
 
 #### Media index counts (2026-06-04 scan)
 - 89 tasks scanned (Content + Social + Ads & Testing, all statuses)
@@ -125,21 +135,24 @@ This means: if Hussam updates a task after you've reviewed it, it reappears auto
 
 #### Behaviour rules
 1. **Mark Reviewed button** — shown in task detail panel (small outline button). Writes to `vista_reviews_v1` with current `last_edited_time`.
-2. **Needs My Attention removal** — a reviewed task is **fully suppressed from Needs My Attention regardless of its status.** Blocked, overdue, and Pending Feedback indicators do NOT keep it in the attention queue. The review means "I have seen this and I am done with it until Hussam changes it."
-3. **Staleness check** — if `Notion.last_edited_time > stored lastEditedTime`, the task is treated as unreviewed and reappears in Needs My Attention automatically. No user action needed.
-4. **Task Tracker visibility** — reviewed tasks stay fully visible in the tracker with all their normal indicators (overdue, Blocked, Pending Feedback) intact, plus a muted "Reviewed by You" badge next to the status badge.
-5. **Detail panel badge** — the task detail panel shows a "Reviewed by You · {date}" badge when a task is reviewed and not stale.
-6. **Undo** — a 10-second undo link appears after marking reviewed. Clicking it removes the localStorage record immediately.
-7. **Remove review** — a "Remove review" link in the detail panel for any reviewed task. Removes the record instantly; task reappears in Needs My Attention if applicable.
-8. **No Notion API calls** — zero new proxy routes, zero new permissions.
+2. **Needs My Attention removal** — a reviewed-and-fresh task is **fully suppressed from Needs My Attention regardless of its status.** Blocked, overdue, and Pending Feedback indicators do NOT keep it in the attention queue. The review means "I have seen this and I am done with it until Hussam changes it."
+3. **Staleness check (`isReviewedStale`)** — if `Notion.last_edited_time > stored lastEditedTime`, the task shows an amber **Updated Since Review** badge and reappears in Needs My Attention. It does NOT leave the Reviewed chip view — only Remove Review removes it.
+4. **Reviewed chip (permanent history)** — uses `isReviewedByMe(t)` (review record exists). Done tasks and stale tasks remain visible. A task leaves Reviewed only when the user manually clicks Remove Review.
+5. **Task Tracker visibility** — reviewed tasks stay fully visible in the tracker with all their normal indicators (overdue, Blocked, Pending Feedback) intact. Green `✓ Reviewed` badge shown for all reviewed tasks. Amber `Updated Since Review` badge shown additionally when stale.
+6. **Detail panel** — shows "Reviewed by You · {date}" bar for all reviewed tasks. When stale, bar turns amber with "Updated since review" note. Remove Review always available.
+7. **Undo** — a 10-second undo link appears after marking reviewed. Clicking it removes the localStorage record immediately.
+8. **Remove review** — a "Remove review" link in the detail panel for any reviewed task. Removes the record instantly; task reappears in Needs My Attention if applicable and leaves the Reviewed chip view.
+9. **No Notion API calls** — zero new proxy routes, zero new permissions.
 
 #### Functions implemented
 - `REVIEWS_KEY = 'vista_reviews_v1'`
-- `loadReviews()`, `saveReview(id, name, lastEditedTime)`, `removeReview(id)`, `isReviewed(id)`
-- `isStale(id)` — checks current `last_edited_time` against stored value; returns true if task updated after review
-- Update `attentionFilter()`: add `&& !isReviewedAndFresh(t)` to **all** qualifying conditions (Youssef-assigned, Blocked, Pending Feedback, and overdue) — reviewed status suppresses the task from the entire attention queue
-- Update `taskRow()`: add ✓ badge when reviewed
-- Update `buildDetailHTML()`: add Mark Reviewed button and reviewed badge
+- `loadReviews()`, `saveReview(id, name, lastEditedTime)`, `removeReview(id)`
+- `isReviewedAndFresh(t)` — true if reviewed AND `updated(t) <= rec.lastEditedTime`. Used only by `attentionFilter`.
+- `isReviewedByMe(t)` — true if any review record exists. Used by Reviewed chip filter, chip count, task row badge, `reviewSectionHTML`.
+- `isReviewedStale(t)` — true if reviewed AND `updated(t) > rec.lastEditedTime`. Used by "Updated Since Review" badge in task row and detail panel.
+- `attentionFilter()`: `isReviewedAndFresh(t)` suppresses the task from the entire attention queue
+- `taskRow()`: green `✓ Reviewed` badge for all reviewed tasks; amber `Updated Since Review` badge when stale
+- `buildDetailHTML()`: Mark Reviewed button or review bar (amber when stale)
 
 ---
 

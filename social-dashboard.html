@@ -97,6 +97,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .chip-overdue:hover  { border-color: #C0392B; color: #C0392B; }
 .chip-overdue.active { background: #C0392B; border-color: #C0392B; color: #fff; }
 
+.chip-reviewed:hover  { border-color: #4A7A52; color: #4A7A52; }
+.chip-reviewed.active { background: #4A7A52; border-color: #4A7A52; color: #fff; }
+
 /* ── Tabs ────────────────────────────────────────────────────────────────── */
 .tab-row { display: flex; border-bottom: 1px solid var(--rule); margin-bottom: 0; gap: 4px; }
 .tab { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
@@ -437,6 +440,8 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 /* ── Reviewed badge (Task Tracker) ──────────────────────────────────────── */
 .b-reviewed { background: #F0F7F0; color: #4A7A52; border: 1px solid #C0D8C2;
               font-size: 8px; padding: 3px 8px; }
+.b-stale    { background: #FEF9EC; color: #B07A20; border: 1px solid #E8D4A0;
+              font-size: 8px; padding: 3px 8px; }
 
 /* ── Review bar / button (detail panel) ──────────────────────────────────── */
 .review-bar {
@@ -444,6 +449,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   padding: 11px 16px; margin-bottom: 22px;
   background: #F2F7F2; border: 1px solid #C0D8C2;
 }
+.review-bar-stale { background: #FDFAF2; border-color: #E8D4A0; }
 .review-bar-label  { font-size: 12px; font-weight: 400; color: #3A6A42; flex: 1; min-width: 0; }
 .review-bar-remove { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500;
                      letter-spacing: 0.12em; text-transform: uppercase; color: var(--light);
@@ -593,6 +599,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
       <button class="chip"               onclick="setChip('social')"    id="chip-social">Social</button>
       <button class="chip chip-media"    onclick="setChip('media')"     id="chip-media">Media / Posts</button>
       <button class="chip chip-overdue"  onclick="setChip('overdue')"   id="chip-overdue">Overdue</button>
+      <button class="chip chip-reviewed" onclick="setChip('reviewed')"  id="chip-reviewed">Reviewed<span id="chip-reviewed-count"></span></button>
     </div>
 
     <!-- Tabs -->
@@ -700,6 +707,20 @@ function isReviewedAndFresh(t) {
   const rec = loadReviews()[t.id];
   if (!rec) return false;
   return updated(t) <= rec.lastEditedTime;
+}
+
+// True if ANY review record exists, regardless of staleness.
+// Used by the Reviewed chip — a task stays in Reviewed until manually removed.
+function isReviewedByMe(t) {
+  return !!loadReviews()[t.id];
+}
+
+// True if reviewed but edited in Notion after the review was recorded.
+// Used to show the "Updated Since Review" badge without ejecting the task from Reviewed.
+function isReviewedStale(t) {
+  const rec = loadReviews()[t.id];
+  if (!rec) return false;
+  return updated(t) > rec.lastEditedTime;
 }
 
 // Media/Posts categories.
@@ -833,10 +854,12 @@ function getFilteredTasks() {
     const st  = status(t);
     const cat = category(t);
     const due = dueDate(t);
-    if (!showDone && st === 'Done') return false;
+    // Reviewed chip must show Done tasks — they stay reviewed until manually removed.
+    if (activeChip !== 'reviewed' && !showDone && st === 'Done') return false;
     if (activeChip === 'media')   { if (!MEDIA_CATEGORIES.has(cat)) return false; }
     else if (activeChip === 'overdue') { if (!(due && due < today && st !== 'Done')) return false; }
     else {
+      if (activeChip === 'reviewed' && !isReviewedByMe(t)) return false;
       if (catSel && cat         !== catSel) return false;
       if (asnSel && assigneeOf(t) !== asnSel) return false;
     }
@@ -871,6 +894,10 @@ function applyFilters() {
   renderTracker(tasks, doneMatches);
   document.getElementById('badgeAttn').textContent    = attnTasks.length;
   document.getElementById('badgeTracker').textContent = tasks.filter(t => status(t) !== 'Done').length;
+  // Reviewed chip count — always reflects fresh reviewed tasks regardless of active chip
+  const reviewedCount = allTasks.filter(isReviewedByMe).length;
+  const rcEl = document.getElementById('chip-reviewed-count');
+  if (rcEl) rcEl.textContent = reviewedCount ? ` · ${reviewedCount}` : '';
   // Media Library badge comes from the index
   updateMediaBadge();
 }
@@ -992,7 +1019,12 @@ function renderTracker(tasks, doneMatches = []) {
       ${doneMatches.map(t => taskRow(t)).join('')}
     </div>` : '';
 
-  el.innerHTML = header + bucketHTML + doneHTML;
+  const reviewedEmpty = (activeChip === 'reviewed' && !tasks.length)
+    ? `<div class="empty-state" style="margin-top:40px">
+         <div class="empty-icon">✓</div>
+         <div class="empty-title">No reviewed tasks match the current filters.</div>
+       </div>` : '';
+  el.innerHTML = header + bucketHTML + reviewedEmpty + doneHTML;
 }
 
 function taskRow(t) {
@@ -1001,8 +1033,9 @@ function taskRow(t) {
   const isYou     = who === 'Youssef';
   const isAttn    = st === 'Pending Feedback' || st === 'Blocked' || (due && due < today && st !== 'Done');
   const isOverdue = due && due < today && st !== 'Done';
-  const isRev     = isReviewedAndFresh(t);
-  const cls       = isYou ? 'youssef-row' : (isAttn ? 'attention-row' : '');
+  const isRev      = isReviewedByMe(t);
+  const isRevStale = isRev && isReviewedStale(t);
+  const cls        = isYou ? 'youssef-row' : (isAttn ? 'attention-row' : '');
   const meta      = [cat, who].filter(Boolean).join(' · ');
   const dueTxt    = due2(t) || (due ? fmtDate(due) : '—');
   return `
@@ -1010,6 +1043,7 @@ function taskRow(t) {
       <div style="display:flex;flex-direction:column;gap:4px">
         <span class="badge ${statusClass(st)}">${st}</span>
         ${isRev ? '<span class="badge b-reviewed">✓ Reviewed</span>' : ''}
+        ${isRevStale ? '<span class="badge b-stale">Updated Since Review</span>' : ''}
       </div>
       <div class="tr-info">
         <div class="tr-name">${esc(taskName(t))}</div>
@@ -2028,11 +2062,15 @@ function renderComments(comments) {
 
 // ── Review actions ────────────────────────────────────────────────────────────
 function reviewSectionHTML(t) {
-  if (isReviewedAndFresh(t)) {
+  if (isReviewedByMe(t)) {
     const rec     = loadReviews()[t.id];
     const revDate = rec ? fmtDate(new Date(rec.reviewedAt).toISOString()) : '';
-    return `<div class="review-bar">
-      <span class="review-bar-label">✓ Reviewed by you${revDate ? ' · ' + revDate : ''}</span>
+    const stale   = isReviewedStale(t);
+    const label   = stale
+      ? `✓ Reviewed by you${revDate ? ' · ' + revDate : ''} · <span style="color:#B07A20;font-weight:500">Updated since review</span>`
+      : `✓ Reviewed by you${revDate ? ' · ' + revDate : ''}`;
+    return `<div class="review-bar${stale ? ' review-bar-stale' : ''}">
+      <span class="review-bar-label">${label}</span>
       <button class="review-bar-remove" onclick="removeReviewAction('${t.id}')">Remove review</button>
     </div>`;
   }

@@ -2,6 +2,71 @@
 
 ---
 
+## [2026-06-05] — Reviewed history: permanent records, Updated Since Review badge
+
+### social-dashboard.html — Reviewed chip corrected to permanent history
+
+**Problem corrected:** Previously, tasks disappeared from the Reviewed chip when:
+1. Their Notion status was changed to Done (updating `last_edited_time`, making the review stale).
+2. Any Notion edit after the review caused `isReviewedAndFresh` to return false.
+
+**Correct behaviour now:**
+
+- A reviewed task stays in Reviewed until the user manually clicks **Remove Review** — no Notion edit or status change can remove it.
+- Done tasks are always visible under Reviewed regardless of the Include Done toggle.
+- If a task is edited in Notion after being reviewed, it shows an amber **Updated Since Review** badge in the task row and a highlighted note in the detail panel review bar. It may also return to Needs My Attention (via `isReviewedAndFresh → false`), but it remains in Reviewed.
+
+**New helper functions:**
+- `isReviewedByMe(t)` — true if any review record exists, regardless of staleness. Used by: Reviewed chip filter, chip count, task row badge, `reviewSectionHTML`.
+- `isReviewedStale(t)` — true if reviewed but edited in Notion after the review. Used by: "Updated Since Review" badge in task row and detail panel.
+- `isReviewedAndFresh(t)` — unchanged, still used only by `attentionFilter` to return stale tasks to Needs My Attention.
+
+**Filter changes (`getFilteredTasks`):**
+- Done gate (`!showDone && st === 'Done'`) now skipped when `activeChip === 'reviewed'`.
+- Reviewed chip now tests `isReviewedByMe(t)` instead of `isReviewedAndFresh(t)`.
+
+**CSS added:**
+- `.b-stale` — amber badge (background `#FEF9EC`, color `#B07A20`, border `#E8D4A0`).
+- `.review-bar-stale` — amber tint on the detail panel review bar when stale.
+
+**Unchanged:** `attentionFilter`, `isReviewedAndFresh`, Mark Reviewed / Remove Review flows, `vista_reviews_v1` schema, all other filters, Media Library, proxy, Notion fetching.
+
+---
+
+## [2026-06-05] — Reviewed quick-filter chip
+
+### social-dashboard.html — Reviewed chip added to quick-filter strip
+
+New **Reviewed** chip placed immediately after the Overdue chip in the quick-filter row. No new main tab created.
+
+**Behaviour:**
+- Clicking the chip switches to the Task Tracker view and shows only tasks where `isReviewedAndFresh(task)` returns true.
+- Task rows display exactly as in the normal Task Tracker: full task name, `✓ Reviewed` badge, status, category, assignee, due date, and media indicators.
+- Search, Category filter, Assignee filter, and Include Done toggle all apply normally while the chip is active.
+- Marking a task reviewed causes it to appear in the Reviewed view on the next filter pass.
+- Removing a review causes the task to leave the Reviewed view immediately.
+- Stale reviews (task edited in Notion after being reviewed) are automatically excluded — `isReviewedAndFresh` returns false and the task disappears from the Reviewed view without any manual action.
+- Clicking any other chip or All deactivates the Reviewed chip.
+- Empty state: "No reviewed tasks match the current filters."
+
+**Chip count:**
+- The chip label shows a live count: `Reviewed · N`.
+- The count reflects all fresh reviewed tasks across the full task list, computed in `applyFilters()` after every filter/render cycle.
+- ⚠ **Known behaviour to test:** the count is calculated globally (all fresh reviewed tasks) and may differ from the number of rows visible when Category, Assignee, or Include Done filters are applied. This difference has not been observed to be confusing in practice, but must be tested before deciding whether to change it. No implementation change made yet.
+
+**CSS added:** `.chip-reviewed:hover`, `.chip-reviewed.active` (green `#4A7A52`, matching the `✓ Reviewed` badge colour).
+
+**HTML added:** One chip button `id="chip-reviewed"` with inline `<span id="chip-reviewed-count">` for the live count.
+
+**JS changes (4 targeted lines):**
+- `getFilteredTasks()` — `activeChip === 'reviewed'` check added inside the `else` branch, so Category and Assignee sidebar filters continue to apply after it.
+- `renderTracker()` — `reviewedEmpty` variable: shows the empty-state message only when `activeChip === 'reviewed'` and `tasks.length === 0`.
+- `applyFilters()` — computes `reviewedCount` from `allTasks.filter(isReviewedAndFresh).length` and writes it to `#chip-reviewed-count` after every render.
+
+**Unchanged:** Needs My Attention logic, `attentionFilter()`, `isReviewedAndFresh()`, Mark Reviewed / Remove Review flows, Task Tracker layout, Media Library, `vista_reviews_v1` schema, proxy, Notion fetching.
+
+---
+
 ## [2026-06-05] — Phase 2A.5: Related Supporting Tasks — Complete
 
 ### social-dashboard.html — Related Supporting Tasks redesigned
