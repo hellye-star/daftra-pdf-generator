@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "daftra-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["proxy.py"],
+      "port": 8080
+    }
+  ]
+}

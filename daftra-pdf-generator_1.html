@@ -19,6 +19,9 @@
   .topbar-sub { font-weight: 300; font-size: 6.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--light); margin-top: 2px; }
   .topbar-div { width: 1px; height: 26px; background: #444; margin: 0 8px; }
   .topbar-tool { font-weight: 300; font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--light); }
+  .topbar-home { margin-left: auto; font-size: 8.5px; font-weight: 400; letter-spacing: 0.12em; text-transform: uppercase;
+                 color: var(--light); text-decoration: none; transition: color 0.15s; }
+  .topbar-home:hover { color: #fff; }
 
   .main { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 59px); }
 
@@ -97,6 +100,12 @@
 
   /* Header */
   .pp-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; column-gap: 28px; margin-bottom: 14px; width: 100%; }
+  /* Quotation header: no QR center column — use clean 2-col grid for balanced alignment */
+  .pp-header-quo { grid-template-columns: 1fr 1fr; column-gap: 0; }
+  .pp-header-quo .pp-qr-wrap { display: none; }
+  /* Title block inset: logo floats -48px upward-left; title pulls slightly inward from right edge
+     to balance visual weight rather than sitting flush against the right margin */
+  .pp-header-quo .pp-title-block { margin-right: 20px; }
   .pp-logo-wrap, .pp-qr-wrap, .pp-title-block { align-self: start; }
   .pp-logo-wrap { justify-self: start; margin-top: 0; margin-left: 0; }
   .pp-logo { width: 150px; height: auto; display: block; object-fit: contain; transform: translateY(-48px); }
@@ -108,49 +117,58 @@
   .pp-title-block { justify-self: end; text-align: right; }
   .pp-doc-heading { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 32px; color: #1C1C1A; line-height: 1; }
   .pp-doc-heading-ar { font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 400; color: #6B6B67; display: block; line-height: 1.2; margin-top: 2px; text-align: right; }
-  .pp-doc-meta { font-size: 6.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 4px; }
+  .pp-doc-meta { font-size: 7.5px; font-weight: 300; letter-spacing: 0.17em; color: #6B6B67; text-transform: uppercase; margin-top: 4px; }
   .pp-rule { border: none; border-top: 0.5px solid #D8D5CF; margin-bottom: 16px; }
 
   /* Issued To / Issued By grid */
   .pp-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; width: 100%; margin-bottom: 18px; }
   .pp-info-block { min-width: 0; }
   .pp-section-heading { margin-bottom: 10px; }
-  .pp-heading-en { font-size: 7px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: #ADADAA; line-height: 1.2; }
+  .pp-heading-en { font-size: 7.5px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: #ADADAA; line-height: 1.2; }
   .pp-heading-ar { font-family: 'Cairo', sans-serif; font-size: 8px; font-weight: 400; color: #C0BDB8; line-height: 1.2; margin-top: 4px; text-align: left; }
   .pp-info-name { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 13px; color: #1C1C1A; line-height: 1.2; margin-bottom: 4px; }
-  .pp-info-body { font-size: 7px; font-weight: 300; color: #6B6B67; line-height: 1.75; }
+  .pp-info-body { font-size: 8px; font-weight: 400; color: #6B6B67; line-height: 1.75; }
 
   /* VAT / CR rows */
   .pp-reg { margin-top: 8px; padding-top: 7px; border-top: 0.5px solid #D8D5CF; }
   .pp-reg-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
-  .pp-reg-lbl-en { font-size: 6px; font-weight: 500; color: #ADADAA; text-transform: uppercase; letter-spacing: 0.1em; width: 48px; flex-shrink: 0; }
-  .pp-reg-lbl-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 400; color: #C8C5BF; width: 64px; flex-shrink: 0; }
-  .pp-reg-val { font-size: 7.5px; font-weight: 300; color: #1C1C1A; letter-spacing: 0.01em; }
+  .pp-reg-lbl-en { font-size: 7px; font-weight: 500; color: #ADADAA; text-transform: uppercase; letter-spacing: 0.1em; width: 48px; flex-shrink: 0; }
+  .pp-reg-lbl-ar { font-family: 'Cairo', sans-serif; font-size: 7px; font-weight: 400; color: #C8C5BF; width: 64px; flex-shrink: 0; }
+  .pp-reg-val { font-size: 8.5px; font-weight: 300; color: #1C1C1A; letter-spacing: 0.01em; }
 
   /* Summary block — never splits across pages */
   .pp-summary-block { display: flex; justify-content: flex-end; margin-top: 10px; page-break-inside: avoid; break-inside: avoid; }
-  .pp-totals { width: 220px; page-break-inside: avoid; break-inside: avoid; }
+  .pp-totals { width: 220px; page-break-inside: avoid; break-inside: avoid; padding-right: 8px; box-sizing: border-box; }
   .pp-t-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 0.5px solid #D8D5CF; }
   .pp-t-row-lbl { display: flex; flex-direction: column; gap: 1px; }
-  .pp-t-row-en { font-size: 7px; font-weight: 300; color: #6B6B67; }
-  .pp-t-row-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 300; color: #ADADAA; }
-  .pp-t-row-amt { font-size: 7.5px; font-weight: 400; color: #1C1C1A; }
+  .pp-t-row-en { font-size: 8px; font-weight: 400; color: #6B6B67; }
+  .pp-t-row-ar { font-family: 'Cairo', sans-serif; font-size: 7px; font-weight: 300; color: #ADADAA; }
+  .pp-t-row-amt { font-size: 8.5px; font-weight: 400; color: #1C1C1A; }
   .pp-t-final { border-top: 0.8px solid #1C1C1A; border-bottom: none !important; padding-top: 9px; margin-top: 3px; display: flex; justify-content: space-between; align-items: flex-start; }
   .pp-t-final .lbl { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 12px; color: #1C1C1A; line-height: 1.2; }
   .pp-t-final .lbl-ar { font-family: 'Cairo', sans-serif; font-size: 8px; font-weight: 400; color: #6B6B67; display: block; margin-top: 2px; }
-  .pp-t-final .val { font-size: 10px; font-weight: 600; color: #1C1C1A; }
+  .pp-t-final .val { font-size: 11px; font-weight: 600; color: #1C1C1A; }
 
   /* Table */
   .pp-table { width: 100%; border-collapse: collapse; }
   .pp-table thead tr { border-bottom: 0.5px solid #D8D5CF; }
-  .pp-table th { font-size: 6px; font-weight: 500; letter-spacing: 0.18em; color: #ADADAA; text-transform: uppercase; padding-bottom: 7px; text-align: left; }
-  .th-ar { font-family: 'Cairo', sans-serif; font-size: 6px; font-weight: 300; color: #ADADAA; display: block; margin-top: 2px; letter-spacing: 0; }
+  .pp-table th { font-size: 7px; font-weight: 500; letter-spacing: 0.18em; color: #ADADAA; text-transform: uppercase; padding-bottom: 7px; text-align: left; }
+  .th-ar { font-family: 'Cairo', sans-serif; font-size: 7px; font-weight: 300; color: #ADADAA; display: block; margin-top: 2px; letter-spacing: 0; }
   .pp-table th.r { text-align: right; }
   .pp-table tbody tr { border-bottom: 0.5px solid #D8D5CF; page-break-inside: avoid; break-inside: avoid; }
   .pp-table td { padding: 9px 0; vertical-align: top; }
-  .pp-item-name { font-size: 7.5px; font-weight: 500; color: #1C1C1A; margin-bottom: 2px; }
-  .pp-item-desc { font-size: 6.5px; font-weight: 300; color: #6B6B67; }
-  .pp-td-r { text-align: right; font-size: 7.5px; font-weight: 300; color: #1C1C1A; white-space: nowrap; padding-left: 8px; }
+  .pp-item-name { font-size: 8.5px; font-weight: 500; color: #1C1C1A; margin-bottom: 2px; }
+  .pp-item-desc { font-size: 7.5px; font-weight: 400; color: #6B6B67; }
+  .pp-td-r { font-size: 8.5px; font-weight: 400; color: #1C1C1A; white-space: nowrap; }
+  /* Invoice: right-align numeric columns 2–4 */
+  .pp-table th:nth-child(2), .pp-table th:nth-child(3), .pp-table th:nth-child(4),
+  .pp-table td:nth-child(2), .pp-table td:nth-child(3), .pp-table td:nth-child(4),
+  .pp-table-tail td:nth-child(2), .pp-table-tail td:nth-child(3), .pp-table-tail td:nth-child(4) { text-align: right; }
+  /* Quotation: cols 1–2 left (Item, Description), cols 3–8 right */
+  .pp-table-quo th:nth-child(2), .pp-table-quo td:nth-child(2),
+  .pp-table-tail-quo td:nth-child(2) { text-align: left; }
+  .pp-table-quo th:nth-child(n+3), .pp-table-quo td:nth-child(n+3),
+  .pp-table-tail-quo td:nth-child(n+3) { text-align: right; }
 
   /* Invoice tail — last 2 rows + totals kept together; prevents orphan totals on page 2 */
   .pp-invoice-tail { page-break-inside: avoid; break-inside: avoid; margin-top: 0; }
@@ -159,7 +177,7 @@
   .pp-table-tail td { padding: 9px 0; vertical-align: top; }
 
   /* Terms */
-  .pp-terms { margin-top: 14px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; font-size: 6.5px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
+  .pp-terms { margin-top: 28px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; font-size: 7.5px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
   .pp-terms strong { font-weight: 600; color: #1C1C1A; display: block; margin-bottom: 3px; font-size: 7px; }
   .pp-validity-badge { display: inline-block; background: #1C1C1A; color: white; font-size: 5px; font-weight: 300; letter-spacing: 0.14em; text-transform: uppercase; padding: 2.5px 6px; margin-top: 6px; }
 
@@ -185,6 +203,7 @@
   </div>
   <div class="topbar-div"></div>
   <div class="topbar-tool">Daftra PDF Generator</div>
+  <a href="index.html" class="topbar-home">← Platform Home</a>
 </div>
 
 <div class="main">
@@ -403,7 +422,7 @@ async function openDoc(index) {
   const doc  = docs[index];
   const endpoint = currentTab === 'invoices' ? 'invoices'    : 'estimates';
   const docKey   = currentTab === 'invoices' ? 'Invoice'     : 'Estimate';
-  const itemsKey = currentTab === 'invoices' ? 'InvoiceItem' : 'EstimateItem';
+  const itemsKey = 'InvoiceItem'; // Daftra uses InvoiceItem for both invoices and estimates
 
   status('Loading document...');
 
@@ -495,7 +514,17 @@ function renderPreview() {
   // Arabic-numeral conversion applied to display values only — source data unchanged
   const clientVat = toEnDigits(doc._clientVat || '');
   const clientCr  = toEnDigits(doc._clientCr  || '');
-  const validUntil = doc.expiry_date || '—';
+  // Valid Until: use expiry_date if set, otherwise calculate quotation date + 30 days (DD/MM/YYYY)
+  const validUntil = (() => {
+    if (isInv) return '';
+    if (doc.expiry_date) return doc.expiry_date;
+    const parts = (date || '').split('/');
+    if (parts.length !== 3) return '—';
+    const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+    if (isNaN(d)) return '—';
+    d.setDate(d.getDate() + 30);
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  })();
 
   const subtotal = parseFloat(doc.summary_subtotal || doc.subtotal_amount || 0);
   const total    = parseFloat(doc.total_amount   || doc.summary_total    || 0);
@@ -503,7 +532,7 @@ function renderPreview() {
   const taxAmt   = parseFloat(doc.summary_tax || doc.tax_amount || doc.vat_amount || 0)
                    || Math.max(0, total - subtotal);
 
-  const prefix    = isInv ? `INV-${no}` : `QUO-${no}`;
+  const prefix    = String(no).trim(); // Pass-through for both invoices and quotations — Daftra provides the full number
   const docLabel  = isInv ? 'Tax Invoice'  : 'Quotation';
   const docLabelAr= isInv ? 'فاتورة ضريبية' : 'عرض سعر';
   const qrPayload = doc._qrPayload || '';
@@ -516,6 +545,7 @@ function renderPreview() {
 
   const addrLine = [addr1, city, postal].filter(Boolean).join(', ');
 
+  // Invoice row renderer (4 columns)
   const renderRow = it => {
     const name  = it.product_name || it.name || it.item || it.title || '—';
     const desc  = it.description || it.note || it.notes || '';
@@ -529,27 +559,73 @@ function renderPreview() {
       <td class="pp-td-r">${amt.toLocaleString('en',{minimumFractionDigits:2})}</td>
     </tr>`;
   };
-  // Split: last 2 rows stay with the totals block to prevent orphan totals on page 2
-  const TAIL_ROWS = 2;
-  const allRows   = items.map(renderRow);
-  const headRows  = items.length ? allRows.slice(0, Math.max(0, allRows.length - TAIL_ROWS)).join('') : `<tr><td colspan="4" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items returned</td></tr>`;
-  const tailRows  = items.length ? allRows.slice(-TAIL_ROWS).join('') : '';
 
-  const thirdCol = !isInv ? `
-    <div class="pp-info-col">
-      <div class="pp-info-label">Valid Until</div>
-      <div class="pp-info-name" style="font-size:11px;">${validUntil}</div>
-      <div class="pp-info-body">30-day validity<br>Subject to approval</div>
-      <div class="pp-validity-badge">Pending Acceptance</div>
+  // Quotation row renderer (8 columns) — uses confirmed Daftra EstimateItem field names
+  const renderQuoRow = it => {
+    const name      = it.item || it.product_name || it.name || '—';
+    const desc      = it.description || it.note || it.notes || '';
+    const price     = parseFloat(it.unit_price || it.price || 0);
+    const qty       = parseFloat(it.quantity || it.qty || 1);
+    const beforeTax = parseFloat(it.item_subtotal || (qty * price) || 0);
+    const vatPct    = it.tax1_percent || '15%';
+    const vatAmt    = parseFloat(it.tax1_value || it.summary_tax1 || (beforeTax * 0.15) || 0);
+    const withVat   = parseFloat(it.subtotal || (beforeTax + vatAmt) || 0);
+    return `<tr>
+      <td><div class="pp-item-name">${name}</div></td>
+      <td><div class="pp-item-desc" style="font-weight:400;">${desc}</div></td>
+      <td class="pp-td-r">${price.toLocaleString('en',{minimumFractionDigits:2})}</td>
+      <td class="pp-td-r">${qty % 1 === 0 ? qty : qty.toFixed(2)}</td>
+      <td class="pp-td-r">${beforeTax.toLocaleString('en',{minimumFractionDigits:2})}</td>
+      <td class="pp-td-r">${vatPct}</td>
+      <td class="pp-td-r">${vatAmt.toLocaleString('en',{minimumFractionDigits:2})}</td>
+      <td class="pp-td-r">${withVat.toLocaleString('en',{minimumFractionDigits:2})}</td>
+    </tr>`;
+  };
+
+  // Split: last 2 rows stay with the totals block to prevent orphan totals on page 2
+  const TAIL_ROWS  = 2;
+  const colSpan    = isInv ? 4 : 8;
+  const allRows    = items.map(isInv ? renderRow : renderQuoRow);
+  const headRows   = items.length ? allRows.slice(0, Math.max(0, allRows.length - TAIL_ROWS)).join('') : `<tr><td colspan="${colSpan}" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items returned</td></tr>`;
+  const tailRows   = items.length ? allRows.slice(-TAIL_ROWS).join('') : '';
+
+  const thirdCol = ''; // Removed from info grid — Valid Until shown in validity strip below
+
+  const validityStrip = !isInv ? `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:8px 12px;background:#F7F6F4;border-left:2px solid #C8A96A;">
+      <div>
+        <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;">Valid Until &nbsp;·&nbsp; <span style="font-family:'Cairo',sans-serif;letter-spacing:0;font-weight:400;">صالح حتى</span></div>
+        <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;color:#1C1C1A;margin-top:2px;">${validUntil}</div>
+      </div>
+      <div style="font-size:5.5px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;background:#1C1C1A;color:#fff;padding:3px 8px;">Pending Acceptance</div>
     </div>` : '';
 
   const termsSection = !isInv ? `
-    <div class="pp-terms">
-      <strong>Terms &amp; Conditions</strong>
-      <span class="ar-title">الشروط والأحكام</span>
-      This quotation is valid for 30 days from the date of issue. A 50% deposit is required upon acceptance.
-      Final payment is due upon delivery. All amounts include VAT at 15% as per ZATCA regulations.
-      <span class="ar" style="display:block;margin-top:3px;font-size:6px;font-weight:300;line-height:1.8;">هذا العرض صالح لمدة 30 يومًا من تاريخ الإصدار. يُشترط دفع 50% من القيمة عند الموافقة. يستحق الدفع النهائي عند التسليم. جميع المبالغ تشمل ضريبة القيمة المضافة 15% وفق متطلبات هيئة الزكاة والضريبة والجمارك.</span>
+    <div class="pp-terms" style="padding:10px 14px;">
+      <div style="display:flex;gap:0;align-items:stretch;">
+        <!-- English column -->
+        <div style="flex:1;padding-right:14px;border-right:0.5px solid #E0DDD8;">
+          <div style="font-size:6.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:#1C1C1A;margin-bottom:6px;">Terms &amp; Conditions</div>
+          <div style="line-height:2;font-size:7.5px;font-weight:300;color:#6B6B67;">
+            <div>&middot;&nbsp; This quotation is valid for 30 days from the date of issue.</div>
+            <div>&middot;&nbsp; 50% advance payment is required upon approval.</div>
+            <div>&middot;&nbsp; Remaining balance is due before delivery.</div>
+            <div>&middot;&nbsp; Production starts only after receipt of payment and final written approval or PO.</div>
+            <div>&middot;&nbsp; All prices include VAT at 15% unless otherwise stated.</div>
+          </div>
+        </div>
+        <!-- Arabic column -->
+        <div style="flex:1;padding-left:14px;text-align:right;">
+          <div style="font-family:'Cairo',sans-serif;font-size:7px;font-weight:600;color:#1C1C1A;margin-bottom:6px;">الشروط والأحكام</div>
+          <div style="font-family:'Cairo',sans-serif;line-height:2;font-size:7.5px;font-weight:300;color:#6B6B67;direction:rtl;">
+            <div>هذا العرض صالح لمدة 30 يومًا من تاريخ الإصدار. &middot;</div>
+            <div>يُشترط دفع 50% من القيمة الإجمالية دفعةً مقدمة عند الموافقة. &middot;</div>
+            <div>يُسدَّد المبلغ المتبقي قبل التسليم. &middot;</div>
+            <div>تبدأ الإنتاج بعد استلام الدفعة المقدمة والموافقة الخطية أو أمر الشراء. &middot;</div>
+            <div>جميع الأسعار تشمل ضريبة القيمة المضافة 15% ما لم يُذكر خلاف ذلك. &middot;</div>
+          </div>
+        </div>
+      </div>
     </div>` : '';
 
   $('mainArea').innerHTML = `
@@ -562,13 +638,13 @@ function renderPreview() {
         <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
         <div class="pdf-page" id="pdfPage">
 
-          <!-- HEADER: logo | QR (Daftra official, conditional) | title -->
-          <div class="pp-header">
+          <!-- HEADER: logo | QR (invoices only) | title -->
+          <div class="pp-header${isInv ? '' : ' pp-header-quo'}">
             <div class="pp-logo-wrap">
               <img class="pp-logo" src="${LOGO_DATA_URL}" alt="Vista United">
             </div>
             <div class="pp-qr-wrap">
-              ${qrPayload ? '<div id="pp-qr-target"></div>' : ''}
+              ${isInv && qrPayload ? '<div id="pp-qr-target"></div>' : ''}
             </div>
             <div class="pp-title-block">
               <div class="pp-doc-heading">${docLabel}</div>
@@ -609,7 +685,7 @@ function renderPreview() {
                   <div class="pp-heading-ar">${byLabelAr}</div>
                 </div>
                 <div class="pp-info-name">${c.name}</div>
-                <div class="pp-info-body">${c.address}<br>${c.website}<br>${c.phone}</div>
+                <div class="pp-info-body">${c.address}<br>${isInv ? c.website + '<br>' + c.phone : c.website + ' &nbsp;&middot;&nbsp; ' + c.phone}</div>
                 <div class="pp-reg">
                   <div class="pp-reg-row">
                     <span class="pp-reg-lbl-en">VAT Reg.</span>
@@ -626,20 +702,36 @@ function renderPreview() {
               ${thirdCol}
             </div>
 
+            ${validityStrip}
+
             <!-- LINE ITEMS TABLE — all rows except last 2 -->
-            <table class="pp-table">
+            <table class="${isInv ? 'pp-table' : 'pp-table pp-table-quo'}">
               <thead><tr>
+                ${isInv ? `
                 <th style="width:52%;">Description <span class="th-ar">الوصف</span></th>
                 <th class="r" style="width:9%;">Qty <span class="th-ar">الكمية</span></th>
                 <th class="r" style="width:20%;">Unit Price <span class="th-ar">سعر الوحدة</span></th>
                 <th class="r" style="width:19%;">Amount <span class="th-ar">المبلغ</span></th>
+                ` : `
+                <th style="width:18%;">Item <span class="th-ar">البند</span></th>
+                <th style="width:20%;">Description <span class="th-ar">الوصف</span></th>
+                <th class="r" style="width:10%;">Price <span class="th-ar">السعر</span></th>
+                <th class="r" style="width:7%;">Qty <span class="th-ar">الكمية</span></th>
+                <th class="r" style="width:14%;">Total Before Tax <span class="th-ar">قبل الضريبة</span></th>
+                <th class="r" style="width:7%;">VAT% <span class="th-ar">نسبة الضريبة</span></th>
+                <th class="r" style="width:12%;">VAT Amount <span class="th-ar">قيمة الضريبة</span></th>
+                <th class="r" style="width:12%;">Total+VAT <span class="th-ar">مع الضريبة</span></th>
+                `}
               </tr></thead>
               <tbody>${headRows}</tbody>
             </table>
 
-            <!-- INVOICE TAIL — last 2 rows + totals kept together; prevents orphan page -->
+            <!-- INVOICE/QUOTATION TAIL — last 2 rows + totals kept together; prevents orphan page -->
             <div class="pp-invoice-tail">
-              ${tailRows ? `<table class="pp-table-tail"><tbody>${tailRows}</tbody></table>` : ''}
+              ${tailRows ? (isInv
+                ? `<table class="pp-table-tail"><colgroup><col style="width:52%"><col style="width:9%"><col style="width:20%"><col style="width:19%"></colgroup><tbody>${tailRows}</tbody></table>`
+                : `<table class="pp-table-tail pp-table-tail-quo"><colgroup><col style="width:18%"><col style="width:20%"><col style="width:10%"><col style="width:7%"><col style="width:14%"><col style="width:7%"><col style="width:12%"><col style="width:12%"></colgroup><tbody>${tailRows}</tbody></table>`
+              ) : ''}
               <div class="pp-summary-block">
                 <div class="pp-totals">
                   <div class="pp-t-row">
@@ -661,7 +753,8 @@ function renderPreview() {
             ${termsSection}
           </div>
 
-          <!-- FOOTER: contact info only, no VAT or CR -->
+          <!-- FOOTER: invoices only -->
+          ${isInv ? `
           <div class="pp-footer">
             <div>
               <strong>${c.name}</strong><br>
@@ -669,7 +762,7 @@ function renderPreview() {
               ${c.address}, Kingdom of Saudi Arabia
             </div>
             <div class="pp-footer-website">${c.website.toUpperCase()}</div>
-          </div>
+          </div>` : ''}
 
         </div>
         </div>
@@ -677,7 +770,7 @@ function renderPreview() {
     </div>`;
 
   // Render Daftra QR payload into inline canvas — html2canvas captures it natively, no CORS
-  if (qrPayload) renderQR('pp-qr-target', qrPayload);
+  if (isInv && qrPayload) renderQR('pp-qr-target', qrPayload); // QR invoices only — not quotations
 
   // ── Rendered HTML diagnostics ─────────────────────────────────────────
   setTimeout(() => {

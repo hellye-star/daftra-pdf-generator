@@ -1,0 +1,9 @@
+# Live config — contains API tokens. Never commit this file.
+config.json
+
+# Windows artifacts
+Thumbs.db
+desktop.ini
+
+# macOS artifacts
+.DS_Store

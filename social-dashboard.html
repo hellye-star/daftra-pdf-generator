@@ -1,0 +1,2228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vista United — Social Media Control Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&family=Cairo:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & tokens ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --dark:  #1C1C1A; --mid:   #6B6B67; --light: #ADADAA;
+  --rule:  #D8D5CF; --cream: #FAF8F5; --white: #FFFFFF;
+}
+body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--dark); min-height: 100vh; }
+
+/* ── Topbar ──────────────────────────────────────────────────────────────── */
+.topbar { background: var(--dark); padding: 16px 36px; display: flex; align-items: center; gap: 12px; }
+.topbar svg { width: 26px; height: 26px; flex-shrink: 0; }
+.topbar-name { font-weight: 500; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #fff; }
+.topbar-sub  { font-weight: 300; font-size: 7.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--light); margin-top: 2px; }
+.topbar-div  { width: 1px; height: 26px; background: #444; margin: 0 8px; }
+.topbar-tool { font-weight: 300; font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--light); }
+.topbar-home { margin-left: auto; font-size: 9px; font-weight: 400; letter-spacing: 0.12em; text-transform: uppercase;
+               color: var(--light); text-decoration: none; transition: color 0.15s; }
+.topbar-home:hover { color: #fff; }
+
+/* ── Main grid ───────────────────────────────────────────────────────────── */
+.main { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 61px); }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.sidebar { background: var(--white); border-right: 1px solid var(--rule); padding: 32px 24px;
+           display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
+.sec-title { font-size: 9px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase;
+             color: var(--light); margin-bottom: 14px; }
+.btn { font-family: 'Jost', sans-serif; font-size: 10.5px; font-weight: 500; letter-spacing: 0.14em;
+       text-transform: uppercase; padding: 15px 18px; cursor: pointer; border: none;
+       transition: all 0.2s; width: 100%; text-align: center; }
+.btn-dark { background: var(--dark); color: #fff; }
+.btn-dark:hover:not(:disabled) { background: #333; }
+.btn-dark:disabled { background: var(--rule); color: var(--light); cursor: not-allowed; }
+.btn-outline { background: var(--white); color: var(--mid); border: 1px solid var(--rule); }
+.btn-outline:hover:not(:disabled) { border-color: var(--dark); color: var(--dark); }
+.btn-outline:disabled { color: var(--light); cursor: not-allowed; }
+.sidebar-sep { border: none; border-top: 1px solid var(--rule); }
+
+.sync-info { font-size: 12px; font-weight: 300; color: var(--mid); line-height: 1.9; }
+.sync-count { font-size: 15px; font-weight: 500; color: var(--dark); display: block; margin-bottom: 4px; }
+
+.form-label  { font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase;
+               color: var(--mid); margin-bottom: 9px; display: block; }
+.form-select { font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 300; color: var(--dark);
+               background: var(--cream); border: 1px solid var(--rule); padding: 11px 10px;
+               outline: none; width: 100%; cursor: pointer; }
+.form-select:focus { border-color: var(--dark); }
+
+.toggle-row  { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.toggle-box  { width: 16px; height: 16px; border: 1px solid var(--rule); display: flex;
+               align-items: center; justify-content: center; flex-shrink: 0; transition: border-color 0.15s; }
+.toggle-row:hover .toggle-box { border-color: var(--dark); }
+.toggle-box.on { background: var(--dark); border-color: var(--dark); }
+.toggle-box.on::after { content: ''; display: block; width: 7px; height: 7px; background: #fff; }
+.toggle-label { font-size: 12.5px; font-weight: 300; color: var(--mid); }
+
+/* ── Media Index sidebar status ──────────────────────────────────────────── */
+.index-status { font-size: 12px; font-weight: 300; color: var(--mid); line-height: 1.85; margin-top: 14px; }
+.index-status-count { font-size: 15px; font-weight: 500; color: var(--dark); display: block; margin-bottom: 3px; }
+.index-status-warn  { font-size: 11px; color: #B06B1A; margin-top: 4px; }
+.index-progress { margin-top: 10px; }
+.index-progress-label { font-size: 11px; font-weight: 300; color: var(--light); margin-bottom: 5px; }
+.index-progress-bar  { height: 3px; background: var(--rule); }
+.index-progress-fill { height: 100%; background: var(--dark); transition: width 0.2s; min-width: 4px; }
+
+/* ── Content area ────────────────────────────────────────────────────────── */
+.content { padding: 40px 44px; overflow-y: auto; }
+.content-title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 40px;
+                 color: var(--dark); line-height: 1; margin-bottom: 6px; }
+.content-sub { font-size: 12px; font-weight: 300; color: var(--light); letter-spacing: 0.06em; margin-bottom: 24px; }
+
+/* ── Quick filter chips ──────────────────────────────────────────────────── */
+.chip-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 28px; }
+.chip {
+  font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 9px 18px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--white); color: var(--mid);
+  transition: all 0.15s; white-space: nowrap;
+}
+.chip:hover { border-color: var(--mid); color: var(--dark); }
+.chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+
+.chip-attention:hover   { border-color: #B06B1A; color: #B06B1A; }
+.chip-attention.active  { background: #B06B1A; border-color: #B06B1A; color: #fff; }
+
+.chip-media:hover  { border-color: #5A7A9A; color: #3A5A7A; }
+.chip-media.active { background: #3A5A7A; border-color: #3A5A7A; color: #fff; }
+
+.chip-overdue:hover  { border-color: #C0392B; color: #C0392B; }
+.chip-overdue.active { background: #C0392B; border-color: #C0392B; color: #fff; }
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.tab-row { display: flex; border-bottom: 1px solid var(--rule); margin-bottom: 0; gap: 4px; }
+.tab { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
+       text-transform: uppercase; color: var(--light); background: none; border: none;
+       padding: 12px 24px 12px 0; cursor: pointer; border-bottom: 2px solid transparent;
+       margin-bottom: -1px; transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+.tab.active { color: var(--dark); border-bottom-color: var(--dark); }
+.tab-badge { font-size: 8.5px; font-weight: 500; background: var(--dark); color: #fff;
+             padding: 3px 7px; line-height: 1.4; }
+.tab.active .tab-badge { background: var(--dark); }
+.tab:not(.active) .tab-badge { background: var(--light); }
+
+/* ── Legend strip ────────────────────────────────────────────────────────── */
+.legend-strip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 20px;
+  padding: 11px 16px; background: var(--white); border: 1px solid var(--rule);
+  border-top: none; margin-bottom: 26px;
+}
+.legend-strip.legend-hidden { display: none; }
+.legend-item { display: flex; align-items: center; gap: 7px;
+               font-size: 11px; font-weight: 300; color: var(--mid); }
+.legend-swatch { width: 13px; height: 13px; flex-shrink: 0; border-radius: 1px; }
+.legend-border-blue  { border-left: 3px solid #3A52A0; background: #EEF1FA; }
+.legend-border-amber { border-left: 3px solid #B06B1A; background: #FEF3E7; }
+.legend-border-red   { border-left: 4px solid #C0392B; background: #FEF0F0; }
+.legend-due-dot { font-size: 12px; line-height: 1; }
+.legend-sep { width: 1px; height: 16px; background: var(--rule); margin: 0 4px; }
+
+/* ── Status / loading bars ───────────────────────────────────────────────── */
+.status-bar { display: flex; align-items: center; gap: 10px; padding: 14px 18px; font-size: 12px;
+              font-weight: 300; color: var(--mid); background: var(--white); border: 1px solid var(--rule);
+              margin-bottom: 20px; }
+.spinner { width: 15px; height: 15px; border: 1.5px solid var(--rule); border-top-color: var(--dark);
+           border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center;
+               min-height: 260px; text-align: center; gap: 14px; }
+.empty-icon  { width: 48px; height: 48px; border: 1px solid var(--rule); display: flex;
+               align-items: center; justify-content: center; color: var(--light); }
+.empty-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--mid); }
+.empty-sub   { font-size: 12px; font-weight: 300; color: var(--light); max-width: 300px; line-height: 1.8; }
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge { font-size: 9px; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase;
+         padding: 4px 10px; white-space: nowrap; }
+.b-not-started    { background: #F0F0EE; color: var(--mid); }
+.b-in-progress    { background: #EEF1FA; color: #3A52A0; }
+.b-pending        { background: #FEF3E7; color: #B06B1A; }
+.b-blocked        { background: #FEF0F0; color: #C0392B; }
+.b-feedback       { background: #F3EEF8; color: #7B52A0; }
+.b-done           { background: #EAF4EE; color: #3A7D52; }
+.b-youssef        { background: #EEF1FA; color: #3A52A0; }
+.b-hussam         { background: #F0F0EE; color: var(--mid); }
+.b-category       { background: var(--cream); color: var(--mid); border: 1px solid var(--rule); }
+
+/* ── Attention cards ─────────────────────────────────────────────────────── */
+.attention-list { display: flex; flex-direction: column; gap: 12px; }
+.attn-card { background: var(--white); border: 1px solid var(--rule);
+             padding: 24px 28px 20px; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+.attn-card:hover { border-color: var(--dark); box-shadow: 0 4px 20px rgba(28,28,26,0.06); }
+.attn-card.urgent { border-left: 4px solid #C0392B; background: #FFFCFC; }
+.attn-card.urgent:hover { border-color: #C0392B; border-left-color: #C0392B; }
+.attn-badges { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.attn-name { font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--dark);
+             line-height: 1.2; margin-bottom: 10px; }
+.attn-desc { font-size: 13px; font-weight: 300; color: var(--mid); line-height: 1.7;
+             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+             margin-bottom: 16px; }
+.attn-footer { display: flex; align-items: baseline; justify-content: space-between; }
+.attn-due    { font-size: 14px; font-weight: 400; color: var(--dark); }
+.attn-right  { display: flex; align-items: baseline; gap: 20px; }
+.attn-updated { font-size: 11px; font-weight: 300; color: var(--light); }
+.attn-open   { font-size: 9.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase;
+               color: var(--mid); transition: color 0.15s; }
+.attn-card:hover .attn-open { color: var(--dark); }
+
+/* ── Task Tracker ────────────────────────────────────────────────────────── */
+.bucket-group  { margin-bottom: 32px; }
+.bucket-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+                 cursor: pointer; user-select: none; }
+.bucket-label  { font-size: 9.5px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase;
+                 color: var(--mid); }
+.bucket-count  { font-size: 9px; font-weight: 400; color: var(--light); }
+.bucket-rule   { flex: 1; height: 1px; background: var(--rule); }
+.bucket-toggle { font-size: 11px; color: var(--light); transition: transform 0.2s; }
+.bucket-toggle.collapsed { transform: rotate(-90deg); }
+.bucket-rows   { display: flex; flex-direction: column; gap: 3px; }
+.task-row { display: grid; grid-template-columns: 110px 1fr auto auto;
+            align-items: center; gap: 16px; padding: 15px 20px; background: var(--white);
+            border: 1px solid var(--rule); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+.task-row:hover { border-color: var(--dark); box-shadow: 0 2px 12px rgba(28,28,26,0.05); }
+.task-row.youssef-row { border-left: 3px solid #3A52A0; }
+.task-row.attention-row { border-left: 3px solid #B06B1A; }
+.tr-info  { min-width: 0; }
+.tr-name  { font-size: 14px; font-weight: 400; color: var(--dark);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.tr-meta  { font-size: 11px; font-weight: 300; color: var(--light); white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; }
+.tr-due   { font-size: 13px; font-weight: 400; color: var(--dark); white-space: nowrap;
+            text-align: right; min-width: 90px; }
+.tr-due.overdue { color: #C0392B; font-weight: 500; }
+.tr-open  { font-size: 15px; color: var(--light); text-align: right; transition: color 0.15s; }
+.task-row:hover .tr-open { color: var(--dark); }
+
+/* ── Search: Completed Matches section ──────────────────────────────────── */
+.search-done-section { margin-top: 32px; }
+.search-done-header  { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.search-done-label   { font-size: 9.5px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase;
+                       color: var(--light); white-space: nowrap; }
+.search-done-rule    { flex: 1; height: 1px; background: var(--rule); }
+.search-done-section .task-row { opacity: 0.65; }
+.search-done-section .task-row:hover { opacity: 1; }
+
+/* ── Related Supporting Tasks ────────────────────────────────────────────── */
+.related-tasks-list        { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.related-task-card         { border: 1px solid var(--rule); padding: 14px 16px 12px; }
+.related-task-meta         { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.related-task-reason-badge { font-size: 8px; font-weight: 500; letter-spacing: 0.11em; text-transform: uppercase;
+                             color: var(--light); border: 1px solid var(--rule); padding: 2px 7px; margin-left: auto; }
+.related-task-name         { font-size: 13px; font-weight: 400; color: var(--dark); margin-bottom: 8px; line-height: 1.4; }
+.related-task-types        { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.related-types-label       { font-size: 10px; font-weight: 400; color: var(--light); }
+.related-type-badge        { font-size: 10px; font-weight: 400; color: var(--mid);
+                             background: var(--cream); border: 1px solid var(--rule); padding: 2px 8px; }
+.related-task-footer       { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.related-task-open         { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 500;
+                             letter-spacing: 0.12em; text-transform: uppercase; padding: 9px 16px;
+                             background: var(--dark); color: #fff; border: none; cursor: pointer;
+                             transition: background 0.15s; }
+.related-task-open:hover   { background: #333; }
+.related-task-notion       { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 500;
+                             letter-spacing: 0.12em; text-transform: uppercase; padding: 9px 16px;
+                             background: transparent; color: var(--dark); border: 1px solid var(--rule);
+                             text-decoration: none; display: inline-block; transition: border-color 0.15s; }
+.related-task-notion:hover { border-color: var(--mid); color: var(--dark); }
+.related-task-remove       { font-family: 'Jost', sans-serif; font-size: 9px; font-weight: 400;
+                             color: var(--light); cursor: pointer; background: none; border: none;
+                             padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+.related-task-remove:hover { color: #c0392b; }
+.link-task-btn             { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 500;
+                             letter-spacing: 0.12em; text-transform: uppercase; padding: 8px 16px;
+                             background: transparent; color: var(--dark); border: 1px solid var(--rule);
+                             cursor: pointer; transition: border-color 0.15s; }
+.link-task-btn:hover       { border-color: var(--mid); }
+
+/* ── Task Selector Modal ─────────────────────────────────────────────────── */
+.ts-overlay  { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 2000;
+               display: flex; align-items: flex-start; justify-content: center; padding-top: 80px; }
+.ts-modal    { background: var(--white); width: 560px; max-width: calc(100vw - 48px);
+               max-height: 70vh; display: flex; flex-direction: column;
+               box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+.ts-header   { padding: 18px 20px 14px; border-bottom: 1px solid var(--rule);
+               display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.ts-title    { font-size: 13px; font-weight: 500; color: var(--dark); letter-spacing: 0.04em; }
+.ts-close    { font-size: 18px; line-height: 1; background: none; border: none; cursor: pointer;
+               color: var(--light); padding: 0 4px; }
+.ts-close:hover { color: var(--dark); }
+.ts-search-wrap { padding: 12px 20px; border-bottom: 1px solid var(--rule); flex-shrink: 0; }
+.ts-search   { width: 100%; font-family: 'Jost', sans-serif; font-size: 12px; font-weight: 400;
+               border: 1px solid var(--rule); padding: 8px 12px; outline: none;
+               background: var(--cream); color: var(--dark); box-sizing: border-box; }
+.ts-search:focus { border-color: var(--mid); }
+.ts-list     { overflow-y: auto; flex: 1; }
+.ts-item     { padding: 11px 20px; cursor: pointer; border-bottom: 1px solid var(--rule);
+               display: flex; flex-direction: column; gap: 4px; transition: background 0.1s; }
+.ts-item:last-child { border-bottom: none; }
+.ts-item:hover { background: var(--cream); }
+.ts-item-name  { font-size: 12px; font-weight: 400; color: var(--dark); line-height: 1.4; }
+.ts-item-meta  { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ts-item-badge { font-size: 9px; font-weight: 500; letter-spacing: 0.09em; text-transform: uppercase;
+                 padding: 2px 6px; border: 1px solid var(--rule); color: var(--mid); }
+.ts-item-type  { font-size: 9px; font-weight: 400; color: var(--light);
+                 background: var(--cream); border: 1px solid var(--rule); padding: 2px 6px; }
+.ts-empty    { padding: 28px 20px; font-size: 12px; color: var(--light); text-align: center; }
+
+/* ── Media Library ───────────────────────────────────────────────────────── */
+.ml-header { display: flex; align-items: baseline; justify-content: space-between;
+             margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
+.ml-header-count { font-size: 12px; font-weight: 300; color: var(--light); }
+
+.ml-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+
+.ml-card { background: var(--white); border: 1px solid var(--rule); padding: 20px 22px 18px;
+           cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; display: flex;
+           flex-direction: column; gap: 12px; }
+.ml-card:hover { border-color: var(--dark); box-shadow: 0 4px 16px rgba(28,28,26,0.06); }
+
+.ml-card-name { font-size: 14px; font-weight: 400; color: var(--dark); line-height: 1.35; }
+
+.ml-type-row { display: flex; flex-wrap: wrap; gap: 5px; }
+.ml-type-badge { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+                 padding: 4px 9px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+.ml-type-image  { background: #EAF0F8; color: #2A4A7A; }
+.ml-type-video  { background: #F3EEF8; color: #6A3A8A; }
+.ml-type-file   { background: #EAF4EE; color: #2A6A42; }
+.ml-type-pdf    { background: #FEF3E7; color: #8A4A1A; }
+.ml-type-embed  { background: #F0F0EE; color: var(--mid); }
+.ml-type-link   { background: #F0F0EE; color: var(--mid); }
+
+.ml-card-footer { display: flex; align-items: center; justify-content: space-between; }
+.ml-card-meta { font-size: 11px; font-weight: 300; color: var(--light);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-card-open { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase;
+                color: var(--light); flex-shrink: 0; transition: color 0.15s; }
+.ml-card:hover .ml-card-open { color: var(--dark); }
+
+.ml-status-done  { opacity: 0.7; }
+.ml-card.ml-status-done .ml-card-name { color: var(--mid); }
+
+/* ── Task Detail panel ───────────────────────────────────────────────────── */
+.detail-overlay { position: fixed; inset: 0; background: rgba(28,28,26,0.4);
+                  z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.detail-overlay.open { opacity: 1; pointer-events: all; }
+.detail-panel { position: fixed; top: 0; right: 0; width: 660px; max-width: 95vw; height: 100vh;
+                background: var(--white); border-left: 1px solid var(--rule); z-index: 101;
+                transform: translateX(100%); transition: transform 0.25s ease; overflow-y: auto;
+                display: flex; flex-direction: column; }
+.detail-panel.open { transform: translateX(0); }
+.detail-topbar { padding: 22px 32px 20px; border-bottom: 1px solid var(--rule);
+                 display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.detail-close  { font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase;
+                 color: var(--mid); background: none; border: none; cursor: pointer; transition: color 0.15s; }
+.detail-close:hover { color: var(--dark); }
+.detail-notion { font-size: 10px; font-weight: 400; color: var(--light); text-decoration: none;
+                 letter-spacing: 0.06em; transition: color 0.15s; }
+.detail-notion:hover { color: var(--dark); }
+.detail-body { padding: 30px 32px 44px; flex: 1; }
+.detail-name { font-family: 'Cormorant Garamond', serif; font-size: 30px; color: var(--dark);
+               line-height: 1.2; margin-bottom: 18px; }
+.detail-strip { display: flex; align-items: stretch; flex-wrap: wrap;
+                background: var(--cream); border: 1px solid var(--rule); margin-bottom: 30px; }
+.detail-strip-item { display: flex; flex-direction: column; gap: 5px; padding: 14px 20px;
+                     border-right: 1px solid var(--rule); flex: 1; min-width: 100px; }
+.detail-strip-item:last-child { border-right: none; }
+.detail-strip-lbl { font-size: 9px; font-weight: 500; letter-spacing: 0.18em;
+                    text-transform: uppercase; color: var(--light); }
+.detail-strip-val { font-size: 13px; font-weight: 400; color: var(--dark); }
+.detail-strip-val.overdue { color: #C0392B; font-weight: 500; }
+.detail-section { margin-bottom: 30px; }
+.detail-sec-title { font-size: 9px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase;
+                    color: var(--light); margin-bottom: 14px; padding-bottom: 9px;
+                    border-bottom: 0.5px solid var(--rule); }
+.detail-row { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 13px; }
+.detail-lbl { font-size: 10px; font-weight: 500; color: var(--light); text-transform: uppercase;
+              letter-spacing: 0.12em; width: 96px; flex-shrink: 0; padding-top: 3px; }
+.detail-val { font-size: 14px; font-weight: 300; color: var(--dark); line-height: 1.6; flex: 1; }
+.detail-desc { font-size: 14px; font-weight: 300; color: var(--mid); line-height: 1.85;
+               padding: 18px 20px; background: var(--cream); border: 1px solid var(--rule); }
+.detail-desc-empty { font-size: 13px; font-weight: 300; color: var(--light); font-style: italic; }
+
+/* ── Detail async sections ───────────────────────────────────────────────── */
+.detail-async-loading { display: flex; align-items: center; gap: 10px; padding: 16px 18px;
+                        background: var(--cream); border: 1px solid var(--rule); }
+.detail-async-loading .spinner { width: 13px; height: 13px; }
+.detail-async-text { font-size: 12px; font-weight: 300; color: var(--light); }
+.detail-async-error { padding: 15px 18px; background: var(--cream); border: 1px solid var(--rule);
+                      font-size: 12.5px; font-weight: 300; color: var(--mid); line-height: 1.75; }
+.detail-phase2-note { font-size: 11px; font-weight: 300; color: var(--light);
+                      font-style: italic; margin-top: 8px; }
+
+/* ── Media & Files (detail panel) ────────────────────────────────────────── */
+.media-section-label { font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
+                       text-transform: uppercase; color: var(--light); margin-bottom: 11px; }
+.media-img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                  gap: 10px; margin-bottom: 4px; }
+.media-img-card { position: relative; display: block; border: 1px solid var(--rule); overflow: hidden;
+                  transition: border-color 0.15s; text-decoration: none; background: var(--cream); }
+.media-img-card:hover { border-color: var(--dark); }
+.media-img-card img { width: 100%; height: 120px; object-fit: cover; display: block; }
+.media-img-card.img-error img { display: none; }
+.media-img-card.img-error::after { content: 'Image URL expired (Notion links last 1 hr)';
+  display: block; padding: 16px 12px; font-size: 11px; font-weight: 300; color: var(--light);
+  font-style: italic; text-align: center; }
+.media-img-cap { font-size: 11px; font-weight: 300; color: var(--mid); padding: 6px 10px;
+                 border-top: 1px solid var(--rule); white-space: nowrap; overflow: hidden;
+                 text-overflow: ellipsis; }
+.media-nested-badge { font-size: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+                      background: rgba(28,28,26,0.75); color: #fff; padding: 2px 6px;
+                      position: absolute; bottom: 6px; right: 6px; }
+.media-links-list { display: flex; flex-direction: column; gap: 3px; }
+.media-link-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px;
+                   background: var(--cream); border: 1px solid var(--rule); text-decoration: none;
+                   transition: border-color 0.15s; }
+.media-link-item:hover { border-color: var(--dark); }
+.media-link-icon { font-size: 16px; flex-shrink: 0; width: 22px; text-align: center; }
+.media-link-body { flex: 1; min-width: 0; }
+.media-link-name { font-size: 13px; font-weight: 400; color: var(--dark); display: block;
+                   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+.media-link-type { font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+                   color: var(--light); }
+.media-link-arr { font-size: 13px; color: var(--light); flex-shrink: 0; transition: color 0.15s; }
+.media-link-item:hover .media-link-arr { color: var(--dark); }
+
+/* Empty / info states for media section */
+.media-none { padding: 16px 18px; background: var(--cream); border: 1px solid var(--rule);
+              font-size: 12.5px; font-weight: 300; color: var(--mid); line-height: 1.7; }
+.media-none.media-empty-page { color: var(--light); font-style: italic; border-left: 3px solid var(--rule); }
+.media-none.media-has-notes  { border-left: 3px solid var(--rule); }
+.media-none.media-has-table  { border-left: 3px solid #B8C4D4; }
+.media-none-sub { font-size: 11px; color: var(--light); margin-top: 5px; font-style: italic; }
+.notion-open-btn {
+  display: inline-block; margin-top: 14px; padding: 11px 20px;
+  font-family: 'Jost', sans-serif; font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; text-decoration: none;
+  background: var(--dark); color: #fff; transition: background 0.15s;
+}
+.notion-open-btn:hover { background: #333; }
+
+/* ── Notion table (detail panel) ─────────────────────────────────────────── */
+.notion-table-wrap { overflow-x: auto; margin-bottom: 4px; }
+.notion-table { width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 300;
+                line-height: 1.55; }
+.notion-table th,
+.notion-table td { padding: 10px 14px; border: 1px solid var(--rule);
+                   text-align: left; vertical-align: top; color: var(--dark); }
+.notion-table th { background: var(--cream); font-size: 11px; font-weight: 500;
+                   letter-spacing: 0.06em; color: var(--mid); }
+.notion-table tbody tr:hover td { background: #FAFAF8; }
+.notion-table a { color: #3A52A0; text-decoration: underline; }
+.notion-table-note { font-size: 11px; font-weight: 300; color: var(--light);
+                     margin-top: 6px; font-style: italic; }
+
+/* ── Search ──────────────────────────────────────────────────────────────── */
+.search-wrap  { position: relative; }
+.search-input { font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 300;
+                color: var(--dark); background: var(--cream); border: 1px solid var(--rule);
+                padding: 11px 34px 11px 10px; outline: none; width: 100%; }
+.search-input:focus { border-color: var(--dark); }
+.search-input::placeholder { color: var(--light); }
+.search-clear { position: absolute; right: 0; top: 0; bottom: 0; width: 34px;
+                background: none; border: none; cursor: pointer; font-size: 17px;
+                color: var(--light); display: flex; align-items: center; justify-content: center;
+                transition: color 0.15s; padding: 0; }
+.search-clear:hover { color: var(--dark); }
+
+/* ── Reviewed badge (Task Tracker) ──────────────────────────────────────── */
+.b-reviewed { background: #F0F7F0; color: #4A7A52; border: 1px solid #C0D8C2;
+              font-size: 8px; padding: 3px 8px; }
+
+/* ── Review bar / button (detail panel) ──────────────────────────────────── */
+.review-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 11px 16px; margin-bottom: 22px;
+  background: #F2F7F2; border: 1px solid #C0D8C2;
+}
+.review-bar-label  { font-size: 12px; font-weight: 400; color: #3A6A42; flex: 1; min-width: 0; }
+.review-bar-remove { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500;
+                     letter-spacing: 0.12em; text-transform: uppercase; color: var(--light);
+                     background: none; border: none; cursor: pointer; transition: color 0.15s;
+                     text-decoration: underline; white-space: nowrap; }
+.review-bar-remove:hover { color: var(--dark); }
+
+.review-btn { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500;
+              letter-spacing: 0.14em; text-transform: uppercase; padding: 10px 18px;
+              cursor: pointer; border: 1px solid var(--rule); background: var(--white);
+              color: var(--mid); transition: all 0.15s; margin-bottom: 22px; display: inline-block; }
+.review-btn:hover { border-color: #3A6A42; color: #3A6A42; }
+
+/* ── Undo toast ──────────────────────────────────────────────────────────── */
+.undo-toast {
+  position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+  background: var(--dark); color: #fff; padding: 14px 24px;
+  font-family: 'Jost', sans-serif; font-size: 12.5px; font-weight: 300;
+  display: flex; align-items: center; gap: 20px; z-index: 300;
+  white-space: nowrap; box-shadow: 0 8px 32px rgba(28,28,26,0.28);
+  animation: toast-in 0.18s ease;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.undo-btn { font-family: 'Jost', sans-serif; font-size: 10.5px; font-weight: 500;
+            letter-spacing: 0.14em; text-transform: uppercase; color: #9DD4A4;
+            background: none; border: none; cursor: pointer; transition: color 0.15s; }
+.undo-btn:hover { color: #fff; }
+
+/* ── Comments ────────────────────────────────────────────────────────────── */
+.comments-list { display: flex; flex-direction: column; gap: 10px; }
+.comment-item { padding: 15px 18px; background: var(--cream); border: 1px solid var(--rule);
+                border-left: 3px solid var(--rule); }
+.comment-item.comment-mentions-you { border-left-color: #3A52A0; background: #F5F7FC; }
+.comment-mention-badge { display: inline-block; font-size: 8.5px; font-weight: 600;
+                         letter-spacing: 0.12em; text-transform: uppercase; color: #3A52A0;
+                         background: #EEF1FA; padding: 3px 8px; margin-bottom: 9px; }
+.comment-text { font-size: 13px; font-weight: 300; color: var(--dark); line-height: 1.8; margin-bottom: 9px; }
+.comment-mention { font-weight: 500; color: #3A52A0; }
+.comment-meta { font-size: 10.5px; font-weight: 300; color: var(--light); }
+</style>
+</head>
+<body>
+
+<!-- ── Topbar ─────────────────────────────────────────────────────────────── -->
+<div class="topbar">
+  <svg viewBox="0 0 26 26" fill="none">
+    <rect x="1" y="1" width="10" height="10" stroke="#fff" stroke-width="1"/>
+    <rect x="15" y="1" width="10" height="10" stroke="#fff" stroke-width="1" opacity="0.5"/>
+    <rect x="1" y="15" width="10" height="10" stroke="#fff" stroke-width="1" opacity="0.5"/>
+    <rect x="15" y="15" width="10" height="10" stroke="#fff" stroke-width="1" opacity="0.3"/>
+  </svg>
+  <div>
+    <div class="topbar-name">Vista United Co.</div>
+    <div class="topbar-sub">Brand Experience Studio</div>
+  </div>
+  <div class="topbar-div"></div>
+  <div class="topbar-tool">Social Media Control Center</div>
+  <a href="index.html" class="topbar-home">← Platform Home</a>
+</div>
+
+<!-- ── Main layout ────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+
+    <!-- Tasks -->
+    <div>
+      <div class="sec-title">Tasks</div>
+      <button class="btn btn-dark" id="refreshBtn" onclick="loadAllTasks()">Refresh Tasks</button>
+    </div>
+    <div id="syncInfo" class="sync-info">Not loaded yet.</div>
+
+    <hr class="sidebar-sep">
+
+    <!-- Search -->
+    <div>
+      <div class="sec-title">Search</div>
+      <div class="search-wrap">
+        <input class="search-input" type="text" id="searchInput"
+               placeholder="Name, status, assignee…"
+               oninput="onSearchInput(this.value)">
+        <button class="search-clear" id="searchClear" onclick="clearSearch()"
+                style="display:none" title="Clear search">×</button>
+      </div>
+    </div>
+
+    <hr class="sidebar-sep">
+
+    <!-- Filters -->
+    <div>
+      <div class="sec-title">Filter</div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div>
+          <label class="form-label">Category</label>
+          <select class="form-select" id="filterCategory" onchange="onSidebarChange()">
+            <option value="">All categories</option>
+            <option>Reports</option>
+            <option>Content</option>
+            <option>Social</option>
+            <option>Ads &amp; Testing</option>
+            <option>Reviews &amp; Strategy</option>
+            <option>SEO</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Assignee</label>
+          <select class="form-select" id="filterAssignee" onchange="onSidebarChange()">
+            <option value="">All</option>
+            <option>Hussam</option>
+            <option>Youssef</option>
+          </select>
+        </div>
+        <div class="toggle-row" onclick="toggleDone()">
+          <div class="toggle-box" id="toggleDoneBox"></div>
+          <span class="toggle-label">Include Done tasks</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sidebar-sep">
+
+    <!-- Media Index -->
+    <div>
+      <div class="sec-title">Media Index</div>
+      <button class="btn btn-outline" id="mediaIndexBtn" onclick="runMediaIndexScan()">
+        Refresh Media Index
+      </button>
+      <div id="indexStatus" class="index-status">Never scanned.</div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- Content -->
+  <div class="content">
+    <div class="content-title">Control Center</div>
+    <div class="content-sub">Vista United · Social Media Tasks — Hussam's workspace</div>
+
+    <!-- Quick filter chips -->
+    <div class="chip-strip" id="chipStrip">
+      <button class="chip active"         onclick="setChip('all')"       id="chip-all">All</button>
+      <button class="chip chip-attention" onclick="setChip('attention')" id="chip-attention">Needs My Attention</button>
+      <button class="chip"               onclick="setChip('content')"   id="chip-content">Content</button>
+      <button class="chip"               onclick="setChip('social')"    id="chip-social">Social</button>
+      <button class="chip chip-media"    onclick="setChip('media')"     id="chip-media">Media / Posts</button>
+      <button class="chip chip-overdue"  onclick="setChip('overdue')"   id="chip-overdue">Overdue</button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-row">
+      <button class="tab active" id="tabAttn" onclick="switchTab('attention')">
+        Needs My Attention <span class="tab-badge" id="badgeAttn">0</span>
+      </button>
+      <button class="tab" id="tabTracker" onclick="switchTab('tracker')">
+        Task Tracker <span class="tab-badge" id="badgeTracker">0</span>
+      </button>
+      <button class="tab" id="tabMedia" onclick="switchTab('media')">
+        Media Library <span class="tab-badge" id="badgeMedia">0</span>
+      </button>
+    </div>
+
+    <!-- Legend strip (hidden on Media Library tab) -->
+    <div class="legend-strip" id="legendStrip">
+      <div class="legend-item">
+        <div class="legend-swatch legend-border-blue"></div>
+        <span>Assigned to Youssef</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch legend-border-amber"></div>
+        <span>Blocked / Pending Feedback / Overdue</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch legend-border-red"></div>
+        <span>Urgent</span>
+      </div>
+      <div class="legend-sep"></div>
+      <div class="legend-item"><span class="legend-due-dot">🔴</span><span>Today</span></div>
+      <div class="legend-item"><span class="legend-due-dot">🟠</span><span>Tomorrow</span></div>
+      <div class="legend-item"><span class="legend-due-dot">🟡</span><span>2–3 days</span></div>
+      <div class="legend-item"><span class="legend-due-dot">🟢</span><span>4+ days</span></div>
+    </div>
+
+    <!-- Loading / Error -->
+    <div id="loadingBar" class="status-bar" style="display:none">
+      <div class="spinner"></div>
+      <span id="loadingMsg">Loading tasks…</span>
+    </div>
+    <div id="errorBar" style="display:none; background:#FEF0F0; border:1px solid #F5C6C6; color:#C0392B;
+         padding:11px 16px; font-size:12px; font-weight:300; margin-bottom:16px;"></div>
+
+    <!-- Tab: Needs My Attention -->
+    <div id="panelAttention">
+      <div id="attentionList" class="attention-list"></div>
+    </div>
+
+    <!-- Tab: Task Tracker -->
+    <div id="panelTracker" style="display:none">
+      <div id="trackerList"></div>
+    </div>
+
+    <!-- Tab: Media Library -->
+    <div id="panelMedia" style="display:none">
+      <div id="mediaLibraryList"></div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ── Task Detail panel ──────────────────────────────────────────────────── -->
+<div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <div class="detail-topbar">
+    <button class="detail-close" onclick="closeDetail()">Close</button>
+    <a class="detail-notion" id="detailNotionLink" href="#" target="_blank">Open in Notion ↗</a>
+  </div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
+<script>
+// ── Configuration ─────────────────────────────────────────────────────────────
+const PROXY_ROUTE    = 'personal';
+const DATA_SOURCE_ID = '35aa2557-c7f8-8140-81f5-000b067a0139';
+const QUERY_ENDPOINT = `/notion/${PROXY_ROUTE}/data_sources/${DATA_SOURCE_ID}/query`;
+
+// Media index storage key — bump version if schema changes
+const MEDIA_INDEX_KEY = 'vista_media_index_v1';
+
+// ── Reviews (Phase 2A — localStorage only, no Notion writes) ─────────────────
+const REVIEWS_KEY = 'vista_reviews_v1';
+
+function loadReviews() {
+  try { const r = localStorage.getItem(REVIEWS_KEY); return r ? JSON.parse(r) : {}; }
+  catch { return {}; }
+}
+
+function saveReview(id, name, lastEditedTime) {
+  const reviews = loadReviews();
+  reviews[id] = { reviewedAt: Date.now(), taskName: name, lastEditedTime, note: '' };
+  try { localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews)); } catch {}
+}
+
+function removeReview(id) {
+  const reviews = loadReviews();
+  delete reviews[id];
+  try { localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews)); } catch {}
+}
+
+// True if a review record exists AND the task has not been edited in Notion since it was reviewed.
+// ISO string comparison is lexicographic — correct for UTC timestamps.
+function isReviewedAndFresh(t) {
+  const rec = loadReviews()[t.id];
+  if (!rec) return false;
+  return updated(t) <= rec.lastEditedTime;
+}
+
+// Media/Posts categories.
+// NOTE: The chip filter shows ~53 *active* tasks (Done excluded by default).
+// The media index always scans ALL 89 tasks including Done, so the library
+// shows media from completed tasks too.
+const MEDIA_CATEGORIES = new Set(['Content', 'Social', 'Ads & Testing']);
+
+// Block types whose children may contain media (one level deep)
+const NESTED_CONTAINER_TYPES = new Set([
+  'toggle', 'column_list', 'column', 'callout', 'synced_block',
+  'quote', 'bulleted_list_item', 'numbered_list_item', 'to_do'
+]);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allTasks      = [];
+let showDone      = false;
+let currentTab    = 'attention';
+let activeChip    = 'all';
+let lastSync      = null;
+let scanAborted   = false;
+let searchQuery   = '';
+let _detailTaskId = null;   // ID of the task currently shown in the detail panel
+
+// ── Search ────────────────────────────────────────────────────────────────────
+function onSearchInput(val) {
+  searchQuery = val;
+  document.getElementById('searchClear').style.display = val ? 'flex' : 'none';
+  applyFilters();
+  if (currentTab === 'media') renderMediaLibrary();
+}
+
+function clearSearch() {
+  searchQuery = '';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchClear').style.display = 'none';
+  applyFilters();
+  if (currentTab === 'media') renderMediaLibrary();
+}
+
+// Case-insensitive substring match across all searchable task fields.
+function searchMatches(t, q) {
+  const index = loadMediaIndex();
+  const entry = index.tasks[t.id];
+  const mediaLabels = entry ? (entry.mediaTypes || []).join(' ') : '';
+  const fields = [
+    taskName(t), description(t), status(t),
+    assigneeOf(t), category(t), dueDate(t), due2(t), bucket(t),
+    mediaLabels,
+  ];
+  return fields.some(f => f && f.toLowerCase().includes(q));
+}
+
+// Media Library variant — entry is from the index, not a full task object.
+function searchMatchesEntry(entry, q) {
+  const fields = [
+    entry.name, entry.category, entry.status, entry.dueDate,
+    ...(entry.mediaTypes || []),
+  ];
+  return fields.some(f => f && f.toLowerCase().includes(q));
+}
+
+// ── Data fetching ─────────────────────────────────────────────────────────────
+async function loadAllTasks() {
+  setLoading(true);
+  hideError();
+  allTasks = [];
+  try {
+    let cursor = null, page = 0;
+    do {
+      page++;
+      setLoadingMsg(`Loading tasks… (page ${page})`);
+      const body = cursor ? { start_cursor: cursor } : {};
+      const res  = await fetch(QUERY_ENDPOINT, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      allTasks.push(...data.results);
+      cursor = data.has_more ? data.next_cursor : null;
+    } while (cursor);
+
+    lastSync = new Date();
+    setSyncInfo();
+    applyFilters();
+    mergeNewTasksIntoIndex();   // mark any unseen tasks as unscanned
+  } catch (e) {
+    showError(`Could not load tasks: ${e.message}. Is proxy.py running?`);
+    setSyncInfo();
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── Chips ─────────────────────────────────────────────────────────────────────
+function setChip(chip) {
+  activeChip = chip;
+  document.querySelectorAll('.chip').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('chip-' + chip);
+  if (el) el.classList.add('active');
+
+  if (chip === 'attention') {
+    switchTab('attention');
+  } else {
+    if (chip === 'content') document.getElementById('filterCategory').value = 'Content';
+    else if (chip === 'social') document.getElementById('filterCategory').value = 'Social';
+    else document.getElementById('filterCategory').value = '';
+    switchTab('tracker');
+  }
+  applyFilters();
+}
+
+function onSidebarChange() {
+  activeChip = 'all';
+  document.querySelectorAll('.chip').forEach(el => el.classList.remove('active'));
+  document.getElementById('chip-all').classList.add('active');
+  applyFilters();
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────────
+function getFilteredTasks() {
+  const today   = todayStr();
+  const catSel  = document.getElementById('filterCategory').value;
+  const asnSel  = document.getElementById('filterAssignee').value;
+
+  return allTasks.filter(t => {
+    const st  = status(t);
+    const cat = category(t);
+    const due = dueDate(t);
+    if (!showDone && st === 'Done') return false;
+    if (activeChip === 'media')   { if (!MEDIA_CATEGORIES.has(cat)) return false; }
+    else if (activeChip === 'overdue') { if (!(due && due < today && st !== 'Done')) return false; }
+    else {
+      if (catSel && cat         !== catSel) return false;
+      if (asnSel && assigneeOf(t) !== asnSel) return false;
+    }
+    return true;
+  });
+}
+
+function getFilteredTasksForAttention() {
+  const asnSel = document.getElementById('filterAssignee').value;
+  return allTasks.filter(t => {
+    if (!showDone && status(t) === 'Done') return false;
+    if (asnSel && assigneeOf(t) !== asnSel) return false;
+    return true;
+  });
+}
+
+function applyFilters() {
+  let tasks     = getFilteredTasks();
+  let attnTasks = attentionFilter(tasks.length ? tasks : getFilteredTasksForAttention());
+  const q = searchQuery.trim().toLowerCase();
+  let doneMatches = [];
+  if (q) {
+    tasks     = tasks.filter(t => searchMatches(t, q));
+    attnTasks = attnTasks.filter(t => searchMatches(t, q));
+    // When Done tasks are hidden during normal browsing, surface any that match the search
+    // so similarly-named active and completed tasks can be distinguished.
+    if (!showDone) {
+      doneMatches = allTasks.filter(t => status(t) === 'Done' && searchMatches(t, q));
+    }
+  }
+  renderAttention(attnTasks);
+  renderTracker(tasks, doneMatches);
+  document.getElementById('badgeAttn').textContent    = attnTasks.length;
+  document.getElementById('badgeTracker').textContent = tasks.filter(t => status(t) !== 'Done').length;
+  // Media Library badge comes from the index
+  updateMediaBadge();
+}
+
+// ── Attention filter ──────────────────────────────────────────────────────────
+function attentionFilter(tasks) {
+  const today = todayStr();
+  return tasks.filter(t => {
+    const st  = status(t);
+    const who = assigneeOf(t);
+    const due = dueDate(t);
+    if (st === 'Done') return false;
+    if (isReviewedAndFresh(t)) return false;   // reviewed tasks leave the queue entirely
+    if (who === 'Youssef')         return true;
+    if (st === 'Pending Feedback') return true;
+    if (st === 'Blocked')          return true;
+    if (due && due < today)        return true;
+    return false;
+  });
+}
+
+function attentionPriority(t) {
+  const st = status(t), who = assigneeOf(t), due = dueDate(t), today = todayStr();
+  if (due && due < today && st !== 'Done') return 0;
+  if (st === 'Blocked')                    return 1;
+  if (st === 'Pending Feedback')           return 2;
+  if (who === 'Youssef')                   return 3;
+  return 4;
+}
+
+// ── Render: Attention ─────────────────────────────────────────────────────────
+function renderAttention(tasks) {
+  const el = document.getElementById('attentionList');
+  if (!allTasks.length) {
+    el.innerHTML = emptyState(svgDoc(), 'No tasks loaded', 'Click Refresh Tasks to load data from Notion.');
+    return;
+  }
+  const sorted = [...tasks].sort((a, b) => attentionPriority(a) - attentionPriority(b));
+  if (!sorted.length) {
+    el.innerHTML = emptyState(svgCheck(), 'Nothing needs your attention', 'No overdue, blocked, or assigned tasks right now.');
+    return;
+  }
+  const today = todayStr();
+  el.innerHTML = sorted.map(t => {
+    const st = status(t), due = dueDate(t);
+    const isUrgent = (due && due < today) || st === 'Blocked';
+    const desc = description(t), upd = updated(t);
+    return `
+      <div class="attn-card${isUrgent ? ' urgent' : ''}" onclick="openDetail('${t.id}')">
+        <div class="attn-badges">
+          <span class="badge ${statusClass(st)}">${st}</span>
+          <span class="badge ${assigneeOf(t) === 'Youssef' ? 'b-youssef' : 'b-hussam'}">${assigneeOf(t) || '—'}</span>
+          <span class="badge b-category">${category(t) || '—'}</span>
+        </div>
+        <div class="attn-name">${esc(taskName(t))}</div>
+        ${desc ? `<div class="attn-desc">${esc(desc)}</div>` : ''}
+        <div class="attn-footer">
+          <span class="attn-due">${due2(t)}</span>
+          <div class="attn-right">
+            <span class="attn-updated">Updated ${fmtDate(upd)}</span>
+            <span class="attn-open">Open →</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Render: Tracker ───────────────────────────────────────────────────────────
+const BUCKET_ORDER = [
+  '1 · Due this week','2 · Due next week','3 · Beyond next week',
+  '4 · Last week','5 · 2 weeks ago','6 · 3 weeks ago',
+  '7 · Due last month and before','',
+];
+
+function renderTracker(tasks, doneMatches = []) {
+  const el = document.getElementById('trackerList');
+  if (!allTasks.length) { el.innerHTML = ''; return; }
+  const groups = {};
+  BUCKET_ORDER.forEach(b => groups[b] = []);
+  tasks.forEach(t => {
+    const b = bucket(t);
+    if (groups[b] !== undefined) groups[b].push(t);
+    else groups[''].push(t);
+  });
+  const header = `
+    <div style="display:grid;grid-template-columns:110px 1fr auto auto;
+         gap:16px;padding:9px 20px;margin-bottom:6px;">
+      <span style="font-size:9px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--light)">Status</span>
+      <span style="font-size:9px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--light)">Task</span>
+      <span style="font-size:9px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--light);text-align:right">Due</span>
+      <span></span>
+    </div>`;
+  const bucketHTML = BUCKET_ORDER.map(b => {
+    const grp = groups[b] || [];
+    if (!grp.length) return '';
+    const label = b || 'No due date';
+    const collapseDefaults = ['4 · Last week','5 · 2 weeks ago','6 · 3 weeks ago','7 · Due last month and before'];
+    const collapsed = collapseDefaults.includes(b) && grp.every(t => status(t) === 'Done');
+    return `
+      <div class="bucket-group">
+        <div class="bucket-header" onclick="toggleBucket(this)">
+          <span class="bucket-label">${label}</span>
+          <span class="bucket-count">(${grp.length})</span>
+          <span class="bucket-rule"></span>
+          <span class="bucket-toggle${collapsed ? ' collapsed' : ''}">▾</span>
+        </div>
+        <div class="bucket-rows" style="${collapsed ? 'display:none' : ''}">
+          ${grp.map(t => taskRow(t)).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  const doneHTML = doneMatches.length ? `
+    <div class="search-done-section">
+      <div class="search-done-header">
+        <span class="search-done-label">Completed Matches · ${doneMatches.length}</span>
+        <span class="search-done-rule"></span>
+      </div>
+      ${doneMatches.map(t => taskRow(t)).join('')}
+    </div>` : '';
+
+  el.innerHTML = header + bucketHTML + doneHTML;
+}
+
+function taskRow(t) {
+  const st = status(t), who = assigneeOf(t), cat = category(t);
+  const today = todayStr(), due = dueDate(t);
+  const isYou     = who === 'Youssef';
+  const isAttn    = st === 'Pending Feedback' || st === 'Blocked' || (due && due < today && st !== 'Done');
+  const isOverdue = due && due < today && st !== 'Done';
+  const isRev     = isReviewedAndFresh(t);
+  const cls       = isYou ? 'youssef-row' : (isAttn ? 'attention-row' : '');
+  const meta      = [cat, who].filter(Boolean).join(' · ');
+  const dueTxt    = due2(t) || (due ? fmtDate(due) : '—');
+  return `
+    <div class="task-row${cls ? ' '+cls : ''}" onclick="openDetail('${t.id}')">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <span class="badge ${statusClass(st)}">${st}</span>
+        ${isRev ? '<span class="badge b-reviewed">✓ Reviewed</span>' : ''}
+      </div>
+      <div class="tr-info">
+        <div class="tr-name">${esc(taskName(t))}</div>
+        ${meta ? `<div class="tr-meta">${esc(meta)}</div>` : ''}
+      </div>
+      <span class="tr-due${isOverdue ? ' overdue' : ''}">${isOverdue ? '⚠ ' : ''}${esc(dueTxt)}</span>
+      <span class="tr-open">→</span>
+    </div>`;
+}
+
+// ── Related Tasks ─────────────────────────────────────────────────────────────
+// Five ranked tiers (strongest to weakest):
+//   Tier 5 — Linked by You         manual localStorage link (bidirectional)
+//   Tier 4 — Explicit Notion Link   Notion page link in the task body blocks
+//   Tier 3 — Exact Reference        full task name appears in other task's description
+//   Tier 2 — Strong Match           same category + shared bigram OR 3+ shared sig words;
+//                                   OR cross-category + shared bigram
+//   Tier 1 — Possible Match         same category + 2+ shared sig words
+// Max 5 results shown, sorted strongest first. hasMedia as tie-breaker.
+
+// Stop-words excluded from automatic name matching.
+const RELATED_STOP = new Set([
+  // user-specified generic terms
+  'task','post','content','update','review','prepare','send','publish','vista','united',
+  'add','new','final',
+  // common short/structural words
+  'a','an','the','and','or','for','to','of','in','on','at','as','is','be',
+  'by','with','from','not','do','up','its','our','your','this','that','are',
+  'was','has','had','but','if','all','any','can','one','out','how','get',
+  'use','own','into','than','then','over','when','also','just','have',
+  'will','been','were','they','them','their','some','make','need','after',
+  'before','about','which','there','using','used','each','plus','only',
+]);
+
+// Extract significant words from text: ≥4 chars, not in RELATED_STOP.
+function sigWords(text) {
+  return [...new Set(
+    text.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 4 && !RELATED_STOP.has(w))
+  )];
+}
+
+// Produce a Set of consecutive significant-word bigrams from a text string.
+// Bigrams stored as "word1|word2". Adjacency preserved from the original word order.
+function sigBigrams(text) {
+  const words = text.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 4 && !RELATED_STOP.has(w));
+  const result = new Set();
+  for (let i = 0; i < words.length - 1; i++) result.add(`${words[i]}|${words[i + 1]}`);
+  return result;
+}
+
+// Tier 4 signal — extract Notion internal page links from block rich_text and
+// resolve to known task IDs. URL format:
+//   https://app.notion.com/p/Title-words-<truncated-uuid>
+function notionLinksFromBlocks(blocks) {
+  const found = [];
+  for (const b of blocks) {
+    const bd = b[b.type];
+    if (!bd || typeof bd !== 'object') continue;
+    for (const rt of (bd.rich_text || [])) {
+      const href = rt.href || '';
+      if (!href.includes('notion.com/p/')) continue;
+      const seg      = href.split('/p/').pop() || '';
+      const lastPart = seg.split('-').pop();   // final hyphen-segment = truncated UUID prefix
+      if (!lastPart || lastPart.length < 20) continue;
+      const prefix = lastPart.toLowerCase();
+      const linked = allTasks.find(t => t.id.replace(/-/g, '').startsWith(prefix));
+      if (linked) found.push(linked.id);
+    }
+  }
+  return [...new Set(found)];
+}
+
+// ── Manual relations localStorage store ──────────────────────────────────────
+// Schema: { [taskId]: [{ relatedTaskId, createdAt }] }
+// Both directions stored explicitly so either task surfaces the link.
+const RELATIONS_KEY = 'vista_task_relations_v1';
+
+function loadRelations() {
+  try {
+    const raw = localStorage.getItem(RELATIONS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveRelations(data) {
+  try { localStorage.setItem(RELATIONS_KEY, JSON.stringify(data)); } catch {}
+}
+
+// Link taskA ↔ taskB (stored bidirectionally).
+function saveRelation(taskAId, taskBId) {
+  const data = loadRelations();
+  const now  = Date.now();
+
+  [taskAId, taskBId].forEach((from, i) => {
+    const to = i === 0 ? taskBId : taskAId;
+    if (!data[from]) data[from] = [];
+    if (!data[from].some(r => r.relatedTaskId === to)) {
+      data[from].push({ relatedTaskId: to, createdAt: now });
+    }
+  });
+
+  saveRelations(data);
+}
+
+// Remove a manual link between taskA and taskB (both directions).
+function removeRelation(taskAId, taskBId) {
+  const data = loadRelations();
+  if (data[taskAId]) {
+    data[taskAId] = data[taskAId].filter(r => r.relatedTaskId !== taskBId);
+    if (!data[taskAId].length) delete data[taskAId];
+  }
+  if (data[taskBId]) {
+    data[taskBId] = data[taskBId].filter(r => r.relatedTaskId !== taskAId);
+    if (!data[taskBId].length) delete data[taskBId];
+  }
+  saveRelations(data);
+}
+
+// Return all task IDs manually linked to this task.
+function getManualRelatedIds(taskId) {
+  const data = loadRelations();
+  return (data[taskId] || []).map(r => r.relatedTaskId);
+}
+
+// ── Main ranking function ─────────────────────────────────────────────────────
+// Returns up to 5 related tasks sorted by tier descending (strongest first).
+// topBlocks: fetched Notion blocks used for Tier 4. Pass [] when unavailable.
+function findRelatedTasks(currentTaskId, topBlocks) {
+  const cur = allTasks.find(x => x.id === currentTaskId);
+  if (!cur) return [];
+
+  const curNameRaw  = taskName(cur);
+  const curNameLow  = curNameRaw.toLowerCase();
+  const curDescLow  = description(cur).toLowerCase();
+  const curCat      = category(cur);
+  const curSigW     = sigWords(curNameLow);
+  const curBigrams  = sigBigrams(curNameRaw);
+
+  // candidates: taskId → { task, tier, label }
+  // addCandidate keeps whichever tier is higher for a given task.
+  const candidates = new Map();
+  const addCandidate = (task, tier, label) => {
+    if (task.id === currentTaskId) return;
+    const ex = candidates.get(task.id);
+    if (!ex || tier > ex.tier) candidates.set(task.id, { task, tier, label });
+  };
+
+  // Tier 5 — Linked by You (manual localStorage)
+  for (const id of getManualRelatedIds(currentTaskId)) {
+    const t = allTasks.find(x => x.id === id);
+    if (t) addCandidate(t, 5, 'Linked by You');
+  }
+
+  // Tier 4 — Explicit Notion Link (page link in task body)
+  for (const id of notionLinksFromBlocks(topBlocks)) {
+    const t = allTasks.find(x => x.id === id);
+    if (t) addCandidate(t, 4, 'Explicit Notion Link');
+  }
+
+  // Tiers 3-1 — automatic signals (scan all tasks)
+  for (const other of allTasks) {
+    if (other.id === currentTaskId) continue;
+
+    const otherNameRaw = taskName(other);
+    const otherNameLow = otherNameRaw.toLowerCase();
+    const otherDescLow = description(other).toLowerCase();
+    const otherCat     = category(other);
+    const otherSigW    = sigWords(otherNameLow);
+    const otherBigrams = sigBigrams(otherNameRaw);
+    const sameCategory = !!(curCat && otherCat && curCat === otherCat);
+
+    // Tier 3 — Exact Reference: full task name in the other's description (either direction)
+    const exactRef = (curDescLow  && otherNameLow && curDescLow.includes(otherNameLow)) ||
+                     (otherDescLow && curNameLow  && otherDescLow.includes(curNameLow));
+    if (exactRef) { addCandidate(other, 3, 'Exact Reference'); continue; }
+
+    // Count shared significant words and bigrams between the two task names
+    const sharedWordCount = curSigW.filter(w => otherSigW.includes(w)).length;
+    let sharedBigCount = 0;
+    for (const bg of curBigrams) { if (otherBigrams.has(bg)) sharedBigCount++; }
+
+    // Tier 2 — Strong Match
+    if ((sameCategory && (sharedBigCount > 0 || sharedWordCount >= 3)) ||
+        (!sameCategory && sharedBigCount > 0)) {
+      addCandidate(other, 2, 'Strong Match'); continue;
+    }
+
+    // Tier 1 — Possible Match
+    if (sameCategory && sharedWordCount >= 2) {
+      addCandidate(other, 1, 'Possible Match');
+    }
+  }
+
+  // Sort: tier descending; hasMedia as tie-breaker within the same tier
+  const index = loadMediaIndex();
+  return Array.from(candidates.values())
+    .sort((a, b) => {
+      if (b.tier !== a.tier) return b.tier - a.tier;
+      const aM = !!(index.tasks?.[a.task.id]?.hasMedia);
+      const bM = !!(index.tasks?.[b.task.id]?.hasMedia);
+      return (bM ? 1 : 0) - (aM ? 1 : 0);
+    })
+    .slice(0, 5);
+}
+
+// Cache the last fetched topBlocks so _refreshRelatedSectionFull can re-rank
+// without an extra API call (valid as long as the same task is open).
+let _lastTopBlocks = [];
+
+// ── Related tasks section renderer ───────────────────────────────────────────
+// related: array of { task, tier, label } from findRelatedTasks()
+// currentTaskId: task currently open (for Remove Link callback)
+function buildRelatedTasksHTML(related, currentTaskId) {
+  if (!related.length) return '';
+  const index = loadMediaIndex();
+  const TYPE_LABELS = {
+    image:'Images', video:'Videos', file:'Files', pdf:'PDFs',
+    embed:'Embeds', link:'Links', table:'Tables',
+  };
+  return `<div class="related-tasks-list">${related.map(({ task: rt, tier, label }) => {
+    const st         = status(rt);
+    const who        = assigneeOf(rt);
+    const cat        = category(rt);
+    const entry      = index.tasks && index.tasks[rt.id];
+    const mediaTypes = entry?.mediaTypes || [];
+    const hasMedia   = entry?.hasMedia;
+    const isManual   = tier === 5;
+    const typesHTML  = hasMedia && mediaTypes.length
+      ? `<div class="related-task-types">
+           <span class="related-types-label">Contains</span>
+           ${mediaTypes.map(m => `<span class="related-type-badge">${esc(TYPE_LABELS[m] || m)}</span>`).join('')}
+         </div>`
+      : '';
+    const removeBtn  = isManual
+      ? `<button class="related-task-remove"
+           onclick="removeManualRelation('${esc(currentTaskId)}','${esc(rt.id)}')">Remove link</button>`
+      : '';
+    return `
+      <div class="related-task-card">
+        <div class="related-task-meta">
+          <span class="badge ${statusClass(st)}">${esc(st)}</span>
+          <span class="badge b-category">${esc(cat || '—')}</span>
+          <span class="badge ${who === 'Youssef' ? 'b-youssef' : 'b-hussam'}">${esc(who || '—')}</span>
+          <span class="related-task-reason-badge">${esc(label)}</span>
+        </div>
+        <div class="related-task-name">${esc(taskName(rt))}</div>
+        ${typesHTML}
+        <div class="related-task-footer">
+          <button class="related-task-open" onclick="openDetail('${esc(rt.id)}')">Open Task →</button>
+          ${removeBtn}
+        </div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+// Remove a manual relation then re-rank and re-render the whole section.
+function removeManualRelation(currentTaskId, relatedTaskId) {
+  removeRelation(currentTaskId, relatedTaskId);
+  _refreshRelatedSectionFull(currentTaskId);
+}
+
+// Full re-render using cached topBlocks — safe to call anytime the task is open.
+function _refreshRelatedSectionFull(taskId) {
+  const relEl = document.getElementById('detail-related-content');
+  if (!relEl) return;
+  relEl.innerHTML = buildRelatedTasksHTML(findRelatedTasks(taskId, _lastTopBlocks), taskId);
+}
+
+// ── Task Selector Modal ───────────────────────────────────────────────────────
+let _tsCurrentTaskId = null;   // task currently open in the detail panel
+
+function openTaskSelector(currentTaskId) {
+  _tsCurrentTaskId = currentTaskId;
+  const overlay = document.getElementById('ts-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  const input = document.getElementById('ts-search-input');
+  if (input) { input.value = ''; input.focus(); }
+  renderTaskSelectorList('');
+}
+
+function closeTaskSelector() {
+  const overlay = document.getElementById('ts-overlay');
+  if (overlay) overlay.style.display = 'none';
+  _tsCurrentTaskId = null;
+}
+
+function renderTaskSelectorList(query) {
+  const listEl = document.getElementById('ts-list');
+  if (!listEl) return;
+  const q    = query.trim().toLowerCase();
+  const index = loadMediaIndex();
+  const TYPE_LABELS = { image:'Images', video:'Videos', file:'Files',
+                        pdf:'PDFs', embed:'Embeds', link:'Links', table:'Tables' };
+
+  // Exclude current task and already-linked tasks from choices
+  const alreadyLinked = new Set([
+    _tsCurrentTaskId,
+    ...getManualRelatedIds(_tsCurrentTaskId),
+  ]);
+
+  const matches = allTasks.filter(t => {
+    if (alreadyLinked.has(t.id)) return false;
+    if (!q) return true;
+    const name = taskName(t).toLowerCase();
+    const cat  = (category(t) || '').toLowerCase();
+    const st   = (status(t) || '').toLowerCase();
+    return name.includes(q) || cat.includes(q) || st.includes(q);
+  });
+
+  if (!matches.length) {
+    listEl.innerHTML = `<div class="ts-empty">${q ? 'No tasks match your search.' : 'No tasks available.'}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = matches.map(t => {
+    const st        = status(t);
+    const cat       = category(t) || '—';
+    const who       = assigneeOf(t) || '—';
+    const entry     = index.tasks && index.tasks[t.id];
+    const mediaTypes = entry?.mediaTypes || [];
+    const typeBadges = mediaTypes.map(m =>
+      `<span class="ts-item-type">${esc(TYPE_LABELS[m] || m)}</span>`
+    ).join('');
+    return `<div class="ts-item" onclick="selectRelatedTask('${esc(t.id)}')">
+      <div class="ts-item-name">${esc(taskName(t))}</div>
+      <div class="ts-item-meta">
+        <span class="ts-item-badge ${statusClass(st)}">${esc(st)}</span>
+        <span class="ts-item-badge">${esc(cat)}</span>
+        <span class="ts-item-badge">${esc(who)}</span>
+        ${typeBadges}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectRelatedTask(relatedTaskId) {
+  if (!_tsCurrentTaskId || !relatedTaskId) return;
+  saveRelation(_tsCurrentTaskId, relatedTaskId);
+  closeTaskSelector();
+  _refreshRelatedSectionFull(_tsCurrentTaskId);
+}
+
+// ── Media Index — persistent metadata (no signed URLs stored) ─────────────────
+function loadMediaIndex() {
+  try {
+    const raw = localStorage.getItem(MEDIA_INDEX_KEY);
+    if (!raw) return { tasks: {}, lastFullScan: null, totalScanned: 0 };
+    return JSON.parse(raw);
+  } catch { return { tasks: {}, lastFullScan: null, totalScanned: 0 }; }
+}
+
+function saveMediaIndex(index) {
+  try { localStorage.setItem(MEDIA_INDEX_KEY, JSON.stringify(index)); }
+  catch (e) { console.warn('Media index save failed (storage full?):', e); }
+}
+
+// All media/posts tasks regardless of Done status — used for scanning and library
+function getAllMediaTasks() {
+  return allTasks.filter(t => MEDIA_CATEGORIES.has(t.properties?.Category?.select?.name || ''));
+}
+
+// After loading tasks, register any new task IDs as unscanned so the
+// sidebar can report "X new tasks not yet scanned"
+function mergeNewTasksIntoIndex() {
+  if (!allTasks.length) return;
+  const index    = loadMediaIndex();
+  const mediaTasks = getAllMediaTasks();
+  let   added    = 0;
+  for (const t of mediaTasks) {
+    if (!(t.id in index.tasks)) {
+      index.tasks[t.id] = { id: t.id, name: taskName(t), scannedAt: null, hasMedia: null };
+      added++;
+    }
+  }
+  if (added > 0) saveMediaIndex(index);
+  updateIndexSidebarStatus();
+  updateMediaBadge();
+}
+
+// ── Media index scan ──────────────────────────────────────────────────────────
+async function runMediaIndexScan() {
+  if (!allTasks.length) {
+    showError('Please load tasks first (click Refresh Tasks), then scan the media index.');
+    return;
+  }
+  const btn = document.getElementById('mediaIndexBtn');
+  btn.disabled = true;
+  scanAborted  = false;
+
+  const tasks  = getAllMediaTasks();   // all 89, including Done
+  const index  = loadMediaIndex();
+  let   done   = 0;
+
+  const setProgress = () => {
+    const pct = Math.round(done / tasks.length * 100);
+    document.getElementById('indexStatus').innerHTML = `
+      <span class="index-status-count">Scanning…</span>
+      ${done} of ${tasks.length} tasks
+      <div class="index-progress">
+        <div class="index-progress-label">${pct}% complete</div>
+        <div class="index-progress-bar">
+          <div class="index-progress-fill" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  };
+
+  setProgress();
+
+  for (const t of tasks) {
+    if (scanAborted) break;
+    const entry  = await scanTaskForMedia(t);
+    index.tasks[t.id] = entry;
+    done++;
+    if (done % 5 === 0 || done === tasks.length) setProgress();
+    await sleep(150);
+  }
+
+  index.lastFullScan = Date.now();
+  index.totalScanned = tasks.length;
+  saveMediaIndex(index);
+
+  btn.disabled = false;
+  updateIndexSidebarStatus();
+  updateMediaBadge();
+  if (currentTab === 'media') renderMediaLibrary();
+}
+
+// Scan a single task — returns persistent metadata only, no signed URLs
+async function scanTaskForMedia(t) {
+  const entry = {
+    id:         t.id,
+    name:       taskName(t),
+    category:   category(t),
+    status:     status(t),
+    dueDate:    dueDate(t),
+    mediaTypes: [],
+    hasMedia:   false,
+    scannedAt:  Date.now(),
+  };
+
+  try {
+    const r = await fetch(`/notion/${PROXY_ROUTE}/blocks/${t.id}/children`);
+    if (!r.ok) { entry.scanError = `HTTP ${r.status}`; return entry; }
+
+    const topBlocks = (await r.json()).results || [];
+    const allBlocks = [...topBlocks];
+
+    // One level of nested containers
+    const containers = topBlocks.filter(b => b.has_children && NESTED_CONTAINER_TYPES.has(b.type));
+    for (const parent of containers.slice(0, 6)) {
+      try {
+        const nr = await fetch(`/notion/${PROXY_ROUTE}/blocks/${parent.id}/children`);
+        if (nr.ok) allBlocks.push(...(await nr.json()).results || []);
+      } catch {}
+      await sleep(80);
+    }
+
+    // Classify — record types only, NOT the signed URLs
+    const types = new Set();
+    for (const b of allBlocks) {
+      if (b.type === 'image')                                         types.add('image');
+      else if (b.type === 'video')                                    types.add('video');
+      else if (b.type === 'file')                                     types.add('file');
+      else if (b.type === 'pdf')                                      types.add('pdf');
+      else if (['bookmark','embed','link_preview'].includes(b.type)) types.add('embed');
+      else if (b.type === 'paragraph') {
+        if ((b.paragraph?.rich_text || []).some(rt => rt.href))       types.add('link');
+      }
+    }
+
+    entry.mediaTypes = [...types];
+    entry.hasMedia   = types.size > 0;
+  } catch (e) {
+    entry.scanError = e.message;
+  }
+
+  return entry;
+}
+
+// ── Media Index sidebar status ────────────────────────────────────────────────
+function updateIndexSidebarStatus() {
+  const el    = document.getElementById('indexStatus');
+  if (!el) return;
+  const index = loadMediaIndex();
+
+  if (!index.lastFullScan) {
+    const unscanned = Object.values(index.tasks).filter(e => e.scannedAt === null).length;
+    el.innerHTML = unscanned
+      ? `${unscanned} tasks registered, not yet scanned.`
+      : 'Never scanned.';
+    return;
+  }
+
+  const entries   = Object.values(index.tasks);
+  const withMedia = entries.filter(e => e.hasMedia).length;
+  const total     = index.totalScanned || entries.length;
+  const unscanned = entries.filter(e => e.scannedAt === null).length;
+  const scannedAt = new Date(index.lastFullScan);
+  const dateStr   = scannedAt.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+  const timeStr   = scannedAt.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  el.innerHTML = `
+    <span class="index-status-count">${withMedia} tasks with media</span>
+    ${total} tasks scanned · ${dateStr}, ${timeStr}
+    ${unscanned > 0 ? `<div class="index-status-warn">⚠ ${unscanned} new tasks not yet scanned</div>` : ''}`;
+}
+
+function updateMediaBadge() {
+  const index = loadMediaIndex();
+  const count = Object.values(index.tasks).filter(e => e.hasMedia).length;
+  document.getElementById('badgeMedia').textContent = count || '—';
+}
+
+// ── Media Library ─────────────────────────────────────────────────────────────
+function renderMediaLibrary() {
+  const el = document.getElementById('mediaLibraryList');
+  if (!el) return;
+
+  const index = loadMediaIndex();
+
+  if (!index.lastFullScan) {
+    el.innerHTML = emptyState(
+      svgMedia(),
+      'Media index not built',
+      'Click "Refresh Media Index" in the sidebar to scan Content, Social, and Ads & Testing tasks for attached images, files, and links.'
+    );
+    return;
+  }
+
+  // Only confirmed media — sorted: images first, then by name
+  const q = searchQuery.trim().toLowerCase();
+  const entries = Object.values(index.tasks)
+    .filter(e => e.hasMedia && (!q || searchMatchesEntry(e, q)))
+    .sort((a, b) => {
+      const ai = a.mediaTypes.includes('image') ? 0 : 1;
+      const bi = b.mediaTypes.includes('image') ? 0 : 1;
+      return ai - bi || a.name.localeCompare(b.name);
+    });
+
+  const unscanned = Object.values(index.tasks).filter(e => e.scannedAt === null).length;
+  const scannedAt = new Date(index.lastFullScan);
+  const dateStr   = scannedAt.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+  const timeStr   = scannedAt.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+
+  if (!entries.length) {
+    el.innerHTML = emptyState(svgMedia(), 'No media found',
+      'No attached images, files, or links were detected in any Media / Posts task.');
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="ml-header">
+      <span class="ml-header-count">
+        ${entries.length} tasks with confirmed media · Scanned ${dateStr}, ${timeStr}
+        ${unscanned ? ` · <span style="color:#B06B1A">${unscanned} new tasks unscanned</span>` : ''}
+      </span>
+    </div>
+    <div class="ml-grid">
+      ${entries.map(e => renderMediaCard(e)).join('')}
+    </div>`;
+}
+
+// TYPE config — label, CSS class, icon
+const ML_TYPES = {
+  image: { label: 'Images', cls: 'ml-type-image', icon: '🖼' },
+  video: { label: 'Video',  cls: 'ml-type-video', icon: '▶' },
+  file:  { label: 'File',   cls: 'ml-type-file',  icon: '📎' },
+  pdf:   { label: 'PDF',    cls: 'ml-type-pdf',   icon: '📄' },
+  embed: { label: 'Embed',  cls: 'ml-type-embed', icon: '🔗' },
+  link:  { label: 'Link',   cls: 'ml-type-link',  icon: '🔗' },
+};
+
+function renderMediaCard(entry) {
+  const typeBadges = entry.mediaTypes.map(t => {
+    const cfg = ML_TYPES[t] || { label: t, cls: 'ml-type-link', icon: '•' };
+    return `<span class="ml-type-badge ${cfg.cls}">${cfg.icon} ${cfg.label}</span>`;
+  }).join('');
+
+  const isDone = entry.status === 'Done';
+  const due    = entry.dueDate ? fmtDate(entry.dueDate) : '';
+  const meta   = [entry.category, entry.status, due].filter(Boolean).join(' · ');
+
+  return `
+    <div class="ml-card${isDone ? ' ml-status-done' : ''}" onclick="openDetail('${entry.id}')">
+      <div class="ml-card-name">${esc(entry.name)}</div>
+      <div class="ml-type-row">${typeBadges}</div>
+      <div class="ml-card-footer">
+        <span class="ml-card-meta">${esc(meta)}</span>
+        <span class="ml-card-open">View →</span>
+      </div>
+    </div>`;
+}
+
+// ── Task Detail ───────────────────────────────────────────────────────────────
+async function openDetail(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t) return;
+  _detailTaskId = id;   // must be set BEFORE spawning async loaders
+  document.getElementById('detailNotionLink').href = t.url || '#';
+  document.getElementById('detailBody').innerHTML  = buildDetailHTML(t);
+  document.getElementById('detailOverlay').classList.add('open');
+  document.getElementById('detailPanel').classList.add('open');
+  loadDetailMedia(id);
+  loadDetailComments(id);
+}
+
+function buildDetailHTML(t) {
+  const st = status(t), who = assigneeOf(t), cat = category(t);
+  const due = dueDate(t), d2 = due2(t), desc = description(t), upd = updated(t);
+  const today = todayStr();
+  const isOverdue  = due && due < today && st !== 'Done';
+  const dueDisplay = due ? `${fmtDate(due)}${d2 ? '  ·  ' + d2 : ''}` : '—';
+
+  return `
+    <div class="detail-name">${esc(taskName(t))}</div>
+    <div class="detail-strip">
+      <div class="detail-strip-item">
+        <span class="detail-strip-lbl">Status</span>
+        <span class="detail-strip-val"><span class="badge ${statusClass(st)}">${st}</span></span>
+      </div>
+      <div class="detail-strip-item">
+        <span class="detail-strip-lbl">Due date</span>
+        <span class="detail-strip-val${isOverdue ? ' overdue' : ''}">${isOverdue ? '⚠ ' : ''}${esc(dueDisplay)}</span>
+      </div>
+      <div class="detail-strip-item">
+        <span class="detail-strip-lbl">Assignee</span>
+        <span class="detail-strip-val"><span class="badge ${who === 'Youssef' ? 'b-youssef' : 'b-hussam'}">${esc(who || '—')}</span></span>
+      </div>
+      <div class="detail-strip-item">
+        <span class="detail-strip-lbl">Category</span>
+        <span class="detail-strip-val"><span class="badge b-category">${esc(cat || '—')}</span></span>
+      </div>
+    </div>
+
+    <div id="detail-review-section">${reviewSectionHTML(t)}</div>
+
+    <div class="detail-section">
+      <div class="detail-sec-title">Description</div>
+      ${desc
+        ? `<div class="detail-desc">${esc(desc)}</div>`
+        : `<div class="detail-desc-empty">No description in task properties.</div>`}
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-sec-title">Details</div>
+      <div class="detail-row">
+        <span class="detail-lbl">Updated</span>
+        <span class="detail-val">${fmtDate(upd)}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-lbl">Period</span>
+        <span class="detail-val">${esc(bucket(t) || '—')}</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-sec-title">Media &amp; Files</div>
+      <div id="detail-media-content">
+        <div class="detail-async-loading">
+          <div class="spinner"></div>
+          <span class="detail-async-text">Fetching page content…</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="detail-related-wrapper">
+      <div class="detail-section">
+        <div class="detail-sec-title">Related Supporting Tasks</div>
+        <div id="detail-related-content"></div>
+        <button class="link-task-btn" onclick="openTaskSelector(_detailTaskId)">+ Link Supporting Task</button>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-sec-title">Comments</div>
+      <div id="detail-comments-content">
+        <div class="detail-async-loading">
+          <div class="spinner"></div>
+          <span class="detail-async-text">Checking for comments…</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Media loader (on demand — fresh signed URLs) ──────────────────────────────
+async function loadDetailMedia(pageId) {
+  const el = document.getElementById('detail-media-content');
+  if (!el) return;
+  const notionUrl = allTasks.find(x => x.id === pageId)?.url || '';
+  try {
+    const r = await fetch(`/notion/${PROXY_ROUTE}/blocks/${pageId}/children`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const topBlocks = (await r.json()).results || [];
+
+    // Stale guard: another task may have been opened while this fetch was in flight
+    if (_detailTaskId !== pageId) return;
+
+    // ── Related tasks — ranked across all 5 tiers ─────────────────────────────
+    // Tier 5: Linked by You (manual) · Tier 4: Explicit Notion Link ·
+    // Tier 3: Exact Reference · Tier 2: Strong Match · Tier 1: Possible Match
+    // Max 5 results, sorted strongest first.
+    _lastTopBlocks = topBlocks;   // cache for _refreshRelatedSectionFull
+    const relEl = document.getElementById('detail-related-content');
+    if (relEl) {
+      relEl.innerHTML = buildRelatedTasksHTML(findRelatedTasks(pageId, topBlocks), pageId);
+    }
+
+    if (topBlocks.length === 0) {
+      el.innerHTML = `<div class="media-none media-empty-page">
+        This task has no page body — only the title and properties exist in Notion.
+        ${notionUrl ? `<br><a href="${esc(notionUrl)}" target="_blank" class="notion-open-btn">Open This Task in Notion ↗</a>` : ''}
+      </div>`;
+      return;
+    }
+
+    // Fetch one level of nested children for media containers
+    const allBlocks  = [...topBlocks];
+    const containers = topBlocks.filter(b => b.has_children && NESTED_CONTAINER_TYPES.has(b.type));
+    for (const parent of containers.slice(0, 8)) {
+      if (_detailTaskId !== pageId) return;   // stale guard inside loop
+      try {
+        const nr = await fetch(`/notion/${PROXY_ROUTE}/blocks/${parent.id}/children`);
+        if (nr.ok) {
+          const children = (await nr.json()).results || [];
+          children.forEach(b => { b._nested = true; b._parentType = parent.type; });
+          allBlocks.push(...children);
+        }
+      } catch {}
+    }
+
+    // Fetch rows for table blocks (tables need structured row data, not flat media detection)
+    const tableBlocks  = topBlocks.filter(b => b.type === 'table' && b.has_children);
+    const tableRowsMap = {};
+    for (const tb of tableBlocks) {
+      if (_detailTaskId !== pageId) return;   // stale guard inside loop
+      try {
+        const tr = await fetch(`/notion/${PROXY_ROUTE}/blocks/${tb.id}/children`);
+        if (tr.ok) tableRowsMap[tb.id] = (await tr.json()).results || [];
+      } catch {}
+    }
+
+    // Final stale guard before writing — all nested fetches now complete
+    if (_detailTaskId !== pageId) return;
+    const result = renderMediaBlocks(topBlocks, allBlocks, tableRowsMap, notionUrl);
+    el.innerHTML  = result.html || result.emptyMsg;
+  } catch (e) {
+    if (_detailTaskId !== pageId) return;
+    const openBtn = notionUrl
+      ? `<br><a href="${esc(notionUrl)}" target="_blank" class="notion-open-btn">Open This Task in Notion ↗</a>`
+      : '';
+    el.innerHTML = `<div class="detail-async-error">Could not load page content: ${esc(e.message)}${openBtn}</div>`;
+  }
+}
+
+// ── Block renderer ────────────────────────────────────────────────────────────
+// Returns { html, emptyMsg } — exactly one will be non-null.
+function renderMediaBlocks(topBlocks, allBlocks, tableRowsMap = {}, notionUrl = '') {
+  const images  = [], links = [], tables = [];
+  let   hasText = false;
+
+  const TEXT_TYPES = new Set([
+    'heading_1','heading_2','heading_3','paragraph',
+    'bulleted_list_item','numbered_list_item','quote',
+    'callout','to_do','divider','toggle','column_list','column',
+  ]);
+
+  for (const b of allBlocks) {
+    const nested    = b._nested === true;
+    const parentLbl = nested && b._parentType
+      ? ` · inside ${b._parentType.replace(/_/g,' ')}` : '';
+
+    switch (b.type) {
+      case 'image': {
+        const src = b.image?.file?.url || b.image?.external?.url || '';
+        const cap = plainText(b.image?.caption);
+        if (src) images.push({ src, caption: cap, nested, parentLbl });
+        break;
+      }
+      case 'video': {
+        const src  = b.video?.file?.url || b.video?.external?.url || '';
+        const name = plainText(b.video?.caption) || 'Video';
+        if (src) links.push({ type: 'Video', icon: '▶', src, name, nested, parentLbl });
+        break;
+      }
+      case 'file': {
+        const src  = b.file?.file?.url || b.file?.external?.url || '';
+        const name = plainText(b.file?.caption) || 'File attachment';
+        if (src) links.push({ type: 'File', icon: '📎', src, name, nested, parentLbl });
+        break;
+      }
+      case 'pdf': {
+        const src  = b.pdf?.file?.url || b.pdf?.external?.url || '';
+        const name = plainText(b.pdf?.caption) || 'PDF document';
+        if (src) links.push({ type: 'PDF', icon: '📄', src, name, nested, parentLbl });
+        break;
+      }
+      case 'bookmark': {
+        const src  = b.bookmark?.url || '';
+        const name = plainText(b.bookmark?.caption) || src;
+        if (src) links.push({ type: 'Bookmark', icon: '🔗', src, name, nested, parentLbl });
+        break;
+      }
+      case 'embed': {
+        const src = b.embed?.url || '';
+        if (src) links.push({ type: 'Embed', icon: '🔗', src, name: src, nested, parentLbl });
+        break;
+      }
+      case 'link_preview': {
+        const src = b.link_preview?.url || '';
+        if (src) links.push({ type: 'Link Preview', icon: '🔗', src, name: src, nested, parentLbl });
+        break;
+      }
+      case 'paragraph': {
+        hasText = true;
+        for (const rt of b.paragraph?.rich_text || []) {
+          if (rt.href && rt.plain_text)
+            links.push({ type: 'Link', icon: '🔗', src: rt.href, name: rt.plain_text, nested, parentLbl });
+        }
+        break;
+      }
+      case 'table': { tables.push(b); break; }
+      default: if (TEXT_TYPES.has(b.type)) hasText = true;
+    }
+  }
+
+  const hasMedia = images.length > 0 || links.length > 0;
+
+  // ── Empty states ────────────────────────────────────────────────────────
+  const openBtn = notionUrl
+    ? `<br><a href="${esc(notionUrl)}" target="_blank" class="notion-open-btn">Open This Task in Notion ↗</a>`
+    : '';
+
+  if (!hasMedia && !tables.length) {
+    if (hasText) {
+      return { html: null, emptyMsg: `<div class="media-none media-has-notes">
+        📝&nbsp; This task has notes and text but no attached images, files, or links.
+        <div class="media-none-sub">Open in Notion to read the full brief or description.</div>
+        ${openBtn}
+      </div>` };
+    }
+    return { html: null, emptyMsg: `<div class="media-none media-empty-page">
+      No detectable content in this task's page body.
+      <div class="media-none-sub">The page may use unsupported block types.</div>
+      ${openBtn}
+    </div>` };
+  }
+
+  // ── Build HTML ───────────────────────────────────────────────────────────
+  let html = '';
+
+  if (images.length) {
+    html += `<div class="media-section-label">Images · ${images.length}</div>
+      <div class="media-img-grid">
+        ${images.map(img => `
+          <a href="${esc(img.src)}" target="_blank" class="media-img-card">
+            <img src="${esc(img.src)}" alt="${esc(img.caption || '')}"
+                 onerror="this.closest('.media-img-card').classList.add('img-error')">
+            ${img.caption ? `<div class="media-img-cap">${esc(img.caption)}</div>` : ''}
+            ${img.nested  ? `<div class="media-nested-badge">nested</div>` : ''}
+          </a>`).join('')}
+      </div>`;
+  }
+
+  if (links.length) {
+    if (images.length) html += '<div style="margin-top:14px"></div>';
+    html += `<div class="media-section-label">Files &amp; Links · ${links.length}</div>
+      <div class="media-links-list">
+        ${links.map(l => `
+          <a href="${esc(l.src)}" target="_blank" class="media-link-item">
+            <span class="media-link-icon">${l.icon}</span>
+            <span class="media-link-body">
+              <span class="media-link-name">${esc(l.name)}</span>
+              <span class="media-link-type">${l.type}${l.nested ? l.parentLbl : ''}</span>
+            </span>
+            <span class="media-link-arr">↗</span>
+          </a>`).join('')}
+      </div>`;
+  }
+
+  if (tables.length) {
+    if (images.length || links.length) html += '<div style="margin-top:14px"></div>';
+    html += `<div class="media-section-label">Tables · ${tables.length}</div>`;
+    tables.forEach((block, i) => {
+      const rows = tableRowsMap[block.id];
+      if (i > 0) html += '<div style="margin-top:10px"></div>';
+      html += renderNotionTable(block, rows);
+    });
+  }
+
+  return { html, emptyMsg: null };
+}
+
+// ── Notion table renderer ─────────────────────────────────────────────────────
+// Converts a rich_text[] array to safe HTML, preserving links.
+function richTextToHTML(richTexts) {
+  if (!Array.isArray(richTexts)) return '';
+  return richTexts.map(rt => {
+    const text = esc(rt.plain_text || '');
+    if (!text) return '';
+    if (rt.href) return `<a href="${esc(rt.href)}" target="_blank">${text}</a>`;
+    return text;
+  }).join('');
+}
+
+// Renders a Notion table block + its fetched rows into an HTML table.
+// Falls back gracefully if rows are missing or empty.
+function renderNotionTable(block, rows) {
+  if (!rows || rows.length === 0) {
+    return `<div class="media-none media-has-table">
+      📊&nbsp; Table found but rows could not be loaded.
+      <div class="media-none-sub">The table may use unsupported content or be inaccessible. Use the Notion link above to view it.</div>
+    </div>`;
+  }
+
+  const hasColHeader = block.table?.has_column_header ?? false;
+  const hasRowHeader = block.table?.has_row_header     ?? false;
+
+  let html = '<div class="notion-table-wrap"><table class="notion-table">';
+
+  // If Notion marks the first row as a column header, render it in <thead>
+  if (hasColHeader && rows.length > 0) {
+    const headerRow = rows[0];
+    const cells     = headerRow.table_row?.cells || [];
+    html += '<thead><tr>';
+    cells.forEach(cell => { html += `<th>${richTextToHTML(cell)}</th>`; });
+    html += '</tr></thead>';
+  }
+
+  // Body rows — skip row 0 if it was used as the column header
+  const bodyRows = hasColHeader ? rows.slice(1) : rows;
+  if (bodyRows.length > 0) {
+    html += '<tbody>';
+    bodyRows.forEach(row => {
+      const cells = row.table_row?.cells || [];
+      html += '<tr>';
+      cells.forEach((cell, ci) => {
+        // First column becomes a <th> when Notion has row headers enabled
+        const tag = (hasRowHeader && ci === 0) ? 'th' : 'td';
+        html += `<${tag}>${richTextToHTML(cell)}</${tag}>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody>';
+  }
+
+  html += '</table></div>';
+
+  const totalRows = rows.length;
+  const colCount  = rows[0]?.table_row?.cells?.length ?? 0;
+  html += `<div class="notion-table-note">${totalRows} row${totalRows !== 1 ? 's' : ''} · ${colCount} column${colCount !== 1 ? 's' : ''}</div>`;
+
+  return html;
+}
+
+// ── Comments loader ───────────────────────────────────────────────────────────
+async function loadDetailComments(pageId) {
+  const el = document.getElementById('detail-comments-content');
+  if (!el) return;
+  try {
+    const res = await fetch(`/notion/${PROXY_ROUTE}/comments?block_id=${pageId}`);
+    if (_detailTaskId !== pageId) return;   // stale guard after main fetch
+    if (res.status === 403 || res.status === 401) {
+      el.innerHTML = `<div class="detail-async-error">
+        Comments are not accessible with the current integration permissions.
+        <div class="detail-phase2-note">Enable "Read comments" in Notion integration settings. Planned for Phase 2.</div>
+      </div>`;
+      return;
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (_detailTaskId !== pageId) return;   // stale guard after error-body parse
+      if (err.code === 'object_not_found' || err.code === 'restricted_resource') {
+        el.innerHTML = `<div class="detail-async-error">
+          Comments require "Read comments" permission on the Notion integration.
+          <div class="detail-phase2-note">Planned for Phase 2.</div>
+        </div>`;
+        return;
+      }
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    const comments = (await res.json()).results || [];
+    if (_detailTaskId !== pageId) return;   // stale guard before final write
+    el.innerHTML = renderComments(comments);
+  } catch (e) {
+    if (_detailTaskId !== pageId) return;   // stale guard in catch
+    el.innerHTML = `<div class="detail-async-error">Comments unavailable: ${esc(e.message)}<div class="detail-phase2-note">Planned for Phase 2.</div></div>`;
+  }
+}
+
+// ── Comment renderer ──────────────────────────────────────────────────────────
+function renderComments(comments) {
+  if (!comments.length) return `<div class="detail-desc-empty">No comments on this task.</div>`;
+  return `<div class="comments-list">
+    ${comments.map(c => {
+      const hasMention = (c.rich_text || []).some(r => r.type === 'mention' && r.mention?.type === 'user');
+      const text = (c.rich_text || []).map(r => {
+        if (r.type === 'mention' && r.mention?.type === 'user')
+          return `<span class="comment-mention">@${esc(r.plain_text || 'someone')}</span>`;
+        return esc(r.plain_text || '');
+      }).join('');
+      return `<div class="comment-item${hasMention ? ' comment-mentions-you' : ''}">
+        ${hasMention ? '<span class="comment-mention-badge">Mentioned You</span>' : ''}
+        <div class="comment-text">${text || '<em style="color:var(--light)">Empty comment</em>'}</div>
+        <div class="comment-meta">${fmtDate(c.created_time)}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ── Review actions ────────────────────────────────────────────────────────────
+function reviewSectionHTML(t) {
+  if (isReviewedAndFresh(t)) {
+    const rec     = loadReviews()[t.id];
+    const revDate = rec ? fmtDate(new Date(rec.reviewedAt).toISOString()) : '';
+    return `<div class="review-bar">
+      <span class="review-bar-label">✓ Reviewed by you${revDate ? ' · ' + revDate : ''}</span>
+      <button class="review-bar-remove" onclick="removeReviewAction('${t.id}')">Remove review</button>
+    </div>`;
+  }
+  return `<button class="review-btn" onclick="markReviewed('${t.id}')">Mark Reviewed</button>`;
+}
+
+function refreshDetailReviewSection(t) {
+  const el = document.getElementById('detail-review-section');
+  if (el) el.innerHTML = reviewSectionHTML(t);
+}
+
+function markReviewed(id) {
+  const t = allTasks.find(x => x.id === id);
+  if (!t) return;
+  saveReview(id, taskName(t), updated(t));
+  applyFilters();
+  refreshDetailReviewSection(t);
+  showUndoToast(id);
+}
+
+function removeReviewAction(id) {
+  removeReview(id);
+  applyFilters();
+  const t = allTasks.find(x => x.id === id);
+  if (t) refreshDetailReviewSection(t);
+  hideUndoToast();
+}
+
+// ── Undo toast ────────────────────────────────────────────────────────────────
+let _undoTimer  = null;
+let _undoTaskId = null;
+
+function showUndoToast(id) {
+  _undoTaskId = id;
+  const existing = document.getElementById('undoToast');
+  if (existing) existing.remove();
+  if (_undoTimer) clearTimeout(_undoTimer);
+
+  const el = document.createElement('div');
+  el.className = 'undo-toast';
+  el.id = 'undoToast';
+  el.innerHTML = `Marked as reviewed. <button class="undo-btn" onclick="undoReview()">Undo</button>`;
+  document.body.appendChild(el);
+  _undoTimer = setTimeout(hideUndoToast, 10000);
+}
+
+function hideUndoToast() {
+  if (_undoTimer) { clearTimeout(_undoTimer); _undoTimer = null; }
+  const el = document.getElementById('undoToast');
+  if (el) el.remove();
+  _undoTaskId = null;
+}
+
+function undoReview() {
+  const id = _undoTaskId;
+  hideUndoToast();
+  if (!id) return;
+  removeReview(id);
+  applyFilters();
+  const t = allTasks.find(x => x.id === id);
+  if (t) refreshDetailReviewSection(t);
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('panelAttention').style.display = tab === 'attention' ? '' : 'none';
+  document.getElementById('panelTracker').style.display   = tab === 'tracker'   ? '' : 'none';
+  document.getElementById('panelMedia').style.display     = tab === 'media'     ? '' : 'none';
+  document.getElementById('tabAttn').classList.toggle('active',    tab === 'attention');
+  document.getElementById('tabTracker').classList.toggle('active', tab === 'tracker');
+  document.getElementById('tabMedia').classList.toggle('active',   tab === 'media');
+  // Hide legend on Media Library tab — it's not relevant there
+  document.getElementById('legendStrip').classList.toggle('legend-hidden', tab === 'media');
+  if (tab === 'media') renderMediaLibrary();
+}
+
+function toggleBucket(header) {
+  const rows   = header.nextElementSibling;
+  const toggle = header.querySelector('.bucket-toggle');
+  const hidden = rows.style.display === 'none';
+  rows.style.display = hidden ? '' : 'none';
+  toggle.classList.toggle('collapsed', !hidden);
+}
+
+function toggleDone() {
+  showDone = !showDone;
+  document.getElementById('toggleDoneBox').classList.toggle('on', showDone);
+  applyFilters();
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+// ── Property helpers ──────────────────────────────────────────────────────────
+const taskName    = t => t.properties['Task name']?.title?.[0]?.plain_text || '(Untitled)';
+const status      = t => t.properties['Status']?.status?.name || '';
+const assigneeOf  = t => t.properties['Assignee']?.select?.name || '';
+const category    = t => t.properties['Category']?.select?.name || '';
+const dueDate     = t => t.properties['Due date']?.date?.start || '';
+const due2        = t => t.properties['Due Date 2']?.formula?.string || '';
+const bucket      = t => t.properties['Bucket']?.formula?.string || '';
+const updated     = t => t.properties['Updated at']?.last_edited_time || '';
+const description = t => (t.properties['Description']?.rich_text || []).map(r => r.plain_text).join('');
+
+function statusClass(st) {
+  return { 'Not started':'b-not-started', 'In progress':'b-in-progress',
+           'Pending Feedback':'b-pending', 'Blocked':'b-blocked',
+           'Feedback Shared':'b-feedback', 'Done':'b-done' }[st] || 'b-not-started';
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const sleep    = ms => new Promise(r => setTimeout(r, ms));
+
+function plainText(arr) {
+  if (!Array.isArray(arr)) return '';
+  return arr.map(r => r.plain_text || '').join('');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function setLoading(on) {
+  document.getElementById('loadingBar').style.display = on ? 'flex' : 'none';
+  document.getElementById('refreshBtn').disabled = on;
+}
+function setLoadingMsg(msg) { document.getElementById('loadingMsg').textContent = msg; }
+function showError(msg) {
+  const el = document.getElementById('errorBar');
+  el.textContent = msg; el.style.display = 'block';
+}
+function hideError() { document.getElementById('errorBar').style.display = 'none'; }
+
+function setSyncInfo() {
+  const el = document.getElementById('syncInfo');
+  if (!lastSync) { el.innerHTML = 'Not loaded yet.'; return; }
+  const total  = allTasks.length;
+  const active = allTasks.filter(t => status(t) !== 'Done').length;
+  el.innerHTML = `
+    <span class="sync-count">${total} tasks loaded</span>
+    ${active} active · ${total - active} done<br>
+    Last sync: ${lastSync.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+function emptyState(icon, title, sub) {
+  return `<div class="empty-state">
+    <div class="empty-icon">${icon}</div>
+    <div class="empty-title">${title}</div>
+    <div class="empty-sub">${sub}</div>
+  </div>`;
+}
+function svgDoc()   { return '<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="0.5" width="11" height="15" stroke="currentColor"/><line x1="5" y1="5" x2="11" y2="5" stroke="currentColor" stroke-width="0.8"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="0.8"/><line x1="5" y1="11" x2="9" y2="11" stroke="currentColor" stroke-width="0.8"/></svg>'; }
+function svgCheck() { return '<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><polyline points="3,8 7,12 13,4" stroke="currentColor" stroke-width="1.2"/></svg>'; }
+function svgMedia() { return '<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="0.5" y="2.5" width="15" height="11" stroke="currentColor"/><polyline points="0.5,10 4,6 7,9 10,5.5 15.5,10" stroke="currentColor" stroke-width="0.9" fill="none"/><circle cx="11.5" cy="5.5" r="1.5" stroke="currentColor" stroke-width="0.8"/></svg>'; }
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+updateIndexSidebarStatus();  // show stored index status immediately on load
+updateMediaBadge();
+loadAllTasks();
+</script>
+
+<!-- ── Task Selector Modal ──────────────────────────────────────────────── -->
+<div id="ts-overlay" class="ts-overlay" style="display:none" onclick="if(event.target===this)closeTaskSelector()">
+  <div class="ts-modal" role="dialog" aria-modal="true" aria-label="Link Supporting Task">
+    <div class="ts-header">
+      <span class="ts-title">Link Supporting Task</span>
+      <button class="ts-close" onclick="closeTaskSelector()" title="Close">×</button>
+    </div>
+    <div class="ts-search-wrap">
+      <input id="ts-search-input" class="ts-search" type="text" placeholder="Search by name, status, or category…"
+             oninput="renderTaskSelectorList(this.value)"
+             onkeydown="if(event.key==='Escape')closeTaskSelector()">
+    </div>
+    <div id="ts-list" class="ts-list"></div>
+  </div>
+</div>
+</body>
+</html>

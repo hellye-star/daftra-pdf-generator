@@ -1,0 +1,29 @@
+{
+  "_readme": "Copy this file to config.json and fill in your real values. config.json is git-ignored and must never be committed.",
+
+  "notion": {
+    "_readme": "Create one integration per workspace at notion.so/my-integrations. Use read-only capability unless write-back features are explicitly enabled.",
+
+    "social_media": {
+      "_label": "Hussam / Vista — Social Media Control Center",
+      "_description": "Shared database managed by Hussam. Contains social media tasks, media assets, meeting agendas, and items needing your review or approval.",
+      "token": "secret_REPLACE_WITH_VISTA_INTEGRATION_TOKEN",
+      "task_database_id": "REPLACE_WITH_VISTA_TASK_DATABASE_ID",
+      "meeting_database_id": "REPLACE_WITH_VISTA_MEETING_DATABASE_ID_OR_LEAVE_BLANK",
+      "notion_user_id": "REPLACE_WITH_YOUR_NOTION_USER_ID"
+    },
+
+    "personal": {
+      "_label": "Youssef — Personal Task Center",
+      "_description": "Your private Notion workspace. Contains personal reminders, private task list, follow-ups, and items you track independently from Hussam.",
+      "token": "secret_REPLACE_WITH_PERSONAL_INTEGRATION_TOKEN",
+      "task_database_id": "REPLACE_WITH_PERSONAL_TASK_DATABASE_ID"
+    }
+  },
+
+  "proxy": {
+    "port": 8080,
+    "bind": "127.0.0.1",
+    "_readme": "bind must stay 127.0.0.1 — do not change to 0.0.0.0 or the proxy becomes reachable from other machines on your network."
+  }
+}

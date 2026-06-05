@@ -1,3 +1,148 @@
+# CLAUDE_CONTEXT — Vista Platform
+
+---
+
+## Social Media Control Center (`social-dashboard.html`)
+
+### Current Status — Session Save Point 2026-06-05 (Phase 2A.5 complete)
+
+This section is the permanent source of truth for the Social Media Control Center. Before starting any new session on this module, read this section first.
+
+#### What is working
+- `proxy.py` running on `localhost:8080` via `python proxy.py`. Relays Notion API calls with token injected from `config.json`. Never exposes tokens in HTML files.
+- Dashboard loads all Notion tasks successfully (118 total as of 2026-06-05, paginated). Uses Notion API version `2025-09-03`.
+- **Needs My Attention tab** — surfaces Youssef-assigned, Blocked, Pending Feedback, and overdue tasks, sorted by urgency.
+- **Task Tracker tab** — all tasks grouped by due-date bucket, collapsible, with color-coded rows and status badges.
+- **Media Library tab** — shows only tasks with confirmed media (27 of 89 in current index).
+- **Task detail panel** — slide-in from right, shows summary strip, description, live-fetched media section, comments section. Notion tables render inline as styled HTML tables with column/row header support and link-aware cells.
+- **Unified detail loading** — all entry points (Media Library, Task Tracker, Needs My Attention, search results) call the same `openDetail(id)` function. No entry-point-specific code paths exist. Verified programmatically 2026-06-05; visual click-through testing still pending during normal dashboard use.
+- **Race condition fix** — `_detailTaskId` global tracks which task is currently open. Both `loadDetailMedia` and `loadDetailComments` check `_detailTaskId !== pageId` before every `el.innerHTML` write (7 write points guarded total). Stale fetch results from a previously opened task are silently discarded.
+- **Contextual "Open This Task in Notion ↗" button** — appears in the Media & Files section only when the entire section cannot render content: empty page body, text-only tasks, unsupported block types, or fetch errors. Does NOT appear when images, links, tables, or any supported content renders successfully. The general topbar "Open in Notion ↗" link is always available and is the only Notion link shown when content renders.
+- **Media index** — manual scan stored in `localStorage` key `vista_media_index_v1`. Scans all 89 Content/Social/Ads & Testing tasks including Done tasks. Index is metadata only — it does not gate or control live media loading in the detail panel.
+- **Nested media detection** — fetches one level of child blocks for toggles, callouts, list items, columns. Confirmed: images nested inside `numbered_list_item` are detected.
+- **Notion table rendering** — `table` blocks in top-level page content have their child rows fetched separately (one API call per table) and rendered as HTML tables in the detail panel. Column header row → `<thead>`. Row header column → `<th>`. Links in cells rendered as `<a target="_blank">`. Table-row fallback message shown without a Notion button (topbar link is sufficient). Tables nested inside containers (toggles, callouts) are not rendered — Notion does not expose nested table rows in a single children response.
+- **On-demand URL fetching** — media URLs are always fetched live when a task is opened. Notion signed URLs expire in ~1 hour and are **never stored in localStorage**.
+- **Quick-filter chips** — All, Needs My Attention, Content, Social, Media/Posts, Overdue.
+- **Sidebar** — Refresh Tasks button, Search box with live filtering and × clear button, Category + Assignee filters, Include Done toggle, Refresh Media Index button with index status.
+- **Search** — live substring search across task name, description, status, assignee, category, due date, due date formula, and media type labels. Applies to all three tabs (Needs My Attention, Task Tracker, Media Library). Stacks additively with chips and sidebar filters.
+- **Search — Completed Matches section** — when a search query is active and `showDone` is off, Done tasks matching the query appear below the active bucket groups under a "Completed Matches · N" header, muted at 65% opacity. Section disappears when the search box is cleared. Tracker badge counts and normal browsing behaviour are unchanged.
+- **Related Supporting Tasks section** — always visible in the task detail panel between Media & Files and Comments. Each card shows status, category, assignee, confirmed media types from the index, source label ("Explicit Notion link" or "Linked by You"), an "Open Task →" button, and a "Remove link" button for manually created links only. A "+ Link Supporting Task" button is always available to add new manual links. See approved detection signals below.
+- **Document Generator navigation** — "← Platform Home" link added to the topbar of `daftra-pdf-generator_1.html`. Links to `index.html`. Never appears in generated PDFs (outside `#pdfPage`).
+
+#### Related Supporting Tasks — APPROVED AND FINAL (2026-06-05)
+
+**Detection signals (only these two are permitted — no others):**
+
+| Signal | Type | Implementation |
+|---|---|---|
+| Explicit Notion page link | Automatic | `notionLinksFromBlocks()` — scans top-level block rich_text for `app.notion.com/p/` URLs, extracts UUID prefix, matches against `allTasks`. |
+| Linked by You | Manual (local) | User clicks "+ Link Supporting Task", picks a task from the searchable modal. Stored in `localStorage` key `vista_task_relations_v1`. Bidirectional. |
+
+**Permanently removed (do not restore):**
+- `RELATED_STOP` constant
+- `sigTaskWords()` function
+- `findRelatedByDescription()` function
+- All fuzzy, keyword, word-overlap, bigram, exact-name, and description-scanning logic
+
+**localStorage schema — `vista_task_relations_v1`:**
+```json
+{
+  "actionTaskId": [{ "relatedTaskId": "...", "createdAt": 1748000000000 }]
+}
+```
+Both directions stored explicitly. No Notion write permissions required.
+
+**Key functions:**
+- `notionLinksFromBlocks(blocks)` — Signal 1 (unchanged)
+- `loadRelations()`, `saveRelation(a,b)`, `removeRelation(a,b)`, `getManualRelatedIds(taskId)` — Signal 2 store
+- `buildRelatedTasksHTML(related, currentTaskId)` — renders cards with source label + Remove Link for manual links
+- `_refreshRelatedSectionFull(taskId)` — re-renders Related section in-place after add/remove
+- `openTaskSelector(currentTaskId)`, `renderTaskSelectorList(query)`, `selectRelatedTask(id)`, `closeTaskSelector()` — modal
+
+**Validation confirmed (2026-06-05):**
+- "Tag keywords as positive or negative" ↔ "Ad keyword research (not final)" linked manually — Tables and Links badges appear, content loads correctly from both sides.
+- "Research tote bag demand in KSA" does NOT appear unless explicitly linked.
+- No description-based or fuzzy detection remains.
+
+#### What is NOT implemented yet
+| Feature | Status | Notes |
+|---|---|---|
+| Comments | ❌ Blocked | Live permission test performed 2026-06-05: all tasks return `403 restricted_resource`. Integration "Youssef" (bot, Saura Agency workspace) does not have Read Comments active. Hussam must enable it on the correct integration. Detail panel shows clear error message. |
+| Mark Reviewed | ✅ Done (Phase 2A) | localStorage only. `vista_reviews_v1`. Staleness auto-reset via `last_edited_time` comparison. |
+| Related Supporting Tasks | ✅ Done (Phase 2A.5) | Automatic: Notion page links. Manual: "+ Link Supporting Task" button → searchable modal → stored in `vista_task_relations_v1`. No fuzzy/description matching. |
+| Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
+| Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
+| Personal Task Center | ❌ Not started | Phase 3 — `personal-dashboard.html`. |
+
+#### Validation status (2026-06-05)
+- Programmatic validation passed: all 3 `openDetail` call-sites confirmed, all 7 `el.innerHTML` write points confirmed guarded, block fetch returning correct data for test task (372a2557), `renderMediaBlocks` returning `html` path (no fallback button) for task with confirmed content.
+- **Visual click-through testing still pending.** Should be performed during normal dashboard use: open same task from Media Library, Task Tracker, search results, and (if applicable) Needs My Attention; confirm identical media rendering and no stale overwrites when switching tasks quickly.
+
+#### Proxy and data source
+```
+Command to run:   python proxy.py
+URL:              http://localhost:8080/social-dashboard.html
+Notion route:     /notion/personal/...  → api.notion.com/v1/...
+Data source ID:   35aa2557-c7f8-8140-81f5-000b067a0139
+API version:      2025-09-03
+Token source:     config.json → notion.personal.token  (git-ignored, never commit)
+```
+
+#### localStorage keys in use
+| Key | Purpose |
+|---|---|
+| `vista_media_index_v1` | Media index metadata. Never stores signed URLs. |
+| `vista_reviews_v1` | Mark Reviewed records (Phase 2A). Stores reviewedAt, taskName, lastEditedTime. |
+
+#### Media index counts (2026-06-04 scan)
+- 89 tasks scanned (Content + Social + Ads & Testing, all statuses)
+- 27 tasks with confirmed media
+- Media types: 14 image · 8 link · 5 video · 4 embed · 3 file
+- 23 of 27 are Done tasks — confirmed that scanning includes Done
+
+---
+
+### Phase 2A: Mark Reviewed by Me — IMPLEMENTED ✅ (2026-06-04)
+
+**Approach:** Local `localStorage` only. No Notion write permission required. No changes to Hussam's database.
+
+#### Storage schema — `localStorage` key `vista_reviews_v1`
+```json
+{
+  "taskId_abc123": {
+    "reviewedAt":      1748000000000,
+    "taskName":        "Share team member images and descriptions",
+    "lastEditedTime":  "2026-06-01T10:30:00.000Z",
+    "note":            ""
+  }
+}
+```
+
+**Critical field: `lastEditedTime`**
+When a task is marked reviewed, store its current `last_edited_time` from the Notion task properties (`t.properties['Updated at'].last_edited_time`). On every task load, compare the stored `lastEditedTime` to the current value from Notion. If the task has been edited after it was reviewed, automatically treat it as unreviewed and return it to Needs My Attention.
+
+This means: if Hussam updates a task after you've reviewed it, it reappears automatically — you don't have to remember to re-check it.
+
+#### Behaviour rules
+1. **Mark Reviewed button** — shown in task detail panel (small outline button). Writes to `vista_reviews_v1` with current `last_edited_time`.
+2. **Needs My Attention removal** — a reviewed task is **fully suppressed from Needs My Attention regardless of its status.** Blocked, overdue, and Pending Feedback indicators do NOT keep it in the attention queue. The review means "I have seen this and I am done with it until Hussam changes it."
+3. **Staleness check** — if `Notion.last_edited_time > stored lastEditedTime`, the task is treated as unreviewed and reappears in Needs My Attention automatically. No user action needed.
+4. **Task Tracker visibility** — reviewed tasks stay fully visible in the tracker with all their normal indicators (overdue, Blocked, Pending Feedback) intact, plus a muted "Reviewed by You" badge next to the status badge.
+5. **Detail panel badge** — the task detail panel shows a "Reviewed by You · {date}" badge when a task is reviewed and not stale.
+6. **Undo** — a 10-second undo link appears after marking reviewed. Clicking it removes the localStorage record immediately.
+7. **Remove review** — a "Remove review" link in the detail panel for any reviewed task. Removes the record instantly; task reappears in Needs My Attention if applicable.
+8. **No Notion API calls** — zero new proxy routes, zero new permissions.
+
+#### Functions implemented
+- `REVIEWS_KEY = 'vista_reviews_v1'`
+- `loadReviews()`, `saveReview(id, name, lastEditedTime)`, `removeReview(id)`, `isReviewed(id)`
+- `isStale(id)` — checks current `last_edited_time` against stored value; returns true if task updated after review
+- Update `attentionFilter()`: add `&& !isReviewedAndFresh(t)` to **all** qualifying conditions (Youssef-assigned, Blocked, Pending Feedback, and overdue) — reviewed status suppresses the task from the entire attention queue
+- Update `taskRow()`: add ✓ badge when reviewed
+- Update `buildDetailHTML()`: add Mark Reviewed button and reviewed badge
+
+---
+
 # CLAUDE_CONTEXT — Daftra PDF Generator
 
 ## Project
@@ -36,6 +181,8 @@ Authorization: APIKEY header
 | `GET /clients/{id}.json` | Fallback for client VAT/CR if missing from invoice |
 
 **Do not use** `/customers` or `/contacts` — both return 404.
+
+**Estimate item key:** Daftra returns estimate line items under `data.Estimate.InvoiceItem` (NOT `EstimateItem`). The `itemsKey` must be `'InvoiceItem'` for both invoices and estimates.
 
 ### Key Daftra field names (confirmed from live API)
 | Field | Location | Meaning |
@@ -218,44 +365,172 @@ For any future QR-related change:
 ## Current Final Polish Tasks
 
 ### 1. Invoice Number Formatting
-**Status: pending**
+**Status: DONE ✅**
 
-Current display: `NO. INV-INV000021` — double prefix, wrong separator.
-Required display: `NO. INV#000021`
+Pass-through only — display the Daftra invoice number exactly as received, no reformatting.
 
-**Normalization rule — strip any existing prefix first, then reformat:**
-```
-INV000021   → INV#000021
-INV-000021  → INV#000021
-INV#000021  → INV#000021
-000021      → INV#000021
-```
-
-Implementation hint:
 ```js
-function formatInvoiceNo(raw) {
-  const clean = String(raw).replace(/^INV[#-]?/i, '');
-  return `INV#${clean}`;
-}
+const prefix = String(no).trim(); // pass-through for both invoices and quotations
 ```
 
-Apply to the `prefix` variable in `renderPreview()` for invoices only.
-Quotation prefix (`QUO-`) is unaffected.
+**Previous broken logic (do not restore):**
+```js
+// WRONG — strips and reformats, adding INV# prefix
+const cleanNo = isInv ? String(no).replace(/^INV[#-]?/i, '') : String(no);
+const prefix  = isInv ? `INV#${cleanNo}` : `QUO-${no}`;
+```
+
+Validated:
+```
+Daftra invoice number: INV000021
+PDF invoice number:    INV000021
+Status: PASS
+```
+
+Quotation numbers are also pass-through — `String(no).trim()` for both document types. Do not prepend `QUO-`.
 
 ---
 
 ### 2. Numeric Column Alignment
-**Status: pending**
+**Status: DONE ✅**
 
-Current issue: QTY and UNIT PRICE values are not consistently right-aligned under their headers.
+Root cause: two separate tables (`pp-table` with `<thead>` and `pp-table-tail` without one). The tail table had no column widths set, so its columns floated to auto-width and values appeared under wrong headers.
 
-Required:
-- `QTY` column: header right-aligned, values right-aligned
-- `UNIT PRICE` column: header right-aligned, values right-aligned
-- `AMOUNT` column: header right-aligned, values right-aligned
+Fixes applied:
+- Added `<colgroup>` to the tail table template (52% / 9% / 20% / 19%) to match header table widths.
+- Replaced class-based alignment with `nth-child(2/3/4)` selectors on both `.pp-table` and `.pp-table-tail` — targeting cells by position, not class name.
+- Removed `padding-left: 8px` from `.pp-td-r` (was asymmetric; not needed for alignment).
 
-These columns already use `.pp-td-r { text-align: right }` for values.
-Check that `<th class="r">` is applied to all three numeric column headers and that no override is misaligning them.
+### 3. Totals Clipping
+**Status: DONE ✅**
+
+Added `padding-right: 8px; box-sizing: border-box` to `.pp-totals`. Total Due amount now has 14px gap from the right edge — no longer clipping.
+
+### 4. Readability Improvement at 100% PDF Zoom
+**Status: DONE ✅**
+
+Conservative font-size pass — no structural changes, layout unchanged.
+
+| Element | Before | After |
+|---|---|---|
+| `pp-table th` (header) | 6px | 7px |
+| `.th-ar` (Arabic header) | 6px | 7px |
+| `pp-item-name` | 7.5px | 8.5px |
+| `pp-item-desc` | 6.5px | 7.5px |
+| `pp-td-r` (cell values) | 7.5px | 8.5px |
+| `pp-info-body` | 7px | 8px |
+| `pp-heading-en` | 7px | 7.5px |
+| `pp-reg-lbl-en/ar` | 6px | 7px |
+| `pp-reg-val` | 7.5px | 8.5px |
+| `pp-doc-meta` | 6.5px | 7.5px |
+| `pp-t-row-en` | 7px | 8px |
+| `pp-t-row-ar` | 6px | 7px |
+| `pp-t-row-amt` | 7.5px | 8.5px |
+| `pp-t-final .val` | 10px | 11px |
+| `pp-terms` | 6.5px | 7.5px |
+
+Validated: all column alignments, QR, logo, VAT/CR, totals visibility, invoice number — no regressions.
+
+### 5. Secondary Text Contrast Refinement
+**Status: DONE ✅**
+
+Issue: description text and secondary info felt pale at 100% PDF zoom due to Jost Light (300) weight combined with muted gray `#6B6B67` color.
+
+Fix: bumped `font-weight: 300 → 400` (Jost Regular) on readable body elements only. No color or size changes — the color palette is fully preserved.
+
+| Element | Role | Change |
+|---|---|---|
+| `pp-item-desc` | Item description lines | 300 → 400 |
+| `pp-info-body` | Address/contact in Issued To/By | 300 → 400 |
+| `pp-td-r` | Numeric cell values | 300 → 400 |
+| `pp-t-row-en` | Subtotal/VAT labels in totals | 300 → 400 |
+
+Left at 300 (intentionally decorative): `pp-t-row-ar`, `pp-doc-meta`, `pp-terms`, `th-ar`.
+
+---
+
+### 6. Quotation Section
+**Status: DONE ✅**
+
+#### Bug fixed — items not loading
+Daftra returns estimate line items under `data.Estimate.InvoiceItem` (same key as invoices), not `EstimateItem`. Changed `itemsKey` to `'InvoiceItem'` unconditionally.
+
+#### QR removed from quotations
+`isInv && qrPayload` condition added in both the HTML template (`#pp-qr-target` div) and the `renderQR()` call. Quotation PDFs never render a QR. Invoice QR unchanged.
+
+#### Quotation 8-column table
+Quotation uses a separate `renderQuoRow` function and a `pp-table-quo` / `pp-table-tail-quo` CSS class for independent column alignment.
+
+**Column → Daftra field mapping (confirmed from live API):**
+| Column | EN Label | AR Label | Field |
+|---|---|---|---|
+| 1 | Item | البند | `it.item` |
+| 2 | Description | الوصف | `it.description` |
+| 3 | Price | السعر | `it.unit_price` |
+| 4 | Qty | الكمية | `it.quantity` |
+| 5 | Total Before Tax | قبل الضريبة | `it.item_subtotal` |
+| 6 | VAT % | نسبة الضريبة | `it.tax1_percent` |
+| 7 | VAT Amount | قيمة الضريبة | `it.tax1_value` |
+| 8 | Total With VAT | مع الضريبة | `it.subtotal` |
+
+**Alignment rule:** cols 1–2 left, cols 3–8 right (nth-child selectors on `pp-table-quo`).
+
+#### Quotation number rule
+Pass-through only — same as invoices. Daftra returns bare numbers (e.g. `000021`). Do not prepend `QUO-`. `prefix = String(no).trim()` for both document types.
+
+#### Header alignment
+Quotation header uses `pp-header-quo` class:
+- `grid-template-columns: 1fr 1fr; column-gap: 0` — two equal columns, no empty QR centre
+- `.pp-qr-wrap { display: none }` — QR hidden for quotations
+- Logo retains `translateY(-48px)` — same as invoices; do not override this for quotations
+- `.pp-header-quo .pp-title-block { margin-right: 20px }` — title inset 20px from right content edge; compensates visually for the logo's upward-floating weight so the header feels balanced rather than the title sitting hard against the right margin
+
+Invoice header unchanged (`1fr auto 1fr`, QR in centre, `translateY(-48px)`).
+
+#### Valid Until date
+`doc.expiry_date` is always blank on Daftra estimates. Calculated as `doc.date + 30 days` using DD/MM/YYYY parsing. Do not rely on `expiry_date`.
+
+```js
+const validUntil = (() => {
+  if (isInv) return '';
+  if (doc.expiry_date) return doc.expiry_date;
+  const parts = (date || '').split('/');
+  const d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+  d.setDate(d.getDate() + 30);
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+})();
+```
+
+#### Terms & Conditions layout
+Two-column flex layout — EN left, AR right, separated by a `0.5px` rule. No `<ul>/<li>` — uses `<div>` with `&middot;` prefix to avoid stray RTL bullet rendering. Arabic column uses `direction:rtl; text-align:right` with `·` appended at line end.
+
+#### Footer
+Quotation PDFs have no footer. `${isInv ? '<div class="pp-footer">...</div>' : ''}`. Invoice footer unchanged.
+
+#### Valid Until strip
+Replaces the old `thirdCol` third grid column. Rendered as a standalone `display:flex` bar between the info grid and the line items table. Keeps the info grid strictly 2-column (Prepared For / Prepared By) for clean alignment.
+
+#### Terms & Conditions (quotation only)
+Five bullet points — EN + AR:
+1. Quotation valid for 30 days.
+2. 50% advance payment required upon approval.
+3. Remaining balance due before delivery.
+4. Production starts only after payment and final written approval or PO.
+5. All prices include VAT at 15% unless otherwise stated.
+
+**Quotation validation checklist:**
+- [ ] Quotation number matches Daftra exactly (no `QUO-` prefix)
+- [ ] QR absent from quotation PDF
+- [ ] Invoice QR still present
+- [ ] All 8 columns populated from correct fields
+- [ ] Cols 3–8 right-aligned, cols 1–2 left-aligned
+- [ ] Info grid strictly 2-column (Prepared For / Prepared By)
+- [ ] Valid Until strip visible above table
+- [ ] Footer absent from quotation
+- [ ] Terms & Conditions with 5 bullet points visible
+- [ ] Totals (subtotal, VAT, total) visible
+- [ ] VAT/CR present
+- [ ] No regressions on invoice PDF
 
 ---
 
@@ -317,3 +592,230 @@ These items are stable and must not be modified during polish work:
 
 6. **No offline fallback** — requires live internet for Google Fonts and the
    html2pdf CDN. PDFs generated offline may have missing fonts.
+
+---
+
+## Invoice System Regression Prevention Update
+
+### 1. MD File Usage Rule
+
+This MD file is the permanent source of truth for the invoice automation project.
+
+Before making any code change, Claude must:
+1. Read this MD file.
+2. Follow all existing rules.
+3. Preserve all previously fixed behavior.
+4. Avoid quick local patches that may break other invoice sections.
+
+After fixing any bug, Claude must update this MD file with:
+1. The issue discovered.
+2. The root cause.
+3. The permanent prevention rule.
+4. A validation checklist item.
+
+A fix is not considered complete unless:
+- Code is updated.
+- MD file is updated.
+- A fresh invoice PDF is generated.
+- The full validation checklist passes.
+
+---
+
+### 2. Regression Prevention Rule
+
+Never fix one invoice issue by breaking another already-fixed issue.
+Any invoice layout or data change must preserve:
+
+- Logo alignment.
+- Header spacing.
+- Invoice number accuracy.
+- QR code visibility and readability.
+- Item table alignment.
+- Quantity alignment.
+- Unit price alignment.
+- Line total alignment.
+- Totals section visibility.
+- VAT calculation visibility.
+- Grand total visibility.
+- Page margin safety.
+- Arabic and English text rendering.
+- No overlapping text.
+- No hidden or clipped totals.
+
+Before delivery, Claude must perform a full visual and data validation pass.
+
+---
+
+### 3. Invoice Number Rule
+
+The invoice number displayed in the generated PDF must exactly match the invoice number received from Daftra.
+
+Example — Daftra value:
+```
+INV000021
+```
+
+PDF output must be:
+```
+INV000021
+```
+
+Do not add `INV#`. Do not output `INV#000021`, `INVINV000021`, `INV #000021`, or `INV-000021`.
+
+The PDF must show the same invoice number as Daftra, with no added prefix, symbol, spacing, or formatting change.
+
+---
+
+### 4. Invoice Number Implementation Rule
+
+Claude must inspect the current code and remove any logic that manually adds an invoice prefix.
+
+Invalid logic examples:
+```js
+"INV" + invoice_number
+"INV#" + invoice_number
+`INV${invoice_number}`
+`INV#${invoice_number}`
+```
+
+Correct logic — keep Daftra invoice number exactly as received:
+```js
+function formatInvoiceNumber(daftraInvoiceNumber) {
+  if (!daftraInvoiceNumber) return '';
+  return String(daftraInvoiceNumber).trim();
+}
+```
+
+The invoice template must display only `formatInvoiceNumber(invoice_number)`.
+It must not add `INV`, `INV#`, `#`, spaces, or any other formatting in the HTML/template layer.
+
+---
+
+### 5. Invoice Number Validation Checklist
+
+Before delivering any generated invoice PDF, Claude must verify:
+
+- [ ] Raw Daftra invoice number is identified.
+- [ ] Rendered PDF invoice number is checked.
+- [ ] PDF invoice number exactly equals Daftra invoice number.
+- [ ] No duplicated `INV`.
+- [ ] No added `#`.
+- [ ] No added spaces.
+- [ ] No missing digits.
+- [ ] No formatting transformation applied.
+
+Example validation:
+```
+Raw Daftra invoice number: INV000021
+Rendered PDF invoice number: INV000021
+Status: PASS
+```
+
+---
+
+### 6. Table Alignment Rule
+
+The invoice item table must keep stable column alignment across all invoices.
+
+Required alignment:
+- Item description: left-aligned.
+- Quantity: right-aligned (consistent inside its column).
+- Unit price: right-aligned.
+- Line total: right-aligned.
+
+Quantity, unit price, and total must never visually shift into neighboring columns.
+Changing logo, header, totals, QR, or invoice number logic must not affect table alignment.
+
+---
+
+### 7. Totals Section Visibility Rule
+
+The totals section must always be fully visible inside the page boundaries.
+The following must never be hidden, clipped, or pushed outside the PDF page:
+
+- Subtotal.
+- Discount, if present.
+- VAT amount.
+- Grand total.
+- Payment amount, if present.
+- Balance due, if present.
+
+Before delivery, Claude must visually confirm that the totals section appears fully and clearly.
+
+---
+
+### 8. QR Code Rule
+
+The QR code must remain:
+- Visible.
+- Not stretched.
+- Not cropped.
+- Not overlapping other elements.
+- Readable after PDF generation.
+
+Any layout change must preserve QR code readability.
+
+---
+
+### 9. Final PDF Validation Checklist
+
+Before delivering any invoice PDF, Claude must validate the final rendered PDF — not only the HTML or code.
+
+```
+[ ] Logo aligned correctly
+[ ] Header layout stable
+[ ] Invoice number exactly matches Daftra
+[ ] No duplicated invoice prefix
+[ ] No added # symbol
+[ ] QR code visible and readable
+[ ] Item description aligned
+[ ] Quantity aligned
+[ ] Unit price aligned
+[ ] Line total aligned
+[ ] Subtotal visible
+[ ] VAT visible
+[ ] Grand total visible
+[ ] Nothing clipped
+[ ] Nothing overlapping
+[ ] Page margins safe
+[ ] Arabic text renders correctly
+[ ] English text renders correctly
+```
+
+Claude must not mark the task complete until all items pass.
+
+---
+
+### 10. Root Cause Discipline
+
+Claude must not only patch the visible symptom.
+For every bug, Claude must identify:
+
+```
+Issue:
+Root cause:
+Code area affected:
+Fix applied:
+MD rule added:
+Validation performed:
+```
+
+This prevents repeated fixes of the same issue across different sessions.
+
+---
+
+### 11. Current Known Issue — Invoice Number Formatting
+
+**Issue:** Invoice number was displayed incorrectly because the template was adding extra formatting (`INV#` prefix + stripping the existing prefix).
+
+**Root cause:** `renderPreview()` applied `String(no).replace(/^INV[#-]?/i, '')` then prepended `INV#`, transforming `INV000021` → `INV#000021` instead of leaving it as-is.
+
+**Correct behavior:** The PDF invoice number must exactly match Daftra.
+```
+Daftra: INV000021
+PDF:    INV000021
+```
+
+**Permanent rule:** Never add `INV`, `INV#`, `#`, spaces, or symbols to the invoice number. Daftra already provides the full invoice number — pass it through unchanged.
+
+**Resolution:** Reverted. `renderPreview()` now uses pass-through logic. See Section 4 above and the Invoice Number Formatting entry in Current Final Polish Tasks.
