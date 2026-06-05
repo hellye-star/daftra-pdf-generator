@@ -66,54 +66,44 @@ See "Mark Reviewed — Local Tracking" section below.
 
 ### ✅ Phase 2A.5 — Related Supporting Tasks — COMPLETE (2026-06-05)
 
-The Related Supporting Tasks section is live in the task detail panel. All fuzzy/description-based matching has been removed. The section is always visible when a task is open, with a "Link Supporting Task" button available at all times.
+The Related Supporting Tasks section is live in the task detail panel. The section is always visible when a task is open, with a "+ Link Supporting Task" button available at all times.
 
-**Detection signals (final — no others permitted):**
+**Detection: 5-tier system (strongest to weakest, max 5 results)**
 
-| Signal | Type | How it works |
-|---|---|---|
-| Explicit Notion page link | Automatic | `notionLinksFromBlocks()` scans top-level block rich_text for `app.notion.com/p/` URLs, extracts the UUID prefix, and matches against `allTasks`. Zero false positives. |
-| Linked by You | Manual (local) | User clicks "+ Link Supporting Task", searches all tasks, selects one. Stored in `localStorage` key `vista_task_relations_v1`. Bidirectional — opening either task shows the connection. |
+| Tier | Label | Type | Logic |
+|---|---|---|---|
+| 5 | Linked by You | Manual | User-created link stored in `vista_task_relations_v1`. Bidirectional. |
+| 4 | Explicit Notion Link | Automatic | `notionLinksFromBlocks()` — `app.notion.com/p/` URL in task body blocks. |
+| 3 | Exact Reference | Automatic | Full task name (lowercase) is a substring of the other task's description, or vice versa. |
+| 2 | Strong Match | Automatic | Same category + shared bigram OR 3+ shared sig words; OR cross-category + shared bigram. |
+| 1 | Possible Match | Automatic | Same category + 2+ shared significant words from task names. |
 
-**Explicitly removed:**
-- `RELATED_STOP` constant — gone
-- `sigTaskWords()` function — gone
-- `findRelatedByDescription()` function — gone
-- All word-overlap, keyword, bigram, exact-name, and description-based detection — none of it remains
+`RELATED_STOP` stop-words + minimum word length (≥4 chars) prevent false positives at Tiers 1–3. `hasMedia` used as tie-breaker within a tier.
 
-**What each Related task card shows:**
-- Full task name
-- Status, category, and assignee badges
-- Confirmed media types from the Media Index (Tables, Links, Images, etc.)
-- Source label: "Explicit Notion link" or "Linked by You"
-- "Open Task →" button (calls shared `openDetail(id)`)
-- "Remove link" button — only for manually created links (Notion-link cards are read-only)
+**Previously removed (old implementation, must not be restored):**
+- `sigTaskWords()` — the original single-pass word function
+- `findRelatedByDescription()` — the original description-word search that produced false positives
+
+**Current functions (the approved 5-tier implementation):**
+- `RELATED_STOP` — stop-word set
+- `sigWords(text)`, `sigBigrams(text)` — significant word and bigram extraction
+- `findRelatedTasks(currentTaskId, topBlocks)` — all 5 tiers, sorted, capped at 5
+- `notionLinksFromBlocks(blocks)` — Tier 4 signal
+- `getManualRelatedIds(taskId)`, `loadRelations()`, `saveRelation(a,b)`, `removeRelation(a,b)` — Tier 5 store
+- `buildRelatedTasksHTML(related, currentTaskId)` — renders cards with tier label; Remove link only on Tier 5
+- `_refreshRelatedSectionFull(taskId)`, `_lastTopBlocks` — re-render without re-fetch
+- `openTaskSelector`, `closeTaskSelector`, `renderTaskSelectorList`, `selectRelatedTask` — manual-link modal
 
 **localStorage schema — `vista_task_relations_v1`:**
 ```json
-{
-  "actionTaskId": [
-    { "relatedTaskId": "supporting-task-id", "createdAt": 1748000000000 }
-  ]
-}
+{ "taskAId": [{ "relatedTaskId": "taskBId", "createdAt": 1748000000000 }] }
 ```
-Both directions are stored explicitly. Opening either linked task surfaces the connection. No Notion API calls, no write permissions required.
+Both directions stored. No Notion API calls, no write permissions required.
 
 **Validated (2026-06-05):**
-- "Tag keywords as positive or negative" and "Ad keyword research (not final)" linked manually — confirmed Tables and Links badges appear, opening either task loads content correctly.
-- "Research tote bag demand in KSA" does not appear unless manually linked.
-- No fuzzy or description-word matching remains in the codebase.
-
-**Functions added/changed:**
-- `notionLinksFromBlocks(blocks)` — unchanged (kept from previous implementation)
-- `RELATIONS_KEY` — `'vista_task_relations_v1'`
-- `loadRelations()`, `saveRelations(data)`, `saveRelation(a, b)`, `removeRelation(a, b)`, `getManualRelatedIds(taskId)`
-- `buildRelatedTasksHTML(related, currentTaskId)` — rewritten; source label + conditional Remove Link button
-- `removeManualRelation(currentTaskId, relatedTaskId)` — removes relation and re-renders section in place
-- `_refreshRelatedSectionFull(taskId)` — rebuilds the Related section from localStorage + DOM-preserved Notion-link cards
-- `openTaskSelector(currentTaskId)`, `closeTaskSelector()`, `renderTaskSelectorList(query)`, `selectRelatedTask(relatedTaskId)` — task selector modal
-- `loadDetailMedia` — related block updated: no `findRelatedByDescription` call; uses `getManualRelatedIds` + `notionLinksFromBlocks` only
-- `#detail-related-wrapper` — always visible; "+ Link Supporting Task" button always present
+- False positive eliminated: "Research tote bag demand in KSA" scores 0 against "Ad keyword research (not final)" — different categories, only 1 shared word, below threshold.
+- Same-category tasks sharing 3+ significant words correctly surface as Strong Match.
+- "Tag keywords as positive or negative" ↔ "Ad keyword research (not final)": requires manual link (plural "keywords" ≠ singular "keyword"; no shared bigrams — confirmed correct, not a defect).
 
 ### ⏳ Related Tasks — preferred long-term solution
 A proper Notion `relation` property added by Hussam to his database is the correct permanent solution. It would:
