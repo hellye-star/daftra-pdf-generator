@@ -4,6 +4,7 @@ config.json
 # Windows artifacts
 Thumbs.db
 desktop.ini
+logo.png.png.png
 
 # macOS artifacts
 .DS_Store
