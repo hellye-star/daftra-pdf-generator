@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Financial Dashboard — Vista United</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Tokens ─────────────────────────────────────────────────────────────── */
+    :root {
+      --dark:   #1C1C1A;
+      --cream:  #F5F3EE;
+      --rule:   #E0DDD7;
+      --muted:  #8A8880;
+      --accent: #4A7A52;
+      --warn:   #B07A20;
+      --error:  #A03030;
+      --card-bg:#FAFAF7;
+    }
+
+    /* ── Reset / base ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Jost', sans-serif;
+      font-size: 14px;
+      background: var(--cream);
+      color: var(--dark);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Topbar ─────────────────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 28px;
+      height: 52px;
+      background: var(--dark);
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .topbar-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      flex: 1;
+    }
+    .topbar-sub {
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.55);
+    }
+    .topbar-home {
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.55);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .topbar-home:hover { color: #fff; }
+
+    /* ── Layout shell ───────────────────────────────────────────────────────── */
+    .shell {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────────────────── */
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: #fff;
+      border-right: 1px solid var(--rule);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 20px 0;
+      overflow-y: auto;
+    }
+    .sidebar-section {
+      padding: 0 18px;
+      margin-bottom: 24px;
+    }
+    .sidebar-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .btn-fetch {
+      width: 100%;
+      padding: 9px 14px;
+      background: var(--dark);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-family: 'Jost', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-fetch:hover { opacity: 0.85; }
+    .btn-fetch:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .status-text {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .status-text.ok    { color: var(--accent); }
+    .status-text.error { color: var(--error); }
+    .status-text.warn  { color: var(--warn); }
+
+    .sidebar-rule {
+      border: none;
+      border-top: 1px solid var(--rule);
+      margin: 0 0 20px;
+    }
+
+    /* Endpoint status indicators */
+    .endpoint-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .endpoint-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+    }
+    .ep-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--rule);
+    }
+    .ep-dot.ok    { background: var(--accent); }
+    .ep-dot.error { background: var(--error); }
+    .ep-dot.warn  { background: var(--warn); }
+    .ep-label { color: var(--muted); }
+    .ep-count { margin-left: auto; font-weight: 500; font-size: 10px; }
+
+    /* ── Main content ───────────────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .page-heading {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+    }
+    .page-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Metric card row ────────────────────────────────────────────────────── */
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 20px 22px;
+    }
+    .metric-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .metric-value {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 28px;
+      font-weight: 500;
+      color: var(--dark);
+      line-height: 1;
+    }
+    .metric-value.placeholder {
+      font-family: 'Jost', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--muted);
+    }
+    .metric-sub {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* ── Data health panel ──────────────────────────────────────────────────── */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 20px 22px;
+    }
+    .panel-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .health-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .health-cell {
+      border-left: 3px solid var(--rule);
+      padding-left: 12px;
+    }
+    .health-cell.ok    { border-color: var(--accent); }
+    .health-cell.error { border-color: var(--error); }
+    .health-cell.warn  { border-color: var(--warn); }
+    .health-cell-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .health-cell-value {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--dark);
+    }
+    .health-cell-detail {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 3px;
+      line-height: 1.5;
+    }
+    .health-cell .error-msg {
+      font-size: 11px;
+      color: var(--error);
+      line-height: 1.4;
+    }
+
+    /* Placeholder / initial state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 48px 0;
+      color: var(--muted);
+    }
+    .empty-icon {
+      font-size: 32px;
+      opacity: 0.4;
+    }
+    .empty-label {
+      font-size: 13px;
+      font-weight: 400;
+    }
+    .empty-hint {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--rule);
+      border-top-color: var(--dark);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Raw summary strip */
+    .summary-strip {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .summary-item {
+      flex: 1;
+      padding: 14px 18px;
+      border-right: 1px solid var(--rule);
+    }
+    .summary-item:last-child { border-right: none; }
+    .summary-item-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .summary-item-val {
+      font-size: 18px;
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 500;
+    }
+    .summary-item-val.error { font-family: 'Jost', sans-serif; font-size: 11px; color: var(--error); }
+    .summary-item-detail {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Topbar ─────────────────────────────────────────────────────────────── -->
+<div class="topbar">
+  <div class="topbar-title">Vista United</div>
+  <div class="topbar-sub">Financial Dashboard</div>
+  <a class="topbar-home" href="index.html">← Platform Home</a>
+</div>
+
+<!-- ── Shell ─────────────────────────────────────────────────────────────── -->
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Data</div>
+      <button class="btn-fetch" id="btn-fetch" onclick="fetchAll()">Fetch Data</button>
+      <div class="status-text" id="fetch-status">Press Fetch Data to load.</div>
+    </div>
+
+    <hr class="sidebar-rule" />
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Endpoints</div>
+      <div class="endpoint-list" id="endpoint-list">
+        <div class="endpoint-row">
+          <span class="ep-dot" id="dot-inv"></span>
+          <span class="ep-label">Invoices</span>
+          <span class="ep-count" id="count-inv">—</span>
+        </div>
+        <div class="endpoint-row">
+          <span class="ep-dot" id="dot-pur"></span>
+          <span class="ep-label">Purchases</span>
+          <span class="ep-count" id="count-pur">—</span>
+        </div>
+        <div class="endpoint-row">
+          <span class="ep-dot" id="dot-exp"></span>
+          <span class="ep-label">Expenses</span>
+          <span class="ep-count" id="count-exp">—</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="main">
+
+    <!-- Initial empty state -->
+    <div>
+      <div class="page-heading">Financial Overview</div>
+      <div class="page-sub">Live data from Daftra ERP — via local proxy</div>
+    </div>
+
+    <div id="content-area">
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-label">No data loaded</div>
+        <div class="empty-hint">Press Fetch Data in the sidebar to load from Daftra.</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let rawInvoices  = null;
+let rawPurchases = null;
+let rawExpenses  = null;
+
+// ── Fetch helpers ──────────────────────────────────────────────────────────
+
+async function fetchEndpoint(path) {
+  // All Daftra calls go through the local proxy — credentials never in browser code.
+  const res = await fetch(path);
+  const json = await res.json();
+  if (!res.ok) {
+    const msg = json?.error || json?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return json;
+}
+
+// Extract the records array from a Daftra list response.
+// Daftra wraps results: { data: [ {Invoice:{...}}, ... ], ... }
+function extractRecords(json, typeKey) {
+  const data = json?.data;
+  if (!Array.isArray(data)) return [];
+  if (!typeKey) return data;
+  // Each element may be { TypeKey: {...} } or a flat object
+  return data.map(item => (item[typeKey] || item));
+}
+
+// Date range helper
+function dateRange(records, dateField) {
+  const dates = records
+    .map(r => r[dateField])
+    .filter(Boolean)
+    .sort();
+  if (!dates.length) return null;
+  return { min: dates[0], max: dates[dates.length - 1] };
+}
+
+// ── Main fetch orchestrator ────────────────────────────────────────────────
+
+async function fetchAll() {
+  const btn    = document.getElementById('btn-fetch');
+  const status = document.getElementById('fetch-status');
+
+  btn.disabled = true;
+  status.className = 'status-text';
+  status.innerHTML = '<span class="spinner"></span>Fetching…';
+
+  // Reset dot indicators
+  ['inv','pur','exp'].forEach(k => {
+    dot(k, '');
+    setCount(k, '…');
+  });
+
+  // Fire all three requests in parallel — per-endpoint errors are independent.
+  const [invResult, purResult, expResult] = await Promise.allSettled([
+    fetchEndpoint('/daftra/invoices.json?limit=100&page=1'),
+    fetchEndpoint('/daftra/purchase_invoices.json?limit=100&page=1'),
+    fetchEndpoint('/daftra/expenses.json?limit=100&page=1'),
+  ]);
+
+  // Process invoices
+  let invRecords = [], invError = null;
+  if (invResult.status === 'fulfilled') {
+    invRecords  = extractRecords(invResult.value, 'Invoice');
+    rawInvoices = invRecords;
+    dot('inv', 'ok');
+    setCount('inv', invRecords.length);
+  } else {
+    invError = invResult.reason?.message || 'Unknown error';
+    rawInvoices = null;
+    dot('inv', 'error');
+    setCount('inv', '✕');
+  }
+
+  // Process purchases
+  let purRecords = [], purError = null;
+  if (purResult.status === 'fulfilled') {
+    purRecords   = extractRecords(purResult.value, 'PurchaseOrder');
+    rawPurchases = purRecords;
+    dot('pur', 'ok');
+    setCount('pur', purRecords.length);
+  } else {
+    purError = purResult.reason?.message || 'Unknown error';
+    rawPurchases = null;
+    dot('pur', 'error');
+    setCount('pur', '✕');
+  }
+
+  // Process expenses
+  let expRecords = [], expError = null;
+  if (expResult.status === 'fulfilled') {
+    expRecords  = extractRecords(expResult.value, 'Expense');
+    rawExpenses = expRecords;
+    dot('exp', expRecords.length === 0 ? 'warn' : 'ok');
+    setCount('exp', expRecords.length);
+  } else {
+    expError = expResult.reason?.message || 'Unknown error';
+    rawExpenses = null;
+    dot('exp', 'error');
+    setCount('exp', '✕');
+  }
+
+  btn.disabled = false;
+
+  const anyError = invError || purError || expError;
+  if (anyError && !invRecords.length && !purRecords.length && !expRecords.length) {
+    status.className = 'status-text error';
+    status.textContent = 'All endpoints failed. Check proxy / config.json.';
+  } else if (anyError) {
+    status.className = 'status-text warn';
+    status.textContent = 'Partial data — some endpoints failed.';
+  } else {
+    status.className = 'status-text ok';
+    status.textContent = 'Data loaded.';
+  }
+
+  renderContent({ invRecords, invError, purRecords, purError, expRecords, expError });
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+
+function renderContent({ invRecords, invError, purRecords, purError, expRecords, expError }) {
+  const area = document.getElementById('content-area');
+
+  const invRange = dateRange(invRecords, 'date');
+  const purRange = dateRange(purRecords, 'date');
+  const expRange = dateRange(expRecords, 'date');
+
+  area.innerHTML = `
+    <!-- Raw count summary strip -->
+    <div class="summary-strip">
+      ${summaryItem('Invoices (Sales)', invRecords, invError)}
+      ${summaryItem('Purchase Invoices', purRecords, purError)}
+      ${summaryItem('Expenses', expRecords, expError)}
+    </div>
+
+    <!-- Placeholder metric cards -->
+    <div class="metric-row">
+      ${metricCard('Monthly Sales', 'Calculations in next phase', invError)}
+      ${metricCard('Monthly Purchases', 'Calculations in next phase', purError)}
+      ${metricCard('Monthly Expenses', 'Calculations in next phase', expError)}
+    </div>
+
+    <!-- Data health panel -->
+    <div class="panel">
+      <div class="panel-title">Data Health</div>
+      <div class="health-grid">
+        ${healthCell('Invoices', invRecords, invError, invRange, 'date')}
+        ${healthCell('Purchase Invoices', purRecords, purError, purRange, 'date')}
+        ${healthCell('Expenses', expRecords, expError, expRange, 'date')}
+      </div>
+    </div>
+  `;
+}
+
+function summaryItem(label, records, error) {
+  if (error) {
+    return `
+      <div class="summary-item">
+        <div class="summary-item-label">${esc(label)}</div>
+        <div class="summary-item-val error">Error</div>
+        <div class="summary-item-detail" style="color:var(--error)">${esc(error)}</div>
+      </div>`;
+  }
+  return `
+    <div class="summary-item">
+      <div class="summary-item-label">${esc(label)}</div>
+      <div class="summary-item-val">${records.length}</div>
+      <div class="summary-item-detail">${records.length === 0 ? 'No records returned' : 'records received'}</div>
+    </div>`;
+}
+
+function metricCard(label, placeholder, error) {
+  const cls = error ? 'error' : '';
+  const val = error ? 'Endpoint failed' : placeholder;
+  return `
+    <div class="metric-card">
+      <div class="metric-label">${esc(label)}</div>
+      <div class="metric-value placeholder ${cls}">${esc(val)}</div>
+    </div>`;
+}
+
+function healthCell(label, records, error, range, dateField) {
+  const cls = error ? 'error' : (records.length === 0 ? 'warn' : 'ok');
+  if (error) {
+    return `
+      <div class="health-cell ${cls}">
+        <div class="health-cell-label">${esc(label)}</div>
+        <div class="error-msg">${esc(error)}</div>
+      </div>`;
+  }
+  const detail = range
+    ? `${esc(range.min)} → ${esc(range.max)}`
+    : 'No date field found';
+  const note = records.length === 0 ? 'No records in this period.' : `${records.length} record${records.length !== 1 ? 's' : ''} received`;
+  return `
+    <div class="health-cell ${cls}">
+      <div class="health-cell-label">${esc(label)}</div>
+      <div class="health-cell-value">${note}</div>
+      ${range ? `<div class="health-cell-detail">Date range: ${detail}</div>` : ''}
+    </div>`;
+}
+
+// ── DOM helpers ────────────────────────────────────────────────────────────
+
+function dot(key, state) {
+  const el = document.getElementById('dot-' + key);
+  if (el) el.className = 'ep-dot' + (state ? ' ' + state : '');
+}
+
+function setCount(key, val) {
+  const el = document.getElementById('count-' + key);
+  if (el) el.textContent = val;
+}
+
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
