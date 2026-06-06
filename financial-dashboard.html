@@ -401,6 +401,83 @@
       margin-right: 6px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Monthly chart ──────────────────────────────────────────────────────── */
+    .chart-note {
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      font-style: italic;
+    }
+    .chart-wrap  { overflow-x: auto; }
+    .chart-grid  {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 6px;
+      min-width: 480px;
+    }
+    .chart-col   { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .chart-bars  {
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 120px;
+      width: 100%;
+      justify-content: center;
+    }
+    .bar         { width: 9px; border-radius: 2px 2px 0 0; flex-shrink: 0; }
+    .bar.sales   { background: var(--accent); }
+    .bar.purch   { background: var(--warn); }
+    .bar.exp     { background: var(--muted); }
+    .chart-label { font-size: 9px; color: var(--muted); letter-spacing: 0.04em; }
+    .chart-legend { display: flex; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
+    .chart-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .chart-legend-dot {
+      width: 8px; height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      display: inline-block;
+    }
+    .chart-legend-dot.sales { background: var(--accent); }
+    .chart-legend-dot.purch { background: var(--warn); }
+    .chart-legend-dot.exp   { background: var(--muted); }
+    .chart-failed-note { font-size: 10px; color: var(--error); margin-top: 8px; }
+
+    /* ── Monthly table ──────────────────────────────────────────────────────── */
+    .monthly-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+    .monthly-table th {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 6px 8px;
+      text-align: right;
+      border-bottom: 2px solid var(--rule);
+      white-space: nowrap;
+    }
+    .monthly-table th:first-child { text-align: left; }
+    .monthly-table td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--rule); }
+    .monthly-table td:first-child { text-align: left; color: var(--muted); font-size: 11px; }
+    .monthly-table .total-row td {
+      font-weight: 600;
+      border-top: 2px solid var(--rule);
+      border-bottom: none;
+      color: var(--dark);
+    }
+    .monthly-table .total-row td:first-child { color: var(--dark); }
+    .monthly-table .na-cell   { color: var(--muted); font-style: italic; font-size: 11px; }
+    .monthly-table .dash-cell { color: var(--rule); }
+    .val-positive    { color: var(--accent); font-weight: 500; }
+    .val-negative    { color: var(--error);  font-weight: 500; }
+    .val-payable     { color: var(--warn); }
+    .val-reclaimable { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -981,15 +1058,21 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
     parts.push(renderMetricRow2(profit, taxReserve, label));
   }
 
-  // 4. VAT position panel
+  // 4. Monthly chart + table (full current Gregorian year, not filtered by selected period)
+  var chartYear   = new Date().getFullYear();
+  var monthlyRows = buildMonthlyTable(chartYear, invRecords, invError, purRecords, purError, expRecords, expError);
+  parts.push(renderMonthlyChartPanel(monthlyRows, invError, purError, expError, chartYear));
+  parts.push(renderMonthlyTablePanel(monthlyRows, invError, purError, expError, chartYear));
+
+  // 5. VAT position panel
   parts.push(renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allVATAvail, label));
 
-  // 5. Receivables panel (only when invoices succeeded)
+  // 6. Receivables panel (only when invoices succeeded)
   if (!invError && sales) {
     parts.push(renderReceivablesPanel(sales, label));
   }
 
-  // 6. Data health panel
+  // 7. Data health panel
   parts.push(renderHealthPanel(
     invRecords, invError, invRange,
     purRecords, purError, purRange,
@@ -1222,6 +1305,226 @@ function renderHealthPanel(invRecords, invError, invRange, purRecords, purError,
     + cell('Purchase Invoices', purRecords, purError, purRange, purch ? purch.missingDate : 0, rawPurMeta)
     + cell('Expenses',          expRecords, expError, expRange, exp   ? exp.missingDate   : 0, rawExpMeta)
     + '</div>'
+    + '</div>';
+}
+
+// ── Monthly report helpers ─────────────────────────────────────────────────
+
+var MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Returns the ex-VAT amount for a single expense record.
+// Mirrors the branch logic in calcExpenses so monthly grouping stays consistent.
+function expExVATForRecord(r) {
+  var amt = toNum(r.amount);
+  var tax = toNum(r.tax1_amount);
+  return r.tax1_included === '0' ? amt : amt - tax;
+}
+
+// Buckets active (non-draft) records from the current year into { 'YYYY-MM': total }.
+// amountFn(record) → number to accumulate.
+function groupByMonth(records, year, amountFn) {
+  var result = {};
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    if (r.draft === '1') continue;
+    var d = parseDate(r.date);
+    if (!d || d.getFullYear() !== year) continue;
+    var key = year + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    result[key] = (result[key] || 0) + amountFn(r);
+  }
+  return result;
+}
+
+// Builds an array of 12 row objects (one per month, Jan–Dec) for the given year.
+// null in a cell means the corresponding endpoint failed.
+function buildMonthlyTable(year, invRecords, invError, purRecords, purError, expRecords, expError) {
+  var salesByM  = invError ? null : groupByMonth(invRecords, year, function(r) { return toNum(r.summary_subtotal); });
+  var outVByM   = invError ? null : groupByMonth(invRecords, year, function(r) { return toNum(r.summary_total) - toNum(r.summary_subtotal); });
+  var purchByM  = purError ? null : groupByMonth(purRecords, year, function(r) { return toNum(r.summary_subtotal); });
+  var inVPurByM = purError ? null : groupByMonth(purRecords, year, function(r) { return toNum(r.summary_total) - toNum(r.summary_subtotal); });
+  var expByM    = expError ? null : groupByMonth(expRecords, year, expExVATForRecord);
+  var inVExpByM = expError ? null : groupByMonth(expRecords, year, function(r) { return toNum(r.tax1_amount); });
+
+  var rows = [];
+  for (var m = 0; m < 12; m++) {
+    var key    = year + '-' + String(m + 1).padStart(2, '0');
+    var salesEx = salesByM  ? (salesByM[key]  || 0) : null;
+    var outVAT  = outVByM   ? (outVByM[key]   || 0) : null;
+    var purchEx = purchByM  ? (purchByM[key]  || 0) : null;
+    var inVPur  = inVPurByM ? (inVPurByM[key] || 0) : null;
+    var expEx   = expByM    ? (expByM[key]    || 0) : null;
+    var inVExp  = inVExpByM ? (inVExpByM[key] || 0) : null;
+
+    var profit = (salesEx !== null && purchEx !== null && expEx !== null)
+                 ? (salesEx - purchEx - expEx) : null;
+    var vatPos = (outVAT !== null && inVPur !== null && inVExp !== null)
+                 ? (outVAT - inVPur - inVExp) : null;
+
+    // hasData: at least one successful endpoint returned a non-trivial value this month
+    var hasData = (salesEx !== null && salesEx > 0.001)
+               || (purchEx !== null && purchEx > 0.001)
+               || (expEx   !== null && Math.abs(expEx) > 0.001);
+
+    rows.push({
+      month: MONTH_ABBR[m], monthKey: key,
+      salesEx: salesEx, purchEx: purchEx, expEx: expEx,
+      profit: profit, vatPos: vatPos, hasData: hasData,
+    });
+  }
+  return rows;
+}
+
+// Returns the maximum value across the given fields in all rows (min 1 to avoid div-by-zero).
+function maxValMonthly(rows, fields) {
+  var max = 0;
+  for (var i = 0; i < rows.length; i++) {
+    for (var j = 0; j < fields.length; j++) {
+      var v = rows[i][fields[j]];
+      if (v !== null && v > max) max = v;
+    }
+  }
+  return max > 0 ? max : 1;
+}
+
+// ── Monthly render functions ───────────────────────────────────────────────
+
+function renderMonthlyChartPanel(rows, invError, purError, expError, year) {
+  var scaleFields = [];
+  if (!invError) scaleFields.push('salesEx');
+  if (!purError) scaleFields.push('purchEx');
+  if (!expError) scaleFields.push('expEx');
+
+  var maxv = scaleFields.length ? maxValMonthly(rows, scaleFields) : 1;
+
+  function barPct(val) {
+    if (val === null || val <= 0) return 0;
+    return Math.round((val / maxv) * 100);
+  }
+
+  var cols = rows.map(function(row) {
+    var sH = barPct(row.salesEx);
+    var pH = barPct(row.purchEx);
+    var eH = barPct(row.expEx);
+
+    var salesBar = invError ? '' :
+      '<div class="bar sales" style="height:' + sH + '%"'
+      + ' title="Sales ' + row.month + ': ' + fmtCurrency(row.salesEx || 0) + '"></div>';
+    var purchBar = purError ? '' :
+      '<div class="bar purch" style="height:' + pH + '%"'
+      + ' title="Purchases ' + row.month + ': ' + fmtCurrency(row.purchEx || 0) + '"></div>';
+    var expBar = expError ? '' :
+      '<div class="bar exp" style="height:' + eH + '%"'
+      + ' title="Expenses ' + row.month + ': ' + fmtCurrency(row.expEx || 0) + '"></div>';
+
+    return '<div class="chart-col">'
+      + '<div class="chart-bars">' + salesBar + purchBar + expBar + '</div>'
+      + '<div class="chart-label">' + esc(row.month) + '</div>'
+      + '</div>';
+  }).join('');
+
+  var legendItems = [];
+  if (!invError) legendItems.push('<span class="chart-legend-item"><span class="chart-legend-dot sales"></span>Sales</span>');
+  if (!purError) legendItems.push('<span class="chart-legend-item"><span class="chart-legend-dot purch"></span>Purchases</span>');
+  if (!expError) legendItems.push('<span class="chart-legend-item"><span class="chart-legend-dot exp"></span>Expenses</span>');
+
+  var failedNotes = [];
+  if (invError) failedNotes.push('Invoices endpoint failed — Sales series unavailable.');
+  if (purError) failedNotes.push('Purchase invoices endpoint failed — Purchases series unavailable.');
+  if (expError) failedNotes.push('Expenses endpoint failed — Expenses series unavailable.');
+
+  return '<div class="panel">'
+    + '<div class="panel-title">Monthly Comparison — ' + esc(String(year)) + '</div>'
+    + '<div class="chart-note">Full year view · ex-VAT · not filtered by selected period</div>'
+    + '<div class="chart-wrap"><div class="chart-grid">' + cols + '</div></div>'
+    + '<div class="chart-legend">' + legendItems.join('') + '</div>'
+    + (failedNotes.length
+        ? '<div class="chart-failed-note">' + failedNotes.map(esc).join(' ') + '</div>'
+        : '')
+    + '</div>';
+}
+
+function renderMonthlyTablePanel(rows, invError, purError, expError, year) {
+  function valCell(val, error, hasData) {
+    if (!hasData) return '<td class="dash-cell">&#8212;</td>';
+    if (error)    return '<td class="na-cell">N/A</td>';
+    return '<td>' + esc(fmtCurrency(val || 0)) + '</td>';
+  }
+
+  function profitCell(row) {
+    if (!row.hasData)       return '<td class="dash-cell">&#8212;</td>';
+    if (row.profit === null) return '<td class="na-cell">N/A</td>';
+    var cls = row.profit >= 0 ? 'val-positive' : 'val-negative';
+    return '<td class="' + cls + '">' + esc(fmtCurrency(row.profit)) + '</td>';
+  }
+
+  function vatCell(row) {
+    if (!row.hasData)       return '<td class="dash-cell">&#8212;</td>';
+    if (row.vatPos === null) return '<td class="na-cell">N/A</td>';
+    var cls = row.vatPos > 0.005 ? 'val-payable' : row.vatPos < -0.005 ? 'val-reclaimable' : '';
+    return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(fmtCurrency(row.vatPos)) + '</td>';
+  }
+
+  var dataRows = rows.map(function(row) {
+    return '<tr>'
+      + '<td>' + esc(row.month) + '</td>'
+      + valCell(row.salesEx, invError, row.hasData)
+      + valCell(row.purchEx, purError, row.hasData)
+      + valCell(row.expEx,   expError, row.hasData)
+      + profitCell(row)
+      + vatCell(row)
+      + '</tr>';
+  }).join('');
+
+  // Totals row — sum across all 12 months
+  var totSales  = invError ? null : rows.reduce(function(s, r) { return s + (r.salesEx || 0); }, 0);
+  var totPurch  = purError ? null : rows.reduce(function(s, r) { return s + (r.purchEx || 0); }, 0);
+  var totExp    = expError ? null : rows.reduce(function(s, r) { return s + (r.expEx   || 0); }, 0);
+  var totProfit = (totSales !== null && totPurch !== null && totExp !== null)
+                  ? totSales - totPurch - totExp : null;
+  var totVAT    = (invError || purError || expError) ? null
+                  : rows.reduce(function(s, r) { return s + (r.vatPos || 0); }, 0);
+
+  function totCell(val, error) {
+    if (error || val === null) return '<td class="na-cell">N/A</td>';
+    return '<td>' + esc(fmtCurrency(val)) + '</td>';
+  }
+  function totProfitCell() {
+    if (totProfit === null) return '<td class="na-cell">N/A</td>';
+    var cls = totProfit >= 0 ? 'val-positive' : 'val-negative';
+    return '<td class="' + cls + '">' + esc(fmtCurrency(totProfit)) + '</td>';
+  }
+  function totVATCell() {
+    if (totVAT === null) return '<td class="na-cell">N/A</td>';
+    var cls = totVAT > 0.005 ? 'val-payable' : totVAT < -0.005 ? 'val-reclaimable' : '';
+    return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(fmtCurrency(totVAT)) + '</td>';
+  }
+
+  var totalRow = '<tr class="total-row">'
+    + '<td>Total ' + esc(String(year)) + '</td>'
+    + totCell(totSales, invError)
+    + totCell(totPurch, purError)
+    + totCell(totExp,   expError)
+    + totProfitCell()
+    + totVATCell()
+    + '</tr>';
+
+  return '<div class="panel">'
+    + '<div class="panel-title">Monthly Breakdown — ' + esc(String(year)) + '</div>'
+    + '<div class="chart-note">Full year view · ex-VAT · not filtered by selected period</div>'
+    + '<table class="monthly-table">'
+    + '<thead><tr>'
+    + '<th>Month</th>'
+    + '<th>Sales (ex-VAT)</th>'
+    + '<th>Purchases (ex-VAT)</th>'
+    + '<th>Expenses (ex-VAT)</th>'
+    + '<th>Profit Estimate</th>'
+    + '<th>VAT Position</th>'
+    + '</tr></thead>'
+    + '<tbody>' + dataRows + totalRow + '</tbody>'
+    + '</table>'
+    + '<div class="disclaimer">Profit estimate = sales &#8722; purchases &#8722; expenses, ex-VAT. '
+    + 'VAT position = output VAT &#8722; purchase input VAT &#8722; expense input VAT. '
+    + 'Management reference only.</div>'
     + '</div>';
 }
 
