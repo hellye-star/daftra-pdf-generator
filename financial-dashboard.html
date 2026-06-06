@@ -98,6 +98,27 @@
       color: var(--muted);
       margin-bottom: 10px;
     }
+
+    /* Period selector */
+    .period-select {
+      width: 100%;
+      padding: 7px 28px 7px 10px;
+      background: var(--card-bg);
+      color: var(--dark);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      font-family: 'Jost', sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238A8880'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    .period-select:disabled { opacity: 0.45; cursor: not-allowed; }
+    .period-select:focus { outline: none; border-color: var(--accent); }
+
     .btn-fetch {
       width: 100%;
       padding: 9px 14px;
@@ -132,23 +153,11 @@
     }
 
     /* Endpoint status indicators */
-    .endpoint-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .endpoint-row {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 11px;
-    }
+    .endpoint-list { display: flex; flex-direction: column; gap: 6px; }
+    .endpoint-row  { display: flex; align-items: center; gap: 7px; font-size: 11px; }
     .ep-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      background: var(--rule);
+      width: 7px; height: 7px; border-radius: 50%;
+      flex-shrink: 0; background: var(--rule);
     }
     .ep-dot.ok    { background: var(--accent); }
     .ep-dot.error { background: var(--error); }
@@ -165,7 +174,6 @@
       flex-direction: column;
       gap: 24px;
     }
-
     .page-heading {
       font-family: 'Cormorant Garamond', serif;
       font-size: 22px;
@@ -179,136 +187,18 @@
       letter-spacing: 0.04em;
     }
 
-    /* ── Metric card row ────────────────────────────────────────────────────── */
-    .metric-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-    .metric-card {
-      background: var(--card-bg);
-      border: 1px solid var(--rule);
-      border-radius: 6px;
-      padding: 20px 22px;
-    }
-    .metric-label {
-      font-size: 9px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 10px;
-    }
-    .metric-value {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 28px;
-      font-weight: 500;
-      color: var(--dark);
-      line-height: 1;
-    }
-    .metric-value.placeholder {
-      font-family: 'Jost', sans-serif;
-      font-size: 13px;
-      font-weight: 400;
-      color: var(--muted);
-    }
-    .metric-sub {
-      font-size: 10px;
-      color: var(--muted);
-      margin-top: 6px;
-    }
-
-    /* ── Data health panel ──────────────────────────────────────────────────── */
-    .panel {
-      background: var(--card-bg);
-      border: 1px solid var(--rule);
-      border-radius: 6px;
-      padding: 20px 22px;
-    }
-    .panel-title {
+    /* ── Pagination warning ─────────────────────────────────────────────────── */
+    .pagn-warn {
+      background: #FFF8EC;
+      border: 1px solid var(--warn);
+      border-radius: 4px;
+      padding: 10px 14px;
       font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 14px;
-    }
-
-    .health-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-    .health-cell {
-      border-left: 3px solid var(--rule);
-      padding-left: 12px;
-    }
-    .health-cell.ok    { border-color: var(--accent); }
-    .health-cell.error { border-color: var(--error); }
-    .health-cell.warn  { border-color: var(--warn); }
-    .health-cell-label {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 5px;
-    }
-    .health-cell-value {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--dark);
-    }
-    .health-cell-detail {
-      font-size: 10px;
-      color: var(--muted);
-      margin-top: 3px;
+      color: var(--warn);
       line-height: 1.5;
     }
-    .health-cell .error-msg {
-      font-size: 11px;
-      color: var(--error);
-      line-height: 1.4;
-    }
 
-    /* Placeholder / initial state */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 48px 0;
-      color: var(--muted);
-    }
-    .empty-icon {
-      font-size: 32px;
-      opacity: 0.4;
-    }
-    .empty-label {
-      font-size: 13px;
-      font-weight: 400;
-    }
-    .empty-hint {
-      font-size: 11px;
-      opacity: 0.7;
-    }
-
-    /* Spinner */
-    .spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid var(--rule);
-      border-top-color: var(--dark);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      vertical-align: middle;
-      margin-right: 6px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Raw summary strip */
+    /* ── Summary strip ──────────────────────────────────────────────────────── */
     .summary-strip {
       display: flex;
       gap: 0;
@@ -336,11 +226,181 @@
       font-weight: 500;
     }
     .summary-item-val.error { font-family: 'Jost', sans-serif; font-size: 11px; color: var(--error); }
-    .summary-item-detail {
+    .summary-item-detail { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Metric cards ───────────────────────────────────────────────────────── */
+    .metric-row   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .metric-row-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 20px 22px;
+    }
+    .metric-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .metric-value {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 28px;
+      font-weight: 500;
+      color: var(--dark);
+      line-height: 1;
+    }
+    .metric-value.placeholder {
+      font-family: 'Jost', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--muted);
+    }
+    .metric-value.positive { color: var(--accent); }
+    .metric-value.negative { color: var(--error); }
+    .metric-sub { font-size: 10px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Panel (generic) ────────────────────────────────────────────────────── */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 20px 22px;
+    }
+    .panel-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Data health ────────────────────────────────────────────────────────── */
+    .health-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .health-cell { border-left: 3px solid var(--rule); padding-left: 12px; }
+    .health-cell.ok    { border-color: var(--accent); }
+    .health-cell.error { border-color: var(--error); }
+    .health-cell.warn  { border-color: var(--warn); }
+    .health-cell-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .health-cell-value  { font-size: 12px; font-weight: 500; color: var(--dark); }
+    .health-cell-detail { font-size: 10px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+    .health-cell .error-msg { font-size: 11px; color: var(--error); line-height: 1.4; }
+
+    /* ── VAT position ───────────────────────────────────────────────────────── */
+    .vat-table { width: 100%; border-collapse: collapse; }
+    .vat-table td { padding: 5px 0; font-size: 12px; vertical-align: baseline; }
+    .vat-table td:last-child {
+      text-align: right;
+      font-weight: 500;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 15px;
+    }
+    .vat-row-label { color: var(--muted); }
+    .vat-divider td { border-top: 1px solid var(--rule); padding-top: 10px; }
+    .vat-result-label { font-size: 12px; font-weight: 600; }
+    .vat-result-val {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px;
+      font-weight: 500;
+    }
+    .vat-result-val.payable     { color: var(--warn); }
+    .vat-result-val.neutral     { color: var(--muted); }
+    .vat-result-val.reclaimable { color: var(--accent); }
+    .vat-status { font-size: 10px; color: var(--muted); }
+    .vat-status.payable     { color: var(--warn); }
+    .vat-status.reclaimable { color: var(--accent); }
+
+    /* ── Disclaimer ─────────────────────────────────────────────────────────── */
+    .disclaimer {
       font-size: 10px;
       color: var(--muted);
-      margin-top: 2px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--rule);
+      line-height: 1.6;
+      font-style: italic;
     }
+
+    /* ── Receivables ────────────────────────────────────────────────────────── */
+    .recv-section { margin-bottom: 20px; }
+    .recv-section:last-child { margin-bottom: 0; }
+    .recv-section-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .recv-summary { font-size: 12px; margin-bottom: 8px; color: var(--muted); }
+    .recv-summary strong {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--dark);
+    }
+    .recv-rows {
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .recv-row {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      gap: 12px;
+      padding: 8px 12px;
+      font-size: 11px;
+      border-bottom: 1px solid var(--rule);
+      align-items: center;
+    }
+    .recv-row:last-child { border-bottom: none; }
+    .recv-row:nth-child(even) { background: #fff; }
+    .recv-date   { color: var(--muted); }
+    .recv-amount { text-align: right; font-weight: 500; }
+    .recv-more   { font-size: 10px; color: var(--muted); margin-top: 6px; text-align: right; }
+    .recv-empty  { font-size: 12px; color: var(--accent); padding: 4px 0; }
+    .recv-divider {
+      border: none;
+      border-top: 1px solid var(--rule);
+      margin: 20px 0;
+    }
+
+    /* ── Empty state ────────────────────────────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 48px 0;
+      color: var(--muted);
+    }
+    .empty-icon  { font-size: 32px; opacity: 0.4; }
+    .empty-label { font-size: 13px; font-weight: 400; }
+    .empty-hint  { font-size: 11px; opacity: 0.7; }
+
+    /* ── Spinner ────────────────────────────────────────────────────────────── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--rule);
+      border-top-color: var(--dark);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -349,7 +409,7 @@
 <div class="topbar">
   <div class="topbar-title">Vista United</div>
   <div class="topbar-sub">Financial Dashboard</div>
-  <a class="topbar-home" href="index.html">← Platform Home</a>
+  <a class="topbar-home" href="index.html">&#8592; Platform Home</a>
 </div>
 
 <!-- ── Shell ─────────────────────────────────────────────────────────────── -->
@@ -357,6 +417,23 @@
 
   <!-- Sidebar -->
   <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Period</div>
+      <select class="period-select" id="period-select" onchange="onPeriodChange()" disabled>
+        <option value="ytd">Year to Date</option>
+        <option value="this-month">This Month</option>
+        <option value="last-month">Last Month</option>
+        <option value="q1">Q1 (Jan&#8211;Mar)</option>
+        <option value="q2">Q2 (Apr&#8211;Jun)</option>
+        <option value="q3">Q3 (Jul&#8211;Sep)</option>
+        <option value="q4">Q4 (Oct&#8211;Dec)</option>
+        <option value="all">All Time</option>
+      </select>
+    </div>
+
+    <hr class="sidebar-rule" />
+
     <div class="sidebar-section">
       <div class="sidebar-label">Data</div>
       <button class="btn-fetch" id="btn-fetch" onclick="fetchAll()">Fetch Data</button>
@@ -371,34 +448,34 @@
         <div class="endpoint-row">
           <span class="ep-dot" id="dot-inv"></span>
           <span class="ep-label">Invoices</span>
-          <span class="ep-count" id="count-inv">—</span>
+          <span class="ep-count" id="count-inv">&#8212;</span>
         </div>
         <div class="endpoint-row">
           <span class="ep-dot" id="dot-pur"></span>
           <span class="ep-label">Purchases</span>
-          <span class="ep-count" id="count-pur">—</span>
+          <span class="ep-count" id="count-pur">&#8212;</span>
         </div>
         <div class="endpoint-row">
           <span class="ep-dot" id="dot-exp"></span>
           <span class="ep-label">Expenses</span>
-          <span class="ep-count" id="count-exp">—</span>
+          <span class="ep-count" id="count-exp">&#8212;</span>
         </div>
       </div>
     </div>
+
   </aside>
 
   <!-- Main -->
   <main class="main" id="main">
 
-    <!-- Initial empty state -->
     <div>
       <div class="page-heading">Financial Overview</div>
-      <div class="page-sub">Live data from Daftra ERP — via local proxy</div>
+      <div class="page-sub">Live data from Daftra ERP &#8212; via local proxy</div>
     </div>
 
     <div id="content-area">
       <div class="empty-state">
-        <div class="empty-icon">📊</div>
+        <div class="empty-icon">&#128202;</div>
         <div class="empty-label">No data loaded</div>
         <div class="empty-hint">Press Fetch Data in the sidebar to load from Daftra.</div>
       </div>
@@ -411,15 +488,235 @@
 'use strict';
 
 // ── State ──────────────────────────────────────────────────────────────────
-let rawInvoices  = null;
-let rawPurchases = null;
-let rawExpenses  = null;
+let currentPeriod    = 'ytd';
+let rawInvoices      = null;   // extracted records array, or null if not yet fetched / error
+let rawPurchases     = null;
+let rawExpenses      = null;
+let rawInvError      = null;   // last fetch error string or null
+let rawPurError      = null;
+let rawExpError      = null;
+let rawInvPagination = null;   // pagination object from API response
+let rawPurPagination = null;
+let rawExpPagination = null;
+
+// ── Period helpers ─────────────────────────────────────────────────────────
+
+function onPeriodChange() {
+  currentPeriod = document.getElementById('period-select').value;
+  if (rawInvoices !== null || rawPurchases !== null || rawExpenses !== null) {
+    renderContent({
+      invRecords: rawInvoices  || [],
+      invError:   rawInvError,
+      purRecords: rawPurchases || [],
+      purError:   rawPurError,
+      expRecords: rawExpenses  || [],
+      expError:   rawExpError,
+    });
+  }
+}
+
+function getPeriodLabel(key) {
+  const now   = new Date();
+  const yr    = now.getFullYear();
+  const moIdx = now.getMonth();
+  const moName = now.toLocaleString('en-US', { month: 'long' });
+  const lastMoDate = new Date(yr, moIdx, 0);
+  const lastMoName = lastMoDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const map = {
+    'ytd':        'Year to Date ' + yr,
+    'this-month': moName + ' ' + yr,
+    'last-month': lastMoName,
+    'q1':         'Q1 ' + yr + ' (Jan–Mar)',
+    'q2':         'Q2 ' + yr + ' (Apr–Jun)',
+    'q3':         'Q3 ' + yr + ' (Jul–Sep)',
+    'q4':         'Q4 ' + yr + ' (Oct–Dec)',
+    'all':        'All Time',
+  };
+  return map[key] || key;
+}
+
+function getPeriodBounds(key) {
+  if (key === 'all') return null;  // no date filter
+  const now = new Date();
+  const yr  = now.getFullYear();
+  const mo  = now.getMonth();   // 0-indexed
+  const eod = function(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999); };
+  if (key === 'ytd') {
+    return { start: new Date(yr, 0, 1), end: eod(now) };
+  }
+  if (key === 'this-month') {
+    return { start: new Date(yr, mo, 1), end: new Date(yr, mo + 1, 0, 23, 59, 59, 999) };
+  }
+  if (key === 'last-month') {
+    var lm = mo === 0 ? 11 : mo - 1;
+    var ly = mo === 0 ? yr - 1 : yr;
+    return { start: new Date(ly, lm, 1), end: new Date(ly, lm + 1, 0, 23, 59, 59, 999) };
+  }
+  var quarters = { q1: [0, 2], q2: [3, 5], q3: [6, 8], q4: [9, 11] };
+  if (quarters[key]) {
+    var sm = quarters[key][0], em = quarters[key][1];
+    return { start: new Date(yr, sm, 1), end: new Date(yr, em + 1, 0, 23, 59, 59, 999) };
+  }
+  return null;
+}
+
+// ── Low-level helpers ──────────────────────────────────────────────────────
+
+function parseDate(str) {
+  if (!str || typeof str !== 'string') return null;
+  var m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  var d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function inPeriod(dateStr, bounds) {
+  if (!bounds) return true;          // null bounds = "all time"
+  var d = parseDate(dateStr);
+  if (!d) return false;              // unparseable date excluded from period
+  return d >= bounds.start && d <= bounds.end;
+}
+
+function filterActive(records) {
+  return records.filter(function(r) { return r.draft !== '1'; });
+}
+
+function toNum(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  var n = parseFloat(val);
+  return isNaN(n) ? 0 : n;
+}
+
+function fmtCurrency(num) {
+  var abs = Math.abs(num);
+  var formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (num < -0.005 ? '−SAR ' : 'SAR ') + formatted;
+}
+
+// ── Calculations ───────────────────────────────────────────────────────────
+
+function calcSales(records, bounds) {
+  var active = filterActive(records);
+  var missingDate = 0;
+  var inPer = active.filter(function(r) {
+    if (!r.date) { missingDate++; return false; }
+    return inPeriod(r.date, bounds);
+  });
+
+  var salesExVAT = 0, salesIncVAT = 0;
+  for (var i = 0; i < inPer.length; i++) {
+    salesExVAT  += toNum(inPer[i].summary_subtotal);
+    salesIncVAT += toNum(inPer[i].summary_total);
+  }
+
+  // All-time unpaid — all active records regardless of period, sorted oldest first
+  var allUnpaid = active
+    .filter(function(r) { return toNum(r.summary_unpaid) > 0.005; })
+    .sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+  var allUnpaidTotal = allUnpaid.reduce(function(s, r) { return s + toNum(r.summary_unpaid); }, 0);
+
+  // Period unpaid — period-filtered subset of allUnpaid
+  var perUnpaid = bounds
+    ? allUnpaid.filter(function(r) { return inPeriod(r.date, bounds); })
+    : allUnpaid;
+  var perUnpaidTotal = perUnpaid.reduce(function(s, r) { return s + toNum(r.summary_unpaid); }, 0);
+
+  return {
+    salesExVAT:      salesExVAT,
+    salesIncVAT:     salesIncVAT,
+    outputVAT:       salesIncVAT - salesExVAT,
+    allUnpaidRecords: allUnpaid,
+    allUnpaidTotal:   allUnpaidTotal,
+    perUnpaidRecords: perUnpaid,
+    perUnpaidTotal:   perUnpaidTotal,
+    count:       inPer.length,
+    activeCount: active.length,
+    missingDate: missingDate,
+  };
+}
+
+function calcPurchases(records, bounds) {
+  var active = filterActive(records);
+  var missingDate = 0;
+  var inPer = active.filter(function(r) {
+    if (!r.date) { missingDate++; return false; }
+    return inPeriod(r.date, bounds);
+  });
+
+  var purchExVAT = 0, purchIncVAT = 0;
+  for (var i = 0; i < inPer.length; i++) {
+    purchExVAT  += toNum(inPer[i].summary_subtotal);
+    purchIncVAT += toNum(inPer[i].summary_total);
+  }
+
+  return {
+    purchExVAT:  purchExVAT,
+    purchIncVAT: purchIncVAT,
+    inputVAT:    purchIncVAT - purchExVAT,
+    count:       inPer.length,
+    activeCount: active.length,
+    missingDate: missingDate,
+  };
+}
+
+function calcExpenses(records, bounds) {
+  var active = filterActive(records);   // defensive — draft field may not exist on expenses
+  var missingDate = 0;
+  var inPer = active.filter(function(r) {
+    if (!r.date) { missingDate++; return false; }
+    return inPeriod(r.date, bounds);
+  });
+
+  var expExVAT = 0, expGross = 0, inputVAT = 0;
+  for (var i = 0; i < inPer.length; i++) {
+    var r   = inPer[i];
+    var amt = toNum(r.amount);
+    var tax = toNum(r.tax1_amount);
+    if (r.tax1_included === '0') {
+      // VAT not included in amount — amount is already ex-VAT
+      expExVAT += amt;
+      expGross += amt + tax;
+      inputVAT += tax;
+    } else {
+      // VAT included (field = "1", or absent — treat as included; conservative default)
+      expExVAT += amt - tax;
+      expGross += amt;
+      inputVAT += tax;
+    }
+  }
+
+  return {
+    expExVAT:    expExVAT,
+    expGross:    expGross,
+    inputVAT:    inputVAT,
+    count:       inPer.length,
+    activeCount: active.length,
+    missingDate: missingDate,
+  };
+}
+
+// ── Pagination warnings ────────────────────────────────────────────────────
+
+function getPaginationWarnings() {
+  var warnings = [];
+  function check(pag, loaded, label) {
+    if (!pag) return;
+    var total = parseInt(pag.total_results || pag.total || 0, 10);
+    if (!isNaN(total) && total > loaded) {
+      warnings.push(label + ': ' + loaded + ' of ' + total + ' records loaded. Totals may be incomplete.');
+    }
+  }
+  if (rawInvoices  !== null) check(rawInvPagination, rawInvoices.length,  'Invoices');
+  if (rawPurchases !== null) check(rawPurPagination, rawPurchases.length, 'Purchases');
+  if (rawExpenses  !== null) check(rawExpPagination, rawExpenses.length,  'Expenses');
+  return warnings;
+}
 
 // ── Fetch helpers ──────────────────────────────────────────────────────────
 
 async function fetchEndpoint(path) {
   // All Daftra calls go through the local proxy — credentials never in browser code.
-  const res = await fetch(path);
+  const res  = await fetch(path);
   const json = await res.json();
   if (!res.ok) {
     const msg = json?.error || json?.message || `HTTP ${res.status}`;
@@ -428,22 +725,15 @@ async function fetchEndpoint(path) {
   return json;
 }
 
-// Extract the records array from a Daftra list response.
-// Daftra wraps results: { data: [ {Invoice:{...}}, ... ], ... }
 function extractRecords(json, typeKey) {
   const data = json?.data;
   if (!Array.isArray(data)) return [];
   if (!typeKey) return data;
-  // Each element may be { TypeKey: {...} } or a flat object
-  return data.map(item => (item[typeKey] || item));
+  return data.map(function(item) { return item[typeKey] || item; });
 }
 
-// Date range helper
 function dateRange(records, dateField) {
-  const dates = records
-    .map(r => r[dateField])
-    .filter(Boolean)
-    .sort();
+  const dates = records.map(function(r) { return r[dateField]; }).filter(Boolean).sort();
   if (!dates.length) return null;
   return { min: dates[0], max: dates[dates.length - 1] };
 }
@@ -453,16 +743,14 @@ function dateRange(records, dateField) {
 async function fetchAll() {
   const btn    = document.getElementById('btn-fetch');
   const status = document.getElementById('fetch-status');
+  const sel    = document.getElementById('period-select');
 
   btn.disabled = true;
+  sel.disabled = true;
   status.className = 'status-text';
   status.innerHTML = '<span class="spinner"></span>Fetching…';
 
-  // Reset dot indicators
-  ['inv','pur','exp'].forEach(k => {
-    dot(k, '');
-    setCount(k, '…');
-  });
+  ['inv', 'pur', 'exp'].forEach(function(k) { dot(k, ''); setCount(k, '…'); });
 
   // Fire all three requests in parallel — per-endpoint errors are independent.
   const [invResult, purResult, expResult] = await Promise.allSettled([
@@ -474,13 +762,17 @@ async function fetchAll() {
   // Process invoices
   let invRecords = [], invError = null;
   if (invResult.status === 'fulfilled') {
-    invRecords  = extractRecords(invResult.value, 'Invoice');
-    rawInvoices = invRecords;
+    invRecords       = extractRecords(invResult.value, 'Invoice');
+    rawInvoices      = invRecords;
+    rawInvError      = null;
+    rawInvPagination = invResult.value?.pagination || null;
     dot('inv', 'ok');
     setCount('inv', invRecords.length);
   } else {
-    invError = invResult.reason?.message || 'Unknown error';
-    rawInvoices = null;
+    invError         = invResult.reason?.message || 'Unknown error';
+    rawInvoices      = null;
+    rawInvError      = invError;
+    rawInvPagination = null;
     dot('inv', 'error');
     setCount('inv', '✕');
   }
@@ -488,13 +780,17 @@ async function fetchAll() {
   // Process purchases
   let purRecords = [], purError = null;
   if (purResult.status === 'fulfilled') {
-    purRecords   = extractRecords(purResult.value, 'PurchaseOrder');
-    rawPurchases = purRecords;
+    purRecords       = extractRecords(purResult.value, 'PurchaseOrder');
+    rawPurchases     = purRecords;
+    rawPurError      = null;
+    rawPurPagination = purResult.value?.pagination || null;
     dot('pur', 'ok');
     setCount('pur', purRecords.length);
   } else {
-    purError = purResult.reason?.message || 'Unknown error';
-    rawPurchases = null;
+    purError         = purResult.reason?.message || 'Unknown error';
+    rawPurchases     = null;
+    rawPurError      = purError;
+    rawPurPagination = null;
     dot('pur', 'error');
     setCount('pur', '✕');
   }
@@ -502,18 +798,23 @@ async function fetchAll() {
   // Process expenses
   let expRecords = [], expError = null;
   if (expResult.status === 'fulfilled') {
-    expRecords  = extractRecords(expResult.value, 'Expense');
-    rawExpenses = expRecords;
+    expRecords       = extractRecords(expResult.value, 'Expense');
+    rawExpenses      = expRecords;
+    rawExpError      = null;
+    rawExpPagination = expResult.value?.pagination || null;
     dot('exp', expRecords.length === 0 ? 'warn' : 'ok');
     setCount('exp', expRecords.length);
   } else {
-    expError = expResult.reason?.message || 'Unknown error';
-    rawExpenses = null;
+    expError         = expResult.reason?.message || 'Unknown error';
+    rawExpenses      = null;
+    rawExpError      = expError;
+    rawExpPagination = null;
     dot('exp', 'error');
     setCount('exp', '✕');
   }
 
   btn.disabled = false;
+  sel.disabled = false;
 
   const anyError = invError || purError || expError;
   if (anyError && !invRecords.length && !purRecords.length && !expRecords.length) {
@@ -530,88 +831,270 @@ async function fetchAll() {
   renderContent({ invRecords, invError, purRecords, purError, expRecords, expError });
 }
 
-// ── Render ─────────────────────────────────────────────────────────────────
+// ── Render orchestrator ────────────────────────────────────────────────────
 
 function renderContent({ invRecords, invError, purRecords, purError, expRecords, expError }) {
-  const area = document.getElementById('content-area');
+  const area   = document.getElementById('content-area');
+  const bounds = getPeriodBounds(currentPeriod);
+  const label  = getPeriodLabel(currentPeriod);
 
+  // Run calculations only for successful endpoints
+  const sales = invError ? null : calcSales(invRecords, bounds);
+  const purch = purError ? null : calcPurchases(purRecords, bounds);
+  const exp   = expError ? null : calcExpenses(expRecords, bounds);
+
+  // Composite figures — available only when all three endpoints succeeded
+  const canCalc   = sales !== null && purch !== null && exp !== null;
+  const profit    = canCalc ? (sales.salesExVAT - purch.purchExVAT - exp.expExVAT) : null;
+  const taxReserve = profit !== null ? Math.max(profit, 0) * 0.20 : null;
+
+  // VAT position — available when at least one endpoint succeeded (partial disclosure)
+  const outputVAT   = sales ? sales.outputVAT : null;
+  const inputVATpur = purch ? purch.inputVAT  : null;
+  const inputVATexp = exp   ? exp.inputVAT    : null;
+  const allVATAvail = outputVAT !== null && inputVATpur !== null && inputVATexp !== null;
+  const vatPosition = allVATAvail ? (outputVAT - inputVATpur - inputVATexp) : null;
+
+  // Date ranges (for health panel)
   const invRange = dateRange(invRecords, 'date');
   const purRange = dateRange(purRecords, 'date');
   const expRange = dateRange(expRecords, 'date');
 
-  area.innerHTML = `
-    <!-- Raw count summary strip -->
-    <div class="summary-strip">
-      ${summaryItem('Invoices (Sales)', invRecords, invError)}
-      ${summaryItem('Purchase Invoices', purRecords, purError)}
-      ${summaryItem('Expenses', expRecords, expError)}
-    </div>
+  // Pagination warnings
+  const warnings = getPaginationWarnings();
 
-    <!-- Placeholder metric cards -->
-    <div class="metric-row">
-      ${metricCard('Monthly Sales', 'Calculations in next phase', invError)}
-      ${metricCard('Monthly Purchases', 'Calculations in next phase', purError)}
-      ${metricCard('Monthly Expenses', 'Calculations in next phase', expError)}
-    </div>
+  const parts = [];
 
-    <!-- Data health panel -->
-    <div class="panel">
-      <div class="panel-title">Data Health</div>
-      <div class="health-grid">
-        ${healthCell('Invoices', invRecords, invError, invRange, 'date')}
-        ${healthCell('Purchase Invoices', purRecords, purError, purRange, 'date')}
-        ${healthCell('Expenses', expRecords, expError, expRange, 'date')}
-      </div>
-    </div>
-  `;
-}
-
-function summaryItem(label, records, error) {
-  if (error) {
-    return `
-      <div class="summary-item">
-        <div class="summary-item-label">${esc(label)}</div>
-        <div class="summary-item-val error">Error</div>
-        <div class="summary-item-detail" style="color:var(--error)">${esc(error)}</div>
-      </div>`;
+  // 0. Pagination warnings
+  if (warnings.length) {
+    parts.push(warnings.map(function(w) {
+      return '<div class="pagn-warn">⚠ ' + esc(w) + '</div>';
+    }).join('\n'));
   }
-  return `
-    <div class="summary-item">
-      <div class="summary-item-label">${esc(label)}</div>
-      <div class="summary-item-val">${records.length}</div>
-      <div class="summary-item-detail">${records.length === 0 ? 'No records returned' : 'records received'}</div>
-    </div>`;
-}
 
-function metricCard(label, placeholder, error) {
-  const cls = error ? 'error' : '';
-  const val = error ? 'Endpoint failed' : placeholder;
-  return `
-    <div class="metric-card">
-      <div class="metric-label">${esc(label)}</div>
-      <div class="metric-value placeholder ${cls}">${esc(val)}</div>
-    </div>`;
-}
+  // 1. Summary strip — period ex-VAT totals
+  parts.push(renderSummaryStrip(sales, purch, exp, invError, purError, expError, label));
 
-function healthCell(label, records, error, range, dateField) {
-  const cls = error ? 'error' : (records.length === 0 ? 'warn' : 'ok');
-  if (error) {
-    return `
-      <div class="health-cell ${cls}">
-        <div class="health-cell-label">${esc(label)}</div>
-        <div class="error-msg">${esc(error)}</div>
-      </div>`;
+  // 2. Metric cards row 1: Sales, Purchases, Expenses
+  parts.push(renderMetricRow1(sales, purch, exp, invError, purError, expError, label));
+
+  // 3. Metric cards row 2: Profit + Tax Reserve (only when all three available)
+  if (canCalc) {
+    parts.push(renderMetricRow2(profit, taxReserve, label));
   }
-  const detail = range
-    ? `${esc(range.min)} → ${esc(range.max)}`
-    : 'No date field found';
-  const note = records.length === 0 ? 'No records in this period.' : `${records.length} record${records.length !== 1 ? 's' : ''} received`;
-  return `
-    <div class="health-cell ${cls}">
-      <div class="health-cell-label">${esc(label)}</div>
-      <div class="health-cell-value">${note}</div>
-      ${range ? `<div class="health-cell-detail">Date range: ${detail}</div>` : ''}
-    </div>`;
+
+  // 4. VAT position panel
+  parts.push(renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allVATAvail, label));
+
+  // 5. Receivables panel (only when invoices succeeded)
+  if (!invError && sales) {
+    parts.push(renderReceivablesPanel(sales, label));
+  }
+
+  // 6. Data health panel
+  parts.push(renderHealthPanel(
+    invRecords, invError, invRange,
+    purRecords, purError, purRange,
+    expRecords, expError, expRange,
+    sales, purch, exp
+  ));
+
+  area.innerHTML = parts.join('\n');
+}
+
+// ── Render helpers ─────────────────────────────────────────────────────────
+
+function renderSummaryStrip(sales, purch, exp, invError, purError, expError, label) {
+  function item(title, obj, err, field) {
+    if (err) {
+      return '<div class="summary-item">'
+        + '<div class="summary-item-label">' + esc(title) + '</div>'
+        + '<div class="summary-item-val error">Error</div>'
+        + '<div class="summary-item-detail" style="color:var(--error)">' + esc(err) + '</div>'
+        + '</div>';
+    }
+    var val = obj ? obj[field] : 0;
+    var cnt = obj ? obj.count  : 0;
+    return '<div class="summary-item">'
+      + '<div class="summary-item-label">' + esc(title) + '</div>'
+      + '<div class="summary-item-val">' + esc(fmtCurrency(val)) + '</div>'
+      + '<div class="summary-item-detail">' + cnt + ' records · ex-VAT · ' + esc(label) + '</div>'
+      + '</div>';
+  }
+  return '<div class="summary-strip">'
+    + item('Sales', sales, invError, 'salesExVAT')
+    + item('Purchases', purch, purError, 'purchExVAT')
+    + item('Expenses', exp, expError, 'expExVAT')
+    + '</div>';
+}
+
+function renderMetricRow1(sales, purch, exp, invError, purError, expError, label) {
+  function card(title, obj, err, field) {
+    if (err) {
+      return '<div class="metric-card">'
+        + '<div class="metric-label">' + esc(title) + '</div>'
+        + '<div class="metric-value placeholder error">Endpoint failed</div>'
+        + '</div>';
+    }
+    var val = obj ? obj[field] : 0;
+    var cnt = obj ? obj.count  : 0;
+    return '<div class="metric-card">'
+      + '<div class="metric-label">' + esc(title) + '</div>'
+      + '<div class="metric-value">' + esc(fmtCurrency(val)) + '</div>'
+      + '<div class="metric-sub">' + cnt + ' record' + (cnt !== 1 ? 's' : '') + ' · ' + esc(label) + '</div>'
+      + '</div>';
+  }
+  return '<div class="metric-row">'
+    + card('Sales (ex-VAT)', sales, invError, 'salesExVAT')
+    + card('Purchases (ex-VAT)', purch, purError, 'purchExVAT')
+    + card('Expenses (ex-VAT)', exp, expError, 'expExVAT')
+    + '</div>';
+}
+
+function renderMetricRow2(profit, taxReserve, label) {
+  var profitCls = profit >= 0 ? 'positive' : 'negative';
+  var profitNote = profit >= 0
+    ? 'Gross profit estimate · management reference only'
+    : 'Net loss estimate · management reference only';
+  return '<div class="metric-row-2">'
+    + '<div class="metric-card">'
+    + '<div class="metric-label">Profit Estimate</div>'
+    + '<div class="metric-value ' + profitCls + '">' + esc(fmtCurrency(profit)) + '</div>'
+    + '<div class="metric-sub">' + esc(label) + ' · ' + esc(profitNote) + '</div>'
+    + '</div>'
+    + '<div class="metric-card">'
+    + '<div class="metric-label">20% Tax Reserve Estimate</div>'
+    + '<div class="metric-value">' + esc(fmtCurrency(taxReserve)) + '</div>'
+    + '<div class="metric-sub">' + esc(label) + ' · Management estimate — not an official tax calculation</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allAvail, label) {
+  function vatRow(lbl, val) {
+    var valHtml = (val === null)
+      ? '<td style="color:var(--muted);font-family:\'Jost\',sans-serif;font-size:11px">Endpoint failed</td>'
+      : '<td>' + esc(fmtCurrency(val)) + '</td>';
+    return '<tr><td class="vat-row-label">' + esc(lbl) + '</td>' + valHtml + '</tr>';
+  }
+
+  var resultHtml = '';
+  if (allAvail) {
+    var cls  = vatPosition > 0.005 ? 'payable' : vatPosition < -0.005 ? 'reclaimable' : 'neutral';
+    var note = vatPosition > 0.005
+      ? 'Estimated amount payable to tax authority'
+      : vatPosition < -0.005
+      ? 'Estimated reclaimable from tax authority'
+      : 'Estimated break-even';
+    resultHtml = '<tr class="vat-divider">'
+      + '<td class="vat-result-label">Estimated net VAT position</td>'
+      + '<td class="vat-result-val ' + cls + '">' + esc(fmtCurrency(vatPosition)) + '</td>'
+      + '</tr>'
+      + '<tr><td colspan="2"><div class="vat-status ' + cls + '">' + esc(note) + '</div></td></tr>';
+  }
+
+  return '<div class="panel">'
+    + '<div class="panel-title">VAT Position — ' + esc(label) + '</div>'
+    + '<table class="vat-table">'
+    + vatRow('Output VAT (on sales)', outputVAT)
+    + vatRow('− Input VAT (purchase invoices)', inputVATpur)
+    + vatRow('− Input VAT (expenses)', inputVATexp)
+    + resultHtml
+    + '</table>'
+    + '<div class="disclaimer">Management reference only — not an official VAT filing or return calculation. '
+    + 'Figures are based on data loaded (up to 100 records per endpoint). '
+    + 'Consult your accountant for filing purposes.</div>'
+    + '</div>';
+}
+
+function renderReceivablesPanel(sales, label) {
+  var allRecs = sales.allUnpaidRecords;   // all-time unpaid, sorted oldest first
+  var perRecs = sales.perUnpaidRecords;   // period-filtered unpaid
+
+  function recvList(recs) {
+    if (!recs.length) {
+      return '<div class="recv-empty">No outstanding invoices.</div>';
+    }
+    var shown = recs.slice(0, 10);
+    var more  = recs.length - shown.length;
+    var rows  = shown.map(function(r) {
+      var client = esc(r.client_name || r.client_business_name || '—');
+      var date   = esc(r.date || '—');
+      var amt    = esc(fmtCurrency(toNum(r.summary_unpaid)));
+      return '<div class="recv-row">'
+        + '<span class="recv-date">' + date + '</span>'
+        + '<span class="recv-client">' + client + '</span>'
+        + '<span class="recv-amount">' + amt + '</span>'
+        + '</div>';
+    }).join('');
+    var moreHtml = more > 0 ? '<div class="recv-more">and ' + more + ' more</div>' : '';
+    return '<div class="recv-rows">' + rows + '</div>' + moreHtml;
+  }
+
+  var html = '<div class="panel">'
+    + '<div class="panel-title">Receivables</div>'
+
+    // Section 1: All-time outstanding
+    + '<div class="recv-section">'
+    + '<div class="recv-section-title">All-time outstanding (all unpaid invoices, regardless of selected period)</div>'
+    + '<div class="recv-summary">'
+    + allRecs.length + ' unpaid invoice' + (allRecs.length !== 1 ? 's' : '') + ' · '
+    + '<strong>' + esc(fmtCurrency(sales.allUnpaidTotal)) + '</strong> total outstanding'
+    + '</div>'
+    + recvList(allRecs)
+    + '</div>'
+
+    // Divider
+    + '<hr class="recv-divider" />'
+
+    // Section 2: Selected-period outstanding
+    + '<div class="recv-section">'
+    + '<div class="recv-section-title">Outstanding in selected period — ' + esc(label) + '</div>'
+    + '<div class="recv-summary">'
+    + perRecs.length + ' unpaid invoice' + (perRecs.length !== 1 ? 's' : '') + ' · '
+    + '<strong>' + esc(fmtCurrency(sales.perUnpaidTotal)) + '</strong> outstanding in period'
+    + '</div>'
+    + recvList(perRecs)
+    + '</div>'
+
+    + '</div>';
+  return html;
+}
+
+function renderHealthPanel(invRecords, invError, invRange, purRecords, purError, purRange, expRecords, expError, expRange, sales, purch, exp) {
+  function cell(label, records, error, range, missingDate) {
+    var cls = error ? 'error' : (records.length === 0 ? 'warn' : 'ok');
+    if (error) {
+      return '<div class="health-cell ' + cls + '">'
+        + '<div class="health-cell-label">' + esc(label) + '</div>'
+        + '<div class="error-msg">' + esc(error) + '</div>'
+        + '</div>';
+    }
+    var active     = records.filter(function(r) { return r.draft !== '1'; }).length;
+    var drafts     = records.length - active;
+    var note       = records.length === 0
+      ? 'No records returned'
+      : records.length + ' record' + (records.length !== 1 ? 's' : '') + ' returned';
+    var detail     = range ? 'Date range: ' + esc(range.min) + ' → ' + esc(range.max) : '';
+    var draftNote  = drafts > 0  ? drafts + ' draft' + (drafts !== 1 ? 's' : '') + ' excluded from calculations.' : '';
+    var missNote   = missingDate > 0 ? missingDate + ' record' + (missingDate !== 1 ? 's' : '') + ' excluded — no parseable date.' : '';
+    return '<div class="health-cell ' + cls + '">'
+      + '<div class="health-cell-label">' + esc(label) + '</div>'
+      + '<div class="health-cell-value">' + esc(note) + '</div>'
+      + (detail    ? '<div class="health-cell-detail">' + detail + '</div>' : '')
+      + (draftNote ? '<div class="health-cell-detail">' + esc(draftNote) + '</div>' : '')
+      + (missNote  ? '<div class="health-cell-detail" style="color:var(--warn)">' + esc(missNote) + '</div>' : '')
+      + '</div>';
+  }
+
+  return '<div class="panel">'
+    + '<div class="panel-title">Data Health</div>'
+    + '<div class="health-grid">'
+    + cell('Invoices',          invRecords, invError, invRange, sales ? sales.missingDate : 0)
+    + cell('Purchase Invoices', purRecords, purError, purRange, purch ? purch.missingDate : 0)
+    + cell('Expenses',          expRecords, expError, expRange, exp   ? exp.missingDate   : 0)
+    + '</div>'
+    + '</div>';
 }
 
 // ── DOM helpers ────────────────────────────────────────────────────────────
