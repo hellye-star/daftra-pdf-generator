@@ -2,6 +2,41 @@
 
 ---
 
+## Platform Workflow Rules — PERMANENT (added 2026-06-07)
+
+These rules apply to every session on every Vista Platform module. Read before making any change.
+
+### Git workflow — required order for every approved change
+
+1. **Validate locally** — run `python proxy.py` and test in the normal browser before declaring anything done.
+2. **Document if needed** — update `CLAUDE_CONTEXT.md`, `docs/changelog.md`, and relevant docs for any functional or architectural change.
+3. **Commit to Git** — stage only the relevant files; write a clear commit message.
+4. **Push to GitHub after approval** — do not push without the user explicitly confirming the commit is approved.
+
+### Push safety rules
+
+| Rule | Detail |
+|---|---|
+| Never push `config.json` or secrets | `config.json` is git-ignored; never force-add, never echo its contents |
+| Never force-push | Do not use `--force` or `--force-with-lease` unless the user explicitly approves with those words |
+| Never push broken experimental work | Only push to a backup/feature branch if the user asks for it by name |
+| Push only the active approved branch | Default push target is the approved branch for that module — do not push other branches without explicit instruction |
+| `stable-reviewed-history` is the approved branch | This is the Social Media / Notion dashboard approved branch |
+| `stable-reviewed-history-v1` is the restore tag | Points to commit `2d0faec` — the approved stable snapshot |
+| `feature/financial-dashboard` must not be pushed | Do not push this branch unless the user explicitly approves |
+
+### localStorage — reviewed task history
+
+| Fact | Detail |
+|---|---|
+| Storage location | Normal browser localStorage only — key `vista_reviews_v1` |
+| Incognito windows | Always show empty reviewed history — localStorage is isolated per window type |
+| Browser F5 refresh | Does NOT delete reviewed tasks — localStorage persists across refreshes |
+| Different browser or device | Will not see reviewed history — localStorage is per browser per machine |
+| Clearing browser data | Will delete reviewed history if "Local storage" or "Site data" is included |
+
+---
+
 ## Social Media Control Center (`social-dashboard.html`)
 
 ### Current Status — Session Save Point 2026-06-05 (Reviewed chip added)

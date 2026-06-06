@@ -2,6 +2,23 @@
 
 ---
 
+## Git Workflow Rule (permanent — added 2026-06-07)
+
+Every approved change must follow this order:
+1. Validate locally (`python proxy.py` + test in normal browser)
+2. Document if needed (update `CLAUDE_CONTEXT.md` and `docs/changelog.md`)
+3. Commit to Git
+4. Push to GitHub only after user approval
+
+**Branch assignments:**
+- `stable-reviewed-history` — approved Social Media / Notion dashboard branch (push target)
+- `stable-reviewed-history-v1` — restore tag, points to `2d0faec`
+- `feature/financial-dashboard` — do not push unless user explicitly approves
+
+**Never push:** `config.json`, force-push, or broken experimental work without explicit user instruction.
+
+---
+
 ## Platform Status
 
 | Module | File | Status |

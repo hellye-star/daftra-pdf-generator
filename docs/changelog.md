@@ -2,6 +2,20 @@
 
 ---
 
+## [2026-06-07] — Platform workflow rules added to documentation
+
+### CLAUDE_CONTEXT.md, docs/CHATGPT_HANDOFF.md, docs/roadmap.md
+
+Added permanent workflow rules to all three documentation files. No application code changed.
+
+**Rules added:**
+- Git workflow order: validate locally → document → commit → push after approval
+- Push safety: never push `config.json`, never force-push, never push `feature/financial-dashboard` without explicit approval
+- Branch assignments: `stable-reviewed-history` is the approved Social Media dashboard branch; `stable-reviewed-history-v1` is the restore tag
+- localStorage behaviour: reviewed task history is stored in normal-browser localStorage only; Incognito always shows empty history; F5 refresh does not delete reviewed tasks
+
+---
+
 ## [2026-06-05] — Reviewed history: permanent records, Updated Since Review badge
 
 ### social-dashboard.html — Reviewed chip corrected to permanent history
