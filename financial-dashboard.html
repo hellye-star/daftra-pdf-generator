@@ -488,16 +488,18 @@
 'use strict';
 
 // ── State ──────────────────────────────────────────────────────────────────
-let currentPeriod    = 'ytd';
-let rawInvoices      = null;   // extracted records array, or null if not yet fetched / error
-let rawPurchases     = null;
-let rawExpenses      = null;
-let rawInvError      = null;   // last fetch error string or null
-let rawPurError      = null;
-let rawExpError      = null;
-let rawInvPagination = null;   // pagination object from API response
-let rawPurPagination = null;
-let rawExpPagination = null;
+let currentPeriod = 'ytd';
+let rawInvoices   = null;   // extracted records array, or null if not yet fetched / error
+let rawPurchases  = null;
+let rawExpenses   = null;
+let rawInvError   = null;   // last fetch error string or null
+let rawPurError   = null;
+let rawExpError   = null;
+// Fetch metadata per endpoint — set by fetchAllPages, read by health panel and warnings
+// Shape: { totalResults, pagesLoaded, capHit, incomplete, incompleteError } or null
+let rawInvMeta    = null;
+let rawPurMeta    = null;
+let rawExpMeta    = null;
 
 // ── Period helpers ─────────────────────────────────────────────────────────
 
@@ -699,16 +701,23 @@ function calcExpenses(records, bounds) {
 
 function getPaginationWarnings() {
   var warnings = [];
-  function check(pag, loaded, label) {
-    if (!pag) return;
-    var total = parseInt(pag.total_results || pag.total || 0, 10);
-    if (!isNaN(total) && total > loaded) {
-      warnings.push(label + ': ' + loaded + ' of ' + total + ' records loaded. Totals may be incomplete.');
+  function check(meta, loaded, label) {
+    if (!meta) return;
+    var totalStr = meta.totalResults ? (' of ' + meta.totalResults) : '';
+    if (meta.capHit) {
+      warnings.push(label + ': Record limit reached. ' + loaded + totalStr
+        + ' records loaded. Totals may be incomplete.');
+    } else if (meta.incomplete) {
+      var msg = label + ': Fetch incomplete — ' + loaded + totalStr + ' records loaded.';
+      if (meta.incompleteError) msg += ' (' + meta.incompleteError + ')';
+      warnings.push(msg);
     }
+    // If neither flag is set but loaded < totalResults, pagination loop handled it correctly —
+    // no warning needed (all records were loaded successfully).
   }
-  if (rawInvoices  !== null) check(rawInvPagination, rawInvoices.length,  'Invoices');
-  if (rawPurchases !== null) check(rawPurPagination, rawPurchases.length, 'Purchases');
-  if (rawExpenses  !== null) check(rawExpPagination, rawExpenses.length,  'Expenses');
+  if (rawInvoices  !== null) check(rawInvMeta, rawInvoices.length,  'Invoices');
+  if (rawPurchases !== null) check(rawPurMeta, rawPurchases.length, 'Purchases');
+  if (rawExpenses  !== null) check(rawExpMeta, rawExpenses.length,  'Expenses');
   return warnings;
 }
 
@@ -723,6 +732,85 @@ async function fetchEndpoint(path) {
     throw new Error(msg);
   }
   return json;
+}
+
+// ── Full pagination helper ─────────────────────────────────────────────────
+// Fetches all pages of a Daftra endpoint sequentially via the local proxy.
+// Never follows pagination.next (which points to daftra.com — bypasses proxy).
+// Uses page increment with limit=100.
+// Hard cap of PAGE_CAP pages prevents infinite loops.
+// If cap is hit the result is marked incomplete so the UI warns clearly.
+
+const PAGE_CAP = 50;  // 50 × 100 = 5,000 records maximum
+
+async function fetchAllPages(basePath, typeKey, countKey) {
+  var allRecords       = [];
+  var totalResults     = null;  // from API pagination.total_results
+  var pageCount        = null;  // from API pagination.page_count
+  var pagesLoaded      = 0;
+  var capHit           = false;
+  var incomplete       = false;
+  var incompleteError  = null;
+  var page             = 1;
+
+  while (true) {
+    // Hard cap guard — checked before each fetch
+    if (page > PAGE_CAP) {
+      capHit     = true;
+      incomplete = true;
+      break;
+    }
+
+    // All calls go through /daftra/... — credentials never in browser code.
+    var path = basePath + '?limit=100&page=' + page;
+    var json;
+    try {
+      json = await fetchEndpoint(path);
+    } catch (err) {
+      if (page === 1) throw err;  // first-page failure → propagate as endpoint error
+      // Later-page failure → keep records so far, mark incomplete
+      incomplete      = true;
+      incompleteError = err.message || ('Error on page ' + page);
+      break;
+    }
+
+    pagesLoaded = page;
+
+    // Capture pagination metadata from first page only
+    if (page === 1) {
+      var pag      = json.pagination || {};
+      var tr       = parseInt(pag.total_results || pag.total || 0, 10);
+      var pc       = parseInt(pag.page_count || 0, 10);
+      totalResults = (tr > 0) ? tr : null;
+      pageCount    = (pc > 0) ? pc : null;
+    }
+
+    var pageRecords = extractRecords(json, typeKey);
+    allRecords = allRecords.concat(pageRecords);
+
+    // Live sidebar count: show "loaded / total" while paginating
+    if (countKey) {
+      setCount(countKey, totalResults ? (allRecords.length + '/' + totalResults) : allRecords.length);
+    }
+
+    // Natural stop conditions (in order of reliability)
+    if (pageRecords.length === 0) break;                                     // empty page
+    if (pageCount    !== null && page >= pageCount)    break;                // reached last page per API
+    if (totalResults !== null && allRecords.length >= totalResults) break;  // all records loaded
+
+    page++;
+  }
+
+  return {
+    records: allRecords,
+    meta: {
+      totalResults:    totalResults,
+      pagesLoaded:     pagesLoaded,
+      capHit:          capHit,
+      incomplete:      incomplete,
+      incompleteError: incompleteError,
+    },
+  };
 }
 
 function extractRecords(json, typeKey) {
@@ -752,27 +840,31 @@ async function fetchAll() {
 
   ['inv', 'pur', 'exp'].forEach(function(k) { dot(k, ''); setCount(k, '…'); });
 
-  // Fire all three requests in parallel — per-endpoint errors are independent.
+  // Fire all three endpoints in parallel; pages within each endpoint are sequential.
+  // fetchAllPages updates the sidebar count live as each page arrives.
   const [invResult, purResult, expResult] = await Promise.allSettled([
-    fetchEndpoint('/daftra/invoices.json?limit=100&page=1'),
-    fetchEndpoint('/daftra/purchase_invoices.json?limit=100&page=1'),
-    fetchEndpoint('/daftra/expenses.json?limit=100&page=1'),
+    fetchAllPages('/daftra/invoices.json',         'Invoice',      'inv'),
+    fetchAllPages('/daftra/purchase_invoices.json', 'PurchaseOrder', 'pur'),
+    fetchAllPages('/daftra/expenses.json',          'Expense',      'exp'),
   ]);
 
   // Process invoices
   let invRecords = [], invError = null;
   if (invResult.status === 'fulfilled') {
-    invRecords       = extractRecords(invResult.value, 'Invoice');
-    rawInvoices      = invRecords;
-    rawInvError      = null;
-    rawInvPagination = invResult.value?.pagination || null;
-    dot('inv', 'ok');
-    setCount('inv', invRecords.length);
+    invRecords  = invResult.value.records;
+    rawInvoices = invRecords;
+    rawInvError = null;
+    rawInvMeta  = invResult.value.meta;
+    const invDot = rawInvMeta.incomplete ? 'warn' : 'ok';
+    dot('inv', invDot);
+    setCount('inv', rawInvMeta.totalResults
+      ? (invRecords.length + '/' + rawInvMeta.totalResults)
+      : invRecords.length);
   } else {
-    invError         = invResult.reason?.message || 'Unknown error';
-    rawInvoices      = null;
-    rawInvError      = invError;
-    rawInvPagination = null;
+    invError    = invResult.reason?.message || 'Unknown error';
+    rawInvoices = null;
+    rawInvError = invError;
+    rawInvMeta  = null;
     dot('inv', 'error');
     setCount('inv', '✕');
   }
@@ -780,17 +872,20 @@ async function fetchAll() {
   // Process purchases
   let purRecords = [], purError = null;
   if (purResult.status === 'fulfilled') {
-    purRecords       = extractRecords(purResult.value, 'PurchaseOrder');
-    rawPurchases     = purRecords;
-    rawPurError      = null;
-    rawPurPagination = purResult.value?.pagination || null;
-    dot('pur', 'ok');
-    setCount('pur', purRecords.length);
+    purRecords   = purResult.value.records;
+    rawPurchases = purRecords;
+    rawPurError  = null;
+    rawPurMeta   = purResult.value.meta;
+    const purDot = rawPurMeta.incomplete ? 'warn' : 'ok';
+    dot('pur', purDot);
+    setCount('pur', rawPurMeta.totalResults
+      ? (purRecords.length + '/' + rawPurMeta.totalResults)
+      : purRecords.length);
   } else {
-    purError         = purResult.reason?.message || 'Unknown error';
-    rawPurchases     = null;
-    rawPurError      = purError;
-    rawPurPagination = null;
+    purError     = purResult.reason?.message || 'Unknown error';
+    rawPurchases = null;
+    rawPurError  = purError;
+    rawPurMeta   = null;
     dot('pur', 'error');
     setCount('pur', '✕');
   }
@@ -798,17 +893,20 @@ async function fetchAll() {
   // Process expenses
   let expRecords = [], expError = null;
   if (expResult.status === 'fulfilled') {
-    expRecords       = extractRecords(expResult.value, 'Expense');
-    rawExpenses      = expRecords;
-    rawExpError      = null;
-    rawExpPagination = expResult.value?.pagination || null;
-    dot('exp', expRecords.length === 0 ? 'warn' : 'ok');
-    setCount('exp', expRecords.length);
+    expRecords  = expResult.value.records;
+    rawExpenses = expRecords;
+    rawExpError = null;
+    rawExpMeta  = expResult.value.meta;
+    const expDot = rawExpMeta.incomplete ? 'warn' : expRecords.length === 0 ? 'warn' : 'ok';
+    dot('exp', expDot);
+    setCount('exp', rawExpMeta.totalResults
+      ? (expRecords.length + '/' + rawExpMeta.totalResults)
+      : expRecords.length);
   } else {
-    expError         = expResult.reason?.message || 'Unknown error';
-    rawExpenses      = null;
-    rawExpError      = expError;
-    rawExpPagination = null;
+    expError    = expResult.reason?.message || 'Unknown error';
+    rawExpenses = null;
+    rawExpError = expError;
+    rawExpMeta  = null;
     dot('exp', 'error');
     setCount('exp', '✕');
   }
@@ -1002,7 +1100,7 @@ function renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allAva
     + resultHtml
     + '</table>'
     + '<div class="disclaimer">Management reference only — not an official VAT filing or return calculation. '
-    + 'Figures are based on data loaded (up to 100 records per endpoint). '
+    + 'Figures cover all records loaded — see Data Health for loading details. '
     + 'Consult your accountant for filing purposes.</div>'
     + '</div>';
 }
@@ -1062,37 +1160,67 @@ function renderReceivablesPanel(sales, label) {
 }
 
 function renderHealthPanel(invRecords, invError, invRange, purRecords, purError, purRange, expRecords, expError, expRange, sales, purch, exp) {
-  function cell(label, records, error, range, missingDate) {
-    var cls = error ? 'error' : (records.length === 0 ? 'warn' : 'ok');
+  // meta objects are read from module-level state (rawInvMeta etc.)
+  function cell(label, records, error, range, missingDate, meta) {
+    // Endpoint failed entirely
     if (error) {
-      return '<div class="health-cell ' + cls + '">'
+      return '<div class="health-cell error">'
         + '<div class="health-cell-label">' + esc(label) + '</div>'
         + '<div class="error-msg">' + esc(error) + '</div>'
         + '</div>';
     }
-    var active     = records.filter(function(r) { return r.draft !== '1'; }).length;
-    var drafts     = records.length - active;
-    var note       = records.length === 0
+
+    // Determine status colour
+    var isIncomplete = meta && (meta.capHit || meta.incomplete);
+    var cls = isIncomplete ? 'warn' : records.length === 0 ? 'warn' : 'ok';
+
+    // Loaded / total string
+    var totalStr = (meta && meta.totalResults) ? (' of ' + meta.totalResults) : '';
+    var note = records.length === 0
       ? 'No records returned'
-      : records.length + ' record' + (records.length !== 1 ? 's' : '') + ' returned';
-    var detail     = range ? 'Date range: ' + esc(range.min) + ' → ' + esc(range.max) : '';
-    var draftNote  = drafts > 0  ? drafts + ' draft' + (drafts !== 1 ? 's' : '') + ' excluded from calculations.' : '';
-    var missNote   = missingDate > 0 ? missingDate + ' record' + (missingDate !== 1 ? 's' : '') + ' excluded — no parseable date.' : '';
+      : records.length + totalStr + ' record' + (records.length !== 1 ? 's' : '') + ' loaded';
+
+    // Pages fetched
+    var pagesNote = meta
+      ? meta.pagesLoaded + ' page' + (meta.pagesLoaded !== 1 ? 's' : '') + ' fetched'
+      : '';
+
+    var detail    = range ? 'Date range: ' + esc(range.min) + ' → ' + esc(range.max) : '';
+    var active    = records.filter(function(r) { return r.draft !== '1'; }).length;
+    var drafts    = records.length - active;
+    var draftNote = drafts > 0
+      ? drafts + ' draft' + (drafts !== 1 ? 's' : '') + ' excluded from calculations.'
+      : '';
+    var missNote  = missingDate > 0
+      ? missingDate + ' record' + (missingDate !== 1 ? 's' : '') + ' excluded — no parseable date.'
+      : '';
+
+    // Incomplete / cap warning — shown prominently in the cell
+    var warnNote = '';
+    if (meta && meta.capHit) {
+      warnNote = 'Record limit reached. Totals may be incomplete.';
+    } else if (meta && meta.incomplete) {
+      warnNote = 'Fetch incomplete — totals may be understated.'
+        + (meta.incompleteError ? ' (' + esc(meta.incompleteError) + ')' : '');
+    }
+
     return '<div class="health-cell ' + cls + '">'
       + '<div class="health-cell-label">' + esc(label) + '</div>'
       + '<div class="health-cell-value">' + esc(note) + '</div>'
+      + (pagesNote ? '<div class="health-cell-detail">' + esc(pagesNote) + '</div>' : '')
       + (detail    ? '<div class="health-cell-detail">' + detail + '</div>' : '')
       + (draftNote ? '<div class="health-cell-detail">' + esc(draftNote) + '</div>' : '')
       + (missNote  ? '<div class="health-cell-detail" style="color:var(--warn)">' + esc(missNote) + '</div>' : '')
+      + (warnNote  ? '<div class="health-cell-detail" style="color:var(--warn);font-weight:500">' + warnNote + '</div>' : '')
       + '</div>';
   }
 
   return '<div class="panel">'
     + '<div class="panel-title">Data Health</div>'
     + '<div class="health-grid">'
-    + cell('Invoices',          invRecords, invError, invRange, sales ? sales.missingDate : 0)
-    + cell('Purchase Invoices', purRecords, purError, purRange, purch ? purch.missingDate : 0)
-    + cell('Expenses',          expRecords, expError, expRange, exp   ? exp.missingDate   : 0)
+    + cell('Invoices',          invRecords, invError, invRange, sales ? sales.missingDate : 0, rawInvMeta)
+    + cell('Purchase Invoices', purRecords, purError, purRange, purch ? purch.missingDate : 0, rawPurMeta)
+    + cell('Expenses',          expRecords, expError, expRange, exp   ? exp.missingDate   : 0, rawExpMeta)
     + '</div>'
     + '</div>';
 }
