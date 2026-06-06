@@ -48,6 +48,9 @@ BIND = CONFIG.get('proxy', {}).get('bind', '127.0.0.1')
 _social_token   = CONFIG.get('notion', {}).get('social_media', {}).get('token', '')
 _personal_token = CONFIG.get('notion', {}).get('personal', {}).get('token', '')
 
+_daftra_subdomain = CONFIG.get('daftra', {}).get('subdomain', '')
+_daftra_api_key   = CONFIG.get('daftra', {}).get('api_key', '')
+
 def _token_ready(t):
     return bool(t) and not t.startswith('PASTE_') and not t.startswith('REPLACE_')
 
@@ -69,18 +72,73 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        route = self._notion_route()
-        if route:
-            self._proxy_notion(*route)
+        if self.path.startswith('/daftra/'):
+            self._proxy_daftra()
         else:
-            super().do_GET()
+            route = self._notion_route()
+            if route:
+                self._proxy_notion(*route)
+            else:
+                super().do_GET()
 
     def do_POST(self):
-        route = self._notion_route()
-        if route:
-            self._proxy_notion(*route)
+        if self.path.startswith('/daftra/'):
+            self._block_daftra_write()
         else:
-            self._json_error(404, 'Not found')
+            route = self._notion_route()
+            if route:
+                self._proxy_notion(*route)
+            else:
+                self._json_error(404, 'Not found')
+
+    # ── Daftra proxy (read-only GET only) ────────────────────────────────────
+
+    def do_DELETE(self): self._block_daftra_write()
+    def do_PUT(self):    self._block_daftra_write()
+    def do_PATCH(self):  self._block_daftra_write()
+
+    def _block_daftra_write(self):
+        if self.path.startswith('/daftra/'):
+            self._json_error(405, 'Method not allowed. The Daftra proxy is read-only (GET only).')
+        else:
+            self._json_error(405, 'Method not allowed.')
+
+    def _proxy_daftra(self):
+        if not _token_ready(_daftra_subdomain) or not _token_ready(_daftra_api_key):
+            self._json_error(503, 'Daftra credentials not configured. '
+                                  'Edit config.json and set daftra.subdomain and daftra.api_key.')
+            return
+
+        # Strip /daftra prefix; preserve path + query string verbatim
+        daftra_path = self.path[len('/daftra'):]   # e.g. /invoices.json?limit=1&page=1
+        url = f'https://{_daftra_subdomain}.daftra.com/api2{daftra_path}'
+
+        req = urllib.request.Request(
+            url,
+            method='GET',
+            headers={
+                'APIKEY':  _daftra_api_key,
+                'Accept':  'application/json',
+            },
+        )
+
+        try:
+            with urllib.request.urlopen(req) as resp:
+                data = resp.read()
+                self.send_response(resp.status)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(data)
+        except urllib.error.HTTPError as e:
+            data = e.read()
+            self.send_response(e.code)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data)
+        except urllib.error.URLError as e:
+            self._json_error(502, f'Could not reach Daftra API: {e.reason}')
 
     # ── Notion proxy ─────────────────────────────────────────────────────────
 
@@ -152,9 +210,11 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, fmt, *args):
-        # Only log Notion proxy calls — suppress noisy static-file requests
+        # Only log proxy calls — suppress noisy static-file requests
         if '/notion/' in self.path:
             print(f'  [notion] {self.command} {self.path}  →  {fmt % args}')
+        elif '/daftra/' in self.path:
+            print(f'  [daftra] {self.command} {self.path}  ->  {fmt % args}')
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
@@ -169,6 +229,7 @@ if __name__ == '__main__':
     print()
     print(f'  Social Media source  : {"OK - configured" if _token_ready(_social_token)   else "NOT SET - edit config.json"}')
     print(f'  Personal source      : {"OK - configured" if _token_ready(_personal_token) else "NOT SET - edit config.json"}')
+    print(f'  Daftra               : {"OK - configured" if (_token_ready(_daftra_subdomain) and _token_ready(_daftra_api_key)) else "NOT SET - edit config.json"}')
     print()
     print('  Press Ctrl+C to stop.')
     print()

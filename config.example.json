@@ -21,6 +21,12 @@
     }
   },
 
+  "daftra": {
+    "_readme": "Your Daftra subdomain and API key. Find your API key at https://{subdomain}.daftra.com/account/api. Never commit config.json.",
+    "subdomain": "REPLACE_WITH_YOUR_DAFTRA_SUBDOMAIN",
+    "api_key": "REPLACE_WITH_YOUR_DAFTRA_API_KEY"
+  },
+
   "proxy": {
     "port": 8080,
     "bind": "127.0.0.1",
