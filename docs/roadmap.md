@@ -117,6 +117,25 @@ See "Mark Reviewed — Local Tracking" section below.
 - Live count `· N` reflects all tasks with a review record (regardless of staleness).
 - Empty state: "No reviewed tasks match the current filters."
 
+### ✅ Phase 2A.6 — Favorites — COMPLETE (2026-06-08)
+
+Local favorites stored in `vista_favorites_v1` localStorage. No Notion write-back.
+
+- `isFavorite(t)`, `addFavorite`, `removeFavorite`, `toggleFavoriteAction` — full toggle lifecycle
+- Star (`☆`/`★`) on every task row — toggles without opening the detail panel
+- Gold `★ Favorite` badge in task row when favorited
+- `☆ Add to Favorites` / `★ Favorited · date` bar in task detail panel
+- **Favorites** chip in quick-filter strip (amber/gold, beside Reviewed) with live count
+- Done tasks always visible in Favorites view regardless of Include Done toggle
+- Category, Assignee, Search filters apply inside Favorites chip
+- Persists across browser refresh; Incognito always starts empty
+
+### ✅ Meeting Agendas — Sidebar placeholder — COMPLETE (2026-06-08)
+
+Investigation confirmed meeting agendas are child pages (not a database) under the Vista United workspace. Individual pages are not yet accessible to the Youssef integration. Collapsible sidebar panel added (Option A — no new tab) showing a clear notice. Requires Hussam to share pages with the integration before content rendering can be built.
+
+**To unlock full meeting agenda content:** Hussam opens Meetings Agendas and Meeting Notes in Notion → ••• → Add connections → Youssef. Then `meeting_agenda_page_id` and `meeting_notes_page_id` can be added to `config.json`.
+
 ### ✅ Phase 2A.5 — Related Supporting Tasks — COMPLETE (2026-06-05)
 
 The Related Supporting Tasks section is live in the task detail panel. The section is always visible when a task is open, with a "+ Link Supporting Task" button available at all times.

@@ -57,8 +57,9 @@ This section is the permanent source of truth for the Social Media Control Cente
 - **Nested media detection** — fetches one level of child blocks for toggles, callouts, list items, columns. Confirmed: images nested inside `numbered_list_item` are detected.
 - **Notion table rendering** — `table` blocks in top-level page content have their child rows fetched separately (one API call per table) and rendered as HTML tables in the detail panel. Column header row → `<thead>`. Row header column → `<th>`. Links in cells rendered as `<a target="_blank">`. Table-row fallback message shown without a Notion button (topbar link is sufficient). Tables nested inside containers (toggles, callouts) are not rendered — Notion does not expose nested table rows in a single children response.
 - **On-demand URL fetching** — media URLs are always fetched live when a task is opened. Notion signed URLs expire in ~1 hour and are **never stored in localStorage**.
-- **Quick-filter chips** — All, Needs My Attention, Content, Social, Media/Posts, Overdue, **Reviewed**.
+- **Quick-filter chips** — All, Needs My Attention, Content, Social, Media/Posts, Overdue, **Reviewed**, **Favorites**.
   - **Reviewed chip** — opens Task Tracker view filtered to tasks where `isReviewedByMe(task)` is true (review record exists regardless of staleness). A task stays in Reviewed until manually removed via "Remove Review" — Notion edits and Done status changes do not eject it. Done tasks are always visible in this view regardless of the Include Done toggle. Search, Category, and Assignee filters still apply. Live count `· N` reflects all tasks with a review record. Tasks edited in Notion after being reviewed show an amber `Updated Since Review` badge in the task row and a highlighted note in the detail panel review bar; they may also reappear in Needs My Attention (via `isReviewedAndFresh` → false) but remain in Reviewed. Empty state: "No reviewed tasks match the current filters."
+  - **Favorites chip** — opens Task Tracker view filtered to tasks where `isFavorite(task)` is true. A task stays in Favorites until the user manually removes it — Notion edits, Done status changes, and refreshes do not eject it. Done tasks are always visible in this view regardless of the Include Done toggle. Search, Category, and Assignee filters still apply. Live count `· N` reflects all favorited tasks. Star toggle (`☆`/`★`) available on every task row (stops event propagation — does not open the detail panel) and inside the task detail panel as a bar/button. Empty state: "No favorited tasks match the current filters." Storage key: `vista_favorites_v1`.
 - **Sidebar** — Refresh Tasks button, Search box with live filtering and × clear button, Category + Assignee filters, Include Done toggle, Refresh Media Index button with index status.
 - **Search** — live substring search across task name, description, status, assignee, category, due date, due date formula, and media type labels. Applies to all three tabs (Needs My Attention, Task Tracker, Media Library). Stacks additively with chips and sidebar filters.
 - **Search — Completed Matches section** — when a search query is active and `showDone` is off, Done tasks matching the query appear below the active bucket groups under a "Completed Matches · N" header, muted at 65% opacity. Section disappears when the search box is cleared. Tracker badge counts and normal browsing behaviour are unchanged.
@@ -114,6 +115,8 @@ Both directions stored explicitly. No Notion write permissions required.
 | Mark Reviewed | ✅ Done (Phase 2A) | localStorage only. `vista_reviews_v1`. Staleness auto-reset via `last_edited_time` comparison. |
 | Reviewed quick-filter chip | ✅ Done | Chip beside Overdue. Filters Task Tracker to `isReviewedByMe` tasks (permanent — only removed by manual Remove Review). Done tasks always visible in this view. Stale tasks show amber `Updated Since Review` badge. Search, Category, Assignee apply; Include Done does not hide reviewed tasks. |
 | Related Supporting Tasks | ✅ Done (Phase 2A.5) | 5-tier detection: Tiers 1–3 automatic (Possible/Strong Match, Exact Reference), Tier 4 Explicit Notion Link, Tier 5 manual "Linked by You". Max 5 results. `RELATED_STOP` + `sigWords`/`sigBigrams` threshold prevents false positives. See "APPROVED AND FINAL" section above. |
+| Favorites | ✅ Done (Phase 2A.6) | localStorage only. `vista_favorites_v1`. `isFavorite(t)`, `addFavorite`, `removeFavorite`, `toggleFavoriteAction`. Star toggle (☆/★) on every task row + in detail panel. Favorites chip beside Reviewed. Done tasks always visible. No staleness concept. |
+| Meeting Agendas sidebar | ✅ Done (placeholder) | Collapsible sidebar panel shows graceful "not yet accessible" notice. Individual agenda pages (35ba2557, 363a2557) detected but content blocked — integration lacks access. Requires Hussam to share Meetings Agendas and Meeting Notes pages with Youssef connection. `config.example.json` updated with optional `meeting_agenda_page_id` / `meeting_notes_page_id` fields. |
 | Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
 | Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
 | Personal Task Center | ❌ Not started | Phase 3 — `personal-dashboard.html`. |
@@ -138,6 +141,7 @@ Token source:     config.json → notion.personal.token  (git-ignored, never com
 | `vista_media_index_v1` | Media index metadata. Never stores signed URLs. |
 | `vista_reviews_v1` | Mark Reviewed records (Phase 2A). Stores reviewedAt, taskName, lastEditedTime. |
 | `vista_task_relations_v1` | Manual Related Supporting Task links (Phase 2A.5). Bidirectional. |
+| `vista_favorites_v1` | Favorites records (Phase 2A.6). Stores favoritedAt, taskName. No staleness concept. |
 
 #### Media index counts (2026-06-04 scan)
 - 89 tasks scanned (Content + Social + Ads & Testing, all statuses)
@@ -188,6 +192,16 @@ This means: if Hussam updates a task after you've reviewed it, it reappears auto
 - `attentionFilter()`: `isReviewedAndFresh(t)` suppresses the task from the entire attention queue
 - `taskRow()`: green `✓ Reviewed` badge for all reviewed tasks; amber `Updated Since Review` badge when stale
 - `buildDetailHTML()`: Mark Reviewed button or review bar (amber when stale)
+
+#### Favorites functions (Phase 2A.6)
+- `FAVORITES_KEY = 'vista_favorites_v1'`
+- `loadFavorites()`, `saveFavorites(data)`
+- `isFavorite(t)` — true if task ID exists in `vista_favorites_v1`. No staleness concept.
+- `addFavorite(id, name)`, `removeFavorite(id)` — write/delete localStorage records
+- `toggleFavoriteAction(id)` — toggles favorite state; re-renders `detail-favorite-section` if task is open; calls `applyFilters()` to update row badges and chip count
+- `favoriteSectionHTML(t)` — returns gold `★ Favorited · date` bar with "Remove" link, or `☆ Add to Favorites` button
+- `taskRow()`: gold `★ Favorite` badge when favorited; `☆`/`★` inline toggle (`stopPropagation` — does not open detail panel)
+- Done gate in `getFilteredTasks()`: exempted for `activeChip === 'favorites'` (same as Reviewed)
 
 ---
 

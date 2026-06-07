@@ -10,6 +10,8 @@
       "token": "secret_REPLACE_WITH_VISTA_INTEGRATION_TOKEN",
       "task_database_id": "REPLACE_WITH_VISTA_TASK_DATABASE_ID",
       "meeting_database_id": "REPLACE_WITH_VISTA_MEETING_DATABASE_ID_OR_LEAVE_BLANK",
+      "meeting_agenda_page_id": "OPTIONAL_LEAVE_BLANK_UNTIL_HUSSAM_SHARES_MEETINGS_AGENDAS_PAGE",
+      "meeting_notes_page_id":  "OPTIONAL_LEAVE_BLANK_UNTIL_HUSSAM_SHARES_MEETING_NOTES_PAGE",
       "notion_user_id": "REPLACE_WITH_YOUR_NOTION_USER_ID"
     },
 

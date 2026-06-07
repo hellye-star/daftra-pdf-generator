@@ -87,7 +87,7 @@ python proxy.py
 - **Media Library** — tasks with confirmed media from the manual scan index (27 of 89 in last scan). Done tasks included — this is a content archive, not a task filter.
 
 ### Quick-filter chips
-`All` · `Needs My Attention` · `Content` · `Social` · `Media/Posts` · `Overdue` · **`Reviewed`**
+`All` · `Needs My Attention` · `Content` · `Social` · `Media/Posts` · `Overdue` · **`Reviewed`** · **`Favorites`**
 
 ### Reviewed chip (approved stable behaviour)
 - Shows tasks where `isReviewedByMe(t)` is true — review record exists regardless of staleness.
@@ -96,6 +96,20 @@ python proxy.py
 - Tasks edited in Notion after review show an amber **Updated Since Review** badge in the task row and a note in the detail panel. They may also return to Needs My Attention but remain in Reviewed.
 - Category, Assignee, and search filters apply. Include Done does not hide reviewed tasks.
 - `isReviewedAndFresh` is used only by `attentionFilter` — this is intentional and must not be changed.
+
+### Favorites chip (Phase 2A.6 — 2026-06-08)
+- Shows tasks where `isFavorite(t)` is true — favorites record exists in `vista_favorites_v1`.
+- **No staleness concept** — a task stays in Favorites until the user removes it. No auto-eject on Notion edits or Done status changes.
+- Done tasks always visible in Favorites regardless of Include Done toggle.
+- Star toggle (`☆`/`★`) on every task row (stops propagation — does not open detail panel) and inside the task detail panel.
+- Category, Assignee, and search filters apply inside the Favorites chip view.
+- `isFavorite` is **not** used by `attentionFilter` — favorites have no effect on Needs My Attention.
+
+### Meeting Agendas sidebar (placeholder — 2026-06-08)
+- Collapsible panel in the left sidebar (below Media Index). No new main tab.
+- Shows a "not yet accessible" notice until Hussam shares the meeting pages with the Youssef integration.
+- Individual agenda pages exist under "Meetings Agendas" and "Meeting Notes" in the Vista United workspace but are not readable by the current integration.
+- **To unlock:** Hussam opens each page in Notion → ••• → Add connections → Youssef. Then add `meeting_agenda_page_id` and `meeting_notes_page_id` to `config.json`.
 
 ### Task detail panel
 - Slide-in from right. Summary strip, description, media blocks, inline Notion table rendering.
@@ -129,6 +143,7 @@ Live substring across task name, description, status, assignee, category, due da
 | `vista_media_index_v1` | Media scan metadata — no signed URLs |
 | `vista_reviews_v1` | Mark Reviewed records — stores `reviewedAt`, `taskName`, `lastEditedTime` |
 | `vista_task_relations_v1` | Manual Related Supporting Task links — bidirectional |
+| `vista_favorites_v1` | Favorites records — stores `favoritedAt`, `taskName`. No staleness concept. |
 
 ---
 

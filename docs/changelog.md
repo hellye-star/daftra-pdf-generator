@@ -2,6 +2,59 @@
 
 ---
 
+## [2026-06-08] — Favorites chip + Meeting Agendas sidebar placeholder
+
+### social-dashboard.html — Favorites (Phase 2A.6)
+
+New **Favorites** feature — localStorage only, no Notion write-back.
+
+**localStorage key:** `vista_favorites_v1` — stores `{ favoritedAt, taskName }` per task ID.
+
+**New functions:**
+- `FAVORITES_KEY`, `loadFavorites()`, `saveFavorites(data)`
+- `isFavorite(t)` — true if task has a favorites record
+- `addFavorite(id, name)`, `removeFavorite(id)`, `toggleFavoriteAction(id)`
+- `favoriteSectionHTML(t)` — renders gold "★ Favorited" bar or "☆ Add to Favorites" button in detail panel
+
+**UI changes:**
+- `Favorites` chip added to quick-filter strip beside `Reviewed` — amber/gold color scheme
+- Live count `· N` on chip; updates after every toggle
+- `☆`/`★` inline star toggle on every task row — uses `event.stopPropagation()` so it does not open the detail panel
+- Gold `★ Favorite` badge in task row badge column when favorited
+- `☆ Add to Favorites` button / `★ Favorited · date` bar in task detail panel
+- Empty state: "No favorited tasks match the current filters."
+
+**Filter behaviour:**
+- Done gate in `getFilteredTasks()` exempted for `activeChip === 'favorites'` (same pattern as Reviewed)
+- Category, Assignee, and Search filters apply inside Favorites chip
+- Include Done does not hide favorited Done tasks
+- Favorites persist across normal browser refreshes; Incognito always starts empty (localStorage isolated)
+
+**Unchanged:** Reviewed logic, `attentionFilter`, `isReviewedAndFresh/ByMe/Stale`, Media Library, proxy, Related Tasks.
+
+### social-dashboard.html — Meeting Agendas sidebar placeholder
+
+New **Meeting Agendas** collapsible section added to the left sidebar (Option A — no new main tab).
+
+**Investigation findings (confirmed by live Notion API queries):**
+- Meeting agendas are stored as child pages under "Meetings Agendas" (4 pages) and "Meeting Notes" (7 pages) — both child pages of the Vista United workspace root
+- They are **not** in a database — they are freeform Notion pages
+- Individual agenda pages return empty content — the Youssef integration does not have access to read them
+- Requires Hussam to share these pages with the Youssef connection via Notion → ••• → Add connections
+
+**Implementation:**
+- Collapsible sidebar panel (toggle ▶/▼) with a clear "not yet accessible" notice
+- Dashboard does not crash if `meeting_agenda_page_id` / `meeting_notes_page_id` are absent from config
+- No new Notion API calls; no new proxy routes; no application state affected
+
+### config.example.json
+
+Added two optional fields under `notion.social_media`:
+- `meeting_agenda_page_id` — optional, leave blank until Hussam shares the page
+- `meeting_notes_page_id` — optional, leave blank until Hussam shares the page
+
+---
+
 ## [2026-06-07] — Financial Dashboard — feature branch complete
 
 **Branch:** `feature/financial-dashboard` — rebased onto `stable-reviewed-history`.
