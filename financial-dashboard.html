@@ -1490,7 +1490,7 @@ function renderPersonalTransfersSection(personalRecords, purError) {
 
       var rows = sorted.map(function(r) {
         return '<tr>'
-          + '<td>' + esc(r.number || r.id || '—') + '</td>'
+          + '<td>' + esc(r.no || r.number || r.id || '—') + '</td>'
           + '<td>' + esc(r.date   || '—') + '</td>'
           + '<td>' + esc(fmtCurrency(toNum(r.summary_subtotal))) + '</td>'
           + '<td>' + esc(fmtCurrency(toNum(r.summary_total)))    + '</td>'
