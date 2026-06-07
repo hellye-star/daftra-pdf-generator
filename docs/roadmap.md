@@ -26,10 +26,46 @@ Every approved change must follow this order:
 | Vista Homepage | `index.html` | ✅ Live |
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A complete + detail unification |
+| Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ⏳ Planned |
 | Local Proxy | `proxy.py` | ✅ Live |
 | Config template | `config.example.json` | ✅ Done |
 | Git safety | `.gitignore` | ✅ Done — config.json excluded |
+
+---
+
+## Financial Dashboard — Feature Branch Status
+
+**Branch:** `feature/financial-dashboard`
+**Status:** Not yet merged to `stable-reviewed-history`. Merge target to be decided after final review.
+
+### Commits (oldest → newest)
+
+| Hash | Message |
+|---|---|
+| `8deefc4` | Add read-only Daftra proxy route |
+| `af1e6d3` | Create Financial Dashboard shell |
+| `24b3924` | Add Financial Dashboard calculations |
+| `8ae3ec9` | Add Financial Dashboard pagination |
+| `553ff28` | Add Financial Dashboard monthly reports |
+| `8013208` | Separate personal transfers from business calculations |
+| `e733ad0` | Fix Personal Transfers reference numbers |
+| `0bc03db` | Add Financial Dashboard card to homepage |
+
+### Features complete
+
+- YTD profit / estimated tax reserve card (period-independent, always YTD)
+- Current-quarter VAT reconciliation card (period-independent, always current Gregorian quarter)
+- Period selector: Year to Date · This Month · Last Month · Q1 · Q2 · Q3 · Q4 · All Time
+- Monthly bar chart + monthly breakdown table
+- Sales / purchases / expenses panels with ex-VAT and VAT breakdown
+- Personal Transfers section (7 records excluded from business totals, shown separately)
+- Homepage card updated to Live on `index.html`
+
+### Not yet done
+
+- Merge to `stable-reviewed-history` (pending final review and docs approval)
+- Docs update (in progress)
 
 ---
 

@@ -17,6 +17,7 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Homepage | `index.html` | ✅ Live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A + 2A.5 complete |
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable, no open tasks |
+| Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ⏳ Planned (Phase 3) |
 | Local Proxy | `proxy.py` | ✅ Live |
 
@@ -26,12 +27,14 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 
 | Item | Value |
 |---|---|
-| Active branch | `stable-reviewed-history` |
+| Active stable branch | `stable-reviewed-history` |
 | Stable commit | `2d0faec` |
 | Stable tag | `stable-reviewed-history-v1` |
 | Tag message | "Approved stable Vista dashboard with permanent Reviewed history" |
 
-**To restore at any time:**
+**Note:** The Financial Dashboard (`feature/financial-dashboard`, latest commit `0bc03db`) is **not** included in `stable-reviewed-history`. That branch and tag reflect only the Social Media Control Center and Document Generator. The merge target for the Financial Dashboard branch will be decided after final review.
+
+**To restore stable at any time:**
 ```bash
 # Inspect (detached HEAD):
 git checkout stable-reviewed-history-v1
@@ -53,6 +56,7 @@ python proxy.py
 | `http://localhost:8080` | Vista Platform homepage |
 | `http://localhost:8080/social-dashboard.html` | Social Media Control Center |
 | `http://localhost:8080/daftra-pdf-generator_1.html` | Document Generator |
+| `http://localhost:8080/financial-dashboard.html` | Financial Dashboard |
 
 **Requirements:** `config.json` must exist in the project root (git-ignored). It holds the Notion API token and database IDs. See `config.example.json` for the structure. Never commit `config.json`.
 
@@ -62,7 +66,11 @@ python proxy.py
 
 - **Single-file HTML** — all logic, CSS, and JS in one `.html` file per tool. No bundler, no framework.
 - **Local proxy required for Notion** — `proxy.py` relays Notion API calls and injects the auth token. Direct browser fetch to `api.notion.com` is blocked by CORS. Proxy binds to `127.0.0.1` only.
-- **Daftra API is browser-direct** — CORS is allowed by Daftra, so no proxy is needed for the document generator.
+- **Daftra API — Document Generator** (`daftra-pdf-generator_1.html`): browser-direct. CORS is allowed by Daftra; the API key is hardcoded in the source. This module predates the proxy-based Daftra route and is stable — do not change its connection pattern.
+- **Daftra API — Financial Dashboard** (`financial-dashboard.html`): all browser calls go to `/daftra/...` only. The proxy injects the `APIKEY` header from `config.json → daftra.api_key`. The API key never appears in the HTML source. Direct browser calls to `daftra.com` are not made from this module. The proxy route is read-only GET only — POST, PUT, PATCH, DELETE are blocked with 405.
+- **No auto-fetch in Financial Dashboard** — zero `DOMContentLoaded` / `setInterval` / `setTimeout` data-fetch triggers. Manual Fetch Data button only.
+- **Financial values are management estimates** — not official tax filings. Labels in the dashboard reflect this.
+- **Personal transfer exclusion** — purchase invoices where `supplier_business_name.trim().toLowerCase() === 'personal transfer'` are excluded from all business calculations in the Financial Dashboard and shown in a separate panel.
 - **Never store Notion signed URLs** — they expire in ~1 hour. The media index stores metadata only; live URLs are fetched on demand when a task is opened.
 - **Logo must stay as base64** — `html2canvas` cannot load local file paths. `LOGO_DATA_URL` in the document generator must remain a base64 data URL, never a file path.
 - **QR implementation is locked** — the full pipeline (`d64 → atob() → QRCode.js → canvas → PNG img`) must not be changed. Verified by scan. See `CLAUDE_CONTEXT.md`.
@@ -137,7 +145,31 @@ Key facts:
 
 ---
 
-## 8. Major Completed Decisions and Why
+## 8. Financial Dashboard — Feature Branch Summary
+
+**Branch:** `feature/financial-dashboard` — not yet merged to `stable-reviewed-history`.
+**Latest commit:** `0bc03db`
+
+**What it does:** Fetches sales invoices, purchase invoices, and expenses from Daftra via the `/daftra/...` proxy. Shows period-based revenue, costs, VAT, profit, and an estimated profit tax reserve.
+
+**Two period-independent top cards:**
+- Yellow: Estimated Profit Tax Payable End of Year — always YTD, always 20% of positive profit. Subtitle: `20% of estimated business profit · management estimate`.
+- Red: VAT Reconciliation — always current Gregorian quarter (Q1=Jan–Mar, Q2=Apr–Jun, Q3=Jul–Sep, Q4=Oct–Dec).
+
+**Period selector:** Year to Date · This Month · Last Month · Q1 · Q2 · Q3 · Q4 · All Time. Does not affect the two top cards.
+
+**Personal Transfers panel:** 7 purchase invoices excluded from all business figures, shown separately. Identified by `supplier_business_name.trim().toLowerCase() === 'personal transfer'`.
+
+**Key locked rules:**
+- Browser calls `/daftra/...` only — never `daftra.com` directly.
+- No auto-fetch. Manual button only.
+- VAT derived as `summary_total − summary_subtotal` (not `summary_tax1` — always null).
+- Purchase invoice number: `r.no` (e.g. `000048`), not `r.number`.
+- No localStorage / sessionStorage.
+
+---
+
+## 9. Major Completed Decisions and Why
 
 | Decision | Why |
 |---|---|
@@ -152,10 +184,12 @@ Key facts:
 | No `min-height: 297mm` on PDF page | Fixed height forced a blank second page on short invoices |
 | No flexbox on PDF page root | Previously caused footer to overlap content on long invoices |
 | Terms & Conditions use `<div>` + `·`, not `<ul>/<li>` | `<ul>` with `direction: rtl` on the container renders bullet dots on the wrong side |
+| Daftra API calls routed through proxy in Financial Dashboard | Keeps the API key out of browser source. Document Generator predates this route and is stable — two patterns coexist intentionally. |
+| Personal transfers excluded from business calculations | Owner withdrawal records distort profit and VAT if included. Separated pre-calculation into `personalRecords` / `bizPurRecords`. |
 
 ---
 
-## 9. Blocked and Deferred Features
+## 10. Blocked and Deferred Features
 
 | Feature | Status | Blocker |
 |---|---|---|
@@ -167,7 +201,7 @@ Key facts:
 
 ---
 
-## 10. Known Limitations
+## 11. Known Limitations
 
 - **Comments blocked** — `403 restricted_resource` on all tasks. Integration permission not yet enabled.
 - **100-document cap** — document generator fetches `?limit=100&page=1` only. Pagination not implemented.
@@ -179,7 +213,7 @@ Key facts:
 
 ---
 
-## 11. Latest Approved Behaviour (Reviewed chip — corrected 2026-06-05)
+## 12. Latest Approved Behaviour (Reviewed chip — corrected 2026-06-05)
 
 The Reviewed chip was corrected from a "freshness filter" to a "permanent history" model.
 
@@ -193,7 +227,7 @@ The Reviewed chip was corrected from a "freshness filter" to a "permanent histor
 
 ---
 
-## 12. Recommended Next Priorities
+## 13. Recommended Next Priorities
 
 1. **Enable Comments (Phase 2B)** — ask Hussam to enable "Read Comments" on the Notion integration. No code changes needed; the error handler is already in place.
 2. **Live click-through validation** — open the same task from Media Library, Task Tracker, Needs My Attention, and search results; switch tasks quickly to confirm no stale overwrites.
@@ -203,7 +237,7 @@ The Reviewed chip was corrected from a "freshness filter" to a "permanent histor
 
 ---
 
-## 13. Approaches That Must Not Be Repeated
+## 14. Approaches That Must Not Be Repeated
 
 - **Do not restore `sigTaskWords()` or `findRelatedByDescription()`** — the old functions that produced false positives. The current 5-tier system (`sigWords`, `sigBigrams`, `findRelatedTasks`) is the correct replacement and is already live. Do not collapse it back to "two signals only."
 - **Do not gate the Reviewed chip with `isReviewedAndFresh`**. This was the bug. Use `isReviewedByMe` for the Reviewed view; keep `isReviewedAndFresh` only in `attentionFilter`.
@@ -214,6 +248,10 @@ The Reviewed chip was corrected from a "freshness filter" to a "permanent histor
 - **Do not add `min-height: 297mm` or `display: flex` to the PDF page root**. Both were tried and caused layout regressions.
 - **Do not prepend `INV#` or `QUO-` to document numbers**. Pass through from Daftra exactly.
 - **Do not commit `config.json`**. It contains live API tokens.
+- **Do not add direct `daftra.com` browser calls to `financial-dashboard.html`**. All Daftra fetches must go through `/daftra/...`.
+- **Do not add auto-refresh, `setInterval`, `setTimeout`, or `DOMContentLoaded` data-fetching to `financial-dashboard.html`**. Manual fetch only.
+- **Do not include personal transfer records in business profit, VAT, or purchase totals**. Pre-filter at `renderContent()` before any calculation.
+- **Do not migrate the Document Generator to the proxy Daftra route**. It is stable and its pattern is intentional.
 
 ---
 
@@ -258,7 +296,7 @@ Before recommending or making any change, ChatGPT must:
 2. **Read `docs/changelog.md`** — shows what changed and when. The most recent entries reflect the current approved state.
 3. **Read `docs/roadmap.md`** — shows phase status, what is complete, what is blocked, and what is next.
 4. **Read `docs/decisions.md`** — explains the reasoning behind structural choices. Consult before proposing any architectural change.
-5. **Check `git log --oneline -5`** — confirm you are on `stable-reviewed-history` at commit `2d0faec` or later.
+5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (commit `2d0faec`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
 6. **Check `git status`** — confirm working tree is clean before any work begins.
 7. **Read the relevant section of `social-dashboard.html`** before changing any JS function. Do not rely on summaries alone — the function signatures, guard conditions, and localStorage schemas matter exactly.
 8. **Do not suggest changes to locked items** (QR pipeline, html2pdf chain, `attentionFilter` + `isReviewedAndFresh` interaction, `openDetail` unification) without first confirming the lock is documented in `CLAUDE_CONTEXT.md` and has a clear reason to revisit.

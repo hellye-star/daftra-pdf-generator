@@ -867,3 +867,128 @@ PDF:    INV000021
 **Permanent rule:** Never add `INV`, `INV#`, `#`, spaces, or symbols to the invoice number. Daftra already provides the full invoice number — pass it through unchanged.
 
 **Resolution:** Reverted. `renderPreview()` now uses pass-through logic. See Section 4 above and the Invoice Number Formatting entry in Current Final Polish Tasks.
+
+---
+
+# CLAUDE_CONTEXT — Financial Dashboard
+
+## Branch and Status
+
+Branch: `feature/financial-dashboard` — not yet merged to `stable-reviewed-history`.
+Latest commit: `0bc03db` — Add Financial Dashboard card to homepage.
+
+---
+
+## What the Dashboard Does
+
+Single-file HTML tool (`financial-dashboard.html`) connected to Daftra ERP via the `/daftra/...` proxy route. Fetches sales invoices, purchase invoices, and expenses. Calculates revenue, costs, VAT, and estimated profit tax.
+
+**Two period-independent top cards (always recalculated regardless of sidebar selector):**
+
+- **Yellow — Estimated Profit Tax Payable End of Year**
+  Always uses YTD bounds (`getPeriodBounds('ytd')`).
+  `taxReserve = Math.max(profit, 0) × 0.20`
+  Subtitle hardcoded: `20% of estimated business profit · management estimate`
+  Note is context-sensitive (data available / partial year / no data).
+
+- **Red — VAT Reconciliation — {current quarter} So Far**
+  Always uses `getCurrentQuarterBounds()` — Gregorian Q1=Jan–Mar, Q2=Apr–Jun, Q3=Jul–Sep, Q4=Oct–Dec.
+  `vatBalance = outputVAT − inputVAT(purchases) − inputVAT(expenses)`
+
+**Period selector (sidebar):** Year to Date · This Month · Last Month · Q1 · Q2 · Q3 · Q4 · All Time.
+Changing the period affects the panels, monthly chart, and monthly table. It never affects the two top cards.
+
+---
+
+## Locked Behaviours — Do Not Change Without Explicit Approval
+
+### 1. Daftra API key stays server-side only
+`financial-dashboard.html` calls `/daftra/...` only. The proxy injects the `APIKEY` header from `config.json → daftra.api_key`. Never add a direct `fetch()` to `daftra.com` from this file.
+
+### 2. Daftra proxy is read-only GET only
+`proxy.py` blocks POST, PUT, PATCH, DELETE on `/daftra/...` with 405. Never add write calls through this proxy.
+
+### 3. No auto-fetch
+Zero `DOMContentLoaded`, `setInterval`, `setTimeout`, or `window.onload` that triggers data fetching. Manual Fetch Data button only. This is intentional — no timers of any kind.
+
+### 4. Financial values are management estimates only
+Labels must reflect this. The yellow card subtitle is hardcoded: `20% of estimated business profit · management estimate`. These figures are not official tax filings. Do not present them as such.
+
+### 5. Personal transfer exclusion — locked
+Records where `r.supplier_business_name.trim().toLowerCase() === 'personal transfer'` are excluded from **all** business calculations (profit, VAT, monthly chart, period panels). They appear **only** in the Personal Transfers section.
+- Do not remove this filter.
+- Do not include personal transfers in business profit, VAT, or purchase totals.
+- Pre-filter happens at the top of `renderContent()` before any calculation.
+
+### 6. VAT derivation: `summary_total − summary_subtotal`
+`summary_tax1` is always null on both invoices and purchase invoices. Never use it as the primary VAT source for these endpoints. Always derive VAT as `summary_total − summary_subtotal`.
+
+### 7. Purchase invoice reference field: `r.no`
+Daftra's formatted purchase invoice number is in `r.no` (e.g. `000048`). `r.number` is undefined on purchase invoices. Always use the fallback chain: `r.no || r.number || r.id || '—'`.
+
+### 8. No localStorage / sessionStorage
+`financial-dashboard.html` uses zero client-side storage. Every Fetch Data call starts fresh from the API.
+
+---
+
+## Proxy Route (added commit `8deefc4`)
+
+```
+Browser → GET /daftra/{path+querystring}
+Proxy strips /daftra prefix
+→ forwards to https://{subdomain}.daftra.com/api2/{path+querystring}
+→ injects APIKEY header from config.json → daftra.api_key
+→ returns JSON response verbatim
+POST / PUT / PATCH / DELETE → 405 (blocked)
+```
+
+---
+
+## Daftra Endpoints Used
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /daftra/invoices.json?limit=100&page=N` | Sales invoices (paginated) |
+| `GET /daftra/purchase_invoices.json?limit=100&page=N` | Purchase invoices (paginated) |
+| `GET /daftra/expenses.json?limit=100&page=N` | Expenses (paginated) |
+
+---
+
+## Key Functions
+
+```js
+isPersonalTransfer(r)          // r.supplier_business_name.trim().toLowerCase() === 'personal transfer'
+getPeriodBounds(key)           // returns {start, end} Date objects for ytd/this-month/last-month/q1–q4/all
+getCurrentQuarterBounds()      // always current Gregorian quarter
+getCurrentQuarterLabel()       // e.g. "Q2 2026 (Apr–Jun)"
+calcSales(records, bounds)     // salesExVAT, outputVAT filtered to period
+calcPurchases(records, bounds) // purchExVAT, inputVAT filtered to period
+calcExpenses(records, bounds)  // expExVAT, inputVAT filtered to period
+buildMonthlyTable(...)         // monthly breakdown, uses bizPurRecords only
+renderPersonalTransfersSection(personalRecords)
+```
+
+---
+
+## Sample Regression / Reference Figures
+
+Captured from live Daftra data during branch testing, 2026-06-07.
+These values will change as invoices are added. Use for regression checking only — not permanent business facts.
+
+| Metric | Value |
+|---|---|
+| YTD sales ex-VAT | SAR 488,682.20 |
+| YTD business purchases ex-VAT (personal excluded) | SAR 237,920.69 |
+| YTD expenses ex-VAT | SAR 92.00 |
+| YTD business profit | SAR 250,669.51 |
+| Estimated Profit Tax Payable End of Year (20%) | SAR 50,133.90 |
+| Q2 2026 VAT reconciliation so far | SAR 16,517.32 payable |
+| Personal transfers excluded | 7 records · SAR 32,700.00 ex-VAT · SAR 0.00 derived VAT |
+
+---
+
+## config.json Dependency
+
+Requires `config.json → daftra.subdomain` and `config.json → daftra.api_key` to be set.
+Proxy returns 503 with a clear message if either is missing or still a placeholder value.
+`config.json` is git-ignored. Never commit it. Never print its contents.

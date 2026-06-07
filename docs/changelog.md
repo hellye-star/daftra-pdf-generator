@@ -2,6 +2,90 @@
 
 ---
 
+## [2026-06-07] — Financial Dashboard — feature branch complete
+
+**Branch:** `feature/financial-dashboard` — rebased onto `stable-reviewed-history`.
+
+### Commits (oldest → newest)
+
+| Hash | Message |
+|---|---|
+| `8deefc4` | Add read-only Daftra proxy route |
+| `af1e6d3` | Create Financial Dashboard shell |
+| `24b3924` | Add Financial Dashboard calculations |
+| `8ae3ec9` | Add Financial Dashboard pagination |
+| `553ff28` | Add Financial Dashboard monthly reports |
+| `8013208` | Separate personal transfers from business calculations |
+| `e733ad0` | Fix Personal Transfers reference numbers |
+| `0bc03db` | Add Financial Dashboard card to homepage |
+
+---
+
+### proxy.py — read-only Daftra proxy route (commit `8deefc4`)
+
+Added `/daftra/...` GET-only proxy route. Browser calls `/daftra/{path+querystring}`; proxy strips the prefix, injects `APIKEY` from `config.json → daftra.api_key`, forwards to `https://{subdomain}.daftra.com/api2/...`, and returns the JSON response. POST, PUT, PATCH, DELETE blocked with 405. `config.example.json` updated with `daftra.subdomain` and `daftra.api_key` placeholder fields.
+
+---
+
+### financial-dashboard.html — new module (commits `af1e6d3` through `e733ad0`)
+
+**Two period-independent top cards:**
+
+- **Yellow — Estimated Profit Tax Payable End of Year**
+  Always YTD bounds, regardless of sidebar period selector.
+  `taxReserve = Math.max(ytdProfit, 0) × 0.20`
+  Subtitle hardcoded: `20% of estimated business profit · management estimate`
+
+- **Red — VAT Reconciliation — {current quarter} So Far**
+  Always current Gregorian quarter bounds (Q1=Jan–Mar, Q2=Apr–Jun, Q3=Jul–Sep, Q4=Oct–Dec).
+  `vatBalance = outputVAT − inputVAT(purchases) − inputVAT(expenses)`
+
+**Period selector (sidebar):**
+Year to Date · This Month · Last Month · Q1 · Q2 · Q3 · Q4 · All Time.
+Changing the period affects panels, monthly chart, and monthly table. Never affects the two top cards.
+
+**Personal Transfers section (commit `8013208`):**
+Purchase invoices where `supplier_business_name.trim().toLowerCase() === 'personal transfer'` are excluded from all business calculations (profit, VAT, period panels, monthly chart). Shown in a separate purple-tinted panel. Pre-filtered at the top of `renderContent()` before any calculation; `bizPurRecords` used everywhere else.
+
+**Purchase invoice reference field fix (commit `e733ad0`):**
+`r.number || r.id || '—'` → `r.no || r.number || r.id || '—'`
+Daftra's formatted purchase invoice number is in `r.no` (e.g. `000048`). Without the fix, the Personal Transfers table showed raw DB integers.
+
+**VAT derivation:** `summary_total − summary_subtotal` for all three record types. `summary_tax1` is always null; never used.
+
+**No auto-fetch:** Zero `DOMContentLoaded` / `setInterval` / `setTimeout` data-fetch triggers. Manual Fetch Data button only.
+
+**No localStorage / sessionStorage:** Zero client-side storage. Every fetch starts fresh.
+
+**Pagination:** `limit=100&page=N` on all three endpoints, fetching until no more records.
+
+**Sample regression figures (live data, branch testing 2026-06-07 — management estimate, not official):**
+
+| Metric | Value |
+|---|---|
+| YTD sales ex-VAT | SAR 488,682.20 |
+| YTD business purchases ex-VAT (personal excluded) | SAR 237,920.69 |
+| YTD expenses ex-VAT | SAR 92.00 |
+| YTD business profit | SAR 250,669.51 |
+| Estimated Profit Tax Payable End of Year (20%) | SAR 50,133.90 |
+| Q2 2026 VAT reconciliation so far | SAR 16,517.32 payable |
+| Personal transfers excluded | 7 records · SAR 32,700.00 ex-VAT · SAR 0.00 derived VAT |
+
+---
+
+### index.html — Financial Dashboard homepage card (commit `0bc03db`)
+
+Replaced the disabled Future Tools placeholder (card 3) with a live Financial Dashboard card.
+- Title: `Financial Dashboard` / `لوحة المالية`
+- Description: `Live Daftra data — sales vs purchases vs expenses. VAT reconciliation for the current quarter. Estimated profit tax payable end of year.`
+- Status badge: `Live` (green `status-live`)
+- Link: `financial-dashboard.html` (relative)
+- Icon: rising line chart with baseline
+
+Document Generator and Social Media Control Center cards are unchanged.
+
+---
+
 ## [2026-06-07] — Platform workflow rules added to documentation
 
 ### CLAUDE_CONTEXT.md, docs/CHATGPT_HANDOFF.md, docs/roadmap.md

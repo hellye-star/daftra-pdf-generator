@@ -4,6 +4,30 @@ A record of why key implementation choices were made. Consult this before changi
 
 ---
 
+## Financial Dashboard
+
+---
+
+### Daftra API Calls Routed Through Proxy (Financial Dashboard Only)
+
+**Decision:** `financial-dashboard.html` calls `/daftra/...` only. `proxy.py` injects the `APIKEY` header from `config.json`. The API key never appears in the HTML source.
+
+**Why:** The Document Generator predates the proxy's Daftra route and calls Daftra browser-direct (CORS allowed by Daftra). It has the API key hardcoded — acceptable for that legacy module. The Financial Dashboard was built after the proxy infrastructure existed and uses the correct pattern: credentials stay server-side, browser code never sees them.
+
+**Two patterns coexist intentionally.** The Document Generator is stable and must not be migrated to the proxy route without a specific reason. New Daftra-connected tools must use the proxy route.
+
+---
+
+### Personal Transfer Purchase Invoices Excluded From All Business Calculations
+
+**Decision:** Purchase invoices where `supplier_business_name.trim().toLowerCase() === 'personal transfer'` are excluded from business profit, VAT reconciliation, monthly chart, and all period panels. They appear only in a dedicated Personal Transfers section.
+
+**Why:** These records represent owner withdrawals — money moved out of the business bank account to personal use — not business operating costs. Including them in profit or VAT calculations would understate profit and misrepresent the VAT position. They are shown separately (7 records, identified as of branch testing) so the user has full visibility without contaminating business figures.
+
+**Implementation:** Pre-filtered at the top of `renderContent()` into `personalRecords` and `bizPurRecords` before any calculation. `bizPurRecords` is passed to all calculation functions. This is a locked behaviour — do not remove or weaken the filter.
+
+---
+
 ## Social Media Control Center
 
 ---

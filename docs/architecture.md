@@ -13,8 +13,9 @@ A suite of local, single-file HTML tools for Vista United Co. No cloud hosting, 
 | Homepage | `index.html` | None | ✅ Live |
 | Document Generator | `daftra-pdf-generator_1.html` | Daftra ERP (browser-direct) | ✅ Live |
 | Social Media Control Center | `social-dashboard.html` | Notion — Vista/Hussam workspace | ✅ Live — Phase 2A complete + detail unification |
+| Financial Dashboard | `financial-dashboard.html` | Daftra ERP (via `/daftra/...` proxy) | 🌿 Feature branch — not yet merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | Notion — Youssef private workspace | ⏳ Planned |
-| Local Proxy | `proxy.py` | — relays Notion API | ✅ Live |
+| Local Proxy | `proxy.py` | — relays Notion API + Daftra API | ✅ Live |
 
 ---
 
@@ -42,8 +43,9 @@ A suite of local, single-file HTML tools for Vista United Co. No cloud hosting, 
 index.html                     — Vista Platform homepage
 daftra-pdf-generator_1.html    — Document Generator (invoices + quotations)
 social-dashboard.html          — Social Media Control Center  [live — Phase 2A + detail unification]
+financial-dashboard.html       — Financial Dashboard  [feature branch — not yet merged to stable-reviewed-history]
 personal-dashboard.html        — Personal Task Center  [planned]
-proxy.py                       — Local proxy: serves HTML files + relays Notion API calls  [live]
+proxy.py                       — Local proxy: serves HTML files + relays Notion API + Daftra API  [live]
 config.json                    — Live config: tokens + IDs  (git-ignored — never commit)
 config.example.json            — Safe template with placeholder values (safe to commit)
 .gitignore                     — Excludes config.json and OS artifacts
@@ -53,7 +55,7 @@ docs/
   roadmap.md
   decisions.md
   changelog.md
-CLAUDE_CONTEXT.md              — Permanent implementation rules (document generator)
+CLAUDE_CONTEXT.md              — Permanent implementation rules (all modules)
 .claude/
   launch.json                  — Preview server config (port 8080)
 ```
@@ -173,7 +175,44 @@ All file/image URLs returned by the Notion API are temporary signed links that *
 
 ---
 
-## Daftra Data Flow
+## Daftra Integration — Two Coexisting Patterns
+
+Two modules use Daftra. They use different connection patterns intentionally. **Do not consolidate them.**
+
+| Module | Route | API key location | Notes |
+|---|---|---|---|
+| Document Generator | Browser → `daftra.com/api2/...` directly | Hardcoded in HTML source | Pre-proxy legacy; stable — do not change |
+| Financial Dashboard | Browser → `/daftra/...` → proxy → `daftra.com/api2/...` | `config.json → daftra.api_key` (injected by proxy, never in HTML) | Read-only GET only; added commit `8deefc4` |
+
+### Proxy Daftra route
+```
+Browser → GET /daftra/{path+querystring}
+proxy.py strips /daftra prefix
+  → forwards to https://{subdomain}.daftra.com/api2/{path+querystring}
+  → injects header: APIKEY: {api_key from config.json}
+  → returns JSON response verbatim
+POST / PUT / PATCH / DELETE → 405 (read-only enforced)
+```
+
+### config.json structure
+```
+config.json
+  ├── notion
+  │     ├── social_media
+  │     │     ├── token, task_database_id, meeting_database_id, notion_user_id
+  │     └── personal
+  │           └── token, task_database_id
+  ├── daftra
+  │     ├── subdomain    ← your Daftra subdomain (e.g. "vistaunited")
+  │     └── api_key      ← your Daftra API key  (git-ignored — never commit)
+  └── proxy
+        ├── port         ← default 8080
+        └── bind         ← must stay 127.0.0.1
+```
+
+---
+
+## Document Generator — Daftra Data Flow
 
 ```
 User clicks "Fetch Documents"
@@ -200,7 +239,48 @@ User clicks "Download PDF"
 
 ---
 
-## API Endpoints
+## Financial Dashboard — Daftra Data Flow
+
+```
+User clicks "Fetch Data"
+  → Three paginated fetches (via /daftra/... proxy):
+    GET /daftra/invoices.json?limit=100&page=N          (sales)
+    GET /daftra/purchase_invoices.json?limit=100&page=N (purchases)
+    GET /daftra/expenses.json?limit=100&page=N          (expenses)
+  → Each endpoint fetched page by page until result count < limit
+
+renderContent()
+  → Splits purchase records:
+      personalRecords = purRecords.filter(isPersonalTransfer)
+      bizPurRecords   = purRecords.filter(!isPersonalTransfer)
+
+  → Yellow card (always YTD, period-independent):
+      ytdBounds = getPeriodBounds('ytd')
+      profit    = salesYTD.salesExVAT − purchYTD.purchExVAT − expYTD.expExVAT
+      taxReserve = Math.max(profit, 0) × 0.20
+
+  → Red card (always current Gregorian quarter, period-independent):
+      qtrBounds  = getCurrentQuarterBounds()
+      vatBalance = salesQtr.outputVAT − purchQtr.inputVAT − expQtr.inputVAT
+
+  → Period panels (obey sidebar selector — currentPeriod):
+      bounds = getPeriodBounds(currentPeriod)
+      sales / purchases (bizPurRecords only) / expenses calculated for period
+
+  → Monthly chart + table: uses bizPurRecords (personal transfers excluded)
+  → Personal Transfers panel: uses personalRecords only
+```
+
+**VAT derivation:** `summary_total − summary_subtotal` for all three record types.
+`summary_tax1` is always null — never used.
+
+**Personal transfer identification:** `r.supplier_business_name.trim().toLowerCase() === 'personal transfer'`
+
+**Purchase invoice reference field:** `r.no` (e.g. `000048`). Fallback chain: `r.no || r.number || r.id || '—'`
+
+---
+
+## API Endpoints — Document Generator
 
 | Endpoint | Purpose |
 |---|---|
@@ -211,6 +291,16 @@ User clicks "Download PDF"
 | `GET /clients/{id}.json` | VAT/CR fallback |
 
 **Do not use** `/customers` or `/contacts` — both return 404.
+
+---
+
+## API Endpoints — Financial Dashboard (via `/daftra/...` proxy)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /daftra/invoices.json?limit=100&page=N` | Sales invoices (paginated) |
+| `GET /daftra/purchase_invoices.json?limit=100&page=N` | Purchase invoices (paginated) |
+| `GET /daftra/expenses.json?limit=100&page=N` | Expenses (paginated) |
 
 ---
 
