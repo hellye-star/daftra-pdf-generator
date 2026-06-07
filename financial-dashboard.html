@@ -198,6 +198,69 @@
       line-height: 1.5;
     }
 
+    /* ── Top alert cards ────────────────────────────────────────────────────── */
+    .alert-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .alert-card {
+      border-radius: 6px;
+      padding: 22px 24px;
+    }
+    .alert-card.yellow {
+      background: #FFF8EC;
+      border: 1.5px solid #C89010;
+    }
+    .alert-card.red {
+      background: #FFF0F0;
+      border: 1.5px solid #B03030;
+    }
+    .alert-card-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .alert-card.yellow .alert-card-label { color: #7A5800; }
+    .alert-card.red    .alert-card-label { color: #7A1818; }
+    .alert-card-value {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 34px;
+      font-weight: 500;
+      line-height: 1;
+    }
+    .alert-card.yellow .alert-card-value { color: #5C4000; }
+    .alert-card.red    .alert-card-value { color: #8A1818; }
+    .alert-card-value.placeholder {
+      font-family: 'Jost', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--muted);
+    }
+    .alert-card-value.reclaimable-green {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 34px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+    .alert-card-sub {
+      font-size: 10px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .alert-card.yellow .alert-card-sub { color: #7A5800; }
+    .alert-card.red    .alert-card-sub { color: #7A1818; }
+    .alert-card-note {
+      font-size: 10px;
+      margin-top: 6px;
+      font-style: italic;
+      line-height: 1.5;
+    }
+    .alert-card.yellow .alert-card-note { color: rgba(90,64,0,0.65); }
+    .alert-card.red    .alert-card-note { color: rgba(90,0,0,0.55); }
+
     /* ── Summary strip ──────────────────────────────────────────────────────── */
     .summary-strip {
       display: flex;
@@ -373,6 +436,72 @@
       border: none;
       border-top: 1px solid var(--rule);
       margin: 20px 0;
+    }
+
+    /* ── Personal Transfers section ─────────────────────────────────────────── */
+    .personal-section {
+      background: #F8F6FF;
+      border: 1px solid #C4BBE8;
+      border-radius: 6px;
+      padding: 20px 22px;
+    }
+    .personal-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #5C3EA0;
+      margin-bottom: 4px;
+    }
+    .personal-section-sub {
+      font-size: 11px;
+      color: #8070A8;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .personal-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .personal-table th {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: #8070A8;
+      padding: 5px 8px;
+      text-align: left;
+      border-bottom: 2px solid #C4BBE8;
+    }
+    .personal-table th:nth-child(3),
+    .personal-table th:nth-child(4) { text-align: right; }
+    .personal-table td {
+      padding: 7px 8px;
+      border-bottom: 1px solid #DDD8F0;
+      color: var(--dark);
+      vertical-align: middle;
+    }
+    .personal-table td:nth-child(3),
+    .personal-table td:nth-child(4) { text-align: right; font-weight: 500; }
+    .personal-table tr:last-child td { border-bottom: none; }
+    .personal-total-row td {
+      font-weight: 600;
+      border-top: 2px solid #C4BBE8 !important;
+      border-bottom: none !important;
+      color: #4A2880;
+      padding-top: 9px;
+    }
+    .personal-empty {
+      font-size: 12px;
+      color: #8070A8;
+      padding: 8px 0;
+      font-style: italic;
+    }
+    .personal-note {
+      font-size: 10px;
+      color: #8070A8;
+      margin-top: 12px;
+      font-style: italic;
+      border-top: 1px solid #DDD8F0;
+      padding-top: 10px;
+      line-height: 1.6;
     }
 
     /* ── Empty state ────────────────────────────────────────────────────────── */
@@ -595,13 +724,13 @@ function onPeriodChange() {
 }
 
 function getPeriodLabel(key) {
-  const now   = new Date();
-  const yr    = now.getFullYear();
-  const moIdx = now.getMonth();
-  const moName = now.toLocaleString('en-US', { month: 'long' });
-  const lastMoDate = new Date(yr, moIdx, 0);
-  const lastMoName = lastMoDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const map = {
+  var now    = new Date();
+  var yr     = now.getFullYear();
+  var moIdx  = now.getMonth();
+  var moName = now.toLocaleString('en-US', { month: 'long' });
+  var lastMoDate = new Date(yr, moIdx, 0);
+  var lastMoName = lastMoDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  var map = {
     'ytd':        'Year to Date ' + yr,
     'this-month': moName + ' ' + yr,
     'last-month': lastMoName,
@@ -616,10 +745,10 @@ function getPeriodLabel(key) {
 
 function getPeriodBounds(key) {
   if (key === 'all') return null;  // no date filter
-  const now = new Date();
-  const yr  = now.getFullYear();
-  const mo  = now.getMonth();   // 0-indexed
-  const eod = function(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999); };
+  var now = new Date();
+  var yr  = now.getFullYear();
+  var mo  = now.getMonth();   // 0-indexed
+  var eod = function(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999); };
   if (key === 'ytd') {
     return { start: new Date(yr, 0, 1), end: eod(now) };
   }
@@ -637,6 +766,24 @@ function getPeriodBounds(key) {
     return { start: new Date(yr, sm, 1), end: new Date(yr, em + 1, 0, 23, 59, 59, 999) };
   }
   return null;
+}
+
+// Returns bounds for the current Gregorian quarter (Q1=Jan-Mar, Q2=Apr-Jun, etc.)
+function getCurrentQuarterBounds() {
+  var mo = new Date().getMonth(); // 0-indexed
+  var qKey = mo <= 2 ? 'q1' : mo <= 5 ? 'q2' : mo <= 8 ? 'q3' : 'q4';
+  return getPeriodBounds(qKey);
+}
+
+// Returns a short label for the current quarter, e.g. "Q2 2026 (Apr-Jun)"
+function getCurrentQuarterLabel() {
+  var now = new Date();
+  var yr  = now.getFullYear();
+  var mo  = now.getMonth();
+  if (mo <= 2) return 'Q1 ' + yr + ' (Jan–Mar)';
+  if (mo <= 5) return 'Q2 ' + yr + ' (Apr–Jun)';
+  if (mo <= 8) return 'Q3 ' + yr + ' (Jul–Sep)';
+  return 'Q4 ' + yr + ' (Oct–Dec)';
 }
 
 // ── Low-level helpers ──────────────────────────────────────────────────────
@@ -666,10 +813,17 @@ function toNum(val) {
   return isNaN(n) ? 0 : n;
 }
 
+// Returns true if a purchase invoice record is a personal transfer.
+// Identification: supplier_business_name trimmed + lowercased === 'personal transfer'
+function isPersonalTransfer(r) {
+  if (!r || !r.supplier_business_name) return false;
+  return r.supplier_business_name.trim().toLowerCase() === 'personal transfer';
+}
+
 function fmtCurrency(num) {
   var abs = Math.abs(num);
   var formatted = abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return (num < -0.005 ? '−SAR ' : 'SAR ') + formatted;
+  return (num < -0.005 ? '−SAR ' : 'SAR ') + formatted;
 }
 
 // ── Calculations ───────────────────────────────────────────────────────────
@@ -714,6 +868,7 @@ function calcSales(records, bounds) {
   };
 }
 
+// calcPurchases — caller must pass business-only records (personal transfers pre-filtered out).
 function calcPurchases(records, bounds) {
   var active = filterActive(records);
   var missingDate = 0;
@@ -789,8 +944,7 @@ function getPaginationWarnings() {
       if (meta.incompleteError) msg += ' (' + meta.incompleteError + ')';
       warnings.push(msg);
     }
-    // If neither flag is set but loaded < totalResults, pagination loop handled it correctly —
-    // no warning needed (all records were loaded successfully).
+    // If neither flag is set but loaded < totalResults, pagination loop handled it correctly.
   }
   if (rawInvoices  !== null) check(rawInvMeta, rawInvoices.length,  'Invoices');
   if (rawPurchases !== null) check(rawPurMeta, rawPurchases.length, 'Purchases');
@@ -816,14 +970,13 @@ async function fetchEndpoint(path) {
 // Never follows pagination.next (which points to daftra.com — bypasses proxy).
 // Uses page increment with limit=100.
 // Hard cap of PAGE_CAP pages prevents infinite loops.
-// If cap is hit the result is marked incomplete so the UI warns clearly.
 
-const PAGE_CAP = 50;  // 50 × 100 = 5,000 records maximum
+const PAGE_CAP = 50;  // 50 x 100 = 5,000 records maximum
 
 async function fetchAllPages(basePath, typeKey, countKey) {
   var allRecords       = [];
-  var totalResults     = null;  // from API pagination.total_results
-  var pageCount        = null;  // from API pagination.page_count
+  var totalResults     = null;
+  var pageCount        = null;
   var pagesLoaded      = 0;
   var capHit           = false;
   var incomplete       = false;
@@ -831,7 +984,6 @@ async function fetchAllPages(basePath, typeKey, countKey) {
   var page             = 1;
 
   while (true) {
-    // Hard cap guard — checked before each fetch
     if (page > PAGE_CAP) {
       capHit     = true;
       incomplete = true;
@@ -844,8 +996,7 @@ async function fetchAllPages(basePath, typeKey, countKey) {
     try {
       json = await fetchEndpoint(path);
     } catch (err) {
-      if (page === 1) throw err;  // first-page failure → propagate as endpoint error
-      // Later-page failure → keep records so far, mark incomplete
+      if (page === 1) throw err;
       incomplete      = true;
       incompleteError = err.message || ('Error on page ' + page);
       break;
@@ -853,7 +1004,6 @@ async function fetchAllPages(basePath, typeKey, countKey) {
 
     pagesLoaded = page;
 
-    // Capture pagination metadata from first page only
     if (page === 1) {
       var pag      = json.pagination || {};
       var tr       = parseInt(pag.total_results || pag.total || 0, 10);
@@ -865,15 +1015,13 @@ async function fetchAllPages(basePath, typeKey, countKey) {
     var pageRecords = extractRecords(json, typeKey);
     allRecords = allRecords.concat(pageRecords);
 
-    // Live sidebar count: show "loaded / total" while paginating
     if (countKey) {
       setCount(countKey, totalResults ? (allRecords.length + '/' + totalResults) : allRecords.length);
     }
 
-    // Natural stop conditions (in order of reliability)
-    if (pageRecords.length === 0) break;                                     // empty page
-    if (pageCount    !== null && page >= pageCount)    break;                // reached last page per API
-    if (totalResults !== null && allRecords.length >= totalResults) break;  // all records loaded
+    if (pageRecords.length === 0) break;
+    if (pageCount    !== null && page >= pageCount)    break;
+    if (totalResults !== null && allRecords.length >= totalResults) break;
 
     page++;
   }
@@ -917,12 +1065,10 @@ async function fetchAll() {
 
   ['inv', 'pur', 'exp'].forEach(function(k) { dot(k, ''); setCount(k, '…'); });
 
-  // Fire all three endpoints in parallel; pages within each endpoint are sequential.
-  // fetchAllPages updates the sidebar count live as each page arrives.
   const [invResult, purResult, expResult] = await Promise.allSettled([
-    fetchAllPages('/daftra/invoices.json',         'Invoice',      'inv'),
+    fetchAllPages('/daftra/invoices.json',          'Invoice',       'inv'),
     fetchAllPages('/daftra/purchase_invoices.json', 'PurchaseOrder', 'pur'),
-    fetchAllPages('/daftra/expenses.json',          'Expense',      'exp'),
+    fetchAllPages('/daftra/expenses.json',          'Expense',       'exp'),
   ]);
 
   // Process invoices
@@ -932,18 +1078,13 @@ async function fetchAll() {
     rawInvoices = invRecords;
     rawInvError = null;
     rawInvMeta  = invResult.value.meta;
-    const invDot = rawInvMeta.incomplete ? 'warn' : 'ok';
-    dot('inv', invDot);
+    dot('inv', rawInvMeta.incomplete ? 'warn' : 'ok');
     setCount('inv', rawInvMeta.totalResults
-      ? (invRecords.length + '/' + rawInvMeta.totalResults)
-      : invRecords.length);
+      ? (invRecords.length + '/' + rawInvMeta.totalResults) : invRecords.length);
   } else {
     invError    = invResult.reason?.message || 'Unknown error';
-    rawInvoices = null;
-    rawInvError = invError;
-    rawInvMeta  = null;
-    dot('inv', 'error');
-    setCount('inv', '✕');
+    rawInvoices = null; rawInvError = invError; rawInvMeta = null;
+    dot('inv', 'error'); setCount('inv', '✕');
   }
 
   // Process purchases
@@ -953,18 +1094,13 @@ async function fetchAll() {
     rawPurchases = purRecords;
     rawPurError  = null;
     rawPurMeta   = purResult.value.meta;
-    const purDot = rawPurMeta.incomplete ? 'warn' : 'ok';
-    dot('pur', purDot);
+    dot('pur', rawPurMeta.incomplete ? 'warn' : 'ok');
     setCount('pur', rawPurMeta.totalResults
-      ? (purRecords.length + '/' + rawPurMeta.totalResults)
-      : purRecords.length);
+      ? (purRecords.length + '/' + rawPurMeta.totalResults) : purRecords.length);
   } else {
     purError     = purResult.reason?.message || 'Unknown error';
-    rawPurchases = null;
-    rawPurError  = purError;
-    rawPurMeta   = null;
-    dot('pur', 'error');
-    setCount('pur', '✕');
+    rawPurchases = null; rawPurError = purError; rawPurMeta = null;
+    dot('pur', 'error'); setCount('pur', '✕');
   }
 
   // Process expenses
@@ -974,18 +1110,13 @@ async function fetchAll() {
     rawExpenses = expRecords;
     rawExpError = null;
     rawExpMeta  = expResult.value.meta;
-    const expDot = rawExpMeta.incomplete ? 'warn' : expRecords.length === 0 ? 'warn' : 'ok';
-    dot('exp', expDot);
+    dot('exp', (rawExpMeta.incomplete || expRecords.length === 0) ? 'warn' : 'ok');
     setCount('exp', rawExpMeta.totalResults
-      ? (expRecords.length + '/' + rawExpMeta.totalResults)
-      : expRecords.length);
+      ? (expRecords.length + '/' + rawExpMeta.totalResults) : expRecords.length);
   } else {
     expError    = expResult.reason?.message || 'Unknown error';
-    rawExpenses = null;
-    rawExpError = expError;
-    rawExpMeta  = null;
-    dot('exp', 'error');
-    setCount('exp', '✕');
+    rawExpenses = null; rawExpError = expError; rawExpMeta = null;
+    dot('exp', 'error'); setCount('exp', '✕');
   }
 
   btn.disabled = false;
@@ -1013,17 +1144,43 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
   const bounds = getPeriodBounds(currentPeriod);
   const label  = getPeriodLabel(currentPeriod);
 
-  // Run calculations only for successful endpoints
+  // ── Split purchase invoices: personal transfers vs business ───────────────
+  // Personal transfers are identified by supplier_business_name === 'personal transfer'.
+  // They are EXCLUDED from all business calculations (profit, VAT, monthly charts).
+  // They are displayed separately in the Personal Transfers section below.
+  const personalRecords = purError ? [] : purRecords.filter(isPersonalTransfer);
+  const bizPurRecords   = purError ? [] : purRecords.filter(function(r) { return !isPersonalTransfer(r); });
+
+  // ── Period calculations (business-only) ───────────────────────────────────
   const sales = invError ? null : calcSales(invRecords, bounds);
-  const purch = purError ? null : calcPurchases(purRecords, bounds);
+  const purch = purError ? null : calcPurchases(bizPurRecords, bounds);
   const exp   = expError ? null : calcExpenses(expRecords, bounds);
 
-  // Composite figures — available only when all three endpoints succeeded
-  const canCalc   = sales !== null && purch !== null && exp !== null;
-  const profit    = canCalc ? (sales.salesExVAT - purch.purchExVAT - exp.expExVAT) : null;
+  const canCalc  = sales !== null && purch !== null && exp !== null;
+  const profit   = canCalc ? (sales.salesExVAT - purch.purchExVAT - exp.expExVAT) : null;
   const taxReserve = profit !== null ? Math.max(profit, 0) * 0.20 : null;
 
-  // VAT position — available when at least one endpoint succeeded (partial disclosure)
+  // ── Top Card 1: YTD profit tax reserve (always Year to Date, never period-filtered) ──
+  const ytdBounds   = getPeriodBounds('ytd');
+  const salesYTD    = invError ? null : calcSales(invRecords, ytdBounds);
+  const purchYTD    = purError ? null : calcPurchases(bizPurRecords, ytdBounds);
+  const expYTD      = expError ? null : calcExpenses(expRecords, ytdBounds);
+  const canCalcYTD  = salesYTD !== null && purchYTD !== null && expYTD !== null;
+  const profitYTD   = canCalcYTD ? (salesYTD.salesExVAT - purchYTD.purchExVAT - expYTD.expExVAT) : null;
+  const taxResYTD   = profitYTD !== null ? Math.max(profitYTD, 0) * 0.20 : null;
+
+  // ── Top Card 2: Current quarter VAT reconciliation ───────────────────────
+  const qtrBounds   = getCurrentQuarterBounds();
+  const qtrLabel    = getCurrentQuarterLabel();
+  const salesQtr    = invError ? null : calcSales(invRecords, qtrBounds);
+  const purchQtr    = purError ? null : calcPurchases(bizPurRecords, qtrBounds);
+  const expQtr      = expError ? null : calcExpenses(expRecords, qtrBounds);
+  const vatQtrAvail = salesQtr !== null && purchQtr !== null && expQtr !== null;
+  const vatQtr      = vatQtrAvail
+    ? (salesQtr.outputVAT - purchQtr.inputVAT - expQtr.inputVAT)
+    : null;
+
+  // ── VAT position for selected period (business-only) ─────────────────────
   const outputVAT   = sales ? sales.outputVAT : null;
   const inputVATpur = purch ? purch.inputVAT  : null;
   const inputVATexp = exp   ? exp.inputVAT    : null;
@@ -1035,9 +1192,7 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
   const purRange = dateRange(purRecords, 'date');
   const expRange = dateRange(expRecords, 'date');
 
-  // Pagination warnings
   const warnings = getPaginationWarnings();
-
   const parts = [];
 
   // 0. Pagination warnings
@@ -1047,32 +1202,42 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
     }).join('\n'));
   }
 
-  // 1. Summary strip — period ex-VAT totals
+  // 1. Top alert cards — always show (YTD tax reserve + current quarter VAT)
+  parts.push(renderTopAlertCards(
+    taxResYTD, canCalcYTD,
+    vatQtr, vatQtrAvail, qtrLabel,
+    invError, purError, expError
+  ));
+
+  // 2. Summary strip — selected period, business-only
   parts.push(renderSummaryStrip(sales, purch, exp, invError, purError, expError, label));
 
-  // 2. Metric cards row 1: Sales, Purchases, Expenses
+  // 3. Metric cards row 1: Sales, Business Purchases, Expenses
   parts.push(renderMetricRow1(sales, purch, exp, invError, purError, expError, label));
 
-  // 3. Metric cards row 2: Profit + Tax Reserve (only when all three available)
+  // 4. Metric cards row 2: Profit + Tax Reserve
   if (canCalc) {
     parts.push(renderMetricRow2(profit, taxReserve, label));
   }
 
-  // 4. Monthly chart + table (full current Gregorian year, not filtered by selected period)
+  // 5. Monthly chart + table (full year, business purchases only)
   var chartYear   = new Date().getFullYear();
-  var monthlyRows = buildMonthlyTable(chartYear, invRecords, invError, purRecords, purError, expRecords, expError);
+  var monthlyRows = buildMonthlyTable(chartYear, invRecords, invError, bizPurRecords, purError, expRecords, expError);
   parts.push(renderMonthlyChartPanel(monthlyRows, invError, purError, expError, chartYear));
   parts.push(renderMonthlyTablePanel(monthlyRows, invError, purError, expError, chartYear));
 
-  // 5. VAT position panel
+  // 6. VAT position panel (selected period, business-only)
   parts.push(renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allVATAvail, label));
 
-  // 6. Receivables panel (only when invoices succeeded)
+  // 7. Receivables panel
   if (!invError && sales) {
     parts.push(renderReceivablesPanel(sales, label));
   }
 
-  // 7. Data health panel
+  // 8. Personal Transfers section
+  parts.push(renderPersonalTransfersSection(personalRecords, purError));
+
+  // 9. Data health panel
   parts.push(renderHealthPanel(
     invRecords, invError, invRange,
     purRecords, purError, purRange,
@@ -1081,6 +1246,71 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
   ));
 
   area.innerHTML = parts.join('\n');
+}
+
+// ── Top alert cards ────────────────────────────────────────────────────────
+
+function renderTopAlertCards(taxResYTD, canCalcYTD, vatQtr, vatQtrAvail, qtrLabel, invError, purError, expError) {
+  // Yellow card: Estimated Profit Tax Payable End of Year — 20% of YTD business profit
+  var yellowValueHtml, yellowNote;
+  if (!canCalcYTD) {
+    var miss = [];
+    if (invError) miss.push('invoices');
+    if (purError) miss.push('purchases');
+    if (expError) miss.push('expenses');
+    yellowValueHtml = '<div class="alert-card-value placeholder">Data unavailable</div>';
+    yellowNote = miss.length
+      ? 'Cannot calculate — ' + miss.join(', ') + ' endpoint' + (miss.length > 1 ? 's' : '') + ' failed.'
+      : 'Press Fetch Data to calculate.';
+  } else if (taxResYTD <= 0.005) {
+    yellowValueHtml = '<div class="alert-card-value">SAR 0.00</div>';
+    yellowNote = 'No profit YTD — no tax reserve required. Excl. personal transfers.';
+  } else {
+    yellowValueHtml = '<div class="alert-card-value">' + esc(fmtCurrency(taxResYTD)) + '</div>';
+    yellowNote = 'Not an official tax calculation. Excl. personal transfers. Consult your accountant.';
+  }
+
+  var yellowCard = '<div class="alert-card yellow">'
+    + '<div class="alert-card-label">Estimated Profit Tax Payable End of Year</div>'
+    + yellowValueHtml
+    + '<div class="alert-card-sub">20% of estimated business profit &middot; management estimate</div>'
+    + '<div class="alert-card-note">' + esc(yellowNote) + '</div>'
+    + '</div>';
+
+  // Red card: VAT Reconciliation — Current Quarter So Far
+  var redValueHtml, redSub, redNote;
+  if (!vatQtrAvail) {
+    var miss2 = [];
+    if (invError) miss2.push('invoices');
+    if (purError) miss2.push('purchases');
+    if (expError) miss2.push('expenses');
+    redValueHtml = '<div class="alert-card-value placeholder">Data unavailable</div>';
+    redSub  = miss2.length
+      ? 'Cannot calculate — ' + miss2.join(', ') + ' endpoint' + (miss2.length > 1 ? 's' : '') + ' failed.'
+      : 'Press Fetch Data to calculate.';
+    redNote = esc(qtrLabel) + ' · Output VAT − Purchase input VAT − Expense input VAT';
+  } else if (vatQtr > 0.005) {
+    redValueHtml = '<div class="alert-card-value">' + esc(fmtCurrency(vatQtr)) + '</div>';
+    redSub  = 'Estimated VAT payable to ZATCA this quarter.';
+    redNote = esc(qtrLabel) + ' · Excl. personal transfers · Management estimate only';
+  } else if (vatQtr < -0.005) {
+    redValueHtml = '<div class="alert-card-value reclaimable-green">' + esc(fmtCurrency(Math.abs(vatQtr))) + '</div>';
+    redSub  = 'Estimated VAT reclaimable from ZATCA this quarter.';
+    redNote = esc(qtrLabel) + ' · Excl. personal transfers · Management estimate only';
+  } else {
+    redValueHtml = '<div class="alert-card-value">SAR 0.00</div>';
+    redSub  = 'Estimated break-even VAT position this quarter.';
+    redNote = esc(qtrLabel) + ' · Excl. personal transfers · Management estimate only';
+  }
+
+  var redCard = '<div class="alert-card red">'
+    + '<div class="alert-card-label">VAT Reconciliation — ' + esc(qtrLabel) + ' So Far</div>'
+    + redValueHtml
+    + '<div class="alert-card-sub">' + esc(redSub) + '</div>'
+    + '<div class="alert-card-note">' + redNote + '</div>'
+    + '</div>';
+
+  return '<div class="alert-cards">' + yellowCard + redCard + '</div>';
 }
 
 // ── Render helpers ─────────────────────────────────────────────────────────
@@ -1104,7 +1334,7 @@ function renderSummaryStrip(sales, purch, exp, invError, purError, expError, lab
   }
   return '<div class="summary-strip">'
     + item('Sales', sales, invError, 'salesExVAT')
-    + item('Purchases', purch, purError, 'purchExVAT')
+    + item('Business Purchases', purch, purError, 'purchExVAT')
     + item('Expenses', exp, expError, 'expExVAT')
     + '</div>';
 }
@@ -1114,7 +1344,7 @@ function renderMetricRow1(sales, purch, exp, invError, purError, expError, label
     if (err) {
       return '<div class="metric-card">'
         + '<div class="metric-label">' + esc(title) + '</div>'
-        + '<div class="metric-value placeholder error">Endpoint failed</div>'
+        + '<div class="metric-value placeholder">Endpoint failed</div>'
         + '</div>';
     }
     var val = obj ? obj[field] : 0;
@@ -1127,7 +1357,7 @@ function renderMetricRow1(sales, purch, exp, invError, purError, expError, label
   }
   return '<div class="metric-row">'
     + card('Sales (ex-VAT)', sales, invError, 'salesExVAT')
-    + card('Purchases (ex-VAT)', purch, purError, 'purchExVAT')
+    + card('Business Purchases (ex-VAT)', purch, purError, 'purchExVAT')
     + card('Expenses (ex-VAT)', exp, expError, 'expExVAT')
     + '</div>';
 }
@@ -1135,16 +1365,16 @@ function renderMetricRow1(sales, purch, exp, invError, purError, expError, label
 function renderMetricRow2(profit, taxReserve, label) {
   var profitCls = profit >= 0 ? 'positive' : 'negative';
   var profitNote = profit >= 0
-    ? 'Gross profit estimate · management reference only'
-    : 'Net loss estimate · management reference only';
+    ? 'Business gross profit estimate · management reference only'
+    : 'Business net loss estimate · management reference only';
   return '<div class="metric-row-2">'
     + '<div class="metric-card">'
-    + '<div class="metric-label">Profit Estimate</div>'
+    + '<div class="metric-label">Business Profit Estimate</div>'
     + '<div class="metric-value ' + profitCls + '">' + esc(fmtCurrency(profit)) + '</div>'
     + '<div class="metric-sub">' + esc(label) + ' · ' + esc(profitNote) + '</div>'
     + '</div>'
     + '<div class="metric-card">'
-    + '<div class="metric-label">20% Tax Reserve Estimate</div>'
+    + '<div class="metric-label">Profit Tax Reserve — 20%</div>'
     + '<div class="metric-value">' + esc(fmtCurrency(taxReserve)) + '</div>'
     + '<div class="metric-sub">' + esc(label) + ' · Management estimate — not an official tax calculation</div>'
     + '</div>'
@@ -1178,19 +1408,20 @@ function renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allAva
     + '<div class="panel-title">VAT Position — ' + esc(label) + '</div>'
     + '<table class="vat-table">'
     + vatRow('Output VAT (on sales)', outputVAT)
-    + vatRow('− Input VAT (purchase invoices)', inputVATpur)
+    + vatRow('− Input VAT (business purchase invoices)', inputVATpur)
     + vatRow('− Input VAT (expenses)', inputVATexp)
     + resultHtml
     + '</table>'
     + '<div class="disclaimer">Management reference only — not an official VAT filing or return calculation. '
+    + 'Personal transfer purchase invoices are excluded from all VAT calculations. '
     + 'Figures cover all records loaded — see Data Health for loading details. '
     + 'Consult your accountant for filing purposes.</div>'
     + '</div>';
 }
 
 function renderReceivablesPanel(sales, label) {
-  var allRecs = sales.allUnpaidRecords;   // all-time unpaid, sorted oldest first
-  var perRecs = sales.perUnpaidRecords;   // period-filtered unpaid
+  var allRecs = sales.allUnpaidRecords;
+  var perRecs = sales.perUnpaidRecords;
 
   function recvList(recs) {
     if (!recs.length) {
@@ -1212,10 +1443,8 @@ function renderReceivablesPanel(sales, label) {
     return '<div class="recv-rows">' + rows + '</div>' + moreHtml;
   }
 
-  var html = '<div class="panel">'
+  return '<div class="panel">'
     + '<div class="panel-title">Receivables</div>'
-
-    // Section 1: All-time outstanding
     + '<div class="recv-section">'
     + '<div class="recv-section-title">All-time outstanding (all unpaid invoices, regardless of selected period)</div>'
     + '<div class="recv-summary">'
@@ -1224,11 +1453,7 @@ function renderReceivablesPanel(sales, label) {
     + '</div>'
     + recvList(allRecs)
     + '</div>'
-
-    // Divider
     + '<hr class="recv-divider" />'
-
-    // Section 2: Selected-period outstanding
     + '<div class="recv-section">'
     + '<div class="recv-section-title">Outstanding in selected period — ' + esc(label) + '</div>'
     + '<div class="recv-summary">'
@@ -1237,15 +1462,81 @@ function renderReceivablesPanel(sales, label) {
     + '</div>'
     + recvList(perRecs)
     + '</div>'
-
     + '</div>';
-  return html;
+}
+
+// ── Personal Transfers section ─────────────────────────────────────────────
+// Shows all purchase invoices classified as personal transfers.
+// These records are EXCLUDED from every business metric on this dashboard.
+
+function renderPersonalTransfersSection(personalRecords, purError) {
+  var sectionHtml;
+
+  if (purError) {
+    sectionHtml = '<div class="personal-empty">Purchase invoices endpoint failed — cannot display personal transfers.</div>';
+  } else {
+    // Active (non-draft) records only, sorted newest first
+    var active = personalRecords.filter(function(r) { return r.draft !== '1'; });
+    var sorted = active.slice().sort(function(a, b) {
+      return (b.date || '').localeCompare(a.date || '');
+    });
+
+    if (!sorted.length) {
+      sectionHtml = '<div class="personal-empty">No personal transfer records found in the loaded data.</div>';
+    } else {
+      var totalExVAT  = sorted.reduce(function(s, r) { return s + toNum(r.summary_subtotal); }, 0);
+      var totalIncVAT = sorted.reduce(function(s, r) { return s + toNum(r.summary_total);    }, 0);
+      var totalVAT    = totalIncVAT - totalExVAT;
+
+      var rows = sorted.map(function(r) {
+        return '<tr>'
+          + '<td>' + esc(r.number || r.id || '—') + '</td>'
+          + '<td>' + esc(r.date   || '—') + '</td>'
+          + '<td>' + esc(fmtCurrency(toNum(r.summary_subtotal))) + '</td>'
+          + '<td>' + esc(fmtCurrency(toNum(r.summary_total)))    + '</td>'
+          + '</tr>';
+      }).join('');
+
+      var vatLine = totalVAT > 0.005
+        ? 'Total derived VAT: ' + esc(fmtCurrency(totalVAT)) + '.'
+        : 'Derived VAT: SAR 0.00 on all records (total = subtotal).';
+
+      sectionHtml = '<table class="personal-table">'
+        + '<thead><tr>'
+        + '<th>Ref No.</th><th>Date</th>'
+        + '<th>Amount (ex-VAT)</th><th>Amount (inc-VAT)</th>'
+        + '</tr></thead>'
+        + '<tbody>'
+        + rows
+        + '<tr class="personal-total-row">'
+        + '<td colspan="2">Total (' + sorted.length + ' record' + (sorted.length !== 1 ? 's' : '') + ')</td>'
+        + '<td>' + esc(fmtCurrency(totalExVAT))  + '</td>'
+        + '<td>' + esc(fmtCurrency(totalIncVAT)) + '</td>'
+        + '</tr>'
+        + '</tbody></table>'
+        + '<div class="personal-note">'
+        + esc(vatLine)
+        + ' These records are visible here for reference only and are not included in '
+        + 'business profit, VAT reconciliation, monthly charts, or any other calculation on this dashboard.'
+        + '</div>';
+    }
+  }
+
+  var subLine = purError
+    ? 'Purchase invoices classified as Personal Transfers.'
+    : (personalRecords.filter(function(r){return r.draft!=='1';}).length)
+      + ' record(s) identified by supplier name “Personal Transfer” · '
+      + 'Excluded from all business calculations.';
+
+  return '<div class="personal-section">'
+    + '<div class="personal-section-title">Personal Transfers</div>'
+    + '<div class="personal-section-sub">' + esc(subLine) + '</div>'
+    + sectionHtml
+    + '</div>';
 }
 
 function renderHealthPanel(invRecords, invError, invRange, purRecords, purError, purRange, expRecords, expError, expRange, sales, purch, exp) {
-  // meta objects are read from module-level state (rawInvMeta etc.)
   function cell(label, records, error, range, missingDate, meta) {
-    // Endpoint failed entirely
     if (error) {
       return '<div class="health-cell error">'
         + '<div class="health-cell-label">' + esc(label) + '</div>'
@@ -1253,33 +1544,20 @@ function renderHealthPanel(invRecords, invError, invRange, purRecords, purError,
         + '</div>';
     }
 
-    // Determine status colour
     var isIncomplete = meta && (meta.capHit || meta.incomplete);
     var cls = isIncomplete ? 'warn' : records.length === 0 ? 'warn' : 'ok';
 
-    // Loaded / total string
-    var totalStr = (meta && meta.totalResults) ? (' of ' + meta.totalResults) : '';
-    var note = records.length === 0
+    var totalStr  = (meta && meta.totalResults) ? (' of ' + meta.totalResults) : '';
+    var note      = records.length === 0
       ? 'No records returned'
       : records.length + totalStr + ' record' + (records.length !== 1 ? 's' : '') + ' loaded';
-
-    // Pages fetched
-    var pagesNote = meta
-      ? meta.pagesLoaded + ' page' + (meta.pagesLoaded !== 1 ? 's' : '') + ' fetched'
-      : '';
-
+    var pagesNote = meta ? meta.pagesLoaded + ' page' + (meta.pagesLoaded !== 1 ? 's' : '') + ' fetched' : '';
     var detail    = range ? 'Date range: ' + esc(range.min) + ' → ' + esc(range.max) : '';
     var active    = records.filter(function(r) { return r.draft !== '1'; }).length;
     var drafts    = records.length - active;
-    var draftNote = drafts > 0
-      ? drafts + ' draft' + (drafts !== 1 ? 's' : '') + ' excluded from calculations.'
-      : '';
-    var missNote  = missingDate > 0
-      ? missingDate + ' record' + (missingDate !== 1 ? 's' : '') + ' excluded — no parseable date.'
-      : '';
-
-    // Incomplete / cap warning — shown prominently in the cell
-    var warnNote = '';
+    var draftNote = drafts > 0 ? drafts + ' draft' + (drafts !== 1 ? 's' : '') + ' excluded from calculations.' : '';
+    var missNote  = missingDate > 0 ? missingDate + ' record' + (missingDate !== 1 ? 's' : '') + ' excluded — no parseable date.' : '';
+    var warnNote  = '';
     if (meta && meta.capHit) {
       warnNote = 'Record limit reached. Totals may be incomplete.';
     } else if (meta && meta.incomplete) {
@@ -1312,16 +1590,12 @@ function renderHealthPanel(invRecords, invError, invRange, purRecords, purError,
 
 var MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// Returns the ex-VAT amount for a single expense record.
-// Mirrors the branch logic in calcExpenses so monthly grouping stays consistent.
 function expExVATForRecord(r) {
   var amt = toNum(r.amount);
   var tax = toNum(r.tax1_amount);
   return r.tax1_included === '0' ? amt : amt - tax;
 }
 
-// Buckets active (non-draft) records from the current year into { 'YYYY-MM': total }.
-// amountFn(record) → number to accumulate.
 function groupByMonth(records, year, amountFn) {
   var result = {};
   for (var i = 0; i < records.length; i++) {
@@ -1335,8 +1609,7 @@ function groupByMonth(records, year, amountFn) {
   return result;
 }
 
-// Builds an array of 12 row objects (one per month, Jan–Dec) for the given year.
-// null in a cell means the corresponding endpoint failed.
+// purRecords must be business-only (personal transfers excluded by caller).
 function buildMonthlyTable(year, invRecords, invError, purRecords, purError, expRecords, expError) {
   var salesByM  = invError ? null : groupByMonth(invRecords, year, function(r) { return toNum(r.summary_subtotal); });
   var outVByM   = invError ? null : groupByMonth(invRecords, year, function(r) { return toNum(r.summary_total) - toNum(r.summary_subtotal); });
@@ -1347,7 +1620,7 @@ function buildMonthlyTable(year, invRecords, invError, purRecords, purError, exp
 
   var rows = [];
   for (var m = 0; m < 12; m++) {
-    var key    = year + '-' + String(m + 1).padStart(2, '0');
+    var key     = year + '-' + String(m + 1).padStart(2, '0');
     var salesEx = salesByM  ? (salesByM[key]  || 0) : null;
     var outVAT  = outVByM   ? (outVByM[key]   || 0) : null;
     var purchEx = purchByM  ? (purchByM[key]  || 0) : null;
@@ -1360,7 +1633,6 @@ function buildMonthlyTable(year, invRecords, invError, purRecords, purError, exp
     var vatPos = (outVAT !== null && inVPur !== null && inVExp !== null)
                  ? (outVAT - inVPur - inVExp) : null;
 
-    // hasData: at least one successful endpoint returned a non-trivial value this month
     var hasData = (salesEx !== null && salesEx > 0.001)
                || (purchEx !== null && purchEx > 0.001)
                || (expEx   !== null && Math.abs(expEx) > 0.001);
@@ -1374,7 +1646,6 @@ function buildMonthlyTable(year, invRecords, invError, purRecords, purError, exp
   return rows;
 }
 
-// Returns the maximum value across the given fields in all rows (min 1 to avoid div-by-zero).
 function maxValMonthly(rows, fields) {
   var max = 0;
   for (var i = 0; i < rows.length; i++) {
@@ -1402,20 +1673,15 @@ function renderMonthlyChartPanel(rows, invError, purError, expError, year) {
   }
 
   var cols = rows.map(function(row) {
-    var sH = barPct(row.salesEx);
-    var pH = barPct(row.purchEx);
-    var eH = barPct(row.expEx);
-
     var salesBar = invError ? '' :
-      '<div class="bar sales" style="height:' + sH + '%"'
+      '<div class="bar sales" style="height:' + barPct(row.salesEx) + '%"'
       + ' title="Sales ' + row.month + ': ' + fmtCurrency(row.salesEx || 0) + '"></div>';
     var purchBar = purError ? '' :
-      '<div class="bar purch" style="height:' + pH + '%"'
-      + ' title="Purchases ' + row.month + ': ' + fmtCurrency(row.purchEx || 0) + '"></div>';
+      '<div class="bar purch" style="height:' + barPct(row.purchEx) + '%"'
+      + ' title="Business Purchases ' + row.month + ': ' + fmtCurrency(row.purchEx || 0) + '"></div>';
     var expBar = expError ? '' :
-      '<div class="bar exp" style="height:' + eH + '%"'
+      '<div class="bar exp" style="height:' + barPct(row.expEx) + '%"'
       + ' title="Expenses ' + row.month + ': ' + fmtCurrency(row.expEx || 0) + '"></div>';
-
     return '<div class="chart-col">'
       + '<div class="chart-bars">' + salesBar + purchBar + expBar + '</div>'
       + '<div class="chart-label">' + esc(row.month) + '</div>'
@@ -1424,22 +1690,20 @@ function renderMonthlyChartPanel(rows, invError, purError, expError, year) {
 
   var legendItems = [];
   if (!invError) legendItems.push('<span class="chart-legend-item"><span class="chart-legend-dot sales"></span>Sales</span>');
-  if (!purError) legendItems.push('<span class="chart-legend-item"><span class="chart-legend-dot purch"></span>Purchases</span>');
+  if (!purError) legendItems.push('<span class="chart-legend-item"><span class="chart-legend-dot purch"></span>Business Purchases</span>');
   if (!expError) legendItems.push('<span class="chart-legend-item"><span class="chart-legend-dot exp"></span>Expenses</span>');
 
   var failedNotes = [];
-  if (invError) failedNotes.push('Invoices endpoint failed — Sales series unavailable.');
-  if (purError) failedNotes.push('Purchase invoices endpoint failed — Purchases series unavailable.');
-  if (expError) failedNotes.push('Expenses endpoint failed — Expenses series unavailable.');
+  if (invError) failedNotes.push('Invoices endpoint failed — Sales unavailable.');
+  if (purError) failedNotes.push('Purchases endpoint failed — Purchases unavailable.');
+  if (expError) failedNotes.push('Expenses endpoint failed — Expenses unavailable.');
 
   return '<div class="panel">'
     + '<div class="panel-title">Monthly Comparison — ' + esc(String(year)) + '</div>'
-    + '<div class="chart-note">Full year view · ex-VAT · not filtered by selected period</div>'
+    + '<div class="chart-note">Full year view · ex-VAT · business purchases only (personal transfers excluded) · not filtered by selected period</div>'
     + '<div class="chart-wrap"><div class="chart-grid">' + cols + '</div></div>'
     + '<div class="chart-legend">' + legendItems.join('') + '</div>'
-    + (failedNotes.length
-        ? '<div class="chart-failed-note">' + failedNotes.map(esc).join(' ') + '</div>'
-        : '')
+    + (failedNotes.length ? '<div class="chart-failed-note">' + failedNotes.map(esc).join(' ') + '</div>' : '')
     + '</div>';
 }
 
@@ -1449,16 +1713,14 @@ function renderMonthlyTablePanel(rows, invError, purError, expError, year) {
     if (error)    return '<td class="na-cell">N/A</td>';
     return '<td>' + esc(fmtCurrency(val || 0)) + '</td>';
   }
-
   function profitCell(row) {
-    if (!row.hasData)       return '<td class="dash-cell">&#8212;</td>';
+    if (!row.hasData)        return '<td class="dash-cell">&#8212;</td>';
     if (row.profit === null) return '<td class="na-cell">N/A</td>';
     var cls = row.profit >= 0 ? 'val-positive' : 'val-negative';
     return '<td class="' + cls + '">' + esc(fmtCurrency(row.profit)) + '</td>';
   }
-
   function vatCell(row) {
-    if (!row.hasData)       return '<td class="dash-cell">&#8212;</td>';
+    if (!row.hasData)        return '<td class="dash-cell">&#8212;</td>';
     if (row.vatPos === null) return '<td class="na-cell">N/A</td>';
     var cls = row.vatPos > 0.005 ? 'val-payable' : row.vatPos < -0.005 ? 'val-reclaimable' : '';
     return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(fmtCurrency(row.vatPos)) + '</td>';
@@ -1475,14 +1737,11 @@ function renderMonthlyTablePanel(rows, invError, purError, expError, year) {
       + '</tr>';
   }).join('');
 
-  // Totals row — sum across all 12 months
   var totSales  = invError ? null : rows.reduce(function(s, r) { return s + (r.salesEx || 0); }, 0);
   var totPurch  = purError ? null : rows.reduce(function(s, r) { return s + (r.purchEx || 0); }, 0);
   var totExp    = expError ? null : rows.reduce(function(s, r) { return s + (r.expEx   || 0); }, 0);
-  var totProfit = (totSales !== null && totPurch !== null && totExp !== null)
-                  ? totSales - totPurch - totExp : null;
-  var totVAT    = (invError || purError || expError) ? null
-                  : rows.reduce(function(s, r) { return s + (r.vatPos || 0); }, 0);
+  var totProfit = (totSales !== null && totPurch !== null && totExp !== null) ? totSales - totPurch - totExp : null;
+  var totVAT    = (invError || purError || expError) ? null : rows.reduce(function(s, r) { return s + (r.vatPos || 0); }, 0);
 
   function totCell(val, error) {
     if (error || val === null) return '<td class="na-cell">N/A</td>';
@@ -1501,30 +1760,27 @@ function renderMonthlyTablePanel(rows, invError, purError, expError, year) {
 
   var totalRow = '<tr class="total-row">'
     + '<td>Total ' + esc(String(year)) + '</td>'
-    + totCell(totSales, invError)
-    + totCell(totPurch, purError)
-    + totCell(totExp,   expError)
-    + totProfitCell()
-    + totVATCell()
+    + totCell(totSales, invError) + totCell(totPurch, purError) + totCell(totExp, expError)
+    + totProfitCell() + totVATCell()
     + '</tr>';
 
   return '<div class="panel">'
     + '<div class="panel-title">Monthly Breakdown — ' + esc(String(year)) + '</div>'
-    + '<div class="chart-note">Full year view · ex-VAT · not filtered by selected period</div>'
+    + '<div class="chart-note">Full year view · ex-VAT · business purchases only (personal transfers excluded) · not filtered by selected period</div>'
     + '<table class="monthly-table">'
     + '<thead><tr>'
     + '<th>Month</th>'
     + '<th>Sales (ex-VAT)</th>'
-    + '<th>Purchases (ex-VAT)</th>'
+    + '<th>Bus. Purchases (ex-VAT)</th>'
     + '<th>Expenses (ex-VAT)</th>'
     + '<th>Profit Estimate</th>'
     + '<th>VAT Position</th>'
     + '</tr></thead>'
     + '<tbody>' + dataRows + totalRow + '</tbody>'
     + '</table>'
-    + '<div class="disclaimer">Profit estimate = sales &#8722; purchases &#8722; expenses, ex-VAT. '
-    + 'VAT position = output VAT &#8722; purchase input VAT &#8722; expense input VAT. '
-    + 'Management reference only.</div>'
+    + '<div class="disclaimer">Profit = sales − business purchases − expenses, ex-VAT. '
+    + 'VAT position = output VAT − purchase input VAT − expense input VAT. '
+    + 'Personal transfers excluded from all figures. Management reference only.</div>'
     + '</div>';
 }
 
