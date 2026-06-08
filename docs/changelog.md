@@ -2,6 +2,22 @@
 
 ---
 
+## [2026-06-08] — Media Library sort: newest post date first
+
+### social-dashboard.html — UX fix
+
+Media Library cards now sort **newest due date first** (top to bottom).
+
+Previously sorted: images first, then alphabetically by task name.
+Now sorted: descending by `entry.dueDate` (the task's Due date / planned post date).
+
+- Entries with a due date appear before entries without one
+- Entries with no due date fall back to alphabetical order by name
+- No re-scan required — `dueDate` was already stored in the media index schema
+- No change to scan logic, search, card rendering, or any other feature
+
+---
+
 ## [2026-06-08] — Meeting Agendas / Notes full implementation
 
 ### social-dashboard.html — Meeting Agendas / Notes sidebar (full)

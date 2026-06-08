@@ -1780,14 +1780,17 @@ function renderMediaLibrary() {
     return;
   }
 
-  // Only confirmed media — sorted: images first, then by name
+  // Only confirmed media — sorted: newest due date first, undated entries last (then alphabetical)
   const q = searchQuery.trim().toLowerCase();
   const entries = Object.values(index.tasks)
     .filter(e => e.hasMedia && (!q || searchMatchesEntry(e, q)))
     .sort((a, b) => {
-      const ai = a.mediaTypes.includes('image') ? 0 : 1;
-      const bi = b.mediaTypes.includes('image') ? 0 : 1;
-      return ai - bi || a.name.localeCompare(b.name);
+      const ad = a.dueDate || '';
+      const bd = b.dueDate || '';
+      if (ad && bd) return bd.localeCompare(ad);   // ISO strings compare lexicographically
+      if (ad) return -1;   // a has date, b has none → a first
+      if (bd) return  1;   // b has date, a has none → b first
+      return a.name.localeCompare(b.name);          // both undated → alphabetical
     });
 
   const unscanned = Object.values(index.tasks).filter(e => e.scannedAt === null).length;
