@@ -60,6 +60,9 @@
   .doc-list { display: flex; flex-direction: column; gap: 2px; }
   .doc-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 14px; padding: 13px 14px; background: var(--white); border: 1px solid var(--rule); cursor: pointer; transition: border-color 0.15s; }
   .doc-row:hover { border-color: var(--dark); }
+  .doc-row-inv { grid-template-columns: 1fr auto auto auto auto; }
+  .btn-dn { font-family: 'Jost', sans-serif; font-size: 6.5px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; padding: 5px 9px; cursor: pointer; border: 1px solid var(--rule); background: transparent; color: var(--mid); transition: all 0.15s; white-space: nowrap; }
+  .btn-dn:hover { border-color: var(--dark); color: var(--dark); background: var(--cream); }
   .doc-no { font-size: 9px; font-weight: 500; color: var(--dark); letter-spacing: 0.04em; }
   .doc-client { font-size: 8.5px; font-weight: 300; color: var(--mid); margin-top: 2px; }
   .doc-date { font-size: 8px; font-weight: 300; color: var(--light); white-space: nowrap; }
@@ -189,6 +192,28 @@
   /* Arabic utility */
   .ar { font-family: 'Cairo', sans-serif; }
   .pp-terms .ar-title { font-family: 'Cairo', sans-serif; font-size: 6.5px; font-weight: 600; display: block; color: #1C1C1A; margin-top: 3px; }
+
+  /* Delivery Note table: cols 2–3 left-align (override base pp-table right rule); col 4 right */
+  .pp-table-dn th:nth-child(2), .pp-table-dn th:nth-child(3),
+  .pp-table-dn td:nth-child(2), .pp-table-dn td:nth-child(3) { text-align: left; }
+  .pp-table-dn th:nth-child(4), .pp-table-dn td:nth-child(4) { text-align: right; }
+
+  /* Delivery Note receiver confirmation section */
+  .pp-dn-receiver { margin-top: 32px; page-break-inside: avoid; break-inside: avoid; }
+
+  /* Delivery Note optional notes block */
+  .pp-dn-notes { margin-top: 18px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; page-break-inside: avoid; break-inside: avoid; }
+
+  /* Delivery Note editable form panel (outside pdfPage) */
+  .dn-form-panel { background: var(--white); border: 1px solid var(--rule); padding: 18px 20px; margin-bottom: 14px; }
+  .dn-form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .dn-items-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .dn-items-table th { font-size: 7.5px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mid); padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule); text-align: left; }
+  .dn-items-table th:last-child { text-align: right; }
+  .dn-items-table td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--rule); font-size: 9px; color: var(--dark); vertical-align: middle; }
+  .dn-items-table td:last-child { text-align: right; }
+  .dn-qty { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 400; color: var(--dark); background: var(--cream); border: 1px solid var(--rule); padding: 4px 7px; text-align: right; width: 72px; outline: none; }
+  .dn-qty:focus { border-color: var(--dark); }
 </style>
 </head>
 <body>
@@ -273,6 +298,7 @@
 let allInvoices = [], allEstimates = [];
 let currentTab = 'invoices';
 let currentDoc = null;
+let dnState = null;
 
 // Logo embedded as base64 so html2canvas renders it without CORS/local-path issues.
 // Regenerate with: base64 -w 0 logo.png  (then prefix with data:image/png;base64,)
@@ -338,6 +364,7 @@ function renderList() {
     <div class="tab-row">
       <button class="tab ${currentTab==='invoices'?'active':''}" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
       <button class="tab ${currentTab==='estimates'?'active':''}" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
+      <button class="tab ${currentTab==='delivery_note'?'active':''}" onclick="switchTab('delivery_note')">Delivery Note</button>
     </div>`;
 
   if (!docs.length) {
@@ -366,7 +393,8 @@ function renderList() {
     else if (doc.draft == 1 || doc.draft === '1') { statusLabel = 'Draft'; badgeClass = 'badge-draft'; }
     else { statusLabel = String(rawStatus).replace(/^\d+ => /, '') || 'Draft'; }
 
-    return `<div class="doc-row" onclick="openDoc(${i})">
+    const isInvRow = currentTab === 'invoices';
+    return `<div class="doc-row${isInvRow ? ' doc-row-inv' : ''}" onclick="openDoc(${i})">
       <div>
         <div class="doc-no">${typeLabel}-${no}</div>
         <div class="doc-client">${client}</div>
@@ -374,6 +402,7 @@ function renderList() {
       <div class="doc-date">${date}</div>
       <div class="doc-amount">${totalStr}</div>
       <div class="badge ${badgeClass}">${statusLabel}</div>
+      ${isInvRow ? `<button class="btn-dn" onclick="event.stopPropagation();openDNFromInvoice(${i})">Gen DN</button>` : ''}
     </div>`;
   }).join('');
 
@@ -382,6 +411,7 @@ function renderList() {
 
 function switchTab(tab) {
   currentTab = tab;
+  if (tab === 'delivery_note') { showDNTab(); return; }
   renderList();
 }
 
@@ -854,7 +884,7 @@ async function downloadPDF() {
     const wrapper = el.parentElement;
     const { doc, type } = currentDoc;
     const no = doc.no || doc.id || '001';
-    const filename = `${type === 'invoices' ? 'invoice' : 'quotation'}-${no}.pdf`;
+    const filename = type === 'invoices' ? `invoice-${no}.pdf` : type === 'estimates' ? `quotation-${no}.pdf` : `delivery-note-${no}.pdf`;
     // Temporarily remove the preview scale so the PDF captures at true A4 size
     const prevTransform = wrapper.style.transform;
     wrapper.style.transform = 'none';
@@ -875,6 +905,307 @@ async function downloadPDF() {
     console.error('[PDF] Download failed:', err);
     alert('PDF download failed: ' + err.message);
   }
+}
+
+// ── Delivery Note ─────────────────────────────────────────────────────────────
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showDNTab() {
+  currentTab = 'delivery_note';
+  const tabsHTML = `
+    <div class="tab-row">
+      <button class="tab" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
+      <button class="tab" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
+      <button class="tab active" onclick="switchTab('delivery_note')">Delivery Note</button>
+    </div>`;
+  const noDocsNote = allInvoices.length === 0
+    ? `<div class="form-note" style="margin-top:8px;color:#B06B1A;">Please click <strong>Fetch Documents</strong> in the sidebar first, then enter an invoice number here.</div>`
+    : '';
+  $('mainArea').innerHTML = tabsHTML + `
+    <div class="dn-form-panel">
+      <div class="sec-title" style="margin-bottom:12px;">Generate from Invoice</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;">
+        <div class="form-group" style="flex:1;">
+          <div class="form-label">Invoice Number</div>
+          <input class="form-input" id="dnInvInput" placeholder="e.g. INV000021" onkeydown="if(event.key==='Enter')fetchDN()">
+        </div>
+        <button class="btn btn-dark" style="width:auto;padding:10px 20px;white-space:nowrap;" onclick="fetchDN()">Generate Delivery Note</button>
+      </div>
+      ${noDocsNote}
+    </div>
+    <div id="dnPreviewArea"></div>`;
+}
+
+async function fetchDN() {
+  const invNoInput = ($('dnInvInput') ? $('dnInvInput').value : '').trim();
+  if (!invNoInput) { status('Please enter an invoice number.', 'error'); return; }
+  if (!allInvoices.length) { status('Please fetch documents first using the Fetch Documents button.', 'error'); return; }
+
+  // Normalize: lowercase, strip whitespace.
+  // Match: full equality OR invoice number ends with the input string.
+  // This lets "021" match "INV000021", "000021" match "INV000021",
+  // and "INV000021" match "INV000021" exactly.
+  const inp = invNoInput.toLowerCase();
+  const matches = allInvoices.filter(inv => {
+    const n = String(inv.no || inv.id || '').trim().toLowerCase();
+    return n === inp || n.endsWith(inp);
+  });
+
+  if (matches.length === 0) {
+    status(`No invoice found matching "${escapeHtml(invNoInput)}". Try a different number or re-fetch documents.`, 'error');
+    return;
+  }
+
+  if (matches.length === 1) {
+    await fetchDNFromMatch(matches[0]);
+    return;
+  }
+
+  // Multiple matches — show inline picker; do not guess.
+  status('', 'clear');
+  const pickerRows = matches.map(inv => {
+    const idx    = allInvoices.indexOf(inv);
+    const no     = escapeHtml(String(inv.no || inv.id || '').trim());
+    const client = escapeHtml(inv.client_business_name ||
+                   (inv.client_first_name ? `${inv.client_first_name} ${inv.client_last_name||''}`.trim() : '—'));
+    const date   = inv.date || '—';
+    return `<div class="doc-row" style="cursor:pointer;" onclick="fetchDNFromMatch(allInvoices[${idx}])">
+      <div><div class="doc-no">${no}</div><div class="doc-client">${client}</div></div>
+      <div class="doc-date">${date}</div>
+      <div></div><div></div>
+    </div>`;
+  }).join('');
+
+  const pickerEl = $('dnPreviewArea');
+  if (pickerEl) {
+    pickerEl.innerHTML = `
+      <div style="font-size:8.5px;font-weight:400;color:var(--mid);margin-bottom:10px;">
+        <strong>${matches.length} invoices</strong> match <em>${escapeHtml(invNoInput)}</em> — click one to generate a Delivery Note:
+      </div>
+      <div class="doc-list">${pickerRows}</div>`;
+  }
+}
+
+async function fetchDNFromMatch(match) {
+  currentTab = 'delivery_note';
+  const sub  = $('subdomain').value.trim();
+  const key  = $('apikey').value.trim();
+  const h    = { 'APIKEY': key, 'Accept': 'application/json' };
+  const base = `https://${sub}.daftra.com/api2`;
+
+  status('Loading invoice details...');
+  try {
+    const r = await fetch(`${base}/invoices/${match.id}.json`, { headers: h });
+    const d = await r.json();
+    const invoice  = (d.data || d).Invoice  || (d.data || d);
+    const rawItems = (d.data || d).InvoiceItem || invoice.InvoiceItem || [];
+
+    const client   = invoice.client_business_name ||
+                     `${invoice.client_first_name||''} ${invoice.client_last_name||''}`.trim() ||
+                     match.client_business_name || 'Client';
+    const addr1    = invoice.client_address1    || match.client_address1    || '';
+    const city     = invoice.client_city        || match.client_city        || '';
+    const postal   = invoice.client_postal_code || match.client_postal_code || '';
+    const addrLine = [addr1, city, postal].filter(Boolean).join(', ');
+    const invNo    = String(invoice.no || match.no || match.id || '').trim();
+
+    const today    = new Date();
+    const todayStr = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+
+    dnState = {
+      invoiceNo: invNo,
+      dnNo:      `DN-${invNo}`,
+      dnDate:    todayStr,
+      client,
+      addrLine,
+      items: rawItems.map(it => ({
+        name: it.product_name || it.name || it.item || it.title || '—',
+        desc: it.description  || it.note || it.notes || '',
+        qty:  parseFloat(it.quantity || it.qty || 1),
+      })),
+      notes: '',
+    };
+
+    status('', 'clear');
+    currentDoc = { doc: { no: dnState.dnNo }, type: 'delivery_note' };
+    renderDNForm();
+
+  } catch(e) {
+    console.error('[DN] fetch error:', e);
+    status(e.message || 'Failed to load invoice.', 'error');
+  }
+}
+
+async function openDNFromInvoice(index) {
+  await fetchDNFromMatch(allInvoices[index]);
+}
+
+function renderDNForm() {
+  if (!dnState) return;
+  const tabsHTML = `
+    <div class="tab-row">
+      <button class="tab" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
+      <button class="tab" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
+      <button class="tab active" onclick="switchTab('delivery_note')">Delivery Note</button>
+    </div>`;
+
+  const itemRows = dnState.items.map((it, i) => `
+    <tr>
+      <td style="color:var(--dark);font-weight:500;">${escapeHtml(it.name)}</td>
+      <td style="color:var(--mid);">${escapeHtml(it.desc) || '<span style="color:var(--light);">—</span>'}</td>
+      <td><input class="dn-qty" type="number" value="${it.qty}" min="0" step="any" oninput="updateDNQty(${i},this.value)"></td>
+    </tr>`).join('');
+
+  $('mainArea').innerHTML = tabsHTML + `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="font-size:8.5px;font-weight:300;color:var(--mid);">← <span style="cursor:pointer;text-decoration:underline;" onclick="showDNTab()">Back to search</span></div>
+      <button class="btn-sm btn-sm-dark" onclick="downloadPDF()">Download PDF</button>
+    </div>
+    <div class="dn-form-panel">
+      <div class="sec-title" style="margin-bottom:12px;">Delivery Note Details</div>
+      <div class="dn-form-row">
+        <div class="form-group">
+          <div class="form-label">Delivery Note No.</div>
+          <input class="form-input" id="dnNoInput" value="${escapeHtml(dnState.dnNo)}"
+            oninput="dnState.dnNo=this.value;currentDoc.doc.no=this.value;renderDNPreview()">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Delivery Note Date</div>
+          <input class="form-input" id="dnDateInput" value="${escapeHtml(dnState.dnDate)}"
+            oninput="dnState.dnDate=this.value;renderDNPreview()">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Related Invoice No.</div>
+          <input class="form-input" value="${escapeHtml(dnState.invoiceNo)}" readonly
+            style="color:var(--light);cursor:default;">
+        </div>
+      </div>
+      <div>
+        <div class="sec-title" style="margin-bottom:6px;">Items — Edit Delivered Quantity Before Export</div>
+        <table class="dn-items-table">
+          <thead><tr><th>Item</th><th>Brief Description</th><th>Delivered Qty</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px;">
+        <div class="form-group">
+          <div class="form-label">Notes (optional — leave blank to omit from PDF)</div>
+          <textarea class="form-input" rows="2" style="resize:vertical;"
+            oninput="dnState.notes=this.value;renderDNPreview()">${escapeHtml(dnState.notes)}</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="preview-wrap">
+      <div class="pdf-bg">
+        <div id="dnPreviewScaler" style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
+          <div class="pdf-page" id="pdfPage"></div>
+        </div>
+      </div>
+    </div>`;
+
+  renderDNPreview();
+}
+
+function updateDNQty(idx, val) {
+  const v = parseFloat(val);
+  if (!isNaN(v) && v >= 0) dnState.items[idx].qty = v;
+  renderDNPreview();
+}
+
+function renderDNPreview() {
+  if (!dnState) return;
+  const el = $('pdfPage');
+  if (!el) return;
+  const c = co();
+  const { dnNo, dnDate, invoiceNo, client, addrLine, items, notes } = dnState;
+
+  const itemRows = items.map((it, i) => {
+    const qty = it.qty;
+    return `<tr>
+      <td style="width:5%;font-size:8px;color:#6B6B67;">${i + 1}</td>
+      <td style="width:38%;"><div class="pp-item-name">${escapeHtml(it.name)}</div></td>
+      <td style="width:42%;"><div class="pp-item-desc" style="font-size:8px;font-weight:400;">${escapeHtml(it.desc) || '—'}</div></td>
+      <td class="pp-td-r" style="width:15%;">${qty % 1 === 0 ? qty : parseFloat(qty).toFixed(2)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="4" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No items</td></tr>`;
+
+  const notesHTML = notes ? `
+    <div class="pp-dn-notes">
+      <div style="font-size:6.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:#1C1C1A;margin-bottom:5px;">Notes</div>
+      <div style="font-size:8px;font-weight:300;color:#6B6B67;line-height:1.75;">${escapeHtml(notes)}</div>
+    </div>` : '';
+
+  el.innerHTML = `
+    <div class="pp-header pp-header-quo">
+      <div class="pp-logo-wrap">
+        <img class="pp-logo" src="${LOGO_DATA_URL}" alt="Vista United">
+      </div>
+      <div class="pp-qr-wrap"></div>
+      <div class="pp-title-block">
+        <div class="pp-doc-heading">Delivery Note</div>
+        <div class="pp-doc-heading-ar">مذكرة تسليم</div>
+        <div class="pp-doc-meta">No. ${escapeHtml(dnNo)} &nbsp;&middot;&nbsp; ${escapeHtml(dnDate)}</div>
+        <div class="pp-doc-meta" style="margin-top:3px;font-size:6.5px;">Ref. Invoice: ${escapeHtml(invoiceNo)}</div>
+      </div>
+    </div>
+
+    <hr class="pp-rule">
+
+    <div class="pp-body">
+      <div class="pp-info-grid">
+        <div class="pp-info-block">
+          <div class="pp-section-heading">
+            <div class="pp-heading-en">Delivered To</div>
+            <div class="pp-heading-ar">تسليم إلى</div>
+          </div>
+          <div class="pp-info-name">${escapeHtml(client)}</div>
+          <div class="pp-info-body">${addrLine ? escapeHtml(addrLine) + '<br>' : ''}Kingdom of Saudi Arabia</div>
+        </div>
+        <div class="pp-info-block">
+          <div class="pp-section-heading">
+            <div class="pp-heading-en">Issued By</div>
+            <div class="pp-heading-ar">صادر من</div>
+          </div>
+          <div class="pp-info-name">${escapeHtml(c.name)}</div>
+          <div class="pp-info-body">${escapeHtml(c.address)}<br>${escapeHtml(c.website)}</div>
+        </div>
+      </div>
+
+      <table class="pp-table pp-table-dn">
+        <thead><tr>
+          <th style="width:5%;">#</th>
+          <th style="width:38%;">Item <span class="th-ar">الصنف</span></th>
+          <th style="width:42%;">Brief Description <span class="th-ar">الوصف</span></th>
+          <th class="r" style="width:15%;">Qty Delivered <span class="th-ar">الكمية</span></th>
+        </tr></thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+
+      <div class="pp-dn-receiver">
+        <div style="font-size:6.5px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;color:#ADADAA;margin-bottom:16px;padding-bottom:7px;border-bottom:0.5px solid #D8D5CF;">
+          Receipt Confirmation &nbsp;&middot;&nbsp; <span style="font-family:'Cairo',sans-serif;letter-spacing:0;font-weight:400;font-size:7.5px;">تأكيد الاستلام</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px;">
+          <div>
+            <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:26px;">Receiver Name</div>
+            <div style="border-bottom:0.5px solid #1C1C1A;"></div>
+          </div>
+          <div>
+            <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:26px;">Receiver Signature</div>
+            <div style="border-bottom:0.5px solid #1C1C1A;"></div>
+          </div>
+          <div>
+            <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:26px;">Delivery Date</div>
+            <div style="border-bottom:0.5px solid #1C1C1A;"></div>
+          </div>
+        </div>
+      </div>
+
+      ${notesHTML}
+    </div>`;
 }
 </script>
 </body>
