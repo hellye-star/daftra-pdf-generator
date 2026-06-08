@@ -130,11 +130,21 @@ Local favorites stored in `vista_favorites_v1` localStorage. No Notion write-bac
 - Category, Assignee, Search filters apply inside Favorites chip
 - Persists across browser refresh; Incognito always starts empty
 
-### ✅ Meeting Agendas — Sidebar placeholder — COMPLETE (2026-06-08)
+### ✅ Meeting Agendas / Notes — Full implementation — COMPLETE (2026-06-08)
 
-Investigation confirmed meeting agendas are child pages (not a database) under the Vista United workspace. Individual pages are not yet accessible to the Youssef integration. Collapsible sidebar panel added (Option A — no new tab) showing a clear notice. Requires Hussam to share pages with the integration before content rendering can be built.
+Hussam shared both Meetings Agendas and Meeting Notes pages with the Youssef integration. Full implementation shipped.
 
-**To unlock full meeting agenda content:** Hussam opens Meetings Agendas and Meeting Notes in Notion → ••• → Add connections → Youssef. Then `meeting_agenda_page_id` and `meeting_notes_page_id` can be added to `config.json`.
+**What's live:**
+- Collapsible sidebar panel with **Agendas** / **Notes** tabs
+- 4 agenda pages + 7 meeting note pages, listed newest-first
+- Click any page → full-width content viewer (replaces main content, back button restores)
+- Block renderer: heading_2/3, paragraphs, bullets, numbered lists, dividers, callouts
+- Rich text: bold, italic, code, inline links, auto-linked plain URLs
+- Uses `MEETING_PROXY = 'social'` (Hussam's integration token via proxy)
+- Page IDs: `MEETING_AGENDA_PAGE_ID = 35ba2557-...`, `MEETING_NOTES_PAGE_ID = 363a2557-...`
+- Graceful fallback: spinner while loading, error message on failure, empty-state if no pages
+
+**Previously needed (now resolved):** Hussam opened Meetings Agendas and Meeting Notes in Notion → ••• → Add connections → Youssef.
 
 ### ✅ Phase 2A.5 — Related Supporting Tasks — COMPLETE (2026-06-05)
 

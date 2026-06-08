@@ -2,6 +2,51 @@
 
 ---
 
+## [2026-06-08] — Meeting Agendas / Notes full implementation
+
+### social-dashboard.html — Meeting Agendas / Notes sidebar (full)
+
+Replaced the "not yet accessible" placeholder with a fully functional sidebar panel.
+Access confirmed — Hussam shared both Meetings Agendas and Meeting Notes pages with the Youssef integration.
+
+**Architecture:**
+- Uses `MEETING_PROXY = 'social'` (Hussam's social_media token) — distinct from task fetching which uses `personal` token
+- Page IDs hardcoded as JS constants (`MEETING_AGENDA_PAGE_ID`, `MEETING_NOTES_PAGE_ID`) — same pattern as `DATA_SOURCE_ID`
+- Child-page lists cached in `_meetingCache` per session; invalidated on proxy restart
+
+**Sidebar behaviour:**
+- Two tabs inside the panel: **Agendas** (4 pages) and **Notes** (7 pages)
+- Each tab shows pages newest-first (array reversed from Notion's oldest-first order)
+- List loaded on first panel expand; cached thereafter
+- Loading spinner, empty-state message, and error message for inaccessible pages
+
+**Content viewer:**
+- Click any agenda/note title → full-width viewer replaces main content area
+- Chips strip, tab row, and legend are hidden while viewer is open
+- `← Back` button restores previous state via `closeMeetingViewer()` → `switchTab(currentTab)`
+- Page title rendered in Cormorant Garamond italic heading
+
+**Block renderer (`renderNotionBlocks`):**
+Handles all block types confirmed present in the Notion pages:
+- `heading_2` → `<h2 class="nb-h2">`
+- `heading_3` → `<h3 class="nb-h3">`
+- `paragraph` → `<p class="nb-p">`
+- `bulleted_list_item` → `<ul class="nb-ul">` (consecutive items grouped)
+- `numbered_list_item` → `<ol class="nb-ol">` (consecutive items grouped)
+- `divider` → `<hr class="nb-divider">`
+- `callout` → `<div class="nb-callout">` with emoji icon + styled body
+- Unknown block types silently skipped (graceful)
+
+**Rich text renderer (`renderRichText`):**
+- Inline links (`r.href`) rendered as `<a class="nb-link">`
+- Plain URLs auto-linked via regex
+- Bold → `<strong class="nb-bold">`, Italic → `<em class="nb-italic">`, Code → `<code class="nb-code">`
+
+**Files changed:** `social-dashboard.html` only
+**config.json:** not modified (page IDs already present from previous session)
+
+---
+
 ## [2026-06-08] — Favorites chip + Meeting Agendas sidebar placeholder
 
 ### social-dashboard.html — Favorites (Phase 2A.6)

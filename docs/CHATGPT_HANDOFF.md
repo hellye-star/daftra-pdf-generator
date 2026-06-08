@@ -105,11 +105,15 @@ python proxy.py
 - Category, Assignee, and search filters apply inside the Favorites chip view.
 - `isFavorite` is **not** used by `attentionFilter` — favorites have no effect on Needs My Attention.
 
-### Meeting Agendas sidebar (placeholder — 2026-06-08)
-- Collapsible panel in the left sidebar (below Media Index). No new main tab.
-- Shows a "not yet accessible" notice until Hussam shares the meeting pages with the Youssef integration.
-- Individual agenda pages exist under "Meetings Agendas" and "Meeting Notes" in the Vista United workspace but are not readable by the current integration.
-- **To unlock:** Hussam opens each page in Notion → ••• → Add connections → Youssef. Then add `meeting_agenda_page_id` and `meeting_notes_page_id` to `config.json`.
+### Meeting Agendas / Notes sidebar (full — 2026-06-08)
+- Collapsible panel in the left sidebar (below Media Index).
+- Two tabs inside the panel: **Agendas** (4 pages) and **Notes** (7 pages), newest first.
+- Clicking a page title hides chips/tabs/legend and shows a **full-width content viewer** in the main area.
+- `← Back` button restores the previous tab and layout state.
+- **Block renderer** handles: `heading_2`, `heading_3`, `paragraph`, `bulleted_list_item`, `numbered_list_item`, `divider`, `callout`. Rich text: bold, italic, code, links, auto-linked plain URLs.
+- **Proxy route:** `MEETING_PROXY = 'social'` — uses `notion.social_media.token` (Hussam's integration), not the personal token used for tasks.
+- **Page IDs** (not secrets): `MEETING_AGENDA_PAGE_ID = '35ba2557-...'`, `MEETING_NOTES_PAGE_ID = '363a2557-...'` — hardcoded as JS constants (same pattern as `DATA_SOURCE_ID`).
+- Child-page list cached in `_meetingCache` per session. Graceful fallback for errors or empty lists.
 
 ### Task detail panel
 - Slide-in from right. Summary strip, description, media blocks, inline Notion table rendering.

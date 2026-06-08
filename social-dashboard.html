@@ -503,6 +503,68 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
                   background: var(--cream); border: 1px solid var(--rule); }
 .meeting-notice strong { font-weight: 500; color: var(--dark); }
 
+/* ── Meeting sidebar: tab strip ─────────────────────────────────────────── */
+.meeting-tab-strip { display: flex; gap: 3px; margin-bottom: 8px; }
+.meeting-tab-btn   { font-family: 'Jost', sans-serif; font-size: 8.5px; font-weight: 500;
+                     letter-spacing: 0.14em; text-transform: uppercase; padding: 6px 10px;
+                     cursor: pointer; border: 1px solid var(--rule); background: var(--white);
+                     color: var(--light); transition: all 0.15s; flex: 1; }
+.meeting-tab-btn:hover  { border-color: var(--mid); color: var(--dark); }
+.meeting-tab-btn.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+
+/* ── Meeting sidebar: page list ─────────────────────────────────────────── */
+.meeting-list      { display: flex; flex-direction: column; gap: 2px; }
+.meeting-list-item { padding: 9px 11px; background: var(--cream); border: 1px solid var(--rule);
+                     font-size: 11.5px; font-weight: 300; color: var(--dark); cursor: pointer;
+                     transition: border-color 0.15s, background 0.15s; line-height: 1.4; }
+.meeting-list-item:hover { border-color: var(--dark); background: var(--white); }
+.meeting-list-empty   { font-size: 11px; font-weight: 300; color: var(--light);
+                        padding: 8px 11px; font-style: italic; }
+.meeting-list-loading { display: flex; align-items: center; gap: 7px; padding: 8px 11px;
+                        font-size: 11px; font-weight: 300; color: var(--light); }
+.meeting-list-loading .spinner { width: 11px; height: 11px; border-width: 1.5px; }
+.meeting-list-error   { font-size: 11px; font-weight: 300; color: #C0392B; padding: 8px 11px;
+                        background: var(--cream); border: 1px solid #F5C6C6; }
+
+/* ── Meeting content viewer (main area) ──────────────────────────────────── */
+.meeting-back-row { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.meeting-back-btn { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 500;
+                    letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid);
+                    background: none; border: none; cursor: pointer; padding: 0;
+                    transition: color 0.15s; white-space: nowrap; }
+.meeting-back-btn:hover { color: var(--dark); }
+.meeting-back-rule { flex: 1; height: 1px; background: var(--rule); }
+.meeting-page-title { font-family: 'Cormorant Garamond', serif; font-style: italic;
+                      font-size: 36px; color: var(--dark); line-height: 1.15; margin-bottom: 30px; }
+
+/* ── Notion block renderer ───────────────────────────────────────────────── */
+.nb-body  { max-width: 700px; }
+.nb-h2    { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 600;
+            color: var(--dark); margin: 30px 0 10px; line-height: 1.2; }
+.nb-h2:first-child { margin-top: 0; }
+.nb-h3    { font-size: 13px; font-weight: 500; letter-spacing: 0.04em; color: var(--dark);
+            margin: 20px 0 7px; line-height: 1.35; }
+.nb-p     { font-size: 13.5px; font-weight: 300; color: var(--mid); line-height: 1.85;
+            margin-bottom: 8px; }
+.nb-ul, .nb-ol { padding-left: 22px; margin-bottom: 10px; }
+.nb-ul li, .nb-ol li { font-size: 13.5px; font-weight: 300; color: var(--mid);
+                        line-height: 1.85; margin-bottom: 3px; }
+.nb-divider { border: none; border-top: 1px solid var(--rule); margin: 22px 0; }
+.nb-callout { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px;
+              background: var(--cream); border: 1px solid var(--rule);
+              border-left: 3px solid var(--dark); margin-bottom: 10px; }
+.nb-callout-icon { flex-shrink: 0; font-size: 15px; line-height: 1.7; }
+.nb-callout-text { flex: 1; font-size: 13px; font-weight: 300; color: var(--dark); line-height: 1.7; }
+.nb-link   { color: #3A52A0; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+.nb-bold   { font-weight: 500; color: var(--dark); }
+.nb-italic { font-style: italic; }
+.nb-code   { font-family: monospace; font-size: 12px; background: var(--cream);
+             border: 1px solid var(--rule); padding: 1px 5px; }
+.nb-loading { display: flex; align-items: center; gap: 10px; padding: 24px 0;
+              font-size: 12px; font-weight: 300; color: var(--light); }
+.nb-error   { padding: 16px 20px; background: var(--cream); border: 1px solid var(--rule);
+              font-size: 12.5px; font-weight: 300; color: var(--mid); line-height: 1.75; }
+
 /* ── Undo toast ──────────────────────────────────────────────────────────── */
 .undo-toast {
   position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
@@ -633,10 +695,14 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         <span class="meeting-panel-toggle" id="meetingPanelToggle">▶</span>
       </div>
       <div class="meeting-panel-body" id="meetingPanelBody" style="display:none">
-        <div class="meeting-notice">
-          <strong>Not yet accessible.</strong><br>
-          Meeting agenda pages were detected in Notion but their content cannot be read by the current integration.<br><br>
-          Ask Hussam to open <em>Meetings Agendas</em> and <em>Meeting Notes</em> in Notion and share both pages with the <strong>Youssef</strong> connection via <em>••• → Add connections</em>.
+        <div class="meeting-tab-strip">
+          <button class="meeting-tab-btn active" id="meetingTabAgendas"
+                  onclick="switchMeetingTab('agendas')">Agendas</button>
+          <button class="meeting-tab-btn" id="meetingTabNotes"
+                  onclick="switchMeetingTab('notes')">Notes</button>
+        </div>
+        <div id="meetingListArea">
+          <div class="meeting-list-empty">Expanding…</div>
         </div>
       </div>
     </div>
@@ -717,6 +783,16 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
       <div id="mediaLibraryList"></div>
     </div>
 
+    <!-- Meeting Agendas / Notes viewer -->
+    <div id="panelMeeting" style="display:none">
+      <div class="meeting-back-row">
+        <button class="meeting-back-btn" onclick="closeMeetingViewer()">← Back</button>
+        <div class="meeting-back-rule"></div>
+      </div>
+      <div id="meetingViewerTitle" class="meeting-page-title"></div>
+      <div id="meetingViewerBody" class="nb-body"></div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -732,9 +808,15 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 
 <script>
 // ── Configuration ─────────────────────────────────────────────────────────────
-const PROXY_ROUTE    = 'personal';
+const PROXY_ROUTE    = 'social';
 const DATA_SOURCE_ID = '35aa2557-c7f8-8140-81f5-000b067a0139';
 const QUERY_ENDPOINT = `/notion/${PROXY_ROUTE}/data_sources/${DATA_SOURCE_ID}/query`;
+
+// Meeting Agendas / Notes — page IDs (not secrets; same pattern as DATA_SOURCE_ID)
+// These pages are shared with the social_media integration, so use the 'social' proxy route.
+const MEETING_AGENDA_PAGE_ID = '35ba2557-c7f8-81e9-8f53-ed3da0df85c3';
+const MEETING_NOTES_PAGE_ID  = '363a2557-c7f8-81a1-bf70-e59d23f14b87';
+const MEETING_PROXY          = 'social';   // meeting pages use social_media token, not personal
 
 // Media index storage key — bump version if schema changes
 const MEDIA_INDEX_KEY = 'vista_media_index_v1';
@@ -2294,15 +2376,194 @@ function toggleDone() {
   applyFilters();
 }
 
-// ── Meeting Agendas sidebar panel ─────────────────────────────────────────
+// ── Meeting Agendas / Notes ───────────────────────────────────────────────
+
+// State
+let _meetingTab   = 'agendas';            // 'agendas' | 'notes'
+let _meetingCache = { agendas: null, notes: null };  // cached child-page arrays
+
+// Sidebar toggle — load on first expand
 function toggleMeetingAgendasPanel() {
   const body   = document.getElementById('meetingPanelBody');
   const toggle = document.getElementById('meetingPanelToggle');
   if (!body || !toggle) return;
   const isOpen = body.style.display !== 'none';
-  body.style.display  = isOpen ? 'none' : 'block';
-  toggle.textContent  = isOpen ? '▶' : '▼';
+  body.style.display = isOpen ? 'none' : 'block';
+  toggle.textContent = isOpen ? '▶' : '▼';
   toggle.classList.toggle('open', !isOpen);
+  if (!isOpen) loadMeetingList(_meetingTab);   // fetch on first open
+}
+
+// Switch Agendas / Notes tab in sidebar
+function switchMeetingTab(tab) {
+  _meetingTab = tab;
+  document.getElementById('meetingTabAgendas').classList.toggle('active', tab === 'agendas');
+  document.getElementById('meetingTabNotes').classList.toggle('active',   tab === 'notes');
+  loadMeetingList(tab);
+}
+
+// Fetch and render the child-page list for the chosen tab
+async function loadMeetingList(tab) {
+  const pageId = tab === 'agendas' ? MEETING_AGENDA_PAGE_ID : MEETING_NOTES_PAGE_ID;
+  if (!pageId) {
+    _setMeetingListHTML('<div class="meeting-notice"><strong>Not configured.</strong><br>Add the page ID to config.json.</div>');
+    return;
+  }
+  if (_meetingCache[tab]) { _renderMeetingItems(_meetingCache[tab]); return; }
+
+  _setMeetingListHTML('<div class="meeting-list-loading"><div class="spinner"></div>Loading…</div>');
+  try {
+    const resp = await fetch(`/notion/${MEETING_PROXY}/blocks/${pageId}/children?page_size=50`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.message || `HTTP ${resp.status}`);
+    const pages = (data.results || [])
+      .filter(b => b.type === 'child_page')
+      .map(b => ({ id: b.id, title: b.child_page?.title || '(Untitled)' }))
+      .reverse();   // newest first
+    _meetingCache[tab] = pages;
+    _renderMeetingItems(pages);
+  } catch(err) {
+    _setMeetingListHTML(`<div class="meeting-list-error">Could not load: ${esc(err.message)}</div>`);
+  }
+}
+
+function _setMeetingListHTML(html) {
+  const el = document.getElementById('meetingListArea');
+  if (el) el.innerHTML = html;
+}
+
+function _renderMeetingItems(pages) {
+  if (!pages.length) {
+    _setMeetingListHTML('<div class="meeting-list-empty">No pages found.</div>');
+    return;
+  }
+  const rows = pages.map(p =>
+    `<div class="meeting-list-item" onclick="openMeetingPage('${p.id}','${esc(p.title).replace(/'/g,'&#39;')}')">${esc(p.title)}</div>`
+  ).join('');
+  _setMeetingListHTML(`<div class="meeting-list">${rows}</div>`);
+}
+
+// Open a meeting page — show full-width viewer in main content area
+async function openMeetingPage(id, title) {
+  // Show viewer panel, hide chips / tabs / legend / other panels
+  document.getElementById('panelAttention').style.display = 'none';
+  document.getElementById('panelTracker').style.display   = 'none';
+  document.getElementById('panelMedia').style.display     = 'none';
+  document.getElementById('panelMeeting').style.display   = 'block';
+  document.getElementById('chipStrip').style.display      = 'none';
+  document.getElementById('legendStrip').classList.add('legend-hidden');
+  document.querySelector('.tab-row').style.display        = 'none';
+
+  document.getElementById('meetingViewerTitle').textContent = title;
+  const bodyEl = document.getElementById('meetingViewerBody');
+  bodyEl.innerHTML = '<div class="nb-loading"><div class="spinner"></div>Loading…</div>';
+
+  try {
+    const resp = await fetch(`/notion/${MEETING_PROXY}/blocks/${id}/children?page_size=100`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.message || `HTTP ${resp.status}`);
+    bodyEl.innerHTML = renderNotionBlocks(data.results || []);
+  } catch(err) {
+    bodyEl.innerHTML = `<div class="nb-error">Could not load content: ${esc(err.message)}</div>`;
+  }
+}
+
+// Close viewer — restore normal dashboard state
+function closeMeetingViewer() {
+  document.getElementById('panelMeeting').style.display = 'none';
+  document.getElementById('chipStrip').style.display    = '';
+  document.querySelector('.tab-row').style.display      = '';
+  switchTab(currentTab);   // restores the correct panel + legend state
+}
+
+// ── Notion block / rich-text renderer ────────────────────────────────────────
+
+// Convert a rich_text array to HTML, handling annotations and links.
+function renderRichText(rtArr) {
+  if (!Array.isArray(rtArr) || !rtArr.length) return '';
+  return rtArr.map(r => {
+    let text = esc(r.plain_text || '');
+    const ann = r.annotations || {};
+    if (r.href) {
+      text = `<a class="nb-link" href="${esc(r.href)}" target="_blank" rel="noopener">${text}</a>`;
+    } else {
+      // Auto-link plain URLs in plain text
+      text = text.replace(/(https?:\/\/[^\s<"]+)/g,
+        '<a class="nb-link" href="$1" target="_blank" rel="noopener">$1</a>');
+    }
+    if (ann.code)   text = `<code class="nb-code">${text}</code>`;
+    if (ann.bold)   text = `<strong class="nb-bold">${text}</strong>`;
+    if (ann.italic) text = `<em class="nb-italic">${text}</em>`;
+    return text;
+  }).join('');
+}
+
+// Convert a Notion blocks array to an HTML string.
+function renderNotionBlocks(blocks) {
+  if (!blocks.length)
+    return '<p class="nb-p" style="color:var(--light);font-style:italic">No content.</p>';
+
+  let html = '';
+  let i = 0;
+  while (i < blocks.length) {
+    const b     = blocks[i];
+    const btype = b.type;
+    const bdata = b[btype] || {};
+    const rt    = bdata.rich_text || [];
+
+    switch (btype) {
+      case 'heading_2':
+        html += `<h2 class="nb-h2">${renderRichText(rt)}</h2>`;
+        i++; break;
+
+      case 'heading_3':
+        html += `<h3 class="nb-h3">${renderRichText(rt)}</h3>`;
+        i++; break;
+
+      case 'paragraph': {
+        const txt = renderRichText(rt);
+        html += txt ? `<p class="nb-p">${txt}</p>` : '<br>';
+        i++; break;
+      }
+
+      case 'bulleted_list_item':
+        html += '<ul class="nb-ul">';
+        while (i < blocks.length && blocks[i].type === 'bulleted_list_item') {
+          const lrt = blocks[i].bulleted_list_item?.rich_text || [];
+          html += `<li>${renderRichText(lrt)}</li>`;
+          i++;
+        }
+        html += '</ul>';
+        break;
+
+      case 'numbered_list_item':
+        html += '<ol class="nb-ol">';
+        while (i < blocks.length && blocks[i].type === 'numbered_list_item') {
+          const nrt = blocks[i].numbered_list_item?.rich_text || [];
+          html += `<li>${renderRichText(nrt)}</li>`;
+          i++;
+        }
+        html += '</ol>';
+        break;
+
+      case 'divider':
+        html += '<hr class="nb-divider">';
+        i++; break;
+
+      case 'callout': {
+        const icon = bdata.icon?.emoji || '💬';
+        html += `<div class="nb-callout">
+          <span class="nb-callout-icon">${esc(icon)}</span>
+          <div class="nb-callout-text">${renderRichText(rt)}</div>
+        </div>`;
+        i++; break;
+      }
+
+      default:
+        i++; break;   // skip unsupported block types gracefully
+    }
+  }
+  return html;
 }
 
 function closeDetail() {

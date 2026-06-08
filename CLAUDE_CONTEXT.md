@@ -60,7 +60,8 @@ This section is the permanent source of truth for the Social Media Control Cente
 - **Quick-filter chips** — All, Needs My Attention, Content, Social, Media/Posts, Overdue, **Reviewed**, **Favorites**.
   - **Reviewed chip** — opens Task Tracker view filtered to tasks where `isReviewedByMe(task)` is true (review record exists regardless of staleness). A task stays in Reviewed until manually removed via "Remove Review" — Notion edits and Done status changes do not eject it. Done tasks are always visible in this view regardless of the Include Done toggle. Search, Category, and Assignee filters still apply. Live count `· N` reflects all tasks with a review record. Tasks edited in Notion after being reviewed show an amber `Updated Since Review` badge in the task row and a highlighted note in the detail panel review bar; they may also reappear in Needs My Attention (via `isReviewedAndFresh` → false) but remain in Reviewed. Empty state: "No reviewed tasks match the current filters."
   - **Favorites chip** — opens Task Tracker view filtered to tasks where `isFavorite(task)` is true. A task stays in Favorites until the user manually removes it — Notion edits, Done status changes, and refreshes do not eject it. Done tasks are always visible in this view regardless of the Include Done toggle. Search, Category, and Assignee filters still apply. Live count `· N` reflects all favorited tasks. Star toggle (`☆`/`★`) available on every task row (stops event propagation — does not open the detail panel) and inside the task detail panel as a bar/button. Empty state: "No favorited tasks match the current filters." Storage key: `vista_favorites_v1`.
-- **Sidebar** — Refresh Tasks button, Search box with live filtering and × clear button, Category + Assignee filters, Include Done toggle, Refresh Media Index button with index status.
+- **Meeting Agendas / Notes sidebar panel** — collapsible sidebar section. On expand, fetches child pages from the Meetings Agendas or Meeting Notes parent page via `/notion/social/blocks/{id}/children`. Two tabs: Agendas (4 pages, newest first) and Notes (7 pages, newest first). Clicking a page title opens a full-width content viewer in the main area (chips, tabs, and legend are hidden; back button restores them). Block renderer handles: `heading_2`, `heading_3`, `paragraph`, `bulleted_list_item`, `numbered_list_item`, `divider`, `callout`. Rich text supports bold, italic, code, inline links, and auto-linked plain URLs. Child-page lists cached in `_meetingCache` for the session. Graceful fallback if page IDs are blank or a child page returns an error. Uses `MEETING_PROXY = 'social'` (not `PROXY_ROUTE = 'personal'`) — meeting pages are accessible via Hussam's social_media token.
+- **Sidebar** — Refresh Tasks button, Search box with live filtering and × clear button, Category + Assignee filters, Include Done toggle, Refresh Media Index button with index status, Meeting Agendas/Notes collapsible panel.
 - **Search** — live substring search across task name, description, status, assignee, category, due date, due date formula, and media type labels. Applies to all three tabs (Needs My Attention, Task Tracker, Media Library). Stacks additively with chips and sidebar filters.
 - **Search — Completed Matches section** — when a search query is active and `showDone` is off, Done tasks matching the query appear below the active bucket groups under a "Completed Matches · N" header, muted at 65% opacity. Section disappears when the search box is cleared. Tracker badge counts and normal browsing behaviour are unchanged.
 - **Related Supporting Tasks section** — always visible in the task detail panel between Media & Files and Comments. Each card shows status, category, assignee, confirmed media types from the index, tier label ("Linked by You", "Explicit Notion Link", "Exact Reference", "Strong Match", or "Possible Match"), an "Open Task →" button, and a "Remove link" button for Tier 5 (manual) cards only. A "+ Link Supporting Task" button is always available to add new manual links. See approved detection signals below.
@@ -116,7 +117,7 @@ Both directions stored explicitly. No Notion write permissions required.
 | Reviewed quick-filter chip | ✅ Done | Chip beside Overdue. Filters Task Tracker to `isReviewedByMe` tasks (permanent — only removed by manual Remove Review). Done tasks always visible in this view. Stale tasks show amber `Updated Since Review` badge. Search, Category, Assignee apply; Include Done does not hide reviewed tasks. |
 | Related Supporting Tasks | ✅ Done (Phase 2A.5) | 5-tier detection: Tiers 1–3 automatic (Possible/Strong Match, Exact Reference), Tier 4 Explicit Notion Link, Tier 5 manual "Linked by You". Max 5 results. `RELATED_STOP` + `sigWords`/`sigBigrams` threshold prevents false positives. See "APPROVED AND FINAL" section above. |
 | Favorites | ✅ Done (Phase 2A.6) | localStorage only. `vista_favorites_v1`. `isFavorite(t)`, `addFavorite`, `removeFavorite`, `toggleFavoriteAction`. Star toggle (☆/★) on every task row + in detail panel. Favorites chip beside Reviewed. Done tasks always visible. No staleness concept. |
-| Meeting Agendas sidebar | ✅ Done (placeholder) | Collapsible sidebar panel shows graceful "not yet accessible" notice. Individual agenda pages (35ba2557, 363a2557) detected but content blocked — integration lacks access. Requires Hussam to share Meetings Agendas and Meeting Notes pages with Youssef connection. `config.example.json` updated with optional `meeting_agenda_page_id` / `meeting_notes_page_id` fields. |
+| Meeting Agendas sidebar | ✅ Done (full) | Collapsible sidebar panel. Two tabs: Agendas (4 pages) and Notes (7 pages), newest first. Click page → full-width viewer replaces main content. Block renderer: heading_2/3, paragraph, ul/ol, divider, callout. Rich text: bold, italic, code, links, auto-URL. `MEETING_PROXY = 'social'`. Page IDs in `config.json` as `meeting_agenda_page_id` / `meeting_notes_page_id`. Graceful fallback for inaccessible pages. |
 | Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
 | Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
 | Personal Task Center | ❌ Not started | Phase 3 — `personal-dashboard.html`. |
@@ -129,10 +130,13 @@ Both directions stored explicitly. No Notion write permissions required.
 ```
 Command to run:   python proxy.py
 URL:              http://localhost:8080/social-dashboard.html
-Notion route:     /notion/personal/...  → api.notion.com/v1/...
+Tasks route:      /notion/personal/...  → api.notion.com/v1/... (Youssef's integration)
+Meetings route:   /notion/social/...    → api.notion.com/v1/... (Hussam's integration)
 Data source ID:   35aa2557-c7f8-8140-81f5-000b067a0139
+Meeting Agendas:  35ba2557-c7f8-81e9-8f53-ed3da0df85c3  (parent page ID)
+Meeting Notes:    363a2557-c7f8-81a1-bf70-e59d23f14b87  (parent page ID)
 API version:      2025-09-03
-Token source:     config.json → notion.personal.token  (git-ignored, never commit)
+Token source:     config.json → notion.personal.token + notion.social_media.token (git-ignored)
 ```
 
 #### localStorage keys in use
@@ -202,6 +206,22 @@ This means: if Hussam updates a task after you've reviewed it, it reappears auto
 - `favoriteSectionHTML(t)` — returns gold `★ Favorited · date` bar with "Remove" link, or `☆ Add to Favorites` button
 - `taskRow()`: gold `★ Favorite` badge when favorited; `☆`/`★` inline toggle (`stopPropagation` — does not open detail panel)
 - Done gate in `getFilteredTasks()`: exempted for `activeChip === 'favorites'` (same as Reviewed)
+
+#### Meeting Agendas / Notes functions (2026-06-08)
+- `MEETING_AGENDA_PAGE_ID` = `'35ba2557-c7f8-81e9-8f53-ed3da0df85c3'` (hardcoded constant, same pattern as `DATA_SOURCE_ID`)
+- `MEETING_NOTES_PAGE_ID`  = `'363a2557-c7f8-81a1-bf70-e59d23f14b87'`
+- `MEETING_PROXY = 'social'` — meeting pages are in Hussam's workspace; use the social_media token, NOT the personal (task) token
+- `_meetingTab` state: `'agendas'` | `'notes'`
+- `_meetingCache` — `{ agendas: null, notes: null }` — caches fetched page lists for the session (re-fetched after proxy restart)
+- `toggleMeetingAgendasPanel()` — open/close sidebar panel; triggers `loadMeetingList` on first expand
+- `switchMeetingTab(tab)` — switches Agendas ↔ Notes tab, loads list
+- `loadMeetingList(tab)` — fetches `/notion/social/blocks/{parentId}/children`, filters `child_page` blocks, reverses to newest-first, caches, calls `_renderMeetingItems`
+- `_setMeetingListHTML(html)` / `_renderMeetingItems(pages)` — sidebar list render helpers
+- `openMeetingPage(id, title)` — hides chips/tabs/legend/task panels; shows `panelMeeting`; fetches block content via `/notion/social/blocks/{id}/children?page_size=100`
+- `closeMeetingViewer()` — hides `panelMeeting`, restores chips/tabs, calls `switchTab(currentTab)` to restore legend and active panel
+- `renderRichText(rtArr)` — converts Notion rich_text array to HTML: bold, italic, code, href links, auto-linked plain URLs (regex)
+- `renderNotionBlocks(blocks)` — converts Notion blocks array to HTML. Supported: `heading_2` → `<h2 class="nb-h2">`, `heading_3` → `<h3 class="nb-h3">`, `paragraph` → `<p class="nb-p">`, `bulleted_list_item` → `<ul class="nb-ul">` (consecutive grouped), `numbered_list_item` → `<ol class="nb-ol">` (consecutive grouped), `divider` → `<hr class="nb-divider">`, `callout` → `<div class="nb-callout">` with emoji icon. Unknown block types silently skipped.
+- **Legend restore bug note:** `openMeetingPage` uses `legendStrip.classList.add('legend-hidden')`. `closeMeetingViewer` calls `switchTab(currentTab)` which re-applies `legend-hidden` toggle correctly for media tab. Do NOT use `legendStrip.style.display` for meeting viewer — will prevent switchTab from restoring it.
 
 ---
 
