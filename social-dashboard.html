@@ -565,6 +565,28 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .nb-error   { padding: 16px 20px; background: var(--cream); border: 1px solid var(--rule);
               font-size: 12.5px; font-weight: 300; color: var(--mid); line-height: 1.75; }
 
+/* ── Workload Health card ────────────────────────────────────────────────── */
+.workload-card { padding: 14px 20px 13px; margin-bottom: 22px; background: var(--white);
+                 border: 1px solid var(--rule); border-left: 4px solid var(--rule);
+                 display: flex; align-items: flex-start; gap: 0; }
+.workload-card.wl-light    { border-left-color: #4A7A52; }
+.workload-card.wl-moderate { border-left-color: #B07A20; }
+.workload-card.wl-heavy    { border-left-color: #C06A1A; }
+.workload-card.wl-critical { border-left-color: #C0392B; }
+
+.wl-main       { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+.wl-headline   { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.wl-label      { font-size: 8.5px; font-weight: 500; letter-spacing: 0.2em;
+                 text-transform: uppercase; color: var(--light); }
+.wl-status     { font-size: 12.5px; font-weight: 500; }
+.wl-status.wl-light    { color: #3A6A42; }
+.wl-status.wl-moderate { color: #8A5A10; }
+.wl-status.wl-heavy    { color: #B05010; }
+.wl-status.wl-critical { color: #C0392B; }
+.wl-hours      { font-size: 13px; font-weight: 400; color: var(--dark); }
+.wl-breakdown  { font-size: 11px; font-weight: 300; color: var(--light); line-height: 1.6; }
+.wl-caveat     { font-size: 10px; font-weight: 300; color: var(--light); font-style: italic; }
+
 /* ── Undo toast ──────────────────────────────────────────────────────────── */
 .undo-toast {
   position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
@@ -713,6 +735,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   <div class="content">
     <div class="content-title">Control Center</div>
     <div class="content-sub">Vista United · Social Media Tasks — Hussam's workspace</div>
+
+    <!-- Workload Health card (populated by renderWorkloadCard after tasks load) -->
+    <div id="workloadCard" style="display:none"></div>
 
     <!-- Quick filter chips -->
     <div class="chip-strip" id="chipStrip">
@@ -997,6 +1022,7 @@ async function loadAllTasks() {
     lastSync = new Date();
     setSyncInfo();
     applyFilters();
+    renderWorkloadCard();       // update workload estimate after each full task load
     mergeNewTasksIntoIndex();   // mark any unseen tasks as unscanned
   } catch (e) {
     showError(`Could not load tasks: ${e.message}. Is proxy.py running?`);
@@ -2647,6 +2673,123 @@ function emptyState(icon, title, sub) {
 function svgDoc()   { return '<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="0.5" width="11" height="15" stroke="currentColor"/><line x1="5" y1="5" x2="11" y2="5" stroke="currentColor" stroke-width="0.8"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="0.8"/><line x1="5" y1="11" x2="9" y2="11" stroke="currentColor" stroke-width="0.8"/></svg>'; }
 function svgCheck() { return '<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><polyline points="3,8 7,12 13,4" stroke="currentColor" stroke-width="1.2"/></svg>'; }
 function svgMedia() { return '<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="0.5" y="2.5" width="15" height="11" stroke="currentColor"/><polyline points="0.5,10 4,6 7,9 10,5.5 15.5,10" stroke="currentColor" stroke-width="0.9" fill="none"/><circle cx="11.5" cy="5.5" r="1.5" stroke="currentColor" stroke-width="0.8"/></svg>'; }
+
+// ── Workload Health card ──────────────────────────────────────────────────────
+
+// Add N days to an ISO date string (YYYY-MM-DD), returning ISO date string.
+function dateAddDays(isoDate, n) {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Infer low/high hour range for a task from its name keywords, category, and status.
+function workloadHours(t) {
+  const st   = status(t);
+  const name = taskName(t).toLowerCase();
+  const cat  = category(t);
+  if (st === 'Pending Feedback')                               return [0.25, 0.75];
+  if (st === 'Blocked')                                        return [0.5,  1   ];
+  if (/video|reel|tiktok/.test(name))                         return [2.5,  5   ];
+  if (/instagram|carousel|photo|story/.test(name))            return [1,    2.5 ];
+  if (/linkedin/.test(name))                                   return [0.75, 1.5 ];
+  if (/\bad\b|campaign|\bads\b/.test(name) ||
+      cat === 'Ads & Testing')                                 return [2,    4   ];
+  if (/report|analytic|research/.test(name) ||
+      cat === 'Reviews & Strategy' || cat === 'Reports')       return [2,    4   ];
+  if (/setup|meeting|booking|\bemail\b|access|landing|integration/.test(name))
+                                                               return [0.5,  1   ];
+  return [1, 2];  // generic active task
+}
+
+function renderWorkloadCard() {
+  const el = document.getElementById('workloadCard');
+  if (!el) return;
+  if (!allTasks.length) { el.style.display = 'none'; return; }
+
+  const today = todayStr();
+  const day14 = dateAddDays(today, 14);
+
+  const activeTasks = allTasks.filter(t => status(t) !== 'Done');
+  const attnCount   = attentionFilter(activeTasks).length;
+
+  let totalLow = 0, totalHigh = 0;
+  let countNearTerm = 0, countOverdue = 0, countBlocked = 0, countPending = 0, countFuture = 0;
+
+  for (const t of activeTasks) {
+    const st  = status(t);
+    const due = dueDate(t);
+
+    if (st === 'Blocked')          countBlocked++;
+    if (st === 'Pending Feedback') countPending++;
+    if (due && due < today)        countOverdue++;
+
+    // Determine weight for hour estimate
+    // Scoring window: overdue + in-progress + pending/blocked (always) + due ≤14 days
+    // Tasks due 15+ days away are excluded from the hour estimate (shown as future count)
+    let weight = 0;
+    if (st === 'Blocked' || st === 'Pending Feedback') {
+      weight = 1;                        // always count — health risk regardless of date
+    } else if (st === 'In progress') {
+      weight = 1;                        // actively worked
+    } else if (due && due < today) {
+      weight = 1;                        // overdue → full weight
+    } else if (due && due <= day14) {
+      weight = 1;                        // due within 14 days → full weight
+      countNearTerm++;
+    } else {
+      countFuture++;                     // due 15+ days out or undated → excluded from hours
+    }
+
+    if (weight > 0) {
+      const [lo, hi] = workloadHours(t);
+      totalLow  += lo * weight;
+      totalHigh += hi * weight;
+    }
+  }
+
+  // Classify workload health
+  let healthKey, healthLabel;
+  if (totalHigh > 100 || attnCount >= 13 || countOverdue >= 7 || countBlocked >= 1) {
+    healthKey = 'critical'; healthLabel = 'Critical';
+  } else if (totalHigh > 35 || attnCount >= 8 || countOverdue >= 4) {
+    healthKey = 'heavy';    healthLabel = 'Heavy';
+  } else if (totalHigh > 15 || attnCount >= 4 || countOverdue >= 2) {
+    healthKey = 'moderate'; healthLabel = 'Moderate';
+  } else {
+    healthKey = 'light';    healthLabel = 'Light';
+  }
+
+  // Format hour range
+  const lo = Math.round(totalLow);
+  const hi = Math.round(totalHigh);
+  const hoursStr = (lo === 0 && hi === 0)
+    ? 'minimal near-term work'
+    : `~${lo}–${hi} hours near-term`;
+
+  const breakdown = [
+    `${activeTasks.length} active`,
+    `${countNearTerm} due within 14 days`,
+    `${attnCount} need attention`,
+    `${countOverdue} overdue`,
+    `${countBlocked} blocked`,
+    `${countPending} pending feedback`,
+    `${countFuture} future scheduled`,
+  ].join(' · ');
+
+  el.className     = `workload-card wl-${healthKey}`;
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="wl-main">
+      <div class="wl-headline">
+        <span class="wl-label">Workload Estimate</span>
+        <span class="wl-status wl-${healthKey}">${healthLabel}</span>
+        <span class="wl-hours">${hoursStr}</span>
+      </div>
+      <div class="wl-breakdown">${breakdown}</div>
+      <div class="wl-caveat">Estimated from task type, status, and due dates — not a timesheet</div>
+    </div>`;
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 updateIndexSidebarStatus();  // show stored index status immediately on load

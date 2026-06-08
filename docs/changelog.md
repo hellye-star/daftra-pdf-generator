@@ -2,6 +2,36 @@
 
 ---
 
+## [2026-06-09] — Workload Estimate card added to Social Dashboard
+
+### social-dashboard.html — new feature
+
+Added a **Workload Health + Estimated Hours** card at the top of the Social Media Control Center dashboard. The card appears above the chip-strip filters and updates automatically after each task load.
+
+**What it shows:**
+- Workload health label: **Light / Moderate / Heavy / Critical**
+- Estimated near-term hours range (e.g. `~46–98 hours near-term`)
+- Breakdown: active count · due within 14 days · need attention · overdue · blocked · pending feedback · future scheduled
+
+**Scoring window (near-term only):**
+- Overdue active tasks — full weight
+- In-progress tasks — full weight
+- Pending Feedback tasks — counted as low effort
+- Blocked tasks — counted as low effort, escalate health to Critical
+- Tasks due within the next 14 days — full weight
+- Tasks due 15+ days away — **excluded from hour estimate**, shown as "N future scheduled"
+- Done tasks — excluded entirely
+
+**Health thresholds:**
+- Light: ≤15h estimated, few overdue, low attention count
+- Moderate: >15h, or ≥2 overdue, or ≥4 attention tasks
+- Heavy: >35h, or ≥4 overdue, or ≥8 attention tasks
+- Critical: >100h, or ≥7 overdue, or ≥13 attention tasks, or any blocked task
+
+Hour ranges estimated from task type (video, image, LinkedIn, reports, ads, admin, generic) — not pulled from any Notion field.
+
+---
+
 ## [2026-06-08] — Media Library sort: newest post date first
 
 ### social-dashboard.html — UX fix
