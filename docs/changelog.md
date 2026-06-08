@@ -2,6 +2,22 @@
 
 ---
 
+## [2026-06-09] — Workload Estimate card: Completed This Month section added
+
+### social-dashboard.html — feature extension
+
+The Workload Estimate card now includes a second section: **Completed This Month**.
+
+- Filters Done tasks whose `last_edited_time` falls in the current calendar month
+- Runs the same `workloadHours()` type-based estimation used for the remaining workload
+- Displays: `~36–72 hours delivered · 23 tasks` (figures vary with live data)
+- Shows all-time Done count as a supporting note: `62 done total`
+- Clearly labelled: *"Estimated completed effort, not a timesheet"*
+- Separated from the remaining workload section by a divider line
+- No new API calls, no new localStorage keys, no changes to remaining workload logic
+
+---
+
 ## [2026-06-09] — Workload Estimate card added to Social Dashboard
 
 ### social-dashboard.html — new feature

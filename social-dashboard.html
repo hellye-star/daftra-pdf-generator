@@ -586,6 +586,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .wl-hours      { font-size: 13px; font-weight: 400; color: var(--dark); }
 .wl-breakdown  { font-size: 11px; font-weight: 300; color: var(--light); line-height: 1.6; }
 .wl-caveat     { font-size: 10px; font-weight: 300; color: var(--light); font-style: italic; }
+.wl-divider    { border: none; border-top: 1px solid var(--rule); margin: 10px 0 9px; }
+.wl-done-hours { font-size: 13px; font-weight: 400; color: var(--light); }
+.wl-done-note  { font-size: 10px; font-weight: 300; color: var(--light); font-style: italic; }
 
 /* ── Undo toast ──────────────────────────────────────────────────────────── */
 .undo-toast {
@@ -2760,7 +2763,7 @@ function renderWorkloadCard() {
     healthKey = 'light';    healthLabel = 'Light';
   }
 
-  // Format hour range
+  // Format remaining workload hour range
   const lo = Math.round(totalLow);
   const hi = Math.round(totalHigh);
   const hoursStr = (lo === 0 && hi === 0)
@@ -2777,6 +2780,22 @@ function renderWorkloadCard() {
     `${countFuture} future scheduled`,
   ].join(' · ');
 
+  // Completed This Month — Done tasks whose last_edited_time falls in current YYYY-MM
+  const thisMonth = today.slice(0, 7);  // e.g. "2026-06"
+  const doneTasks      = allTasks.filter(t => status(t) === 'Done');
+  const doneThisMonth  = doneTasks.filter(t => (t.last_edited_time || '').slice(0, 7) === thisMonth);
+  let doneLow = 0, doneHigh = 0;
+  for (const t of doneThisMonth) {
+    const [dlo, dhi] = workloadHours(t);
+    doneLow  += dlo;
+    doneHigh += dhi;
+  }
+  const dlo = Math.round(doneLow);
+  const dhi = Math.round(doneHigh);
+  const doneHoursStr = (dlo === 0 && dhi === 0)
+    ? 'no completed tasks this month'
+    : `~${dlo}–${dhi} hours delivered · ${doneThisMonth.length} tasks`;
+
   el.className     = `workload-card wl-${healthKey}`;
   el.style.display = '';
   el.innerHTML = `
@@ -2788,6 +2807,12 @@ function renderWorkloadCard() {
       </div>
       <div class="wl-breakdown">${breakdown}</div>
       <div class="wl-caveat">Estimated from task type, status, and due dates — not a timesheet</div>
+      <hr class="wl-divider">
+      <div class="wl-headline">
+        <span class="wl-label">Completed This Month</span>
+        <span class="wl-done-hours">${doneHoursStr}</span>
+      </div>
+      <div class="wl-done-note">${doneTasks.length} done total · Estimated completed effort, not a timesheet</div>
     </div>`;
 }
 
