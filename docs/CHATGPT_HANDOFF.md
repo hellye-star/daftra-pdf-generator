@@ -28,9 +28,9 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Item | Value |
 |---|---|
 | Active stable branch | `stable-reviewed-history` |
-| Stable commit | `2d0faec` |
-| Stable tag | `stable-reviewed-history-v1` |
-| Tag message | "Approved stable Vista dashboard with permanent Reviewed history" |
+| Stable commit | `b59995b` |
+| Previous stable commit | `3cb3db9` |
+| Restore tag | `stable-reviewed-history-v1` (points to `2d0faec` — original Social Dashboard stable snapshot) |
 
 **Note:** The Financial Dashboard (`feature/financial-dashboard`, latest commit `0bc03db`) is **not** included in `stable-reviewed-history`. That branch and tag reflect only the Social Media Control Center and Document Generator. The merge target for the Financial Dashboard branch will be decided after final review.
 
@@ -153,14 +153,63 @@ Live substring across task name, description, status, assignee, category, due da
 
 ## 7. Document Generator Status
 
-Stable. No open tasks. Both invoice and quotation PDF generation are complete and verified.
+Stable. Three document types: Invoice, Quotation, Delivery Note. Latest stable commit: `b59995b`.
 
-Key facts:
+### Recent changes (commits `3cb3db9` and `b59995b`)
+
+#### Invoice issued-by alignment fix (`3cb3db9`)
+Removed the phone/mobile line from the invoice "Issued By" block so the ISSUED TO and ISSUED BY divider/underline lines align horizontally. The phone number remains in the invoice footer. Quotation layout unchanged.
+
+#### Delivery Note generation (`b59995b`)
+Added a **Delivery Note** tab to `daftra-pdf-generator_1.html`. Delivery Notes are non-financial documents generated from existing Daftra invoices.
+
+**Workflow:**
+1. User clicks the Delivery Note tab (or clicks **Gen DN** beside any invoice row).
+2. If using the tab: user types a full or partial invoice number (e.g. `021` matches `INV000021`).
+3. If exactly one invoice matches → proceeds directly. If multiple match → shows a picker list; never guesses. If none → clear error.
+4. Invoice detail is fetched from Daftra. Delivery Note form is populated.
+5. User can edit DN No., DN Date, and Delivered Quantity per item (for partial deliveries).
+6. User downloads the PDF.
+
+**PDF contents:**
+- Logo + "Delivery Note" / مذكرة تسليم heading
+- DN No. · Date · Ref. Invoice No.
+- Delivered To (client) / Issued By (Vista) — aligned, no VAT/CR rows
+- Items table: # · Item · Brief Description · Qty Delivered
+- Receipt Confirmation section: Receiver Name · Receiver Signature · Delivery Date (print lines)
+- Optional Notes block (only rendered if filled)
+
+**PDF intentionally omits:** QR code, prices, VAT, totals, Unit column, payment terms, company stamp box, invoice footer.
+
+**Key functions added:**
+- `showDNTab()` — DN search form UI
+- `fetchDN()` — partial/suffix match against `allInvoices`, 0/1/multi routing
+- `fetchDNFromMatch(match)` — shared fetch + populate + render path
+- `openDNFromInvoice(index)` — called by Gen DN button (uses `event.stopPropagation()`)
+- `renderDNForm()` — editable form + PDF preview wrapper
+- `renderDNPreview()` — generates `#pdfPage` content for the DN
+- `updateDNQty(idx, val)` — live qty edit → re-renders preview
+- `escapeHtml(str)` — XSS-safe HTML rendering helper
+
+**Matching logic:**
+```
+input (lowercased) vs invoice no (lowercased):
+  n === inp            → full equality match
+  n.endsWith(inp)      → suffix match ("021" matches "INV000021")
+```
+
+### Key facts (unchanged)
 - Invoice and quotation numbers are strict pass-throughs from Daftra (`String(no).trim()`). No prefix added.
 - QR on invoices only. Source: `qr_code_url → ?d64= → atob() → QRCode.js → canvas → PNG img`. Locked. Verified by scan.
 - Daftra returns estimate line items under `data.Estimate.InvoiceItem` (not `EstimateItem`).
 - VAT fallback: `summary_tax || (total - subtotal)` — Daftra sometimes returns `summary_tax = 0` even when VAT is present.
 - Footer on invoices only. Terms & Conditions on quotations only. Valid Until calculated as issue date + 30 days (`expiry_date` is always blank on Daftra estimates).
+
+### Locked — do not touch
+- QR pipeline (`d64 → atob() → QRCode.js → canvas → PNG img`)
+- `html2pdf` chain order (`.set()` must stay before `.from()`)
+- Invoice and quotation number handling
+- `proxy.py`, `config.json`, `social-dashboard.html`, `financial-dashboard.html`
 
 ---
 
@@ -315,7 +364,7 @@ Before recommending or making any change, ChatGPT must:
 2. **Read `docs/changelog.md`** — shows what changed and when. The most recent entries reflect the current approved state.
 3. **Read `docs/roadmap.md`** — shows phase status, what is complete, what is blocked, and what is next.
 4. **Read `docs/decisions.md`** — explains the reasoning behind structural choices. Consult before proposing any architectural change.
-5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (commit `2d0faec`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
+5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (latest commit `b59995b`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
 6. **Check `git status`** — confirm working tree is clean before any work begins.
 7. **Read the relevant section of `social-dashboard.html`** before changing any JS function. Do not rely on summaries alone — the function signatures, guard conditions, and localStorage schemas matter exactly.
 8. **Do not suggest changes to locked items** (QR pipeline, html2pdf chain, `attentionFilter` + `isReviewedAndFresh` interaction, `openDetail` unification) without first confirming the lock is documented in `CLAUDE_CONTEXT.md` and has a clear reason to revisit.
