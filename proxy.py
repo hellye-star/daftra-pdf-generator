@@ -17,12 +17,15 @@ Routes:
     Everything else      → static file served from this folder
 """
 
+import base64 as _b64
+import datetime
 import json
 import os
 import sys
 import urllib.request
 import urllib.error
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs, unquote, quote as _urllib_parse_quote
 
 # ── Load config ────────────────────────────────────────────────────────────────
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
@@ -41,6 +44,10 @@ except json.JSONDecodeError as e:
 
 NOTION_API_BASE  = 'https://api.notion.com/v1'
 NOTION_VERSION   = '2025-09-03'
+
+# ── Purchasing Invoices local file store ───────────────────────────────────────
+PURCHASE_INVOICE_DIR  = r"C:\Users\YousefMokaled\Documents\Vista United Co\purchasing invoices"
+PURCHASE_ALLOWED_EXTS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp'}
 
 PORT = CONFIG.get('proxy', {}).get('port', 8080)
 BIND = CONFIG.get('proxy', {}).get('bind', '127.0.0.1')
@@ -72,7 +79,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path.startswith('/daftra/'):
+        if self.path.startswith('/purchasing-invoices/'):
+            self._handle_purchasing_get()
+        elif self.path.startswith('/daftra/'):
             self._proxy_daftra()
         else:
             route = self._notion_route()
@@ -82,7 +91,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
                 super().do_GET()
 
     def do_POST(self):
-        if self.path.startswith('/daftra/'):
+        if self.path.startswith('/purchasing-invoices/upload'):
+            self._upload_purchasing()
+        elif self.path.startswith('/daftra/'):
             self._block_daftra_write()
         else:
             route = self._notion_route()
@@ -139,6 +150,212 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self.wfile.write(data)
         except urllib.error.URLError as e:
             self._json_error(502, f'Could not reach Daftra API: {e.reason}')
+
+    # ── Purchasing Invoices (local file routes) ──────────────────────────────
+
+    def _safe_purchase_path(self, rel_path):
+        """Validate rel_path and return absolute path inside PURCHASE_INVOICE_DIR.
+        Returns None if the path is invalid, contains traversal, or escapes the base."""
+        if not rel_path or '..' in rel_path:
+            return None
+        # Normalise separators; reject anything that looks absolute
+        rel_path = rel_path.replace('/', os.sep).replace('\\', os.sep)
+        if rel_path.startswith(os.sep) or (len(rel_path) > 1 and rel_path[1] == ':'):
+            return None
+        abs_path = os.path.normpath(os.path.join(PURCHASE_INVOICE_DIR, rel_path))
+        base_norm = os.path.normpath(PURCHASE_INVOICE_DIR)
+        if abs_path != base_norm and not abs_path.startswith(base_norm + os.sep):
+            return None
+        return abs_path
+
+    def _handle_purchasing_get(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/purchasing-invoices/list':
+            self._list_purchasing()
+        elif parsed.path == '/purchasing-invoices/file':
+            params = parse_qs(parsed.query)
+            rel_path = unquote(params.get('path', [''])[0])
+            self._serve_purchasing_file(rel_path)
+        else:
+            self._json_error(404, 'Not found')
+
+    def _list_purchasing(self):
+        if not os.path.isdir(PURCHASE_INVOICE_DIR):
+            self._json_error(404, 'Purchasing invoices directory not found on this machine.')
+            return
+        files = []
+        for root, dirs, filenames in os.walk(PURCHASE_INVOICE_DIR):
+            # Skip hidden directories
+            dirs[:] = sorted(d for d in dirs if not d.startswith('.'))
+            rel_folder = os.path.relpath(root, PURCHASE_INVOICE_DIR)
+            if rel_folder == '.':
+                rel_folder = ''
+            for fname in sorted(filenames):
+                if fname.startswith('.') or fname.lower() == 'desktop.ini':
+                    continue
+                ext = os.path.splitext(fname)[1].lower()
+                if ext not in PURCHASE_ALLOWED_EXTS:
+                    continue
+                abs_path = os.path.join(root, fname)
+                rel_path = (rel_folder + '/' + fname) if rel_folder else fname
+                rel_path = rel_path.replace(os.sep, '/')
+                try:
+                    stat  = os.stat(abs_path)
+                    size  = stat.st_size
+                    modified = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M')
+                except OSError:
+                    size, modified = 0, ''
+                files.append({
+                    'folder':       rel_folder if rel_folder else '(root)',
+                    'name':         fname,
+                    'relativePath': rel_path,
+                    'type':         ext.lstrip('.'),
+                    'size':         size,
+                    'modified':     modified,
+                })
+        body = json.dumps({'files': files}).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_purchasing_file(self, rel_path):
+        # ── Phase 1: validation — all errors here can still send a JSON error
+        #    response because no response headers have been written yet.
+        abs_path = self._safe_purchase_path(rel_path)
+        if not abs_path:
+            self._json_error(400, 'Invalid path.')
+            return
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext not in PURCHASE_ALLOWED_EXTS:
+            self._json_error(403, 'File type not allowed.')
+            return
+        if not os.path.isfile(abs_path):
+            self._json_error(404, 'File not found.')
+            return
+
+        mime_map = {
+            '.pdf':  'application/pdf',
+            '.png':  'image/png',
+            '.jpg':  'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.webp': 'image/webp',
+        }
+        content_type = mime_map.get(ext, 'application/octet-stream')
+
+        # Get file size for Content-Length before opening (avoids reading all into memory)
+        try:
+            file_size = os.path.getsize(abs_path)
+        except OSError as e:
+            self._json_error(500, f'Could not stat file: {e}')
+            return
+
+        # ── Phase 2: headers — response has started; never call _json_error below here.
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Length', str(file_size))
+        # RFC 5987 — safe for Arabic/Unicode filenames.
+        # HTTP headers are latin-1; raw Unicode in filename= crashes.
+        # Use ASCII-safe fallback + filename*=UTF-8'' percent-encoded original.
+        raw_name  = os.path.basename(abs_path)
+        safe_name = raw_name.encode('ascii', errors='replace').decode('ascii').replace('"', '_')
+        utf8_name = _urllib_parse_quote(raw_name.encode('utf-8'), safe='')
+        self.send_header('Content-Disposition',
+                         f'inline; filename="{safe_name}"; filename*=UTF-8\'\'{utf8_name}')
+        self.end_headers()
+
+        # ── Phase 3: streaming — chunk file to avoid large memory allocation.
+        #    Connection errors here mean the browser/iframe closed the request early
+        #    (e.g. PDF viewer navigated away, tab closed).  Log and return silently;
+        #    do NOT attempt to send a JSON error — headers are already sent.
+        try:
+            with open(abs_path, 'rb') as f:
+                while True:
+                    chunk = f.read(64 * 1024)   # 64 KB chunks
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError) as e:
+            # Client cancelled — normal for PDF viewers when navigating away
+            print(f'  [purch]  client closed connection while streaming {raw_name!r}: {e}')
+        except OSError as e:
+            # Unexpected I/O error during streaming — log but cannot send error response
+            print(f'  [purch]  OSError streaming {raw_name!r}: {e}')
+
+    def _upload_purchasing(self):
+        """Accept JSON body: {filename, data (base64), folder (optional)}."""
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length > 25 * 1024 * 1024:   # 25 MB (base64 of ~18 MB file)
+            self._json_error(413, 'File too large (max ~18 MB).')
+            return
+        raw = self.rfile.read(content_length)
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            self._json_error(400, 'Invalid JSON body.')
+            return
+
+        filename = os.path.basename(payload.get('filename', '').strip())
+        b64_data = payload.get('data', '')
+        folder   = payload.get('folder', '').strip()
+
+        if not filename or not b64_data:
+            self._json_error(400, 'Missing filename or data.')
+            return
+
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in PURCHASE_ALLOWED_EXTS:
+            self._json_error(403, f'File type {ext!r} not allowed.')
+            return
+
+        if not folder:
+            t = datetime.date.today()
+            folder = f'{t.day}-{t.month}-{t.year}'
+
+        # Whitelist: digits, letters, hyphens, underscores, dots only
+        safe_chars = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_.')
+        if '..' in folder or not all(c in safe_chars for c in folder):
+            self._json_error(400, 'Invalid folder name.')
+            return
+
+        target_dir = os.path.join(PURCHASE_INVOICE_DIR, folder)
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Decode base64 content
+        try:
+            file_bytes = _b64.b64decode(b64_data)
+        except Exception:
+            self._json_error(400, 'Invalid base64 data.')
+            return
+
+        # Resolve filename — avoid overwriting existing files
+        dest_name = filename
+        dest = os.path.join(target_dir, dest_name)
+        if os.path.exists(dest):
+            base, ext2 = os.path.splitext(filename)
+            n = 1
+            while os.path.exists(os.path.join(target_dir, f'{base}_{n}{ext2}')):
+                n += 1
+            dest_name = f'{base}_{n}{ext2}'
+            dest = os.path.join(target_dir, dest_name)
+
+        try:
+            with open(dest, 'wb') as f:
+                f.write(file_bytes)
+        except OSError as e:
+            self._json_error(500, f'Could not save file: {e}')
+            return
+
+        result = {'saved': dest_name, 'folder': folder,
+                  'relativePath': (folder + '/' + dest_name)}
+        body_out = json.dumps(result).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(body_out)
 
     # ── Notion proxy ─────────────────────────────────────────────────────────
 
@@ -215,6 +432,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [notion] {self.command} {self.path}  →  {fmt % args}')
         elif '/daftra/' in self.path:
             print(f'  [daftra] {self.command} {self.path}  ->  {fmt % args}')
+        elif '/purchasing-invoices/' in self.path:
+            print(f'  [purch]  {self.command} {self.path}  ->  {fmt % args}')
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
@@ -230,12 +449,14 @@ if __name__ == '__main__':
     print(f'  Social Media source  : {"OK - configured" if _token_ready(_social_token)   else "NOT SET - edit config.json"}')
     print(f'  Personal source      : {"OK - configured" if _token_ready(_personal_token) else "NOT SET - edit config.json"}')
     print(f'  Daftra               : {"OK - configured" if (_token_ready(_daftra_subdomain) and _token_ready(_daftra_api_key)) else "NOT SET - edit config.json"}')
+    _purch_ok = os.path.isdir(PURCHASE_INVOICE_DIR)
+    print(f'  Purchasing invoices  : {"OK - folder found" if _purch_ok else "FOLDER NOT FOUND - " + PURCHASE_INVOICE_DIR}')
     print()
     print('  Press Ctrl+C to stop.')
     print()
 
     try:
-        server = HTTPServer((BIND, PORT), VistaProxyHandler)
+        server = ThreadingHTTPServer((BIND, PORT), VistaProxyHandler)
         server.serve_forever()
     except KeyboardInterrupt:
         print('\n  Proxy stopped.')

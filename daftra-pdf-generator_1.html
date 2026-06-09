@@ -214,6 +214,47 @@
   .dn-items-table td:last-child { text-align: right; }
   .dn-qty { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 400; color: var(--dark); background: var(--cream); border: 1px solid var(--rule); padding: 4px 7px; text-align: right; width: 72px; outline: none; }
   .dn-qty:focus { border-color: var(--dark); }
+
+  /* ── PURCHASING INVOICES TAB ── */
+  .purch-folder-header { font-size: 7px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--light); padding: 10px 0 5px; border-bottom: 1px solid var(--rule); margin-bottom: 3px; margin-top: 14px; }
+  .purch-folder-header:first-child { margin-top: 0; }
+  .purch-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--white); border: 1px solid var(--rule); margin-bottom: 2px; }
+  .purch-item-report { background: #FFFBEA !important; border-color: #E8D87A !important; }
+  .purch-check { width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; accent-color: var(--dark); }
+  .badge-purch-report { font-size: 6px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; background: #FEF08A; color: #854D0E; border: 1px solid #E8D87A; white-space: nowrap; }
+  .purch-item-name { flex: 1; font-size: 8.5px; font-weight: 400; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .purch-item-meta { font-size: 7px; font-weight: 300; color: var(--light); white-space: nowrap; }
+  .purch-type-badge { font-size: 6px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; background: var(--cream); color: var(--mid); border: 1px solid var(--rule); white-space: nowrap; }
+  .purch-modal-overlay { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; }
+  .purch-modal-inner { background: var(--white); width: 88vw; height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+  .purch-modal-bar { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--rule); flex-shrink: 0; gap: 12px; }
+  .purch-modal-title { font-size: 8.5px; font-weight: 500; color: var(--dark); letter-spacing: 0.04em; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .purch-modal-body { flex: 1; overflow: auto; display: flex; align-items: stretch; background: #e5e4e0; }
+  .purch-modal-body iframe { width: 100%; height: 100%; border: none; }
+  .purch-modal-body img { display: block; max-width: 100%; max-height: 100%; margin: auto; object-fit: contain; padding: 16px; }
+  .purch-upload-panel { background: var(--white); border: 1px solid var(--rule); padding: 14px 16px; margin-bottom: 14px; }
+  .purch-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .purch-search { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 300; flex: 1; color: var(--dark); background: var(--cream); border: 1px solid var(--rule); padding: 7px 10px; outline: none; transition: border-color 0.15s; }
+  .purch-search:focus { border-color: var(--dark); }
+  .purch-upload-input { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 300; color: var(--dark); background: var(--cream); border: 1px solid var(--rule); padding: 6px 8px; width: 100%; cursor: pointer; }
+
+  /* ── PRINT ── */
+  @media print {
+    .topbar, .sidebar, .no-print { display: none !important; }
+    body, html { background: white !important; }
+    .main { display: block !important; min-height: 0 !important; }
+    .content { padding: 0 !important; overflow: visible !important; }
+    .tab-row, #statusArea, .empty-state, .doc-list,
+    .dn-form-panel, .purch-upload-panel, .purch-search-row { display: none !important; }
+    .preview-wrap { border: none !important; box-shadow: none !important; }
+    .pdf-bg { background: white !important; padding: 0 !important; display: block !important; }
+    #pdfPage { box-shadow: none !important; margin: 0 !important; }
+    /* Print All: show the dedicated container */
+    #printAllContainer { display: block !important; }
+    #printAllContainer .print-invoice-page { page-break-after: always; break-after: page; }
+    #printAllContainer .print-invoice-page:last-child { page-break-after: auto; break-after: auto; }
+    #printAllContainer .pdf-page { box-shadow: none !important; margin: 0 auto !important; }
+  }
 </style>
 </head>
 <body>
@@ -299,6 +340,9 @@ let allInvoices = [], allEstimates = [];
 let currentTab = 'invoices';
 let currentDoc = null;
 let dnState = null;
+let purchasingFiles = [];    // cache from /purchasing-invoices/list
+let purchasingSearch = '';   // active search string in purchasing tab
+let purchasingSelected = new Set(); // selected file relativePaths
 
 // Logo embedded as base64 so html2canvas renders it without CORS/local-path issues.
 // Regenerate with: base64 -w 0 logo.png  (then prefix with data:image/png;base64,)
@@ -356,16 +400,21 @@ async function fetchDocuments() {
   $('fetchBtn').disabled = false;
 }
 
+// ── Shared tab-row builder ────────────────────────────────────────────────────
+function buildTabsHTML() {
+  return `<div class="tab-row">
+    <button class="tab ${currentTab==='invoices'?'active':''}" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
+    <button class="tab ${currentTab==='estimates'?'active':''}" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
+    <button class="tab ${currentTab==='delivery_note'?'active':''}" onclick="switchTab('delivery_note')">Delivery Note</button>
+    <button class="tab ${currentTab==='purchasing_invoices'?'active':''}" onclick="switchTab('purchasing_invoices')">Purchasing Invoices</button>
+  </div>`;
+}
+
 function renderList() {
   const docs = currentTab === 'invoices' ? allInvoices : allEstimates;
   const typeLabel = currentTab === 'invoices' ? 'INV' : 'QUO';
 
-  const tabs = `
-    <div class="tab-row">
-      <button class="tab ${currentTab==='invoices'?'active':''}" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
-      <button class="tab ${currentTab==='estimates'?'active':''}" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
-      <button class="tab ${currentTab==='delivery_note'?'active':''}" onclick="switchTab('delivery_note')">Delivery Note</button>
-    </div>`;
+  const tabs = buildTabsHTML();
 
   if (!docs.length) {
     $('mainArea').innerHTML = tabs + `<div class="empty-state">
@@ -406,12 +455,19 @@ function renderList() {
     </div>`;
   }).join('');
 
-  $('mainArea').innerHTML = tabs + `<div class="doc-list">${rows}</div>`;
+  const printAllBtn = currentTab === 'invoices' && allInvoices.length > 0
+    ? `<div class="no-print" style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <button class="btn-sm btn-sm-outline" onclick="printAllInvoices()">Print All Invoices (${allInvoices.length})</button>
+       </div>`
+    : '';
+
+  $('mainArea').innerHTML = tabs + printAllBtn + `<div class="doc-list">${rows}</div>`;
 }
 
 function switchTab(tab) {
   currentTab = tab;
-  if (tab === 'delivery_note') { showDNTab(); return; }
+  if (tab === 'delivery_note')       { showDNTab();          return; }
+  if (tab === 'purchasing_invoices') { showPurchasingTab();  return; }
   renderList();
 }
 
@@ -529,9 +585,10 @@ function toEnDigits(str) {
   return String(str).replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660));
 }
 
-function renderPreview() {
-  const { doc, type } = currentDoc;
-  const c = co();
+// Build the inner HTML of a pdf-page div for invoices or quotations.
+// Called by renderPreview() (single doc) and printAllInvoices() (batch print).
+// qrTargetId must be unique per page when building multiple pages for print-all.
+function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
   const isInv = type === 'invoices';
   const items = doc._items || [];
 
@@ -541,10 +598,8 @@ function renderPreview() {
   const addr1  = doc.client_address1 || '';
   const city   = doc.client_city || '';
   const postal = doc.client_postal_code || '';
-  // Arabic-numeral conversion applied to display values only — source data unchanged
   const clientVat = toEnDigits(doc._clientVat || '');
   const clientCr  = toEnDigits(doc._clientCr  || '');
-  // Valid Until: use expiry_date if set, otherwise calculate quotation date + 30 days (DD/MM/YYYY)
   const validUntil = (() => {
     if (isInv) return '';
     if (doc.expiry_date) return doc.expiry_date;
@@ -558,11 +613,10 @@ function renderPreview() {
 
   const subtotal = parseFloat(doc.summary_subtotal || doc.subtotal_amount || 0);
   const total    = parseFloat(doc.total_amount   || doc.summary_total    || 0);
-  // #3 correct VAT: prefer explicit field, fall back to total - subtotal
   const taxAmt   = parseFloat(doc.summary_tax || doc.tax_amount || doc.vat_amount || 0)
                    || Math.max(0, total - subtotal);
 
-  const prefix    = String(no).trim(); // Pass-through for both invoices and quotations — Daftra provides the full number
+  const prefix    = String(no).trim();
   const docLabel  = isInv ? 'Tax Invoice'  : 'Quotation';
   const docLabelAr= isInv ? 'فاتورة ضريبية' : 'عرض سعر';
   const qrPayload = doc._qrPayload || '';
@@ -615,11 +669,9 @@ function renderPreview() {
   // Split: last 2 rows stay with the totals block to prevent orphan totals on page 2
   const TAIL_ROWS  = 2;
   const colSpan    = isInv ? 4 : 8;
-  const allRows    = items.map(isInv ? renderRow : renderQuoRow);
-  const headRows   = items.length ? allRows.slice(0, Math.max(0, allRows.length - TAIL_ROWS)).join('') : `<tr><td colspan="${colSpan}" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items returned</td></tr>`;
-  const tailRows   = items.length ? allRows.slice(-TAIL_ROWS).join('') : '';
-
-  const thirdCol = ''; // Removed from info grid — Valid Until shown in validity strip below
+  const allRowsArr = items.map(isInv ? renderRow : renderQuoRow);
+  const headRows   = items.length ? allRowsArr.slice(0, Math.max(0, allRowsArr.length - TAIL_ROWS)).join('') : `<tr><td colspan="${colSpan}" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items returned</td></tr>`;
+  const tailRows   = items.length ? allRowsArr.slice(-TAIL_ROWS).join('') : '';
 
   const validityStrip = !isInv ? `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:8px 12px;background:#F7F6F4;border-left:2px solid #C8A96A;">
@@ -633,7 +685,6 @@ function renderPreview() {
   const termsSection = !isInv ? `
     <div class="pp-terms" style="padding:10px 14px;">
       <div style="display:flex;gap:0;align-items:stretch;">
-        <!-- English column -->
         <div style="flex:1;padding-right:14px;border-right:0.5px solid #E0DDD8;">
           <div style="font-size:6.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:#1C1C1A;margin-bottom:6px;">Terms &amp; Conditions</div>
           <div style="line-height:2;font-size:7.5px;font-weight:300;color:#6B6B67;">
@@ -644,7 +695,6 @@ function renderPreview() {
             <div>&middot;&nbsp; All prices include VAT at 15% unless otherwise stated.</div>
           </div>
         </div>
-        <!-- Arabic column -->
         <div style="flex:1;padding-left:14px;text-align:right;">
           <div style="font-family:'Cairo',sans-serif;font-size:7px;font-weight:600;color:#1C1C1A;margin-bottom:6px;">الشروط والأحكام</div>
           <div style="font-family:'Cairo',sans-serif;line-height:2;font-size:7.5px;font-weight:300;color:#6B6B67;direction:rtl;">
@@ -658,142 +708,153 @@ function renderPreview() {
       </div>
     </div>` : '';
 
+  return `
+    <!-- HEADER: logo | QR (invoices only) | title -->
+    <div class="pp-header${isInv ? '' : ' pp-header-quo'}">
+      <div class="pp-logo-wrap">
+        <img class="pp-logo" src="${LOGO_DATA_URL}" alt="Vista United">
+      </div>
+      <div class="pp-qr-wrap">
+        ${isInv && qrPayload ? `<div id="${qrTargetId}"></div>` : ''}
+      </div>
+      <div class="pp-title-block">
+        <div class="pp-doc-heading">${docLabel}</div>
+        <div class="pp-doc-heading-ar">${docLabelAr}</div>
+        <div class="pp-doc-meta">No. ${prefix} &nbsp;&middot;&nbsp; ${date}</div>
+      </div>
+    </div>
+
+    <hr class="pp-rule">
+
+    <div class="pp-body">
+
+      <!-- ISSUED TO / ISSUED BY -->
+      <div class="pp-info-grid">
+        <div class="pp-info-block">
+          <div class="pp-section-heading">
+            <div class="pp-heading-en">${toLabel}</div>
+            <div class="pp-heading-ar">${toLabelAr}</div>
+          </div>
+          <div class="pp-info-name">${client}</div>
+          <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia</div>
+          <div class="pp-reg">
+            <div class="pp-reg-row">
+              <span class="pp-reg-lbl-en">VAT Reg.</span>
+              <span class="pp-reg-lbl-ar">الرقم الضريبي</span>
+              <span class="pp-reg-val">${clientVat}</span>
+            </div>
+            <div class="pp-reg-row">
+              <span class="pp-reg-lbl-en">CR No.</span>
+              <span class="pp-reg-lbl-ar">السجل التجاري</span>
+              <span class="pp-reg-val">${clientCr}</span>
+            </div>
+          </div>
+        </div>
+        <div class="pp-info-block">
+          <div class="pp-section-heading">
+            <div class="pp-heading-en">${byLabel}</div>
+            <div class="pp-heading-ar">${byLabelAr}</div>
+          </div>
+          <div class="pp-info-name">${c.name}</div>
+          <div class="pp-info-body">${c.address}<br>${isInv ? c.website : c.website + ' &nbsp;&middot;&nbsp; ' + c.phone}</div>
+          <div class="pp-reg">
+            <div class="pp-reg-row">
+              <span class="pp-reg-lbl-en">VAT Reg.</span>
+              <span class="pp-reg-lbl-ar">الرقم الضريبي</span>
+              <span class="pp-reg-val">${c.vat}</span>
+            </div>
+            <div class="pp-reg-row">
+              <span class="pp-reg-lbl-en">CR No.</span>
+              <span class="pp-reg-lbl-ar">السجل التجاري</span>
+              <span class="pp-reg-val">${c.cr}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      ${validityStrip}
+
+      <!-- LINE ITEMS TABLE — all rows except last 2 -->
+      <table class="${isInv ? 'pp-table' : 'pp-table pp-table-quo'}">
+        <thead><tr>
+          ${isInv ? `
+          <th style="width:52%;">Description <span class="th-ar">الوصف</span></th>
+          <th class="r" style="width:9%;">Qty <span class="th-ar">الكمية</span></th>
+          <th class="r" style="width:20%;">Unit Price <span class="th-ar">سعر الوحدة</span></th>
+          <th class="r" style="width:19%;">Amount <span class="th-ar">المبلغ</span></th>
+          ` : `
+          <th style="width:18%;">Item <span class="th-ar">البند</span></th>
+          <th style="width:20%;">Description <span class="th-ar">الوصف</span></th>
+          <th class="r" style="width:10%;">Price <span class="th-ar">السعر</span></th>
+          <th class="r" style="width:7%;">Qty <span class="th-ar">الكمية</span></th>
+          <th class="r" style="width:14%;">Total Before Tax <span class="th-ar">قبل الضريبة</span></th>
+          <th class="r" style="width:7%;">VAT% <span class="th-ar">نسبة الضريبة</span></th>
+          <th class="r" style="width:12%;">VAT Amount <span class="th-ar">قيمة الضريبة</span></th>
+          <th class="r" style="width:12%;">Total+VAT <span class="th-ar">مع الضريبة</span></th>
+          `}
+        </tr></thead>
+        <tbody>${headRows}</tbody>
+      </table>
+
+      <!-- INVOICE/QUOTATION TAIL — last 2 rows + totals kept together; prevents orphan page -->
+      <div class="pp-invoice-tail">
+        ${tailRows ? (isInv
+          ? `<table class="pp-table-tail"><colgroup><col style="width:52%"><col style="width:9%"><col style="width:20%"><col style="width:19%"></colgroup><tbody>${tailRows}</tbody></table>`
+          : `<table class="pp-table-tail pp-table-tail-quo"><colgroup><col style="width:18%"><col style="width:20%"><col style="width:10%"><col style="width:7%"><col style="width:14%"><col style="width:7%"><col style="width:12%"><col style="width:12%"></colgroup><tbody>${tailRows}</tbody></table>`
+        ) : ''}
+        <div class="pp-summary-block">
+          <div class="pp-totals">
+            <div class="pp-t-row">
+              <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع الفرعي</span></div>
+              <span class="pp-t-row-amt">SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            </div>
+            <div class="pp-t-row">
+              <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT 15%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div>
+              <span class="pp-t-row-amt">SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            </div>
+            <div class="pp-t-final">
+              <div><span class="lbl">${totLabel}</span><span class="lbl-ar">${totLabelAr}</span></div>
+              <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      ${termsSection}
+    </div>
+
+    <!-- FOOTER: invoices only -->
+    ${isInv ? `
+    <div class="pp-footer">
+      <div>
+        <strong>${c.name}</strong><br>
+        ${c.email} &nbsp;&middot;&nbsp; ${c.phone}<br>
+        ${c.address}, Kingdom of Saudi Arabia
+      </div>
+      <div class="pp-footer-website">${c.website.toUpperCase()}</div>
+    </div>` : ''}
+  `;
+}
+
+function renderPreview() {
+  const { doc, type } = currentDoc;
+  const c = co();
+  const isInv  = type === 'invoices';
+  const qrPayload = doc._qrPayload || '';
+
   $('mainArea').innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <div style="font-size:8.5px;font-weight:300;color:var(--mid);">← <span style="cursor:pointer;text-decoration:underline;" onclick="renderList()">Back to list</span></div>
-      <button class="btn-sm btn-sm-dark" onclick="downloadPDF()">Download PDF</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sm btn-sm-outline" onclick="printPreview()">Print</button>
+        <button class="btn-sm btn-sm-dark" onclick="downloadPDF()">Download PDF</button>
+      </div>
     </div>
     <div class="preview-wrap">
       <div class="pdf-bg">
         <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
         <div class="pdf-page" id="pdfPage">
-
-          <!-- HEADER: logo | QR (invoices only) | title -->
-          <div class="pp-header${isInv ? '' : ' pp-header-quo'}">
-            <div class="pp-logo-wrap">
-              <img class="pp-logo" src="${LOGO_DATA_URL}" alt="Vista United">
-            </div>
-            <div class="pp-qr-wrap">
-              ${isInv && qrPayload ? '<div id="pp-qr-target"></div>' : ''}
-            </div>
-            <div class="pp-title-block">
-              <div class="pp-doc-heading">${docLabel}</div>
-              <div class="pp-doc-heading-ar">${docLabelAr}</div>
-              <div class="pp-doc-meta">No. ${prefix} &nbsp;&middot;&nbsp; ${date}</div>
-            </div>
-          </div>
-
-          <hr class="pp-rule">
-
-          <div class="pp-body">
-
-            <!-- ISSUED TO / ISSUED BY -->
-            <div class="pp-info-grid">
-              <div class="pp-info-block">
-                <div class="pp-section-heading">
-                  <div class="pp-heading-en">${toLabel}</div>
-                  <div class="pp-heading-ar">${toLabelAr}</div>
-                </div>
-                <div class="pp-info-name">${client}</div>
-                <div class="pp-info-body">${addrLine ? addrLine + '<br>' : ''}Kingdom of Saudi Arabia</div>
-                <div class="pp-reg">
-                  <div class="pp-reg-row">
-                    <span class="pp-reg-lbl-en">VAT Reg.</span>
-                    <span class="pp-reg-lbl-ar">الرقم الضريبي</span>
-                    <span class="pp-reg-val">${clientVat}</span>
-                  </div>
-                  <div class="pp-reg-row">
-                    <span class="pp-reg-lbl-en">CR No.</span>
-                    <span class="pp-reg-lbl-ar">السجل التجاري</span>
-                    <span class="pp-reg-val">${clientCr}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="pp-info-block">
-                <div class="pp-section-heading">
-                  <div class="pp-heading-en">${byLabel}</div>
-                  <div class="pp-heading-ar">${byLabelAr}</div>
-                </div>
-                <div class="pp-info-name">${c.name}</div>
-                <div class="pp-info-body">${c.address}<br>${isInv ? c.website : c.website + ' &nbsp;&middot;&nbsp; ' + c.phone}</div>
-                <div class="pp-reg">
-                  <div class="pp-reg-row">
-                    <span class="pp-reg-lbl-en">VAT Reg.</span>
-                    <span class="pp-reg-lbl-ar">الرقم الضريبي</span>
-                    <span class="pp-reg-val">${c.vat}</span>
-                  </div>
-                  <div class="pp-reg-row">
-                    <span class="pp-reg-lbl-en">CR No.</span>
-                    <span class="pp-reg-lbl-ar">السجل التجاري</span>
-                    <span class="pp-reg-val">${c.cr}</span>
-                  </div>
-                </div>
-              </div>
-              ${thirdCol}
-            </div>
-
-            ${validityStrip}
-
-            <!-- LINE ITEMS TABLE — all rows except last 2 -->
-            <table class="${isInv ? 'pp-table' : 'pp-table pp-table-quo'}">
-              <thead><tr>
-                ${isInv ? `
-                <th style="width:52%;">Description <span class="th-ar">الوصف</span></th>
-                <th class="r" style="width:9%;">Qty <span class="th-ar">الكمية</span></th>
-                <th class="r" style="width:20%;">Unit Price <span class="th-ar">سعر الوحدة</span></th>
-                <th class="r" style="width:19%;">Amount <span class="th-ar">المبلغ</span></th>
-                ` : `
-                <th style="width:18%;">Item <span class="th-ar">البند</span></th>
-                <th style="width:20%;">Description <span class="th-ar">الوصف</span></th>
-                <th class="r" style="width:10%;">Price <span class="th-ar">السعر</span></th>
-                <th class="r" style="width:7%;">Qty <span class="th-ar">الكمية</span></th>
-                <th class="r" style="width:14%;">Total Before Tax <span class="th-ar">قبل الضريبة</span></th>
-                <th class="r" style="width:7%;">VAT% <span class="th-ar">نسبة الضريبة</span></th>
-                <th class="r" style="width:12%;">VAT Amount <span class="th-ar">قيمة الضريبة</span></th>
-                <th class="r" style="width:12%;">Total+VAT <span class="th-ar">مع الضريبة</span></th>
-                `}
-              </tr></thead>
-              <tbody>${headRows}</tbody>
-            </table>
-
-            <!-- INVOICE/QUOTATION TAIL — last 2 rows + totals kept together; prevents orphan page -->
-            <div class="pp-invoice-tail">
-              ${tailRows ? (isInv
-                ? `<table class="pp-table-tail"><colgroup><col style="width:52%"><col style="width:9%"><col style="width:20%"><col style="width:19%"></colgroup><tbody>${tailRows}</tbody></table>`
-                : `<table class="pp-table-tail pp-table-tail-quo"><colgroup><col style="width:18%"><col style="width:20%"><col style="width:10%"><col style="width:7%"><col style="width:14%"><col style="width:7%"><col style="width:12%"><col style="width:12%"></colgroup><tbody>${tailRows}</tbody></table>`
-              ) : ''}
-              <div class="pp-summary-block">
-                <div class="pp-totals">
-                  <div class="pp-t-row">
-                    <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع الفرعي</span></div>
-                    <span class="pp-t-row-amt">SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
-                  </div>
-                  <div class="pp-t-row">
-                    <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT 15%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div>
-                    <span class="pp-t-row-amt">SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span>
-                  </div>
-                  <div class="pp-t-final">
-                    <div><span class="lbl">${totLabel}</span><span class="lbl-ar">${totLabelAr}</span></div>
-                    <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            ${termsSection}
-          </div>
-
-          <!-- FOOTER: invoices only -->
-          ${isInv ? `
-          <div class="pp-footer">
-            <div>
-              <strong>${c.name}</strong><br>
-              ${c.email} &nbsp;&middot;&nbsp; ${c.phone}<br>
-              ${c.address}, Kingdom of Saudi Arabia
-            </div>
-            <div class="pp-footer-website">${c.website.toUpperCase()}</div>
-          </div>` : ''}
-
+          ${buildInvoicePDFPageHTML(doc, type, c)}
         </div>
         </div>
       </div>
@@ -915,12 +976,7 @@ function escapeHtml(str) {
 
 function showDNTab() {
   currentTab = 'delivery_note';
-  const tabsHTML = `
-    <div class="tab-row">
-      <button class="tab" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
-      <button class="tab" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
-      <button class="tab active" onclick="switchTab('delivery_note')">Delivery Note</button>
-    </div>`;
+  const tabsHTML = buildTabsHTML();
   const noDocsNote = allInvoices.length === 0
     ? `<div class="form-note" style="margin-top:8px;color:#B06B1A;">Please click <strong>Fetch Documents</strong> in the sidebar first, then enter an invoice number here.</div>`
     : '';
@@ -1045,12 +1101,7 @@ async function openDNFromInvoice(index) {
 
 function renderDNForm() {
   if (!dnState) return;
-  const tabsHTML = `
-    <div class="tab-row">
-      <button class="tab" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
-      <button class="tab" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
-      <button class="tab active" onclick="switchTab('delivery_note')">Delivery Note</button>
-    </div>`;
+  const tabsHTML = buildTabsHTML();
 
   const itemRows = dnState.items.map((it, i) => `
     <tr>
@@ -1060,9 +1111,12 @@ function renderDNForm() {
     </tr>`).join('');
 
   $('mainArea').innerHTML = tabsHTML + `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <div style="font-size:8.5px;font-weight:300;color:var(--mid);">← <span style="cursor:pointer;text-decoration:underline;" onclick="showDNTab()">Back to search</span></div>
-      <button class="btn-sm btn-sm-dark" onclick="downloadPDF()">Download PDF</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sm btn-sm-outline" onclick="printPreview()">Print</button>
+        <button class="btn-sm btn-sm-dark" onclick="downloadPDF()">Download PDF</button>
+      </div>
     </div>
     <div class="dn-form-panel">
       <div class="sec-title" style="margin-bottom:12px;">Delivery Note Details</div>
@@ -1206,6 +1260,555 @@ function renderDNPreview() {
 
       ${notesHTML}
     </div>`;
+}
+
+// ── Print helpers ─────────────────────────────────────────────────────────────
+
+// Print the currently displayed pdfPage (invoice, quotation, or delivery note).
+// Temporarily neutralises the scale transform so the browser prints at true A4 width.
+async function printPreview() {
+  const el = $('pdfPage');
+  if (!el) { alert('No document is open for printing.'); return; }
+  await waitForImages(el);
+
+  const wrapper = el.parentElement;
+  const prevTransform  = wrapper.style.transform;
+  const prevMargin     = wrapper.style.marginBottom;
+  wrapper.style.transform  = 'none';
+  wrapper.style.marginBottom = '0';
+
+  window.print();
+
+  wrapper.style.transform  = prevTransform;
+  wrapper.style.marginBottom = prevMargin;
+}
+
+// Fetch full details for every invoice in allInvoices, render each into a
+// hidden container, then call window.print() to print them all.
+// Shows progress in the status bar while preparing.
+async function printAllInvoices() {
+  if (!allInvoices.length) {
+    status('No invoices loaded. Click Fetch Documents first.', 'error');
+    return;
+  }
+
+  const sub  = $('subdomain').value.trim();
+  const key  = $('apikey').value.trim();
+  const h    = { 'APIKEY': key, 'Accept': 'application/json' };
+  const base = `https://${sub}.daftra.com/api2`;
+  const c    = co();
+
+  // Build a hidden, off-screen container
+  const container = document.createElement('div');
+  container.id = 'printAllContainer';
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;';
+  document.body.appendChild(container);
+
+  let ok = 0, failed = 0;
+
+  for (let i = 0; i < allInvoices.length; i++) {
+    const inv = allInvoices[i];
+    status(`Preparing invoice ${i + 1} of ${allInvoices.length} — ${inv.no || inv.id || ''}…`);
+
+    try {
+      // Fetch detail once (cached on the object if already opened via openDoc)
+      if (!inv._items) {
+        const r = await fetch(`${base}/invoices/${inv.id}.json`, { headers: h });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        const invoice  = (d.data || d).Invoice  || (d.data || d);
+        Object.assign(inv, invoice);
+        inv._items     = (d.data || d).InvoiceItem || invoice.InvoiceItem || [];
+        inv._clientVat = invoice.client_bn1 || '';
+        inv._clientCr  = invoice.client_bn2 || '';
+        const qrUrl    = invoice.qr_code_url || '';
+        if (qrUrl) {
+          try {
+            const d64 = new URL(qrUrl).searchParams.get('d64') || '';
+            inv._qrPayload = d64 ? atob(d64) : '';
+          } catch(e) { inv._qrPayload = ''; }
+        } else {
+          inv._qrPayload = '';
+        }
+      }
+
+      const qrId   = `print-qr-${i}`;
+      const pageDiv = document.createElement('div');
+      pageDiv.className = 'print-invoice-page';
+      pageDiv.innerHTML = `<div class="pdf-page">${buildInvoicePDFPageHTML(inv, 'invoices', c, qrId)}</div>`;
+      container.appendChild(pageDiv);
+
+      if (inv._qrPayload) {
+        renderQR(qrId, inv._qrPayload);
+        // Give QRCode.js time to draw and convert canvas → img
+        await new Promise(resolve => setTimeout(resolve, 220));
+      }
+      ok++;
+    } catch(e) {
+      console.error(`[PrintAll] invoice ${inv.id} failed:`, e);
+      failed++;
+    }
+  }
+
+  status('', 'clear');
+
+  if (ok === 0) {
+    container.remove();
+    status('Could not prepare any invoices for printing.', 'error');
+    return;
+  }
+
+  await waitForImages(container);
+
+  // Move to normal flow so @media print can see it
+  container.style.cssText = '';
+  window.print();
+  container.remove();
+
+  if (failed > 0) {
+    status(`Printed ${ok} invoices. ${failed} could not be prepared (see console).`, 'error');
+  }
+}
+
+// ── Purchasing Invoices tab ───────────────────────────────────────────────────
+
+function showPurchasingTab() {
+  currentTab = 'purchasing_invoices';
+  purchasingSearch = '';
+
+  const today = new Date();
+  const defaultFolder = `${today.getDate()}-${today.getMonth()+1}-${today.getFullYear()}`;
+
+  $('mainArea').innerHTML = buildTabsHTML() + `
+    <div class="purch-upload-panel">
+      <div class="sec-title" style="margin-bottom:10px;">Upload Purchasing Invoices</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:180px;">
+          <div class="form-label">Files (PDF, PNG, JPG, WEBP)</div>
+          <input class="purch-upload-input" type="file" id="purchUploadInput" multiple
+            accept=".pdf,.png,.jpg,.jpeg,.webp">
+        </div>
+        <div class="form-group" style="width:140px;">
+          <div class="form-label">Date Folder</div>
+          <input class="form-input" id="purchUploadDate" value="${escapeHtml(defaultFolder)}"
+            placeholder="e.g. 10-3-2026">
+        </div>
+        <button class="btn-sm btn-sm-dark" style="height:fit-content;margin-bottom:1px;"
+          onclick="uploadPurchasingFiles()">Upload</button>
+      </div>
+      <div id="purchUploadStatus" style="margin-top:8px;font-size:8px;color:var(--mid);"></div>
+    </div>
+
+    <div class="purch-search-row no-print">
+      <input class="purch-search" id="purchSearchInput" placeholder="Search files…"
+        oninput="purchasingSearch=this.value;renderPurchasingList()">
+      <button class="btn-sm btn-sm-outline" onclick="selectAllPurchasing()">Select All</button>
+      <button class="btn-sm btn-sm-outline" onclick="clearPurchSelection()">Clear</button>
+      <button class="btn-sm btn-sm-outline" id="purchPrintSelBtn" onclick="printSelectedPurchasingFiles()">Print Selected (0)</button>
+      <button class="btn-sm btn-sm-outline" onclick="fetchPurchasingList()">Refresh</button>
+      <button class="btn-sm btn-sm-outline" onclick="printAllPurchasingFiles()">Print All</button>
+    </div>
+
+    <div id="purchListArea"><div class="empty-state">
+      <div class="empty-sub">Loading purchasing invoices…</div>
+    </div></div>`;
+
+  fetchPurchasingList();
+}
+
+async function fetchPurchasingList() {
+  const listEl = $('purchListArea');
+  if (listEl) listEl.innerHTML = `<div style="font-size:8.5px;font-weight:300;color:var(--light);padding:12px 0;">Loading…</div>`;
+
+  try {
+    const r = await fetch('/purchasing-invoices/list');
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+      if (listEl) listEl.innerHTML = `<div class="error-bar">⚠ ${escapeHtml(err.error || 'Could not load list.')}</div>`;
+      return;
+    }
+    const data = await r.json();
+    purchasingFiles = data.files || [];
+    purchasingSelected.clear();
+    renderPurchasingList();
+  } catch(e) {
+    if (listEl) listEl.innerHTML = `<div class="error-bar">⚠ ${escapeHtml(e.message || 'Network error.')}</div>`;
+  }
+}
+
+function renderPurchasingList() {
+  const listEl = $('purchListArea');
+  if (!listEl) return;
+
+  const q = purchasingSearch.toLowerCase().trim();
+  const filtered = q
+    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
+    : purchasingFiles;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">
+      <div class="empty-sub">${purchasingFiles.length === 0
+        ? 'No purchasing invoices found. Check that the folder exists and contains PDF or image files.'
+        : `No files match "${escapeHtml(purchasingSearch)}".`}</div>
+    </div>`;
+    return;
+  }
+
+  // Group by folder, preserving encounter order
+  const folderOrder = [];
+  const byFolder = {};
+  for (const f of filtered) {
+    if (!byFolder[f.folder]) { byFolder[f.folder] = []; folderOrder.push(f.folder); }
+    byFolder[f.folder].push(f);
+  }
+
+  const html = folderOrder.map(folder => {
+    const items = byFolder[folder].map(f => {
+      const relEnc   = encodeURIComponent(f.relativePath);
+      const ftype    = escapeHtml(f.type.toUpperCase());
+      const fname    = escapeHtml(f.name);
+      const fmeta    = f.modified ? escapeHtml(f.modified) : '';
+      const isRpt    = isPurchPaymentReport(f.name);
+      const rowCls   = isRpt ? ' purch-item-report' : '';
+      const rptBadge = isRpt ? `<span class="badge-purch-report">Payment Report</span>` : '';
+      const chkd     = purchasingSelected.has(f.relativePath) ? ' checked' : '';
+      const relEsc   = escapeHtml(f.relativePath);
+      return `<div class="purch-item${rowCls}">
+        <input type="checkbox" class="purch-check no-print"${chkd}
+          onchange="updatePurchSelection('${relEsc}',this.checked)">
+        <span class="purch-type-badge">${ftype}</span>
+        ${rptBadge}
+        <span class="purch-item-name" title="${fname}">${fname}</span>
+        <span class="purch-item-meta">${fmeta}</span>
+        <button class="btn-sm btn-sm-outline no-print" style="font-size:6.5px;padding:5px 9px;"
+          onclick="viewPurchasingFile('${relEsc}','${escapeHtml(f.type)}')">View</button>
+        <button class="btn-sm btn-sm-outline no-print" style="font-size:6.5px;padding:5px 9px;"
+          onclick="printPurchasingFile('${relEsc}')">Print</button>
+      </div>`;
+    }).join('');
+
+    return `<div class="purch-folder-header">${escapeHtml(folder)}</div>${items}`;
+  }).join('');
+
+  const selCount = purchasingSelected.size;
+  listEl.innerHTML = `<div>${html}</div>
+    <div class="no-print" style="margin-top:10px;font-size:7.5px;font-weight:300;color:var(--light);">
+      ${filtered.length} file${filtered.length !== 1 ? 's' : ''}${q ? ' matching search' : ''} ·
+      ${purchasingFiles.filter(f=>f.type==='pdf').length} PDF ·
+      ${purchasingFiles.filter(f=>f.type!=='pdf').length} images
+      ${selCount > 0 ? `· <strong style="color:var(--dark);">${selCount} selected</strong>` : ''}
+    </div>`;
+  updatePurchSelectionControls();
+}
+
+// ── Purchasing file viewer ────────────────────────────────────────────────
+// Only one viewer exists at a time (id="purchViewerModal").
+// ALL close paths (button, backdrop click, Escape, re-open) must funnel
+// through closePurchasingViewer() — never remove the modal anywhere else.
+
+let _purchViewerEscHandler = null; // stored reference for removeEventListener
+
+function viewPurchasingFile(relPath, type) {
+  // Always tear down any existing viewer first
+  closePurchasingViewer();
+
+  const url   = `/purchasing-invoices/file?path=${encodeURIComponent(relPath)}`;
+  const isImg = ['png','jpg','jpeg','webp'].includes(type.toLowerCase());
+  const fname = relPath.split('/').pop();
+
+  const modal = document.createElement('div');
+  modal.className = 'purch-modal-overlay';
+  modal.id        = 'purchViewerModal';
+
+  modal.innerHTML = `
+    <div class="purch-modal-inner" id="purchViewerInner">
+      <div class="purch-modal-bar">
+        <span class="purch-modal-title">${escapeHtml(fname)}</span>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button class="btn-sm btn-sm-outline" onclick="printPurchasingFile('${escapeHtml(relPath)}')">Print</button>
+          <button class="btn-sm btn-sm-dark" onclick="closePurchasingViewer()">Close ✕</button>
+        </div>
+      </div>
+      <div class="purch-modal-body" id="purchViewerBody">
+        ${isImg
+          ? `<img src="${url}" alt="${escapeHtml(fname)}" id="purchViewerMedia">`
+          : `<iframe src="${url}" title="${escapeHtml(fname)}" id="purchViewerMedia"></iframe>`}
+      </div>
+    </div>`;
+
+  // Backdrop click intentionally does nothing — only Close button and Escape close the viewer.
+  // This prevents the PDF renderer focus issue where backdrop clicks can leave
+  // the PDF plugin in a partially-active state after modal teardown.
+
+  // Escape key — calls closePurchasingViewer(), nothing else
+  _purchViewerEscHandler = function(e) {
+    if (e.key === 'Escape') closePurchasingViewer();
+  };
+  document.addEventListener('keydown', _purchViewerEscHandler);
+
+  document.body.appendChild(modal);
+}
+
+function closePurchasingViewer() {
+  // 1. Remove Escape key listener and null the reference
+  if (_purchViewerEscHandler) {
+    document.removeEventListener('keydown', _purchViewerEscHandler);
+    _purchViewerEscHandler = null;
+  }
+
+  const modal = document.getElementById('purchViewerModal');
+  if (!modal) return;
+
+  // 2. Remove the iframe from DOM first — physically detaches the PDF renderer
+  //    process so it cannot hold focus during the modal teardown
+  const iframe = modal.querySelector('iframe#purchViewerMedia');
+  if (iframe) {
+    iframe.parentNode.removeChild(iframe); // detach from DOM (kills PDF renderer)
+    iframe.src = 'about:blank';            // clean up the now-detached element
+  }
+
+  // 3. Remove the modal shell
+  modal.remove();
+
+  // 4. Return focus to the document body so the page is immediately interactive
+  document.body.focus();
+}
+
+// Backward-compat alias — body must only delegate to closePurchasingViewer()
+function closePurchasingModal() { closePurchasingViewer(); }
+
+function printPurchasingFile(relPath) {
+  const url  = `/purchasing-invoices/file?path=${encodeURIComponent(relPath)}`;
+  const ext  = relPath.split('.').pop().toLowerCase();
+  const isImg = ['png','jpg','jpeg','webp'].includes(ext);
+
+  if (isImg) {
+    // Open a minimal print window and auto-print after load
+    const win = window.open('', '_blank');
+    if (!win) { alert('Allow pop-ups to print this file.'); return; }
+    win.document.write(`<!DOCTYPE html><html><head><style>
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{background:#fff;}
+      img{display:block;width:100%;height:auto;}
+      @page{margin:0;}
+    </style></head><body>
+      <img src="${url}" onload="window.print();window.close();"
+           onerror="alert('Could not load image.');window.close();">
+    </body></html>`);
+    win.document.close();
+  } else {
+    // PDF: open directly — browser PDF viewer has its own print button
+    // If pop-ups are blocked, fall back to a helpful message
+    const win = window.open(url, '_blank');
+    if (!win) {
+      alert('Allow pop-ups to open this PDF for printing. Alternatively, use View to open it in the modal and print from the PDF viewer toolbar.');
+    }
+  }
+}
+
+// Print all visible files.
+// Images: open a combined print window and auto-print.
+// ── Purchasing selection helpers ──────────────────────────────────────────
+
+function isPurchPaymentReport(filename) {
+  const fl = filename.toLowerCase();
+  return ['payment','report','receipt','transfer','bank'].some(t => fl.includes(t));
+}
+
+function updatePurchSelection(relPath, checked) {
+  if (checked) purchasingSelected.add(relPath);
+  else         purchasingSelected.delete(relPath);
+  // Re-render to reflect updated selection state (checkboxes + footer count)
+  renderPurchasingList();
+}
+
+function updatePurchSelectionControls() {
+  const btn = $('purchPrintSelBtn');
+  if (btn) btn.textContent = `Print Selected (${purchasingSelected.size})`;
+}
+
+function selectAllPurchasing() {
+  // Select all currently visible (filtered) files
+  const q = purchasingSearch.toLowerCase().trim();
+  const visible = q
+    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
+    : purchasingFiles;
+  visible.forEach(f => purchasingSelected.add(f.relativePath));
+  renderPurchasingList();
+}
+
+function clearPurchSelection() {
+  purchasingSelected.clear();
+  renderPurchasingList();
+}
+
+function printSelectedPurchasingFiles() {
+  if (purchasingSelected.size === 0) {
+    alert('No files selected. Use the checkboxes to select files to print.');
+    return;
+  }
+
+  // Resolve selected files in order they appear in purchasingFiles
+  const files = purchasingFiles.filter(f => purchasingSelected.has(f.relativePath));
+  if (!files.length) { alert('Selected files not found in list. Try refreshing.'); return; }
+
+  const hasReport = files.some(f => isPurchPaymentReport(f.name));
+  if (hasReport) {
+    const reportNames = files.filter(f => isPurchPaymentReport(f.name)).map(f => f.name).join('\n  ');
+    if (!confirm(`The selection includes payment report file(s):\n  ${reportNames}\n\nInclude them in print?`)) return;
+  }
+
+  const images = files.filter(f => ['png','jpg','jpeg','webp'].includes(f.type.toLowerCase()));
+  const pdfs   = files.filter(f => f.type.toLowerCase() === 'pdf');
+
+  if (pdfs.length > 0 && images.length === 0) {
+    if (!confirm(`Open ${pdfs.length} selected PDF(s) in new tabs for printing?`)) return;
+    pdfs.forEach(f => window.open(`/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}`, '_blank'));
+    return;
+  }
+
+  if (images.length > 0) {
+    const win = window.open('', '_blank');
+    if (!win) { alert('Allow pop-ups for Print Selected.'); return; }
+
+    const imgTags = images.map(f =>
+      `<img src="/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}">`
+    ).join('');
+
+    const pdfNote = pdfs.length > 0
+      ? `<!-- ${pdfs.length} selected PDF(s) not included (browser limitation). Use Print button per file. -->`
+      : '';
+
+    win.document.write(`<!DOCTYPE html><html><head><style>
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{background:#fff;}
+      img{display:block;width:100%;height:auto;page-break-after:always;break-after:page;}
+      img:last-child{page-break-after:auto;break-after:auto;}
+      @page{margin:0;}
+    </style></head><body>${pdfNote}${imgTags}</body></html>`);
+    win.document.close();
+    win.addEventListener('load', () => win.print());
+
+    if (pdfs.length > 0) {
+      status(`Printing ${images.length} selected image(s). Note: ${pdfs.length} selected PDF(s) were skipped — use Print per file for those.`, 'error');
+    }
+  }
+}
+
+// PDFs: open each in a new tab (browser limitation — multiple PDFs cannot be
+//       reliably printed from iframes in a single window).
+function printAllPurchasingFiles() {
+  const q = purchasingSearch.toLowerCase().trim();
+  const files = q
+    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
+    : purchasingFiles;
+
+  if (!files.length) { alert('No files to print.'); return; }
+
+  // Exclude payment reports from Print All — they must be printed individually or via Print Selected
+  const skipped     = files.filter(f => isPurchPaymentReport(f.name));
+  const printable   = files.filter(f => !isPurchPaymentReport(f.name));
+
+  if (printable.length === 0) {
+    alert(`No invoice files to print.\n${skipped.length} payment report file${skipped.length !== 1 ? 's' : ''} were skipped. Use Print Selected or individual Print buttons to print them.`);
+    return;
+  }
+
+  if (skipped.length > 0) {
+    status(`Printing ${printable.length} invoice file${printable.length !== 1 ? 's' : ''}. Skipped ${skipped.length} payment report file${skipped.length !== 1 ? 's' : ''}.`, 'loading');
+  }
+
+  const images = printable.filter(f => ['png','jpg','jpeg','webp'].includes(f.type.toLowerCase()));
+  const pdfs   = printable.filter(f => f.type.toLowerCase() === 'pdf');
+
+  if (pdfs.length > 0 && images.length === 0) {
+    // Only PDFs — open each in a new tab
+    if (!confirm(`Open ${pdfs.length} PDF(s) in new tabs for printing?`)) return;
+    pdfs.forEach(f => window.open(`/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}`, '_blank'));
+    return;
+  }
+
+  if (images.length > 0) {
+    const win = window.open('', '_blank');
+    if (!win) { alert('Allow pop-ups for Print All.'); return; }
+
+    const imgTags = images.map(f =>
+      `<img src="/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}">`
+    ).join('');
+
+    const pdfNote = pdfs.length > 0
+      ? `<!-- ${pdfs.length} PDF(s) not included (browser limitation: cannot auto-print multiple PDFs). Open them individually via the Print button in the list. -->`
+      : '';
+
+    win.document.write(`<!DOCTYPE html><html><head><style>
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{background:#fff;}
+      img{display:block;width:100%;height:auto;page-break-after:always;break-after:page;}
+      img:last-child{page-break-after:auto;break-after:auto;}
+      @page{margin:0;}
+    </style></head><body>${pdfNote}${imgTags}</body></html>`);
+    win.document.close();
+    win.addEventListener('load', () => win.print());
+
+    if (pdfs.length > 0) {
+      status(`Printing ${images.length} image(s). Note: ${pdfs.length} PDF(s) were skipped — use Print per file for those.`, 'error');
+    }
+  }
+}
+
+async function uploadPurchasingFiles() {
+  const inputEl  = $('purchUploadInput');
+  const statusEl = $('purchUploadStatus');
+  const folder   = ($('purchUploadDate') ? $('purchUploadDate').value.trim() : '') || (() => {
+    const t = new Date();
+    return `${t.getDate()}-${t.getMonth()+1}-${t.getFullYear()}`;
+  })();
+
+  if (!inputEl || !inputEl.files.length) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#B06B1A;">Select at least one file first.</span>';
+    return;
+  }
+
+  const files = Array.from(inputEl.files);
+  if (statusEl) statusEl.innerHTML = `Uploading ${files.length} file(s)…`;
+
+  const saved = [], errors = [];
+
+  for (const file of files) {
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror   = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const resp = await fetch('/purchasing-invoices/upload', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ filename: file.name, data: b64, folder }),
+      });
+
+      const result = await resp.json();
+      if (!resp.ok) {
+        errors.push(`${escapeHtml(file.name)}: ${escapeHtml(result.error || 'Upload failed')}`);
+      } else {
+        saved.push(escapeHtml(result.saved));
+      }
+    } catch(e) {
+      errors.push(`${escapeHtml(file.name)}: ${escapeHtml(e.message || 'Error')}`);
+    }
+  }
+
+  let msg = '';
+  if (saved.length)  msg += `<span style="color:#3A7D52;">✓ Saved ${saved.length} file(s) to <strong>${escapeHtml(folder)}</strong>.</span> `;
+  if (errors.length) msg += `<span style="color:#C0392B;">✗ ${errors.join('; ')}</span>`;
+  if (statusEl) statusEl.innerHTML = msg;
+
+  if (saved.length) {
+    inputEl.value = '';        // reset file input
+    await fetchPurchasingList();  // refresh list
+  }
 }
 </script>
 </body>
