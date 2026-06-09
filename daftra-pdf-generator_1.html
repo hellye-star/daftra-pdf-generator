@@ -216,14 +216,21 @@
   .dn-qty:focus { border-color: var(--dark); }
 
   /* ── PURCHASING INVOICES TAB ── */
-  .purch-folder-header { font-size: 7px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--light); padding: 10px 0 5px; border-bottom: 1px solid var(--rule); margin-bottom: 3px; margin-top: 14px; }
-  .purch-folder-header:first-child { margin-top: 0; }
+  .purch-section-header { display: flex; align-items: center; justify-content: space-between; font-size: 7px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); padding: 12px 0 6px; border-bottom: 2px solid var(--rule); margin-top: 20px; }
+  .purch-section-header:first-child { margin-top: 0; }
+  .purch-section-count { font-size: 6.5px; font-weight: 700; background: var(--cream); color: var(--mid); border: 1px solid var(--rule); padding: 2px 8px; letter-spacing: 0; text-transform: none; border-radius: 2px; }
   .purch-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--white); border: 1px solid var(--rule); margin-bottom: 2px; }
   .purch-item-report { background: #FFFBEA !important; border-color: #E8D87A !important; }
   .purch-check { width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; accent-color: var(--dark); }
   .badge-purch-report { font-size: 6px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; background: #FEF08A; color: #854D0E; border: 1px solid #E8D87A; white-space: nowrap; }
   .purch-item-name { flex: 1; font-size: 8.5px; font-weight: 400; color: var(--dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .purch-item-meta { font-size: 7px; font-weight: 300; color: var(--light); white-space: nowrap; }
+  .purch-item-date { font-size: 7px; font-weight: 500; color: var(--mid); white-space: nowrap; background: var(--cream); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; }
+  .purch-date-group { display: flex; align-items: center; justify-content: space-between; font-size: 8.5px; font-weight: 600; color: var(--dark); padding: 9px 12px 5px; background: var(--cream); border: 1px solid var(--rule); border-bottom: none; margin-top: 6px; letter-spacing: 0.03em; }
+  .purch-date-group:first-of-type { margin-top: 4px; }
+  .purch-date-group-count { font-size: 7px; font-weight: 300; color: var(--light); letter-spacing: 0; }
+  .purch-tag-sel { font-family: 'Jost', sans-serif; font-size: 6.5px; font-weight: 400; color: var(--mid); background: var(--cream); border: 1px solid var(--rule); padding: 3px 5px; cursor: pointer; outline: none; flex-shrink: 0; }
+  .purch-tag-sel.is-manual { border-color: var(--dark); color: var(--dark); font-weight: 600; }
   .purch-type-badge { font-size: 6px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; background: var(--cream); color: var(--mid); border: 1px solid var(--rule); white-space: nowrap; }
   .purch-modal-overlay { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; }
   .purch-modal-inner { background: var(--white); width: 88vw; height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
@@ -249,8 +256,9 @@
     .preview-wrap { border: none !important; box-shadow: none !important; }
     .pdf-bg { background: white !important; padding: 0 !important; display: block !important; }
     #pdfPage { box-shadow: none !important; margin: 0 !important; }
-    /* Print All: show the dedicated container */
-    #printAllContainer { display: block !important; }
+    /* Print All: hide every direct body child except the container */
+    body.printing-all > *:not(#printAllContainer) { display: none !important; }
+    #printAllContainer { display: block !important; width: 210mm; margin: 0 auto; }
     #printAllContainer .print-invoice-page { page-break-after: always; break-after: page; }
     #printAllContainer .print-invoice-page:last-child { page-break-after: auto; break-after: auto; }
     #printAllContainer .pdf-page { box-shadow: none !important; margin: 0 auto !important; }
@@ -476,9 +484,13 @@ async function waitForImages(root) {
   const imgs = Array.from(root.querySelectorAll('img'));
   await Promise.all(imgs.map(img => {
     if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       img.onload  = resolve;
-      img.onerror = () => reject(new Error('Image failed to load: ' + img.src.slice(0, 80)));
+      // Resolve (not reject) on error — one broken image must not abort Print All
+      img.onerror = () => {
+        console.warn('[waitForImages] image failed to load:', img.src.slice(0, 80));
+        resolve();
+      };
     });
   }));
 }
@@ -1292,23 +1304,28 @@ async function printAllInvoices() {
     return;
   }
 
+  // Guard: remove any orphaned container from a previous failed/interrupted call
+  const stale = document.getElementById('printAllContainer');
+  if (stale) stale.remove();
+
   const sub  = $('subdomain').value.trim();
   const key  = $('apikey').value.trim();
   const h    = { 'APIKEY': key, 'Accept': 'application/json' };
   const base = `https://${sub}.daftra.com/api2`;
   const c    = co();
 
-  // Build a hidden, off-screen container
+  // Build hidden off-screen container — keep width:210mm for correct layout rendering
   const container = document.createElement('div');
   container.id = 'printAllContainer';
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;';
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;background:#fff;';
   document.body.appendChild(container);
 
+  const total = allInvoices.length;
   let ok = 0, failed = 0;
 
-  for (let i = 0; i < allInvoices.length; i++) {
+  for (let i = 0; i < total; i++) {
     const inv = allInvoices[i];
-    status(`Preparing invoice ${i + 1} of ${allInvoices.length} — ${inv.no || inv.id || ''}…`);
+    status(`Preparing invoice ${i + 1} of ${total} — ${inv.no || inv.id || ''}…`, 'loading');
 
     try {
       // Fetch detail once (cached on the object if already opened via openDoc)
@@ -1330,6 +1347,8 @@ async function printAllInvoices() {
         } else {
           inv._qrPayload = '';
         }
+        // Inter-fetch delay — avoids Daftra API rate limiting on large batches
+        await new Promise(r => setTimeout(r, 150));
       }
 
       const qrId   = `print-qr-${i}`;
@@ -1345,12 +1364,13 @@ async function printAllInvoices() {
       }
       ok++;
     } catch(e) {
-      console.error(`[PrintAll] invoice ${inv.id} failed:`, e);
+      console.error(`[PrintAll] invoice ${i+1}/${total} id:${inv.id} failed:`, e);
       failed++;
     }
   }
 
   status('', 'clear');
+  const pageCount = container.querySelectorAll('.print-invoice-page').length;
 
   if (ok === 0) {
     container.remove();
@@ -1360,13 +1380,26 @@ async function printAllInvoices() {
 
   await waitForImages(container);
 
-  // Move to normal flow so @media print can see it
-  container.style.cssText = '';
+  // Move container into normal flow for print rendering.
+  // Do NOT use cssText='' — that removes width:210mm and can trigger a reflow race.
+  // Instead: clear only position/offset, keep width, then isolate via body class.
+  container.style.position = '';
+  container.style.left     = '';
+  container.style.top      = '';
+  // body.printing-all hides every sibling so only #printAllContainer prints
+  document.body.classList.add('printing-all');
+
+  // Yield one microtask tick so the browser can finish layout before print dialog opens
+  await new Promise(r => setTimeout(r, 0));
+
   window.print();
+
+  // Restore
+  document.body.classList.remove('printing-all');
   container.remove();
 
   if (failed > 0) {
-    status(`Printed ${ok} invoices. ${failed} could not be prepared (see console).`, 'error');
+    status(`Printed ${ok} of ${total} invoice${total!==1?'s':''}. ${failed} failed — check browser console.`, 'error');
   }
 }
 
@@ -1421,7 +1454,8 @@ async function fetchPurchasingList() {
   if (listEl) listEl.innerHTML = `<div style="font-size:8.5px;font-weight:300;color:var(--light);padding:12px 0;">Loading…</div>`;
 
   try {
-    const r = await fetch('/purchasing-invoices/list');
+    // Cache-bust: timestamp param + no-store to prevent Edge/Chrome serving stale directory listing
+    const r = await fetch(`/purchasing-invoices/list?t=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) {
       const err = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
       if (listEl) listEl.innerHTML = `<div class="error-bar">⚠ ${escapeHtml(err.error || 'Could not load list.')}</div>`;
@@ -1434,6 +1468,89 @@ async function fetchPurchasingList() {
   } catch(e) {
     if (listEl) listEl.innerHTML = `<div class="error-bar">⚠ ${escapeHtml(e.message || 'Network error.')}</div>`;
   }
+}
+
+// ── Manual tag storage (localStorage) ────────────────────────────────────────
+// Key: vista_purchasing_file_tags_v1
+// Schema: { "folder/file.pdf": "invoice"|"payment"|"other" }
+// Manual tag overrides automatic classification. "auto" / absent = use auto.
+
+const PURCH_TAGS_KEY = 'vista_purchasing_file_tags_v1';
+
+function _loadPurchTags() {
+  try { return JSON.parse(localStorage.getItem(PURCH_TAGS_KEY) || '{}'); }
+  catch(_) { return {}; }
+}
+
+function getPurchTag(relPath) {
+  const t = _loadPurchTags()[relPath];
+  return (t === 'invoice' || t === 'payment' || t === 'other') ? t : null;
+}
+
+function setPurchTag(relPath, tag) {
+  const tags = _loadPurchTags();
+  if (!tag || tag === 'auto') { delete tags[relPath]; }
+  else { tags[relPath] = tag; }
+  try { localStorage.setItem(PURCH_TAGS_KEY, JSON.stringify(tags)); } catch(_) {}
+  renderPurchasingList();
+}
+
+// Called by the inline onchange on the tag <select> (data-rel attribute carries the path)
+function setPurchTagFromSel(sel) {
+  const rel = sel.getAttribute('data-rel');
+  if (rel) setPurchTag(rel, sel.value);
+}
+
+// ── File classification ───────────────────────────────────────────────────────
+// Priority: manual tag (localStorage) → automatic keyword match → default 'invoice'
+
+function classifyPurchFile(name, relPath) {
+  // 1. Manual override
+  if (relPath) {
+    const tag = getPurchTag(relPath);
+    if (tag) return tag;
+  }
+  // 2. Automatic keyword match
+  const fl = name.toLowerCase();
+  if (['payment','report','receipt','transfer','bank'].some(t => fl.includes(t))) return 'payment';
+  const otherKw = ['quotation','quote','delivery','statement','contract','agreement'];
+  if (otherKw.some(t => fl.includes(t)) || /\bdn\b/.test(fl)) return 'other';
+  // 3. Default: invoice
+  return 'invoice';
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Parse "D-M-YYYY" folder name → Date object (returns null if unparseable)
+function parsePurchFolderDate(folder) {
+  if (!folder || folder === '(root)') return null;
+  const p = folder.split('-');
+  if (p.length !== 3) return null;
+  const [d, m, y] = p.map(Number);
+  if (!d || !m || !y || isNaN(d) || isNaN(m) || isNaN(y)) return null;
+  return new Date(y, m - 1, d);
+}
+
+// Sort a files array in UI display order: newest folder-date first,
+// then alphabetical by filename within the same folder.
+// Returns a new sorted array — does not mutate the original.
+function _sortPurchFilesForPrint(files) {
+  return [...files].sort((a, b) => {
+    if (a.folder !== b.folder) {
+      const da = parsePurchFolderDate(a.folder);
+      const db = parsePurchFolderDate(b.folder);
+      if (da && db) return db - da;   // both parseable → newest first
+      if (da) return -1;              // a parseable, b not → a first
+      if (db) return  1;
+      return a.folder.localeCompare(b.folder);
+    }
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
 }
 
 function renderPurchasingList() {
@@ -1454,48 +1571,129 @@ function renderPurchasingList() {
     return;
   }
 
-  // Group by folder, preserving encounter order
-  const folderOrder = [];
-  const byFolder = {};
+  // ── Classify into 3 sections (manual override → auto keyword) ────────────
+  const sects = [
+    { key: 'invoice', label: 'Invoices',                 files: [] },
+    { key: 'payment', label: 'Payment Slips / Receipts', files: [] },
+    { key: 'other',   label: 'Others',                   files: [] },
+  ];
+  const sectByKey = {};
+  sects.forEach(s => { sectByKey[s.key] = s; });
   for (const f of filtered) {
-    if (!byFolder[f.folder]) { byFolder[f.folder] = []; folderOrder.push(f.folder); }
-    byFolder[f.folder].push(f);
+    sectByKey[classifyPurchFile(f.name, f.relativePath)].files.push(f);
   }
 
-  const html = folderOrder.map(folder => {
-    const items = byFolder[folder].map(f => {
-      const relEnc   = encodeURIComponent(f.relativePath);
-      const ftype    = escapeHtml(f.type.toUpperCase());
-      const fname    = escapeHtml(f.name);
-      const fmeta    = f.modified ? escapeHtml(f.modified) : '';
-      const isRpt    = isPurchPaymentReport(f.name);
-      const rowCls   = isRpt ? ' purch-item-report' : '';
-      const rptBadge = isRpt ? `<span class="badge-purch-report">Payment Report</span>` : '';
-      const chkd     = purchasingSelected.has(f.relativePath) ? ' checked' : '';
-      const relEsc   = escapeHtml(f.relativePath);
-      return `<div class="purch-item${rowCls}">
-        <input type="checkbox" class="purch-check no-print"${chkd}
-          onchange="updatePurchSelection('${relEsc}',this.checked)">
-        <span class="purch-type-badge">${ftype}</span>
-        ${rptBadge}
-        <span class="purch-item-name" title="${fname}">${fname}</span>
-        <span class="purch-item-meta">${fmeta}</span>
-        <button class="btn-sm btn-sm-outline no-print" style="font-size:6.5px;padding:5px 9px;"
-          onclick="viewPurchasingFile('${relEsc}','${escapeHtml(f.type)}')">View</button>
-        <button class="btn-sm btn-sm-outline no-print" style="font-size:6.5px;padding:5px 9px;"
-          onclick="printPurchasingFile('${relEsc}')">Print</button>
-      </div>`;
-    }).join('');
+  // parsePurchFolderDate is defined at module level for reuse
 
-    return `<div class="purch-folder-header">${escapeHtml(folder)}</div>${items}`;
-  }).join('');
+  // ── Build a single file row ───────────────────────────────────────────────
+  function buildRow(f) {
+    const cls      = classifyPurchFile(f.name, f.relativePath);
+    const manTag   = getPurchTag(f.relativePath);
+    const isRpt    = cls === 'payment';
+    const rowCls   = isRpt ? ' purch-item-report' : '';
+    const rptBadge = isRpt ? `<span class="badge-purch-report">Payment Report</span>` : '';
+    const chkd     = purchasingSelected.has(f.relativePath) ? ' checked' : '';
+    const relEsc   = escapeHtml(f.relativePath);
+    const fname    = escapeHtml(f.name);
+    const ftype    = escapeHtml(f.type.toUpperCase());
+    const sizeStr  = formatBytes(f.size);
+    const tagCls   = manTag ? ' is-manual' : '';
+    // Tag control uses data-rel so the path is safely round-tripped via getAttribute
+    const tagSel = `<select class="purch-tag-sel${tagCls} no-print" data-rel="${relEsc}"
+      onchange="setPurchTagFromSel(this)" title="Override classification (Auto = filename rules)">
+      <option value="auto"${!manTag ? ' selected' : ''}>Auto</option>
+      <option value="invoice"${manTag==='invoice' ? ' selected' : ''}>Invoice</option>
+      <option value="payment"${manTag==='payment' ? ' selected' : ''}>Payment</option>
+      <option value="other"${manTag==='other' ? ' selected' : ''}>Other</option>
+    </select>`;
+    return `<div class="purch-item${rowCls}">
+      <input type="checkbox" class="purch-check no-print"${chkd}
+        onchange="updatePurchSelection('${relEsc}',this.checked)">
+      <span class="purch-type-badge">${ftype}</span>
+      ${rptBadge}
+      <span class="purch-item-name" title="${fname}">${fname}</span>
+      ${sizeStr ? `<span class="purch-item-meta">${sizeStr}</span>` : ''}
+      ${tagSel}
+      <button class="btn-sm btn-sm-outline no-print" style="font-size:6.5px;padding:5px 9px;"
+        onclick="viewPurchasingFile('${relEsc}','${escapeHtml(f.type)}')">View</button>
+      <button class="btn-sm btn-sm-outline no-print" style="font-size:6.5px;padding:5px 9px;"
+        onclick="printPurchasingFile('${relEsc}')">Print</button>
+    </div>`;
+  }
+
+  // ── Build HTML: section → date groups (newest first) → rows (alpha) ───────
+  let html = '';
+  for (const s of sects) {
+    if (!s.files.length) continue;
+
+    // Group by folder
+    const folderMap = {};
+    for (const f of s.files) {
+      const k = f.folder || '(root)';
+      if (!folderMap[k]) folderMap[k] = [];
+      folderMap[k].push(f);
+    }
+
+    // Sort folders: newest parsed date first; unparseable folders sorted last alphabetically
+    const sortedFolders = Object.keys(folderMap).sort((a, b) => {
+      const da = parsePurchFolderDate(a), db = parsePurchFolderDate(b);
+      if (da && db) return db - da;   // both parseable → newest first
+      if (da) return -1;              // a parseable, b not → a first
+      if (db) return  1;              // b parseable, a not → b first
+      return a.localeCompare(b);      // neither parseable → alpha
+    });
+
+    // Sort files within each folder alphabetically (case-insensitive)
+    for (const k of sortedFolders) {
+      folderMap[k].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    }
+
+    if (s.key === 'invoice' && s.files.length > 0) {
+      // Invoice section: add "select all invoices" checkbox + selected count
+      const selInvCount = s.files.filter(f => purchasingSelected.has(f.relativePath)).length;
+      const allSelInv   = selInvCount === s.files.length;
+      const selNote     = selInvCount > 0
+        ? `&nbsp;<span style="font-weight:300;color:var(--mid);font-size:7px;">(${selInvCount} selected)</span>`
+        : '';
+      html += `<div class="purch-section-header">
+        <span style="display:flex;align-items:center;gap:7px;">
+          <input type="checkbox" class="purch-check no-print"${allSelInv ? ' checked' : ''}
+            onchange="toggleSelectAllInvoices(this.checked)"
+            title="Select / deselect all visible invoices">
+          <span>${escapeHtml(s.label)}</span>
+        </span>
+        <span class="purch-section-count">${s.files.length}${selNote}</span>
+      </div>`;
+    } else {
+      html += `<div class="purch-section-header">
+        <span>${escapeHtml(s.label)}</span>
+        <span class="purch-section-count">${s.files.length}</span>
+      </div>`;
+    }
+
+    for (const folder of sortedFolders) {
+      const gFiles = folderMap[folder];
+      const gLabel = folder === '(root)' ? 'No date folder' : escapeHtml(folder);
+      html += `<div class="purch-date-group">
+        <span>${gLabel}</span>
+        <span class="purch-date-group-count">${gFiles.length} file${gFiles.length !== 1 ? 's' : ''}</span>
+      </div>`;
+      html += gFiles.map(buildRow).join('');
+    }
+  }
 
   const selCount = purchasingSelected.size;
+  const nInv = sectByKey.invoice.files.length;
+  const nPay = sectByKey.payment.files.length;
+  const nOth = sectByKey.other.files.length;
+
   listEl.innerHTML = `<div>${html}</div>
     <div class="no-print" style="margin-top:10px;font-size:7.5px;font-weight:300;color:var(--light);">
       ${filtered.length} file${filtered.length !== 1 ? 's' : ''}${q ? ' matching search' : ''} ·
-      ${purchasingFiles.filter(f=>f.type==='pdf').length} PDF ·
-      ${purchasingFiles.filter(f=>f.type!=='pdf').length} images
+      ${nInv} invoice${nInv !== 1 ? 's' : ''} ·
+      ${nPay} payment slip${nPay !== 1 ? 's' : ''} ·
+      ${nOth} other${nOth !== 1 ? 's' : ''}
       ${selCount > 0 ? `· <strong style="color:var(--dark);">${selCount} selected</strong>` : ''}
     </div>`;
   updatePurchSelectionControls();
@@ -1611,8 +1809,97 @@ function printPurchasingFile(relPath) {
 // ── Purchasing selection helpers ──────────────────────────────────────────
 
 function isPurchPaymentReport(filename) {
-  const fl = filename.toLowerCase();
-  return ['payment','report','receipt','transfer','bank'].some(t => fl.includes(t));
+  return classifyPurchFile(filename) === 'payment';
+}
+
+// ── Shared combined-PDF print helper ────────────────────────────────────────
+// Calls POST /purchasing-invoices/combine with the given file list.
+// Shows an in-page log panel with progress and graceful error handling.
+// title   : header line shown in the log panel
+// skipNote: optional extra note shown after the count line (e.g. "N skipped")
+async function _purchCombinePrint(files, title, skipNote) {
+  // Build / replace the log panel
+  let logPanel = document.getElementById('purchPrintAllLog');
+  if (logPanel) logPanel.remove();
+  logPanel = document.createElement('div');
+  logPanel.id = 'purchPrintAllLog';
+  logPanel.style.cssText = [
+    'background:#1a1a2e','color:#e0e0e0','border-radius:8px','padding:16px 20px',
+    'margin:16px 0','font-family:monospace','font-size:13px','line-height:1.7',
+    'max-height:340px','overflow-y:auto'
+  ].join(';');
+  logPanel.innerHTML = `<div style="font-weight:700;font-size:14px;margin-bottom:8px;color:#7ec8e3">📄 ${escapeHtml(title)}</div>`;
+  const mainArea = document.getElementById('mainArea');
+  if (mainArea) mainArea.prepend(logPanel); else document.body.prepend(logPanel);
+
+  function paLog(msg, isErr) {
+    const line = document.createElement('div');
+    line.style.color = isErr ? '#ff6b6b' : '#b8f0b8';
+    line.textContent = msg;
+    logPanel.appendChild(line);
+    logPanel.scrollTop = logPanel.scrollHeight;
+  }
+  function addClose() {
+    const btn = document.createElement('button');
+    btn.textContent = '✕ Close';
+    btn.style.cssText = 'margin-top:10px;background:#444;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;';
+    btn.onclick = () => logPanel.remove();
+    logPanel.appendChild(btn);
+  }
+
+  paLog(`Files to combine: ${files.length}`);
+  if (skipNote) paLog(skipNote);
+  paLog('Sending request to proxy…');
+
+  let resp;
+  try {
+    resp = await fetch('/purchasing-invoices/combine', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ paths: files.map(f => f.relativePath) }),
+    });
+  } catch(e) {
+    paLog(`✗ Network error: ${e.message}`, true);
+    addClose();
+    return;
+  }
+
+  if (!resp.ok) {
+    let errMsg = `HTTP ${resp.status}`;
+    try { const j = await resp.json(); errMsg = j.error || errMsg; } catch(_) {}
+    paLog(`✗ ${errMsg}`, true);
+    if (resp.status === 503) {
+      paLog('To enable combined PDF printing:', true);
+      paLog('  1. Run:  pip install PyMuPDF', true);
+      paLog('  2. Restart proxy.py', true);
+    }
+    addClose();
+    return;
+  }
+
+  paLog('Receiving combined PDF…');
+  let blob;
+  try { blob = await resp.blob(); } catch(e) {
+    paLog(`✗ Failed to read response: ${e.message}`, true);
+    addClose();
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    paLog('⚠ Pop-up blocked. Click the link below to open the combined PDF:', true);
+    const link = document.createElement('a');
+    link.href = url; link.target = '_blank'; link.rel = 'noopener';
+    link.style.cssText = 'display:block;color:#7ec8e3;margin:4px 0;';
+    link.textContent = '↗ Open Combined PDF';
+    logPanel.appendChild(link);
+    logPanel.scrollTop = logPanel.scrollHeight;
+    addClose();
+  } else {
+    paLog(`✓ Combined PDF opened (${files.length} file${files.length !== 1 ? 's' : ''})`);
+    setTimeout(() => { if (logPanel.parentNode) logPanel.remove(); }, 2500);
+  }
 }
 
 function updatePurchSelection(relPath, checked) {
@@ -1642,118 +1929,77 @@ function clearPurchSelection() {
   renderPurchasingList();
 }
 
+// Select or deselect all currently visible files in the Invoices section only.
+// Called by the checkbox in the Invoices section header.
+function toggleSelectAllInvoices(checked) {
+  const q = purchasingSearch.toLowerCase().trim();
+  const visible = q
+    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
+    : purchasingFiles;
+  const invoices = visible.filter(f => classifyPurchFile(f.name, f.relativePath) === 'invoice');
+  if (checked) {
+    invoices.forEach(f => purchasingSelected.add(f.relativePath));
+  } else {
+    invoices.forEach(f => purchasingSelected.delete(f.relativePath));
+  }
+  renderPurchasingList();
+}
+
 function printSelectedPurchasingFiles() {
   if (purchasingSelected.size === 0) {
     alert('No files selected. Use the checkboxes to select files to print.');
     return;
   }
 
-  // Resolve selected files in order they appear in purchasingFiles
+  // Resolve selected files in list order
   const files = purchasingFiles.filter(f => purchasingSelected.has(f.relativePath));
   if (!files.length) { alert('Selected files not found in list. Try refreshing.'); return; }
 
-  const hasReport = files.some(f => isPurchPaymentReport(f.name));
-  if (hasReport) {
-    const reportNames = files.filter(f => isPurchPaymentReport(f.name)).map(f => f.name).join('\n  ');
-    if (!confirm(`The selection includes payment report file(s):\n  ${reportNames}\n\nInclude them in print?`)) return;
+  // Warn if selection includes non-invoice files (respects manual tags)
+  const nonInvoice = files.filter(f => classifyPurchFile(f.name, f.relativePath) !== 'invoice');
+  if (nonInvoice.length > 0) {
+    const names = nonInvoice.map(f => `  ${f.name} (${classifyPurchFile(f.name, f.relativePath)})`).join('\n');
+    if (!confirm(`The selection includes ${nonInvoice.length} non-invoice file(s):\n${names}\n\nInclude them in the combined print?`)) return;
   }
 
-  const images = files.filter(f => ['png','jpg','jpeg','webp'].includes(f.type.toLowerCase()));
-  const pdfs   = files.filter(f => f.type.toLowerCase() === 'pdf');
-
-  if (pdfs.length > 0 && images.length === 0) {
-    if (!confirm(`Open ${pdfs.length} selected PDF(s) in new tabs for printing?`)) return;
-    pdfs.forEach(f => window.open(`/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}`, '_blank'));
-    return;
-  }
-
-  if (images.length > 0) {
-    const win = window.open('', '_blank');
-    if (!win) { alert('Allow pop-ups for Print Selected.'); return; }
-
-    const imgTags = images.map(f =>
-      `<img src="/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}">`
-    ).join('');
-
-    const pdfNote = pdfs.length > 0
-      ? `<!-- ${pdfs.length} selected PDF(s) not included (browser limitation). Use Print button per file. -->`
-      : '';
-
-    win.document.write(`<!DOCTYPE html><html><head><style>
-      *{margin:0;padding:0;box-sizing:border-box;}
-      body{background:#fff;}
-      img{display:block;width:100%;height:auto;page-break-after:always;break-after:page;}
-      img:last-child{page-break-after:auto;break-after:auto;}
-      @page{margin:0;}
-    </style></head><body>${pdfNote}${imgTags}</body></html>`);
-    win.document.close();
-    win.addEventListener('load', () => win.print());
-
-    if (pdfs.length > 0) {
-      status(`Printing ${images.length} selected image(s). Note: ${pdfs.length} selected PDF(s) were skipped — use Print per file for those.`, 'error');
-    }
-  }
+  // Sort to match visible UI order: newest date first, alpha within date
+  const sorted = _sortPurchFilesForPrint(files);
+  _purchCombinePrint(sorted, `Print Selected — ${sorted.length} file${sorted.length !== 1 ? 's' : ''}`, null);
 }
 
-// PDFs: open each in a new tab (browser limitation — multiple PDFs cannot be
-//       reliably printed from iframes in a single window).
+// Print All: combines only the Invoices section into one PDF via proxy.
+// Payment Slips/Receipts and Others are skipped by default.
 function printAllPurchasingFiles() {
   const q = purchasingSearch.toLowerCase().trim();
-  const files = q
+  const allVisible = q
     ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
     : purchasingFiles;
 
-  if (!files.length) { alert('No files to print.'); return; }
+  if (!allVisible.length) { alert('No files to print.'); return; }
 
-  // Exclude payment reports from Print All — they must be printed individually or via Print Selected
-  const skipped     = files.filter(f => isPurchPaymentReport(f.name));
-  const printable   = files.filter(f => !isPurchPaymentReport(f.name));
+  const invoices = allVisible.filter(f => classifyPurchFile(f.name, f.relativePath) === 'invoice');
+  const skipped  = allVisible.length - invoices.length;
 
-  if (printable.length === 0) {
-    alert(`No invoice files to print.\n${skipped.length} payment report file${skipped.length !== 1 ? 's' : ''} were skipped. Use Print Selected or individual Print buttons to print them.`);
+  if (invoices.length === 0) {
+    const detail = allVisible.filter(f => classifyPurchFile(f.name, f.relativePath) !== 'invoice');
+    const byType = { payment: 0, other: 0 };
+    detail.forEach(f => { byType[classifyPurchFile(f.name, f.relativePath)]++; });
+    alert(
+      `No invoice files to print.\n` +
+      `${byType.payment} payment slip/receipt file${byType.payment !== 1 ? 's' : ''} and ` +
+      `${byType.other} other file${byType.other !== 1 ? 's' : ''} were skipped.\n\n` +
+      `Use Print Selected to include them.`
+    );
     return;
   }
 
-  if (skipped.length > 0) {
-    status(`Printing ${printable.length} invoice file${printable.length !== 1 ? 's' : ''}. Skipped ${skipped.length} payment report file${skipped.length !== 1 ? 's' : ''}.`, 'loading');
-  }
+  const skipNote = skipped > 0
+    ? `Skipped ${skipped} non-invoice file${skipped !== 1 ? 's' : ''} (payment slips / others)`
+    : null;
 
-  const images = printable.filter(f => ['png','jpg','jpeg','webp'].includes(f.type.toLowerCase()));
-  const pdfs   = printable.filter(f => f.type.toLowerCase() === 'pdf');
-
-  if (pdfs.length > 0 && images.length === 0) {
-    // Only PDFs — open each in a new tab
-    if (!confirm(`Open ${pdfs.length} PDF(s) in new tabs for printing?`)) return;
-    pdfs.forEach(f => window.open(`/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}`, '_blank'));
-    return;
-  }
-
-  if (images.length > 0) {
-    const win = window.open('', '_blank');
-    if (!win) { alert('Allow pop-ups for Print All.'); return; }
-
-    const imgTags = images.map(f =>
-      `<img src="/purchasing-invoices/file?path=${encodeURIComponent(f.relativePath)}">`
-    ).join('');
-
-    const pdfNote = pdfs.length > 0
-      ? `<!-- ${pdfs.length} PDF(s) not included (browser limitation: cannot auto-print multiple PDFs). Open them individually via the Print button in the list. -->`
-      : '';
-
-    win.document.write(`<!DOCTYPE html><html><head><style>
-      *{margin:0;padding:0;box-sizing:border-box;}
-      body{background:#fff;}
-      img{display:block;width:100%;height:auto;page-break-after:always;break-after:page;}
-      img:last-child{page-break-after:auto;break-after:auto;}
-      @page{margin:0;}
-    </style></head><body>${pdfNote}${imgTags}</body></html>`);
-    win.document.close();
-    win.addEventListener('load', () => win.print());
-
-    if (pdfs.length > 0) {
-      status(`Printing ${images.length} image(s). Note: ${pdfs.length} PDF(s) were skipped — use Print per file for those.`, 'error');
-    }
-  }
+  // Sort to match visible UI order: newest date first, alpha within date
+  const sorted = _sortPurchFilesForPrint(invoices);
+  _purchCombinePrint(sorted, `Print All Invoices — ${sorted.length} file${sorted.length !== 1 ? 's' : ''}`, skipNote);
 }
 
 async function uploadPurchasingFiles() {
@@ -1806,8 +2052,12 @@ async function uploadPurchasingFiles() {
   if (statusEl) statusEl.innerHTML = msg;
 
   if (saved.length) {
-    inputEl.value = '';        // reset file input
-    await fetchPurchasingList();  // refresh list
+    inputEl.value = '';   // reset file input
+    // Clear any active search so the newly uploaded file is visible in the list
+    purchasingSearch = '';
+    const si = $('purchSearchInput');
+    if (si) si.value = '';
+    await fetchPurchasingList();  // refresh list (cache-busted)
   }
 }
 </script>

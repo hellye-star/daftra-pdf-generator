@@ -91,7 +91,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
                 super().do_GET()
 
     def do_POST(self):
-        if self.path.startswith('/purchasing-invoices/upload'):
+        if self.path.startswith('/purchasing-invoices/combine'):
+            self._combine_purchasing()
+        elif self.path.startswith('/purchasing-invoices/upload'):
             self._upload_purchasing()
         elif self.path.startswith('/daftra/'):
             self._block_daftra_write()
@@ -217,6 +219,7 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self._send_cors_headers()
         self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
         self.end_headers()
         self.wfile.write(body)
 
@@ -283,6 +286,121 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         except OSError as e:
             # Unexpected I/O error during streaming — log but cannot send error response
             print(f'  [purch]  OSError streaming {raw_name!r}: {e}')
+
+    def _combine_purchasing(self):
+        """Combine a list of purchasing files (PDFs and/or images) into one PDF.
+
+        Requires PyMuPDF (fitz).  If not installed, returns 503 with install
+        instructions so the front-end can display a clear error message.
+
+        Request body (JSON):
+            { "paths": ["folder/file1.pdf", "folder/file2.pdf", ...] }
+
+        Response (success):
+            Content-Type: application/pdf  — the combined PDF as a binary stream.
+
+        Response (error):
+            Content-Type: application/json — { "error": "..." }
+        """
+        # ── Check fitz availability ──────────────────────────────────────────
+        try:
+            import fitz  # PyMuPDF
+        except ImportError:
+            self._json_error(503,
+                'PyMuPDF is not installed. '
+                'To enable combined PDF export, run: pip install PyMuPDF '
+                'then restart proxy.py.')
+            return
+
+        # ── Read + parse request body ────────────────────────────────────────
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length > 50 * 1024 * 1024:
+            self._json_error(413, 'Request body too large.')
+            return
+        raw = self.rfile.read(content_length)
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            self._json_error(400, 'Invalid JSON body.')
+            return
+
+        paths = payload.get('paths', [])
+        if not paths or not isinstance(paths, list):
+            self._json_error(400, 'Missing or invalid "paths" list.')
+            return
+        if len(paths) > 200:
+            self._json_error(400, 'Too many files (max 200).')
+            return
+
+        # ── Validate every path before touching fitz ─────────────────────────
+        abs_paths = []
+        for rel_path in paths:
+            if not isinstance(rel_path, str):
+                self._json_error(400, 'All paths must be strings.')
+                return
+            abs_path = self._safe_purchase_path(rel_path)
+            if not abs_path:
+                self._json_error(400, f'Invalid path: {rel_path!r}')
+                return
+            ext = os.path.splitext(abs_path)[1].lower()
+            if ext not in PURCHASE_ALLOWED_EXTS:
+                self._json_error(403, f'File type not allowed: {ext!r}')
+                return
+            if not os.path.isfile(abs_path):
+                self._json_error(404, f'File not found: {rel_path!r}')
+                return
+            abs_paths.append((abs_path, ext))
+
+        # ── Combine with fitz ────────────────────────────────────────────────
+        total_files = len(abs_paths)
+        print(f'  [purch]  combine: merging {total_files} file(s)…')
+        combined = fitz.open()
+        errors   = []
+        for idx, (abs_path, ext) in enumerate(abs_paths, 1):
+            fname = os.path.basename(abs_path)
+            try:
+                if ext == '.pdf':
+                    with fitz.open(abs_path) as src:
+                        npages = src.page_count
+                        combined.insert_pdf(src)
+                    print(f'  [purch]  combine:  {idx:3d}/{total_files}: {fname!r} — {npages} page(s)')
+                else:
+                    # Image: insert into a new page that matches image dimensions
+                    img_doc = fitz.open(abs_path)          # treat image as single-page doc
+                    combined.insert_pdf(img_doc)
+                    img_doc.close()
+                    print(f'  [purch]  combine:  {idx:3d}/{total_files}: {fname!r} — 1 page (image)')
+            except Exception as e:
+                errors.append(f'{fname}: {e}')
+                print(f'  [purch]  combine:  {idx:3d}/{total_files}: {fname!r} — SKIPPED: {e}')
+
+        if combined.page_count == 0:
+            combined.close()
+            self._json_error(500,
+                'No pages could be combined. ' +
+                ('Errors: ' + '; '.join(errors) if errors else 'Unknown error.'))
+            return
+
+        try:
+            pdf_bytes = combined.tobytes(garbage=4, deflate=True)
+        except Exception as e:
+            combined.close()
+            self._json_error(500, f'Failed to serialise combined PDF: {e}')
+            return
+        combined.close()
+
+        # ── Stream response ──────────────────────────────────────────────────
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/pdf')
+        self.send_header('Content-Length', str(len(pdf_bytes)))
+        self.send_header('Content-Disposition',
+                         'inline; filename="combined-invoices.pdf"')
+        self.end_headers()
+        try:
+            self.wfile.write(pdf_bytes)
+        except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError) as e:
+            print(f'  [purch]  combine: client closed connection: {e}')
 
     def _upload_purchasing(self):
         """Accept JSON body: {filename, data (base64), folder (optional)}."""
