@@ -16,7 +16,7 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 |---|---|---|
 | Homepage | `index.html` | ✅ Live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A + 2A.5 complete |
-| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable, no open tasks |
+| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
 | Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ⏳ Planned (Phase 3) |
 | Local Proxy | `proxy.py` | ✅ Live |
@@ -28,8 +28,8 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Item | Value |
 |---|---|
 | Active stable branch | `stable-reviewed-history` |
-| Stable commit | `b59995b` |
-| Previous stable commit | `3cb3db9` |
+| Stable commit | `d0188c6` |
+| Previous stable commit | `b59995b` |
 | Restore tag | `stable-reviewed-history-v1` (points to `2d0faec` — original Social Dashboard stable snapshot) |
 
 **Note:** The Financial Dashboard (`feature/financial-dashboard`, latest commit `0bc03db`) is **not** included in `stable-reviewed-history`. That branch and tag reflect only the Social Media Control Center and Document Generator. The merge target for the Financial Dashboard branch will be decided after final review.
@@ -153,7 +153,7 @@ Live substring across task name, description, status, assignee, category, due da
 
 ## 7. Document Generator Status
 
-Stable. Three document types: Invoice, Quotation, Delivery Note. Latest stable commit: `b59995b`.
+Stable. Three document types: Invoice, Quotation, Delivery Note. Latest stable commit: `d0188c6`. Also includes the Purchasing Invoice local file manager (live as of `d0188c6`).
 
 ### Recent changes (commits `3cb3db9` and `b59995b`)
 
@@ -198,6 +198,35 @@ input (lowercased) vs invoice no (lowercased):
   n.endsWith(inp)      → suffix match ("021" matches "INV000021")
 ```
 
+### Purchasing Invoice local file manager (new — commit `d0188c6`)
+
+Full local file manager for `C:\Users\YousefMokaled\Documents\Vista United Co\purchasing invoices`.
+
+**Three-section classification:**
+- **Invoices** (default) / **Payment Slips & Receipts** (payment/report/receipt/transfer/bank keywords) / **Others** (quotation/quote/delivery/statement/contract/agreement/dn keywords)
+- Manual override via `localStorage` key `vista_purchasing_file_tags_v1` — schema `{ "folder/file.pdf": "invoice"|"payment"|"other" }` — always wins over auto-classification. Files are never renamed or moved.
+- Per-file `<select>` tag control (Auto / Invoice / Payment / Other) in each file row.
+
+**UI:**
+- Date grouping newest-first (folder names as `D-M-YYYY`), alpha sort within date group
+- Invoice section header has a Select All checkbox + live `(N selected)` count
+- Search/filter clears before upload-triggered refresh
+
+**Combined PDF:**
+- `POST /purchasing-invoices/combine` (PyMuPDF server-side, no temp files)
+- **PyMuPDF v1.27.2.3 required** — `pip install PyMuPDF`. Proxy returns `503` with instructions if absent.
+- Print All: invoice files only, newest-first then alpha
+- Print Selected: all checked files; warning if non-invoice files included
+
+**Other proxy routes:**
+- `GET /purchasing-invoices/list` — `Cache-Control: no-store`
+- `GET /purchasing-invoices/file?path=…` — RFC 5987 Unicode Content-Disposition; three-phase (validate → headers → stream)
+- `POST /purchasing-invoices/upload` — multipart, saves into `D-M-YYYY` subfolder
+
+**Security:** `_safe_purchase_path()` blocks path traversal; allowed exts: `.pdf .png .jpg .jpeg .webp`.
+
+**ThreadingHTTPServer:** `proxy.py` upgraded from `HTTPServer` to `ThreadingHTTPServer` for concurrent requests.
+
 ### Key facts (unchanged)
 - Invoice and quotation numbers are strict pass-throughs from Daftra (`String(no).trim()`). No prefix added.
 - QR on invoices only. Source: `qr_code_url → ?d64= → atob() → QRCode.js → canvas → PNG img`. Locked. Verified by scan.
@@ -209,7 +238,9 @@ input (lowercased) vs invoice no (lowercased):
 - QR pipeline (`d64 → atob() → QRCode.js → canvas → PNG img`)
 - `html2pdf` chain order (`.set()` must stay before `.from()`)
 - Invoice and quotation number handling
-- `proxy.py`, `config.json`, `social-dashboard.html`, `financial-dashboard.html`
+- `config.json`, `social-dashboard.html`, `financial-dashboard.html`
+- `printAllInvoices()` — Daftra invoice Print All; all invoice/quotation/DN rendering logic
+- `proxy.py` Notion relay routes and Daftra proxy route — the purchasing invoice routes (`/purchasing-invoices/...`) and `ThreadingHTTPServer` were intentionally added in `d0188c6` and are live; do not remove them
 
 ---
 
@@ -254,6 +285,10 @@ input (lowercased) vs invoice no (lowercased):
 | Terms & Conditions use `<div>` + `·`, not `<ul>/<li>` | `<ul>` with `direction: rtl` on the container renders bullet dots on the wrong side |
 | Daftra API calls routed through proxy in Financial Dashboard | Keeps the API key out of browser source. Document Generator predates this route and is stable — two patterns coexist intentionally. |
 | Personal transfers excluded from business calculations | Owner withdrawal records distort profit and VAT if included. Separated pre-calculation into `personalRecords` / `bizPurRecords`. |
+| PyMuPDF for purchasing combined PDF (not per-file `window.open()`) | Browsers block rapid `window.open()` after ~2 calls — users only got 2 of N files open. Server-side merge → single blob URL → one tab, no popup limit. |
+| Manual tags in localStorage, files never renamed | Auto-classification can misclassify filenames. localStorage tags let the user correct permanently without touching disk files. Single-user tool so per-machine storage is acceptable. |
+| Payment slips excluded from Print All by default | "Print All" in a purchasing context means "everything for the accountant" = invoices. Payment slips are a separate audience. Print Selected shows a warning if non-invoice files are included. |
+| ThreadingHTTPServer in proxy.py | Single-threaded `HTTPServer` serialises all connections — a slow streaming PDF response blocks every other route including Notion API relays. Threading fixes concurrent requests. |
 
 ---
 
@@ -364,7 +399,7 @@ Before recommending or making any change, ChatGPT must:
 2. **Read `docs/changelog.md`** — shows what changed and when. The most recent entries reflect the current approved state.
 3. **Read `docs/roadmap.md`** — shows phase status, what is complete, what is blocked, and what is next.
 4. **Read `docs/decisions.md`** — explains the reasoning behind structural choices. Consult before proposing any architectural change.
-5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (latest commit `b59995b`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
+5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (latest commit `d0188c6`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
 6. **Check `git status`** — confirm working tree is clean before any work begins.
 7. **Read the relevant section of `social-dashboard.html`** before changing any JS function. Do not rely on summaries alone — the function signatures, guard conditions, and localStorage schemas matter exactly.
 8. **Do not suggest changes to locked items** (QR pipeline, html2pdf chain, `attentionFilter` + `isReviewedAndFresh` interaction, `openDetail` unification) without first confirming the lock is documented in `CLAUDE_CONTEXT.md` and has a clear reason to revisit.

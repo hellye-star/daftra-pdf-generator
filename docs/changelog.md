@@ -2,6 +2,77 @@
 
 ---
 
+## [2026-06-09] — Invoice printing + Purchasing Invoice local file manager
+
+### daftra-pdf-generator_1.html + proxy.py — commit `d0188c6`
+
+#### Invoice printing
+
+- **Print All Invoices** — generates a single combined PDF from all loaded Daftra invoices using PyMuPDF. Prior implementation used `window.open()` per invoice; browsers block rapid popup sequences after ~2 calls. Fixed with async loop + 400ms delays + blocked-popup fallback links.
+- **`printAllInvoices()`** — hardened: stale container guard; extracted `total` for accurate "Preparing invoice N of M" status; 150ms inter-fetch delay; `body.printing-all` CSS class isolation; `waitForImages` resolve-not-reject fix.
+
+#### Purchasing Invoice local file manager (new feature)
+
+Full local file manager for `C:\Users\YousefMokaled\Documents\Vista United Co\purchasing invoices`. All logic isolated from Daftra invoice logic.
+
+**Three-section classification:**
+- **Invoices** — default; keyword-excluded files
+- **Payment Slips & Receipts** — filenames containing: payment, report, receipt, transfer, bank
+- **Others** — filenames containing: quotation, quote, delivery, statement, contract, agreement, or matching `\bdn\b`
+
+**Manual tag override:**
+- `localStorage` key `vista_purchasing_file_tags_v1` — schema: `{ "folder/file.pdf": "invoice"|"payment"|"other" }`
+- Manual tag wins over auto-classification; stored per filename path; persists across refreshes
+- Per-file `<select>` (Auto / Invoice / Payment / Other) in every file row
+
+**Date grouping:**
+- Folder names parsed as `D-M-YYYY` by `parsePurchFolderDate(folder)`
+- Folders sorted newest-first (`db − da`) within each section
+- Files sorted alphabetically within each folder date group
+- Subheadings with folder date and per-group file count
+
+**Invoice-only Select All:**
+- Checkbox in the Invoices section header — selects/deselects all visible invoice-classified files
+- Live count in parentheses next to header: `Invoices (3 selected)`
+
+**Combined PDF (server-side):**
+- `POST /purchasing-invoices/combine` — accepts `{ "paths": [...] }` JSON
+- Server merges all files (PDF pages via `fitz.insert_pdf`, images via `fitz.open`) in UI order
+- Returns `application/pdf` stream; no temp files written to disk
+- Returns `503` with install instructions if PyMuPDF is not available
+- **PyMuPDF v1.27.2.3 is required** — `pip install PyMuPDF`
+
+**Print All Invoices (Purchasing):**
+- Opens combined PDF of all invoice-classified files (excludes payment slips and others by default)
+- Sorted newest-date-first then alpha within date, via `_sortPurchFilesForPrint(files)`
+- Shows `#purchPrintAllLog` progress panel with blob URL on success; fallback link if popup blocked
+
+**Print Selected:**
+- Opens combined PDF of all checked files regardless of classification
+- Warning shown if non-invoice files (payment slips, others) are included in the selection
+
+**Other routes (proxy.py):**
+- `GET /purchasing-invoices/list` — directory walk returning `{ folder, name, relativePath, size }` per file; `Cache-Control: no-store` to prevent browser caching stale listing
+- `GET /purchasing-invoices/file?path=…` — serves a file inline with RFC 5987 Unicode `Content-Disposition` (required for Arabic filenames); three-phase response (validate → headers → stream) to avoid `ConnectionAbortedError` after headers are sent
+- `POST /purchasing-invoices/upload` — multipart upload into a `D-M-YYYY` dated subfolder
+- `POST /purchasing-invoices/combine` — PyMuPDF-based combined PDF (see above)
+
+**Security:**
+- `_safe_purchase_path(rel_path)` blocks path traversal (`..`), absolute paths, and anything escaping `PURCHASE_INVOICE_DIR`
+- Only `.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp` extensions allowed
+
+**Bug fixes applied during testing:**
+- Upload → list refresh not showing new file: two root causes — search filter still active after upload (cleared before refresh) + browser caching list endpoint (Cache-Control + `?t=Date.now()` + `{cache:'no-store'}`)
+- PDF page order in combined PDF not matching UI order: extracted `parsePurchFolderDate` to module level; added `_sortPurchFilesForPrint(files)` helper; both print paths call it before `_purchCombinePrint`
+
+**ThreadingHTTPServer:**
+- `proxy.py` switched from `HTTPServer` to `ThreadingHTTPServer` to handle concurrent PDF viewer requests
+
+**Files changed:** `daftra-pdf-generator_1.html`, `proxy.py`
+**Files NOT changed:** `config.json`, `social-dashboard.html`, `financial-dashboard.html`, all invoice/quotation/delivery-note logic
+
+---
+
 ## [2026-06-09] — Workload Estimate card: Completed This Month section added
 
 ### social-dashboard.html — feature extension

@@ -4,6 +4,64 @@ A record of why key implementation choices were made. Consult this before changi
 
 ---
 
+## Document Generator — Purchasing Invoice Manager
+
+---
+
+### PyMuPDF (fitz) for Server-Side Combined PDF
+
+**Decision:** Use PyMuPDF (`fitz`) in `proxy.py` to merge PDFs and images into a single combined PDF, served via `POST /purchasing-invoices/combine`. The browser receives one PDF blob.
+
+**Why:** The prior approach opened each file in a separate `window.open()` tab. Browsers allow only ~1–2 rapid programmatic `window.open()` calls before blocking further popups — so opening 5+ purchasing files silently failed. A server-side merge produces a single file that opens in one tab with no popup restrictions.
+
+**Trade-off:** PyMuPDF must be installed (`pip install PyMuPDF`). The proxy returns `503` with clear install instructions if the module is absent. Combined PDFs are streamed from memory — no temp files are written to disk.
+
+**Rule:** Do not revert to per-file `window.open()` for purchasing files.
+
+---
+
+### localStorage Manual Tag Override for File Classification
+
+**Decision:** Manual classification tags are stored in `localStorage` key `vista_purchasing_file_tags_v1` (schema: `{ "folder/file.pdf": "invoice"|"payment"|"other" }`). Manual tag wins over auto-classification. Files are never renamed or moved on disk.
+
+**Why:** Automatic keyword classification cannot be perfect for all filenames. The localStorage approach lets the user correct misclassifications permanently without touching the actual files or requiring a server-side metadata store. Tags survive browser refreshes. Tags are per-machine (localStorage), which is acceptable since the tool is single-user.
+
+**Rule:** Never rename, move, or write metadata files to the purchasing invoices folder based on classification tags.
+
+---
+
+### Payment Slips Excluded from Print All by Default
+
+**Decision:** `printAllPurchasingFiles()` prints only invoice-classified files. Payment slips and others are excluded. `printSelectedPurchasingFiles()` includes all checked files but shows a warning if non-invoice files are included in the selection.
+
+**Why:** "Print All" in the context of purchasing invoices typically means "print everything I need to submit to the accountant" — that audience is invoices, not payment confirmations. Payment slips may be needed separately. The warning on Print Selected ensures the user is not surprised by payment slips appearing in a combined PDF they intended for invoices only.
+
+---
+
+### ThreadingHTTPServer for Concurrent Requests
+
+**Decision:** `proxy.py` uses `ThreadingHTTPServer` instead of the default single-threaded `HTTPServer`.
+
+**Why:** The PDF viewer modal and the list endpoint may fire concurrently (e.g. the user opens a PDF while the list is still loading). Single-threaded `HTTPServer` serialises all requests — an in-progress streaming response blocks all other routes including Notion API relays. `ThreadingHTTPServer` handles each connection in its own thread.
+
+---
+
+### Three-Phase Response for Purchasing File Serving
+
+**Decision:** `_serve_purchasing_file()` is split into three phases: (1) validate path and extension, (2) send headers, (3) stream in 64KB chunks. No `_json_error()` call is made after Phase 2 has started.
+
+**Why:** Calling `_json_error` (which calls `send_response` + `send_header` + `end_headers`) after headers are already sent triggers `ConnectionAbortedError` / `BrokenPipeError` because HTTP only allows one response per connection. The three-phase structure ensures that any error before headers go out returns a proper JSON error, and any error after headers go out is logged but does not attempt to send a second response.
+
+---
+
+### Cache-Control: no-store on Purchasing List Endpoint
+
+**Decision:** `GET /purchasing-invoices/list` response includes `Cache-Control: no-store, no-cache, must-revalidate`. The frontend also fetches with `?t=${Date.now()}` and `{ cache: 'no-store' }`.
+
+**Why:** After an upload, Edge and Chrome can return a cached list response that doesn't include the newly uploaded file — even on a fresh fetch. Double defence (both server header and client hint) is necessary because some browsers respect one but not the other.
+
+---
+
 ## Financial Dashboard
 
 ---

@@ -24,7 +24,7 @@ Every approved change must follow this order:
 | Module | File | Status |
 |---|---|---|
 | Vista Homepage | `index.html` | ✅ Live |
-| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable |
+| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A complete + detail unification |
 | Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ⏳ Planned |
@@ -283,7 +283,21 @@ Local `localStorage` only. No Notion write permission required. No changes to Hu
 
 ## Document Generator Status
 
-Invoice and quotation PDF generation is complete and stable. The sections below describe known limitations, potential improvements, and ideas for future work — none of which are required for the current use case.
+Invoice, quotation, and delivery note PDF generation is complete and stable. The Purchasing Invoice local file manager is live as of commit `d0188c6`. The sections below describe known limitations, potential improvements, and ideas for future work.
+
+### Purchasing Invoice Manager — LIVE ✅ (2026-06-09, commit `d0188c6`)
+
+Local file manager for the purchasing invoices folder at `C:\Users\YousefMokaled\Documents\Vista United Co\purchasing invoices`.
+
+- Three-section classification: Invoices / Payment Slips & Receipts / Others (keyword-based + manual localStorage override)
+- `localStorage` key `vista_purchasing_file_tags_v1` — manual tag `{ "folder/file.pdf": "invoice"|"payment"|"other" }` wins over auto-classification
+- Date grouping newest-first (`D-M-YYYY` folder name parsing), alpha sort within date groups
+- Invoice-only Select All checkbox + live selected count in section header
+- Combined PDF via `POST /purchasing-invoices/combine` (PyMuPDF server-side, no temp files)
+- **PyMuPDF v1.27.2.3 required** — `pip install PyMuPDF` before using Print All or Print Selected
+- Print All: invoice-classified files only, sorted newest-first then alpha
+- Print Selected: all checked files, warning if non-invoice files included
+- Upload into dated subfolder; file viewer modal; path-traversal protection
 
 ---
 

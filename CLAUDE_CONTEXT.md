@@ -904,6 +904,84 @@ PDF:    INV000021
 
 ---
 
+---
+
+## Purchasing Invoice Local File Manager — LIVE ✅ (commit `d0188c6`)
+
+This section is the permanent source of truth for the Purchasing Invoice manager. Read before touching any purchasing-invoice code.
+
+### Scope lock
+All purchasing invoice code is strictly isolated. Never touch: `printAllInvoices()`, Daftra invoice/quotation/DN rendering, QR pipeline, html2pdf chain, `config.json`.
+
+### Local folder
+```
+PURCHASE_INVOICE_DIR = C:\Users\YousefMokaled\Documents\Vista United Co\purchasing invoices
+PURCHASE_ALLOWED_EXTS = {'.pdf', '.png', '.jpg', '.jpeg', '.webp'}
+```
+Upload subfolders use `D-M-YYYY` date format. Do not change this format.
+
+### localStorage key
+```
+vista_purchasing_file_tags_v1
+Schema: { "folder/file.pdf": "invoice" | "payment" | "other" }
+```
+Manual tag wins over auto-classification. Tags persist across refreshes. Files are never renamed or moved.
+
+### Classification — `classifyPurchFile(name, relPath)`
+Priority order:
+1. Manual tag from `vista_purchasing_file_tags_v1` (if set)
+2. Auto keyword match:
+   - `payment` if filename contains: payment, report, receipt, transfer, bank
+   - `other` if filename contains: quotation, quote, delivery, statement, contract, agreement — or matches `\bdn\b`
+   - `invoice` (default)
+
+### Proxy routes (proxy.py)
+| Route | Method | Behaviour |
+|---|---|---|
+| `/purchasing-invoices/list` | GET | Directory walk; JSON array `{ folder, name, relativePath, size }`; `Cache-Control: no-store` |
+| `/purchasing-invoices/file?path=…` | GET | Serves file inline; RFC 5987 Content-Disposition for Unicode filenames; three-phase (validate → headers → 64KB stream) |
+| `/purchasing-invoices/upload` | POST | Multipart upload; saves into `D-M-YYYY` subfolder |
+| `/purchasing-invoices/combine` | POST | PyMuPDF merge; accepts `{ "paths": [...] }`; streams combined PDF; `503` if fitz not installed |
+
+### PyMuPDF dependency
+Required for Print All and Print Selected. Install: `pip install PyMuPDF`. Proxy returns `503` with instructions if import fails. Tested with v1.27.2.3.
+
+### Sort order for combined PDF — `_sortPurchFilesForPrint(files)`
+Newest date folder first (`db − da`), alphabetical within folder. Both `printAllPurchasingFiles()` and `printSelectedPurchasingFiles()` call this before posting to `/purchasing-invoices/combine`.
+
+### Print All behaviour
+- Sends only invoice-classified files (payment slips and others excluded)
+- `#purchPrintAllLog` panel shows progress; blob URL opened in new tab on success
+- Fallback link shown if popup is blocked
+
+### Print Selected behaviour
+- Sends all checked files regardless of classification
+- Warning shown in log if non-invoice files (payment / other) are included
+
+### Security
+- `_safe_purchase_path(rel_path)` blocks `..`, absolute paths, and paths escaping `PURCHASE_INVOICE_DIR`
+- Allowed extensions only: `.pdf .png .jpg .jpeg .webp`
+
+### ThreadingHTTPServer
+`proxy.py` uses `ThreadingHTTPServer` (not `HTTPServer`) to handle concurrent requests (e.g. PDF viewer + list endpoint firing at the same time).
+
+### Cache-busting on list fetch
+Frontend: `fetch('/purchasing-invoices/list?t=${Date.now()}', { cache: 'no-store' })`
+Server: `Cache-Control: no-store, no-cache, must-revalidate`
+Both are required — some browsers respect only one.
+
+### Upload flow
+After upload, frontend clears `purchasingSearch` and the search input value, then calls `fetchPurchasingList()`. This ensures newly uploaded files are visible even if a search filter was active.
+
+### Locked — do not touch
+- `printAllInvoices()` — Daftra invoice Print All logic
+- Invoice/quotation/DN rendering, QR pipeline, html2pdf chain
+- `config.json`, `social-dashboard.html`, `financial-dashboard.html`
+- Local folder path (`PURCHASE_INVOICE_DIR`)
+- Upload folder date format (`D-M-YYYY`)
+
+---
+
 # CLAUDE_CONTEXT — Financial Dashboard
 
 ## Branch and Status

@@ -11,11 +11,28 @@ A suite of local, single-file HTML tools for Vista United Co. No cloud hosting, 
 | Module | File | Data source | Status |
 |---|---|---|---|
 | Homepage | `index.html` | None | ✅ Live |
-| Document Generator | `daftra-pdf-generator_1.html` | Daftra ERP (browser-direct) | ✅ Live |
+| Document Generator | `daftra-pdf-generator_1.html` | Daftra ERP (browser-direct) + Local purchasing invoices folder | ✅ Live — includes Purchasing Invoice manager |
 | Social Media Control Center | `social-dashboard.html` | Notion — Vista/Hussam workspace | ✅ Live — Phase 2A complete + detail unification |
 | Financial Dashboard | `financial-dashboard.html` | Daftra ERP (via `/daftra/...` proxy) | 🌿 Feature branch — not yet merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | Notion — Youssef private workspace | ⏳ Planned |
 | Local Proxy | `proxy.py` | — relays Notion API + Daftra API | ✅ Live |
+
+---
+
+## Proxy Routes — Purchasing Invoice Manager
+
+All purchasing invoice routes are handled by `proxy.py`. Files are served from `PURCHASE_INVOICE_DIR = C:\Users\YousefMokaled\Documents\Vista United Co\purchasing invoices`. All routes require path-traversal validation via `_safe_purchase_path(rel_path)`.
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/purchasing-invoices/list` | GET | Directory walk; returns JSON array of `{ folder, name, relativePath, size }`; `Cache-Control: no-store` |
+| `/purchasing-invoices/file?path=…` | GET | Serve a file inline; RFC 5987 `Content-Disposition` for Unicode filenames; three-phase (validate → headers → 64KB chunks) |
+| `/purchasing-invoices/upload` | POST | Multipart upload into a `D-M-YYYY` dated subfolder; allowed ext: `.pdf .png .jpg .jpeg .webp` |
+| `/purchasing-invoices/combine` | POST | PyMuPDF server-side merge; accepts `{ "paths": [...] }`; streams combined PDF; returns `503` if PyMuPDF not installed |
+
+**PyMuPDF dependency:** `pip install PyMuPDF` (v1.27.2.3 tested). Proxy returns `503` with install instructions if import fails.
+
+**Allowed extensions:** `.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`
 
 ---
 
@@ -33,6 +50,7 @@ A suite of local, single-file HTML tools for Vista United Co. No cloud hosting, 
 | Media index cache | `localStorage` key `vista_media_index_v1` — task metadata only, no signed URLs. Does not gate live media loading. |
 | Review store | `localStorage` key `vista_reviews_v1` — reviewed task IDs + `last_edited_time` snapshot (Phase 2A, implemented) |
 | Detail task guard | `let _detailTaskId` — in-memory only, tracks open task ID to discard stale async fetch results |
+| Purchasing file tags | `localStorage` key `vista_purchasing_file_tags_v1` — manual classification overrides: `{ "folder/file.pdf": "invoice"|"payment"|"other" }` |
 | Config | `config.json` (git-ignored) — all tokens and database IDs |
 
 ---
