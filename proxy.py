@@ -547,7 +547,7 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         # Only log proxy calls — suppress noisy static-file requests
         if '/notion/' in self.path:
-            print(f'  [notion] {self.command} {self.path}  →  {fmt % args}')
+            print(f'  [notion] {self.command} {self.path}  ->  {fmt % args}')
         elif '/daftra/' in self.path:
             print(f'  [daftra] {self.command} {self.path}  ->  {fmt % args}')
         elif '/purchasing-invoices/' in self.path:

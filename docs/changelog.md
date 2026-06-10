@@ -2,6 +2,70 @@
 
 ---
 
+## [2026-06-10] — Create New Task — Social Media Control Center
+
+### social-dashboard.html only — proxy.py unchanged
+
+Hussam granted write permission on the Vista social_media Notion integration. Added the ability to create new tasks in Hussam's shared database directly from the Social Media Control Center.
+
+**UI:**
+- `+ New Task` button added to the sidebar Tasks section, below `Refresh Tasks`. Uses `btn-outline` style to distinguish it from the primary refresh action.
+- Modal overlay (`#nt-overlay`) opens on click. Fields: Task name (required), Category (select), Assignee (select), Status (select, defaults to "Not started"), Due date (date), Description (textarea, optional). Two-column grid layout for Category/Assignee and Status/Due date pairs.
+
+**Behaviour:**
+- Submit button disables immediately on click to prevent duplicate submissions. Label changes to "Creating…".
+- On Notion success (HTTP 201): shows green success bar with task name, button changes to "Created", modal closes after 900 ms, `loadAllTasks()` fires so the new task appears immediately.
+- On Notion error (non-2xx): Notion's error message surfaces inline in the modal. Submit re-enables so the user can correct and retry without reopening.
+- On network error: same inline error path.
+- Escape key: closes the new task modal when it is the topmost layer (checked before the task-selector modal and the detail panel in the unified Escape handler).
+- Click-outside (overlay backdrop) also closes the modal.
+- Task name field receives focus automatically on open.
+- Enter in the task name field submits.
+
+**Proxy:** No changes to `proxy.py`. The existing `do_POST` → `_notion_route()` → `_proxy_notion()` path already forwards `POST /notion/social/pages` to the Notion API with the social_media token injected.
+
+**Notion API call:**
+```
+POST /notion/social/pages
+→ proxy forwards to https://api.notion.com/v1/pages
+Body: {
+  "parent": { "database_id": "35aa2557-c7f8-8140-81f5-000b067a0139" },
+  "properties": {
+    "Task name": { "title": [...] },
+    "Status":    { "status": { "name": "Not started" } },
+    "Category":  { "select": { "name": "..." } },   // omitted if blank
+    "Assignee":  { "select": { "name": "..." } },   // omitted if blank
+    "Due date":  { "date":   { "start": "YYYY-MM-DD" } }, // omitted if blank
+    "Description": { "rich_text": [...] }            // omitted if blank
+  }
+}
+```
+
+**Escape key handler unified (side effect fix):**
+The existing global `keydown` Escape handler previously called `closeDetail()` unconditionally. Replaced with a prioritised chain: new task modal → task-selector modal → detail panel. Each layer returns early, preventing lower layers from also firing.
+
+**Functions added:**
+- `openNewTaskModal()` — resets all fields, shows overlay, focuses task name
+- `closeNewTaskModal()` — hides overlay
+- `submitNewTask()` — validates, builds Notion API body, POSTs, handles success/error
+
+**CSS added:** `.nt-overlay`, `.nt-modal`, `.nt-header`, `.nt-title`, `.nt-close`, `.nt-body`, `.nt-field`, `.nt-label`, `.nt-req`, `.nt-input`, `.nt-select`, `.nt-textarea`, `.nt-footer`, `.nt-submit`, `.nt-cancel`, `.nt-error`, `.nt-success`
+
+**Files changed:** `social-dashboard.html`, `proxy.py` (logging crash fix only — see below)
+**Files NOT changed:** `financial-dashboard.html`, `daftra-pdf-generator_1.html`, `config.json`
+
+**proxy.py change (Windows logging crash fix):**
+`log_message()` used the `→` Unicode arrow (U+2192) in a `print()` call. On Windows, Python stdout defaults to cp1252, which cannot encode U+2192. Any Notion route that returned a non-2xx HTTP response triggered this `UnicodeEncodeError` inside `send_response()` — before any response headers were sent — causing the connection to close silently with no response to the caller. Fixed by replacing `→` with `->`. No route logic, auth, CORS, or write-behavior changes.
+
+**Live creation status — BLOCKED (Notion permissions):**
+The UI is fully implemented and tested. The proxy correctly routes `POST /notion/social/pages` to Notion. Live task creation is currently blocked because Notion returns HTTP 404:
+
+> "Could not find database with ID: 35aa2557-c7f8-8140-81f5-000b067a0139. Make sure the relevant pages and databases are shared with your integration 'Youssef'."
+
+**Action required (Hussam):** In Notion, open the Vista tasks database → Share → add the "Youssef" integration with at least "Can edit" permission. Once done, the POST will succeed and no code changes are needed.
+
+---
+
 ## [2026-06-09] — Invoice printing + Purchasing Invoice local file manager
 
 ### daftra-pdf-generator_1.html + proxy.py — commit `d0188c6`

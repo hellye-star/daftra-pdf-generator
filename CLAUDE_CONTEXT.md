@@ -118,9 +118,47 @@ Both directions stored explicitly. No Notion write permissions required.
 | Related Supporting Tasks | ✅ Done (Phase 2A.5) | 5-tier detection: Tiers 1–3 automatic (Possible/Strong Match, Exact Reference), Tier 4 Explicit Notion Link, Tier 5 manual "Linked by You". Max 5 results. `RELATED_STOP` + `sigWords`/`sigBigrams` threshold prevents false positives. See "APPROVED AND FINAL" section above. |
 | Favorites | ✅ Done (Phase 2A.6) | localStorage only. `vista_favorites_v1`. `isFavorite(t)`, `addFavorite`, `removeFavorite`, `toggleFavoriteAction`. Star toggle (☆/★) on every task row + in detail panel. Favorites chip beside Reviewed. Done tasks always visible. No staleness concept. |
 | Meeting Agendas sidebar | ✅ Done (full) | Collapsible sidebar panel. Two tabs: Agendas (4 pages) and Notes (7 pages), newest first. Click page → full-width viewer replaces main content. Block renderer: heading_2/3, paragraph, ul/ol, divider, callout. Rich text: bold, italic, code, links, auto-URL. `MEETING_PROXY = 'social'`. Page IDs in `config.json` as `meeting_agenda_page_id` / `meeting_notes_page_id`. Graceful fallback for inaccessible pages. |
+| Create new task | ✅ Done (2026-06-10) | `+ New Task` sidebar button → modal form → `POST /notion/social/pages`. See "Create New Task" section below. |
 | Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
 | Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
 | Personal Task Center | ❌ Not started | Phase 3 — `personal-dashboard.html`. |
+
+#### Create New Task — LIVE ✅ (2026-06-10)
+
+Hussam granted write permission on the Vista social_media integration. New tasks can be created in the shared database directly from the dashboard.
+
+**Proxy route:** `POST /notion/social/pages` — forwarded by the existing `_proxy_notion()` handler. No proxy.py changes were required.
+
+**Writable properties (all others are read-only or computed):**
+| Property | Type | Required |
+|---|---|---|
+| `Task name` | title | ✅ Yes |
+| `Status` | status | Optional (defaults to "Not started") |
+| `Category` | select | Optional |
+| `Assignee` | select | Optional |
+| `Due date` | date | Optional |
+| `Description` | rich_text | Optional |
+
+**Omit on create (read-only):** `Due Date 2` (formula), `Bucket` (formula), `Updated at` (last_edited_time).
+
+**Functions added:**
+- `openNewTaskModal()` — resets form fields, shows `#nt-overlay`, focuses task name
+- `closeNewTaskModal()` — hides `#nt-overlay`
+- `submitNewTask()` — validates name, builds Notion body (omits blank optional fields), POSTs, handles success/error inline
+
+**Submit flow:**
+1. Button disables + shows "Creating…" on first click (duplicate-submit guard)
+2. Success → green bar, "Created" label, modal closes after 900 ms, `loadAllTasks()` fires
+3. Notion error → error surfaced inline, button re-enables for retry
+4. Network error → same inline path
+
+**Escape key (side effect fix):** The global `keydown` Escape handler was previously unconditional (`closeDetail()` always). Replaced with a prioritised chain: new task modal → task-selector modal → detail panel. Each fires only if its layer is the topmost visible one.
+
+**Locked rules (do not change):**
+- Never send `Due Date 2`, `Bucket`, or `Updated at` in the create body — they are computed/system fields.
+- Optional properties (`Category`, `Assignee`, `Due date`, `Description`) must be omitted entirely (not sent as null/empty) when blank — Notion returns 400 for properties sent with empty values when the field doesn't accept them.
+- The submit button must remain disabled after a successful create (re-enable only on error).
+- On success, always call `loadAllTasks()` so the new task appears in the Task Tracker without a manual refresh.
 
 #### Validation status (2026-06-05)
 - Programmatic validation passed: all 3 `openDetail` call-sites confirmed, all 7 `el.innerHTML` write points confirmed guarded, block fetch returning correct data for test task (372a2557), `renderMediaBlocks` returning `html` path (no fallback button) for task with confirmed content.
