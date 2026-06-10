@@ -122,7 +122,7 @@ Both directions stored explicitly. No Notion write permissions required.
 | Archive (delete) task | ✅ Done (2026-06-10) | "Archive this task…" button in detail panel → confirmation → `PATCH /notion/social/pages/{id}` with `{archived:true}`. Notion archive only — no hard delete. localStorage records not auto-cleaned. See "Archive Task" section below. |
 | Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
 | Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
-| Personal Task Center | ❌ Not started | Phase 3 — `personal-dashboard.html`. |
+| Personal Task Center | ✅ Done (2026-06-10) | Phase 3 — `personal-dashboard.html`. Standalone dashboard, `/notion/personal/` route. See "Personal Task Center" section in CLAUDE_CONTEXT. |
 
 #### Create New Task — LIVE ✅ (2026-06-10)
 
@@ -199,6 +199,46 @@ def do_PATCH(self):
 - Never send `archived: false` to unarchive from this dashboard — no unarchive UI exists.
 - Never attempt hard delete — Notion public API does not expose permanent deletion.
 - Do not auto-clean localStorage records on archive without explicit approval.
+
+#### Personal Task Center — LIVE ✅ (2026-06-10)
+
+**File:** `personal-dashboard.html` (standalone — no shared logic with `social-dashboard.html`)
+**Proxy route:** `/notion/personal/` only. Uses `notion.personal` token from `config.json`.
+**Data source ID:** `3624a590-47e4-80de-85ca-000bf4745dcd` ("To Do List DB")
+
+**Schema (3 properties only):**
+| Property | Type | Notes |
+|---|---|---|
+| `Name` | `title` | Required — task name |
+| `Done` | `checkbox` | true/false |
+| `Due Date` | `date` | Optional. Supports datetime+timezone (syncs to Google Calendar) or date-only |
+
+**Operations:**
+- List: `POST /notion/personal/data_sources/{DATA_SOURCE_ID}/query` with `{ page_size: 100 }`
+- Create: `POST /notion/personal/pages` — `parent: { type: 'data_source_id', data_source_id: '...' }`
+- Toggle Done: `PATCH /notion/personal/pages/{id}` — `{ properties: { Done: { checkbox: bool } } }`
+- Archive: `PATCH /notion/personal/pages/{id}` — `{ archived: true }`
+
+**UI:**
+- Topbar: "Personal Tasks" tool name, links to social-dashboard.html and index.html (same tab).
+- Filter tabs: All / Active / Done.
+- Task rows: checkbox (inline toggle), name, due date with time if present, archive button per row.
+- Overdue tasks (date in past, not Done): red date + "Overdue" tag.
+- Done tasks: name struck through, date greyed out.
+- Sort: active first (overdue → by date → undated), done last.
+- "New Task" button → inline form (name + datetime-local picker). Enter key submits, Escape closes.
+- Archive confirmation: expands inline below the row (no modal). Soft-delete only.
+- No detail panel — schema is too simple to need one.
+
+**Navigation added:**
+- `index.html`: Card 4 linking to `personal-dashboard.html` (same tab, `<a href>`).
+- `social-dashboard.html` topbar: "Personal Tasks" link beside "← Platform Home".
+
+**Locked rules:**
+- Never mix personal tasks with Vista/social tasks.
+- Never call `/notion/social/` from `personal-dashboard.html`.
+- No Google Calendar API or OAuth. Calendar sync happens automatically through Notion's integration.
+- No hard delete. Archive only.
 
 #### Validation status (2026-06-05)
 - Programmatic validation passed: all 3 `openDetail` call-sites confirmed, all 7 `el.innerHTML` write points confirmed guarded, block fetch returning correct data for test task (372a2557), `renderMediaBlocks` returning `html` path (no fallback button) for task with confirmed content.

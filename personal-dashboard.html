@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vista United — Personal Tasks</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & tokens ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --dark:   #1C1C1A;
+  --mid:    #6B6B67;
+  --light:  #ADADAA;
+  --rule:   #D8D5CF;
+  --cream:  #FAF8F5;
+  --white:  #FFFFFF;
+  --danger: #C0392B;
+  --danger-bg: #FEF0F0;
+  --danger-border: #F5C6C6;
+}
+body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--dark); min-height: 100vh; }
+
+/* ── Topbar ──────────────────────────────────────────────────────────────── */
+.topbar { background: var(--dark); padding: 16px 36px; display: flex; align-items: center; gap: 12px; }
+.topbar-logo { width: 26px; height: 26px; flex-shrink: 0; }
+.topbar-name { font-weight: 500; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #fff; }
+.topbar-sub  { font-weight: 300; font-size: 7.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--light); margin-top: 2px; }
+.topbar-div  { width: 1px; height: 26px; background: #444; margin: 0 8px; }
+.topbar-tool { font-weight: 300; font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--light); }
+.topbar-links { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+.topbar-link { font-size: 9px; font-weight: 400; letter-spacing: 0.12em; text-transform: uppercase;
+               color: var(--light); text-decoration: none; transition: color 0.15s; white-space: nowrap; }
+.topbar-link:hover { color: #fff; }
+
+/* ── Page shell ──────────────────────────────────────────────────────────── */
+.page { max-width: 720px; margin: 0 auto; padding: 44px 24px 80px; }
+
+/* ── Page header ─────────────────────────────────────────────────────────── */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between;
+               margin-bottom: 32px; gap: 16px; flex-wrap: wrap; }
+.page-title  { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 400;
+               color: var(--dark); line-height: 1; }
+.page-meta   { font-size: 11px; font-weight: 300; color: var(--light); margin-top: 6px; }
+.btn-new { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
+           text-transform: uppercase; padding: 10px 20px; border: none; background: var(--dark);
+           color: #fff; cursor: pointer; flex-shrink: 0; }
+.btn-new:hover { background: #333; }
+
+/* ── New task form ───────────────────────────────────────────────────────── */
+.new-task-form { display: none; background: var(--white); border: 1px solid var(--rule);
+                 padding: 24px; margin-bottom: 20px; }
+.new-task-form.open { display: block; }
+.ntf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; margin-bottom: 14px; }
+.ntf-full { grid-column: 1 / -1; }
+.field-label { font-size: 9.5px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase;
+               color: var(--mid); display: block; margin-bottom: 5px; }
+.field-input { font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 300; width: 100%;
+               border: 1px solid var(--rule); padding: 9px 12px; background: var(--cream);
+               color: var(--dark); outline: none; transition: border-color 0.15s; }
+.field-input:focus { border-color: var(--dark); background: var(--white); }
+select.field-input { cursor: pointer; }
+textarea.field-input { resize: vertical; min-height: 64px; }
+.tags-checkboxes { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+.tag-check-label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 400;
+                   color: var(--mid); cursor: pointer; padding: 4px 10px; border: 1px solid var(--rule);
+                   background: var(--cream); transition: all 0.15s; user-select: none; }
+.tag-check-label:hover { border-color: var(--dark); color: var(--dark); }
+.tag-check-label input { display: none; }
+.tag-check-label.checked { background: var(--dark); color: #fff; border-color: var(--dark); }
+.ntf-hint { font-size: 10px; color: var(--light); margin-top: 4px; }
+.ntf-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.btn-save { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.12em;
+            text-transform: uppercase; padding: 10px 22px; border: none; background: var(--dark);
+            color: #fff; cursor: pointer; }
+.btn-save:hover:not(:disabled) { background: #333; }
+.btn-save:disabled { background: var(--rule); color: var(--light); cursor: not-allowed; }
+.btn-cancel-form { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 400; letter-spacing: 0.12em;
+                   text-transform: uppercase; padding: 10px 16px; border: 1px solid var(--rule);
+                   background: none; color: var(--mid); cursor: pointer; }
+.btn-cancel-form:hover { border-color: var(--mid); color: var(--dark); }
+.form-error { font-size: 11px; color: var(--danger); margin-top: 8px; display: none; }
+
+/* ── Filter bar ──────────────────────────────────────────────────────────── */
+.filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.filter-tabs { display: flex; border: 1px solid var(--rule); }
+.ftab { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 400; letter-spacing: 0.13em;
+        text-transform: uppercase; padding: 7px 16px; border: none; background: none;
+        color: var(--mid); cursor: pointer; transition: all 0.15s; }
+.ftab + .ftab { border-left: 1px solid var(--rule); }
+.ftab.active { background: var(--dark); color: #fff; }
+.ftab:not(.active):hover { background: var(--cream); color: var(--dark); }
+.filter-sep { width: 1px; height: 26px; background: var(--rule); }
+.filter-select { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 400; letter-spacing: 0.1em;
+                 text-transform: uppercase; padding: 7px 12px; border: 1px solid var(--rule);
+                 background: var(--cream); color: var(--mid); cursor: pointer; outline: none; }
+.filter-select:focus { border-color: var(--dark); }
+
+/* ── Task list ───────────────────────────────────────────────────────────── */
+.task-list  { display: flex; flex-direction: column; gap: 2px; }
+.task-card  { background: var(--white); border: 1px solid var(--rule); overflow: hidden;
+              transition: border-color 0.12s; }
+.task-card:hover { border-color: #c0bdb8; }
+.task-card.expanded { border-color: var(--dark); }
+
+/* task row */
+.task-row   { display: flex; align-items: center; gap: 0; padding: 13px 18px; cursor: pointer; min-height: 52px; }
+.task-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-right: 13px; }
+.dot-not-started { background: var(--light); }
+.dot-in-progress { background: #2980B9; }
+.dot-done        { background: #27AE60; }
+.task-main  { flex: 1; min-width: 0; }
+.task-name  { font-size: 13px; font-weight: 400; color: var(--dark);
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.task-name.done-name { color: var(--light); text-decoration: line-through; }
+.task-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 5px; }
+.badge { font-size: 9px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
+         padding: 2px 7px; border-radius: 2px; }
+.badge-high   { background: #FDECEA; color: #C0392B; }
+.badge-medium { background: #FEF3CD; color: #9A6700; }
+.badge-low    { background: #E8F5E9; color: #2E7D32; }
+.badge-tag    { background: var(--cream); color: var(--mid); border: 1px solid var(--rule); }
+.task-due   { font-size: 10.5px; font-weight: 300; color: var(--mid); white-space: nowrap; flex-shrink: 0;
+              margin-left: 16px; text-align: right; min-width: 90px; }
+.task-due.overdue { color: var(--danger); font-weight: 500; }
+.task-due.overdue::after { content: ' ·'; }
+.overdue-tag { font-size: 9px; font-weight: 600; color: var(--danger); text-transform: uppercase;
+               letter-spacing: 0.08em; display: block; }
+.task-expand-icon { font-size: 10px; color: var(--light); margin-left: 14px; flex-shrink: 0;
+                    transition: transform 0.2s; }
+.task-card.expanded .task-expand-icon { transform: rotate(180deg); }
+
+/* ── Edit panel ──────────────────────────────────────────────────────────── */
+.task-edit  { display: none; border-top: 1px solid var(--rule); padding: 20px 18px 18px; }
+.task-card.expanded .task-edit { display: block; }
+.edit-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-bottom: 12px; }
+.edit-full  { grid-column: 1 / -1; }
+.edit-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.btn-edit-save { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.12em;
+                 text-transform: uppercase; padding: 8px 18px; border: none; background: var(--dark);
+                 color: #fff; cursor: pointer; }
+.btn-edit-save:hover:not(:disabled) { background: #333; }
+.btn-edit-save:disabled { background: var(--rule); color: var(--light); cursor: not-allowed; }
+.edit-saved-msg { font-size: 11px; color: #27AE60; display: none; }
+.edit-error-msg { font-size: 11px; color: var(--danger); display: none; flex: 1; }
+.edit-sep { flex: 1; }
+
+/* archive within edit panel */
+.arch-zone  { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 14px; }
+.btn-arch   { font-size: 10px; font-weight: 400; letter-spacing: 0.1em; text-transform: uppercase;
+              color: var(--light); background: none; border: 1px solid transparent;
+              padding: 5px 12px; cursor: pointer; transition: all 0.15s; }
+.btn-arch:hover { color: var(--danger); border-color: var(--danger-border); }
+.arch-confirm { display: none; margin-top: 10px; padding: 12px 14px;
+                background: var(--danger-bg); border: 1px solid var(--danger-border); }
+.arch-confirm p { font-size: 11px; color: #7a2020; margin-bottom: 10px; line-height: 1.5; }
+.arch-btns  { display: flex; gap: 8px; }
+.btn-arch-yes { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 600; color: #fff;
+                background: var(--danger); border: none; padding: 6px 14px; cursor: pointer; }
+.btn-arch-yes:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-arch-no  { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 400; color: var(--mid);
+                background: none; border: 1px solid var(--rule); padding: 6px 12px; cursor: pointer; }
+.arch-err   { font-size: 10px; color: var(--danger); margin-top: 6px; display: none; }
+
+/* ── Empty / loading ─────────────────────────────────────────────────────── */
+.state-msg { text-align: center; font-size: 13px; font-weight: 300; color: var(--light); padding: 48px 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--rule); border-top-color: var(--mid);
+           border-radius: 50%; animation: spin 0.7s linear infinite; margin: 48px auto; display: block; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <svg class="topbar-logo" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="1" y="1" width="10" height="10" stroke="#fff" stroke-width="1"/>
+    <rect x="15" y="1" width="10" height="10" stroke="#fff" stroke-width="1"/>
+    <rect x="1" y="15" width="10" height="10" stroke="#fff" stroke-width="1"/>
+    <rect x="15" y="15" width="10" height="10" stroke="#fff" stroke-width="1"/>
+  </svg>
+  <div>
+    <div class="topbar-name">Vista United</div>
+    <div class="topbar-sub">Internal Platform</div>
+  </div>
+  <div class="topbar-div"></div>
+  <div class="topbar-tool">Personal Tasks</div>
+  <div class="topbar-links">
+    <a href="social-dashboard.html" class="topbar-link">Social Dashboard</a>
+    <a href="index.html" class="topbar-link">← Platform Home</a>
+  </div>
+</div>
+
+<!-- Page -->
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Personal Tasks</div>
+      <div class="page-meta" id="page-meta">Loading…</div>
+    </div>
+    <button class="btn-new" id="btn-new" onclick="openNewForm()">+ New Task</button>
+  </div>
+
+  <!-- New task form -->
+  <div class="new-task-form" id="new-task-form">
+    <div class="ntf-grid">
+      <div class="ntf-full">
+        <label class="field-label" for="ntf-name">Task name *</label>
+        <input class="field-input" id="ntf-name" type="text" placeholder="What needs to be done?" autocomplete="off">
+      </div>
+      <div>
+        <label class="field-label" for="ntf-status">Status</label>
+        <select class="field-input" id="ntf-status">
+          <option value="">— select —</option>
+          <option value="Not started" selected>Not started</option>
+          <option value="In progress">In progress</option>
+          <option value="Done">Done</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label" for="ntf-priority">Priority</label>
+        <select class="field-input" id="ntf-priority">
+          <option value="">— none —</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+      </div>
+      <div class="ntf-full">
+        <label class="field-label" for="ntf-due">Due date / time</label>
+        <input class="field-input" id="ntf-due" type="datetime-local">
+        <div class="ntf-hint">Setting a time syncs this task to Google Calendar via Notion.</div>
+      </div>
+      <div class="ntf-full">
+        <label class="field-label">Tags</label>
+        <div class="tags-checkboxes" id="ntf-tags">
+          <label class="tag-check-label" onclick="toggleTagChip(this)"><input type="checkbox" value="Work">Work</label>
+          <label class="tag-check-label" onclick="toggleTagChip(this)"><input type="checkbox" value="Personal">Personal</label>
+          <label class="tag-check-label" onclick="toggleTagChip(this)"><input type="checkbox" value="Finance">Finance</label>
+          <label class="tag-check-label" onclick="toggleTagChip(this)"><input type="checkbox" value="Follow-up">Follow-up</label>
+          <label class="tag-check-label" onclick="toggleTagChip(this)"><input type="checkbox" value="Important">Important</label>
+        </div>
+      </div>
+      <div class="ntf-full">
+        <label class="field-label" for="ntf-notes">Notes</label>
+        <textarea class="field-input" id="ntf-notes" placeholder="Optional notes…"></textarea>
+      </div>
+    </div>
+    <div class="ntf-actions">
+      <button class="btn-cancel-form" onclick="closeNewForm()">Cancel</button>
+      <button class="btn-save" id="ntf-save" onclick="submitNewTask()">Add Task</button>
+    </div>
+    <div class="form-error" id="ntf-error"></div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="filter-tabs">
+      <button class="ftab active" id="ftab-all"         onclick="setStatusFilter('all')">All</button>
+      <button class="ftab"        id="ftab-not-started" onclick="setStatusFilter('Not started')">Not started</button>
+      <button class="ftab"        id="ftab-in-progress" onclick="setStatusFilter('In progress')">In progress</button>
+      <button class="ftab"        id="ftab-done"        onclick="setStatusFilter('Done')">Done</button>
+    </div>
+    <div class="filter-sep"></div>
+    <select class="filter-select" id="filter-priority" onchange="setPriorityFilter(this.value)">
+      <option value="all">All priorities</option>
+      <option value="High">High</option>
+      <option value="Medium">Medium</option>
+      <option value="Low">Low</option>
+    </select>
+  </div>
+
+  <!-- Task list -->
+  <div class="task-list" id="task-list">
+    <div class="spinner"></div>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+/* ── Constants ───────────────────────────────────────────────────────────── */
+const DATA_SOURCE_ID = '3b74a590-47e4-82cb-ab74-073bb96d4cba';
+const QUERY_ENDPOINT = `/notion/personal/data_sources/${DATA_SOURCE_ID}/query`;
+const PAGES_ENDPOINT = `/notion/personal/pages`;
+
+/* ── State ───────────────────────────────────────────────────────────────── */
+let allTasks      = [];
+let statusFilter  = 'all';
+let priorityFilter = 'all';
+let expandedId    = null;
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function prop(t, key) { return t.properties?.[key] ?? {}; }
+
+function taskName(t)     { return prop(t,'Name').title?.map(r=>r.plain_text).join('') || '(Untitled)'; }
+function taskStatus(t)   { return prop(t,'Status').status?.name || ''; }
+function taskPriority(t) { return prop(t,'Priority').select?.name || ''; }
+function taskDue(t)      { return prop(t,'Due').date?.start || null; }
+function taskTags(t)     { return (prop(t,'Tags').multi_select || []).map(x=>x.name); }
+function taskNotes(t)    { return (prop(t,'Notes').rich_text || []).map(r=>r.plain_text).join(''); }
+function taskAssignee(t) { return (prop(t,'Assignee').people || []).map(p=>p.name).join(', '); }
+
+function isOverdue(t) {
+  const d = taskDue(t);
+  if (!d || taskStatus(t) === 'Done') return false;
+  return new Date(d) < new Date();
+}
+
+function formatDue(s) {
+  if (!s) return null;
+  const hasTime = s.includes('T');
+  const d = new Date(s);
+  if (hasTime) {
+    return d.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:false });
+  }
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function dotClass(status) {
+  if (status === 'In progress') return 'dot-in-progress';
+  if (status === 'Done')        return 'dot-done';
+  return 'dot-not-started';
+}
+
+function priorityBadgeClass(p) {
+  if (p === 'High')   return 'badge badge-high';
+  if (p === 'Medium') return 'badge badge-medium';
+  if (p === 'Low')    return 'badge badge-low';
+  return '';
+}
+
+/* ── Load ────────────────────────────────────────────────────────────────── */
+async function loadTasks() {
+  document.getElementById('task-list').innerHTML = '<div class="spinner"></div>';
+  try {
+    const res = await fetch(QUERY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page_size: 100 }),
+    });
+    if (!res.ok) throw new Error(`Notion ${res.status}`);
+    const data = await res.json();
+    allTasks = (data.results || []).filter(t => !t.archived && !t.in_trash);
+    renderTasks();
+  } catch (err) {
+    document.getElementById('task-list').innerHTML = `<div class="state-msg">Failed to load: ${esc(err.message)}</div>`;
+    document.getElementById('page-meta').textContent = 'Error loading tasks';
+  }
+}
+
+/* ── Render ──────────────────────────────────────────────────────────────── */
+function setStatusFilter(v) {
+  statusFilter = v;
+  ['all','not-started','in-progress','done'].forEach(k => {
+    document.getElementById('ftab-' + k)?.classList.remove('active');
+  });
+  const tabId = v === 'all' ? 'ftab-all'
+    : v === 'Not started'   ? 'ftab-not-started'
+    : v === 'In progress'   ? 'ftab-in-progress'
+    : 'ftab-done';
+  document.getElementById(tabId)?.classList.add('active');
+  expandedId = null;
+  renderTasks();
+}
+
+function setPriorityFilter(v) {
+  priorityFilter = v;
+  expandedId = null;
+  renderTasks();
+}
+
+function visibleTasks() {
+  return allTasks.filter(t => {
+    if (statusFilter !== 'all' && taskStatus(t) !== statusFilter) return false;
+    if (priorityFilter !== 'all' && taskPriority(t) !== priorityFilter) return false;
+    return true;
+  });
+}
+
+function renderTasks() {
+  const total  = allTasks.length;
+  const active = allTasks.filter(t => taskStatus(t) !== 'Done').length;
+  document.getElementById('page-meta').textContent = `${total} task${total !== 1 ? 's' : ''} · ${active} active`;
+
+  const tasks = visibleTasks();
+
+  // Sort: overdue first, then by due date, then undated; done last
+  const sorted = [...tasks].sort((a, b) => {
+    const doneA = taskStatus(a) === 'Done' ? 1 : 0;
+    const doneB = taskStatus(b) === 'Done' ? 1 : 0;
+    if (doneA !== doneB) return doneA - doneB;
+    const da = taskDue(a) ? new Date(taskDue(a)) : null;
+    const db = taskDue(b) ? new Date(taskDue(b)) : null;
+    if (da && db) return da - db;
+    if (da) return -1;
+    if (db) return 1;
+    return 0;
+  });
+
+  if (sorted.length === 0) {
+    const msg = statusFilter !== 'all'
+      ? `No ${statusFilter.toLowerCase()} tasks${priorityFilter !== 'all' ? ' with ' + priorityFilter + ' priority' : ''}.`
+      : 'No tasks yet.';
+    document.getElementById('task-list').innerHTML = `<div class="state-msg">${msg}</div>`;
+    return;
+  }
+
+  document.getElementById('task-list').innerHTML = sorted.map(t => buildCard(t)).join('');
+}
+
+function buildCard(t) {
+  const id       = t.id;
+  const name     = esc(taskName(t));
+  const status   = taskStatus(t);
+  const priority = taskPriority(t);
+  const dueStr   = taskDue(t);
+  const dueFmt   = formatDue(dueStr);
+  const tags     = taskTags(t);
+  const notes    = esc(taskNotes(t));
+  const assignee = esc(taskAssignee(t));
+  const overdue  = isOverdue(t);
+  const isDone   = status === 'Done';
+  const expanded = expandedId === id;
+
+  const chipsHtml = [
+    priority ? `<span class="${priorityBadgeClass(priority)}">${esc(priority)}</span>` : '',
+    ...tags.map(tag => `<span class="badge badge-tag">${esc(tag)}</span>`),
+    assignee ? `<span class="badge badge-tag">${assignee}</span>` : '',
+  ].filter(Boolean).join('');
+
+  const dueHtml = dueFmt
+    ? `<div class="task-due ${overdue ? 'overdue' : ''}">${esc(dueFmt)}${overdue ? '<span class="overdue-tag">Overdue</span>' : ''}</div>`
+    : '';
+
+  // Build edit tag checkboxes
+  const editTagsHtml = ['Work','Personal','Finance','Follow-up','Important'].map(tag => {
+    const checked = tags.includes(tag) ? 'checked' : '';
+    const cls     = tags.includes(tag) ? 'tag-check-label checked' : 'tag-check-label';
+    return `<label class="${cls}" onclick="toggleTagChip(this)"><input type="checkbox" value="${esc(tag)}" ${checked}>${esc(tag)}</label>`;
+  }).join('');
+
+  // Escape for attribute values
+  const safeName  = esc(name);
+  const safeNotes = notes;
+  const dueVal    = dueStr ? toLocalDatetimeInput(dueStr) : '';
+
+  return `
+<div class="task-card${expanded ? ' expanded' : ''}" id="card-${id}">
+  <div class="task-row" onclick="toggleExpand('${id}')">
+    <div class="task-status-dot ${dotClass(status)}"></div>
+    <div class="task-main">
+      <div class="task-name${isDone ? ' done-name' : ''}">${name}</div>
+      ${chipsHtml || dueHtml ? `<div class="task-chips">${chipsHtml}</div>` : ''}
+    </div>
+    ${dueHtml}
+    <div class="task-expand-icon">▾</div>
+  </div>
+  <div class="task-edit" id="edit-${id}">
+    <div class="edit-grid">
+      <div>
+        <label class="field-label">Status</label>
+        <select class="field-input" id="es-${id}">
+          <option value="">— none —</option>
+          <option value="Not started" ${status==='Not started'?'selected':''}>Not started</option>
+          <option value="In progress" ${status==='In progress'?'selected':''}>In progress</option>
+          <option value="Done"        ${status==='Done'?'selected':''}>Done</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Priority</label>
+        <select class="field-input" id="ep-${id}">
+          <option value="">— none —</option>
+          <option value="High"   ${priority==='High'?'selected':''}>High</option>
+          <option value="Medium" ${priority==='Medium'?'selected':''}>Medium</option>
+          <option value="Low"    ${priority==='Low'?'selected':''}>Low</option>
+        </select>
+      </div>
+      <div class="edit-full">
+        <label class="field-label">Due date / time</label>
+        <input class="field-input" id="ed-${id}" type="datetime-local" value="${esc(dueVal)}">
+        <div class="ntf-hint">Setting a time syncs to Google Calendar via Notion.</div>
+      </div>
+      <div class="edit-full">
+        <label class="field-label">Tags</label>
+        <div class="tags-checkboxes" id="et-${id}">${editTagsHtml}</div>
+      </div>
+      <div class="edit-full">
+        <label class="field-label">Notes</label>
+        <textarea class="field-input" id="en-${id}">${safeNotes}</textarea>
+      </div>
+    </div>
+    <div class="edit-actions">
+      <button class="btn-edit-save" id="esave-${id}" onclick="saveEdit('${id}')">Save changes</button>
+      <div class="edit-saved-msg" id="esaved-${id}">Saved ✓</div>
+      <div class="edit-error-msg" id="eerr-${id}"></div>
+      <div class="edit-sep"></div>
+    </div>
+    <div class="arch-zone">
+      <button class="btn-arch" id="arch-btn-${id}" onclick="showArchiveConfirm('${id}')">Archive task…</button>
+      <div class="arch-confirm" id="arch-confirm-${id}">
+        <p>Archive <strong>${name}</strong>? It will be removed from all views. Recoverable from Notion Trash only.</p>
+        <div class="arch-btns">
+          <button class="btn-arch-yes" id="arch-yes-${id}" onclick="confirmArchive('${id}')">Yes, archive it</button>
+          <button class="btn-arch-no"  onclick="cancelArchive('${id}')">Cancel</button>
+        </div>
+        <div class="arch-err" id="arch-err-${id}"></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+/* ── Expand / collapse ───────────────────────────────────────────────────── */
+function toggleExpand(id) {
+  if (expandedId === id) {
+    expandedId = null;
+    document.getElementById('card-' + id)?.classList.remove('expanded');
+  } else {
+    if (expandedId) document.getElementById('card-' + expandedId)?.classList.remove('expanded');
+    expandedId = id;
+    document.getElementById('card-' + id)?.classList.add('expanded');
+  }
+}
+
+/* ── Local datetime conversion ───────────────────────────────────────────── */
+function toLocalDatetimeInput(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/* ── Tag chip toggle ─────────────────────────────────────────────────────── */
+function toggleTagChip(label) {
+  const cb = label.querySelector('input[type=checkbox]');
+  // The click already fires before this runs — checkbox is toggled
+  setTimeout(() => {
+    label.classList.toggle('checked', cb.checked);
+  }, 0);
+}
+
+function getCheckedTags(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`))
+    .map(cb => cb.value);
+}
+
+/* ── Save edit ───────────────────────────────────────────────────────────── */
+async function saveEdit(id) {
+  const saveBtn = document.getElementById(`esave-${id}`);
+  const savedEl = document.getElementById(`esaved-${id}`);
+  const errEl   = document.getElementById(`eerr-${id}`);
+
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Saving…';
+  savedEl.style.display = 'none';
+  errEl.style.display   = 'none';
+
+  const status   = document.getElementById(`es-${id}`).value;
+  const priority = document.getElementById(`ep-${id}`).value;
+  const dueVal   = document.getElementById(`ed-${id}`).value;
+  const notes    = document.getElementById(`en-${id}`).value;
+  const tags     = getCheckedTags(`et-${id}`);
+
+  const properties = {};
+  if (status)   properties['Status']   = { status: { name: status } };
+  if (priority) properties['Priority'] = { select: { name: priority } };
+  else          properties['Priority'] = { select: null };
+  properties['Due'] = dueVal ? { date: { start: dueVal } } : { date: null };
+  properties['Tags']  = { multi_select: tags.map(t => ({ name: t })) };
+  properties['Notes'] = { rich_text: notes ? [{ text: { content: notes } }] : [] };
+
+  try {
+    const res = await fetch(`/notion/personal/pages/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ properties }),
+    });
+    if (!res.ok) {
+      let msg = `Notion ${res.status}`;
+      try { const j = await res.json(); msg = j.message || msg; } catch(_) {}
+      throw new Error(msg);
+    }
+    savedEl.style.display = 'inline';
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Save changes';
+    // Update local state
+    const task = allTasks.find(t => t.id === id);
+    if (task) {
+      if (status)   task.properties.Status.status         = { name: status };
+      if (priority) task.properties.Priority.select       = { name: priority };
+      else          task.properties.Priority.select       = null;
+      task.properties.Due.date = dueVal ? { start: dueVal } : null;
+      task.properties.Tags.multi_select = tags.map(t => ({ name: t }));
+      task.properties.Notes.rich_text   = notes ? [{ plain_text: notes }] : [];
+    }
+    setTimeout(() => { savedEl.style.display = 'none'; renderTasks(); expandedId = id; }, 1200);
+  } catch (err) {
+    errEl.textContent   = `Save failed: ${err.message}`;
+    errEl.style.display = 'inline';
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Save changes';
+  }
+}
+
+/* ── Archive ─────────────────────────────────────────────────────────────── */
+function showArchiveConfirm(id) {
+  document.getElementById(`arch-btn-${id}`).style.display    = 'none';
+  document.getElementById(`arch-confirm-${id}`).style.display = 'block';
+}
+function cancelArchive(id) {
+  document.getElementById(`arch-confirm-${id}`).style.display = 'none';
+  document.getElementById(`arch-btn-${id}`).style.display     = '';
+}
+async function confirmArchive(id) {
+  const yesBtn = document.getElementById(`arch-yes-${id}`);
+  const errEl  = document.getElementById(`arch-err-${id}`);
+  yesBtn.disabled    = true;
+  yesBtn.textContent = 'Archiving…';
+  errEl.style.display = 'none';
+  try {
+    const res = await fetch(`/notion/personal/pages/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: true }),
+    });
+    if (!res.ok) {
+      let msg = `Notion ${res.status}`;
+      try { const j = await res.json(); msg = j.message || msg; } catch(_) {}
+      throw new Error(msg);
+    }
+    allTasks = allTasks.filter(t => t.id !== id);
+    expandedId = null;
+    renderTasks();
+  } catch (err) {
+    errEl.textContent   = `Failed: ${err.message}`;
+    errEl.style.display = 'block';
+    yesBtn.disabled     = false;
+    yesBtn.textContent  = 'Yes, archive it';
+  }
+}
+
+/* ── New task form ───────────────────────────────────────────────────────── */
+function openNewForm() {
+  document.getElementById('new-task-form').classList.add('open');
+  document.getElementById('btn-new').style.display = 'none';
+  document.getElementById('ntf-name').focus();
+}
+function closeNewForm() {
+  document.getElementById('new-task-form').classList.remove('open');
+  document.getElementById('btn-new').style.display = '';
+  document.getElementById('ntf-name').value    = '';
+  document.getElementById('ntf-status').value  = 'Not started';
+  document.getElementById('ntf-priority').value = '';
+  document.getElementById('ntf-due').value     = '';
+  document.getElementById('ntf-notes').value   = '';
+  document.querySelectorAll('#ntf-tags input[type=checkbox]').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.tag-check-label')?.classList.remove('checked');
+  });
+  document.getElementById('ntf-error').style.display = 'none';
+}
+
+async function submitNewTask() {
+  const nameEl  = document.getElementById('ntf-name');
+  const saveBtn = document.getElementById('ntf-save');
+  const errEl   = document.getElementById('ntf-error');
+
+  const name = nameEl.value.trim();
+  if (!name) { nameEl.focus(); return; }
+
+  saveBtn.disabled    = true;
+  saveBtn.textContent = 'Adding…';
+  errEl.style.display = 'none';
+
+  const status   = document.getElementById('ntf-status').value;
+  const priority = document.getElementById('ntf-priority').value;
+  const dueVal   = document.getElementById('ntf-due').value;
+  const notes    = document.getElementById('ntf-notes').value.trim();
+  const tags     = getCheckedTags('ntf-tags');
+
+  const properties = {
+    Name: { title: [{ text: { content: name } }] },
+  };
+  if (status)   properties['Status']   = { status: { name: status } };
+  if (priority) properties['Priority'] = { select: { name: priority } };
+  if (dueVal)   properties['Due']      = { date: { start: dueVal } };
+  if (tags.length) properties['Tags']  = { multi_select: tags.map(t => ({ name: t })) };
+  if (notes)    properties['Notes']    = { rich_text: [{ text: { content: notes } }] };
+
+  try {
+    const res = await fetch(PAGES_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parent: { type: 'data_source_id', data_source_id: DATA_SOURCE_ID },
+        properties,
+      }),
+    });
+    if (!res.ok) {
+      let msg = `Notion returned ${res.status}`;
+      try { const j = await res.json(); msg = j.message || msg; } catch(_) {}
+      throw new Error(msg);
+    }
+    closeNewForm();
+    await loadTasks();
+  } catch (err) {
+    errEl.textContent   = `Create failed: ${err.message}`;
+    errEl.style.display = 'block';
+    saveBtn.disabled    = false;
+    saveBtn.textContent = 'Add Task';
+  }
+}
+
+/* ── Keyboard ────────────────────────────────────────────────────────────── */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('new-task-form').classList.contains('open')) closeNewForm();
+    else if (expandedId) { document.getElementById('card-' + expandedId)?.classList.remove('expanded'); expandedId = null; }
+  }
+  if (e.key === 'Enter' && document.activeElement?.id === 'ntf-name') submitNewTask();
+});
+
+/* ── Boot ────────────────────────────────────────────────────────────────── */
+loadTasks();
+</script>
+</body>
+</html>

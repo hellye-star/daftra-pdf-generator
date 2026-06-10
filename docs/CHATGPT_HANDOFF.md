@@ -18,7 +18,7 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A + 2A.5 complete |
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
 | Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
-| Personal Task Center | `personal-dashboard.html` | ⏳ Planned (Phase 3) |
+| Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
 | Local Proxy | `proxy.py` | ✅ Live |
 
 ---
@@ -299,7 +299,7 @@ Full local file manager for `C:\Users\YousefMokaled\Documents\Vista United Co\pu
 | Comments & @mentions (Phase 2B) | ❌ Blocked | All tasks return `403 restricted_resource`. Hussam must enable "Read Comments" on the "Youssef" integration in Notion (Saura Agency workspace). No code changes needed once enabled. |
 | Notion write-back / Mark Reviewed in Notion (Phase 2D) | ⏳ Not started | Requires Hussam to add a `Youssef Reviewed` checkbox to his database + write permission on the integration |
 | Notion `relation` property for Related Tasks | ⏳ Preferred future | Hussam adding a native Notion relation property would replace localStorage detection. `vista_task_relations_v1` can be retired once all existing links have Notion-side equivalents. |
-| Personal Task Center (Phase 3) | ⏳ Not started | `personal-dashboard.html`, Youssef's private Notion workspace |
+| Personal Task Center (Phase 3) | ✅ Done | `personal-dashboard.html` — list, create, toggle Done, archive; `/notion/personal/` proxy route |
 | Google Drive Media Archive (Phase 4) | ⏳ Deferred | Scheduled after Personal Task Center |
 
 ---
@@ -334,7 +334,7 @@ The Reviewed chip was corrected from a "freshness filter" to a "permanent histor
 
 1. **Enable Comments (Phase 2B)** — ask Hussam to enable "Read Comments" on the Notion integration. No code changes needed; the error handler is already in place.
 2. **Live click-through validation** — open the same task from Media Library, Task Tracker, Needs My Attention, and search results; switch tasks quickly to confirm no stale overwrites.
-3. **Personal Task Center (Phase 3)** — `personal-dashboard.html` using `notion.personal` config.
+3. ~~**Personal Task Center (Phase 3)**~~ — ✅ Done. `personal-dashboard.html` live.
 4. **Notion relation property** — ask Hussam to add a `Related Tasks` relation to his database; replaces localStorage-based manual links.
 5. **Phase 2D (Notion write-back)** — only after Phase 2B is validated in daily use.
 

@@ -14,7 +14,7 @@ A suite of local, single-file HTML tools for Vista United Co. No cloud hosting, 
 | Document Generator | `daftra-pdf-generator_1.html` | Daftra ERP (browser-direct) + Local purchasing invoices folder | ✅ Live — includes Purchasing Invoice manager |
 | Social Media Control Center | `social-dashboard.html` | Notion — Vista/Hussam workspace | ✅ Live — Phase 2A complete + detail unification |
 | Financial Dashboard | `financial-dashboard.html` | Daftra ERP (via `/daftra/...` proxy) | 🌿 Feature branch — not yet merged to `stable-reviewed-history` |
-| Personal Task Center | `personal-dashboard.html` | Notion — Youssef private workspace | ⏳ Planned |
+| Personal Task Center | `personal-dashboard.html` | Notion — Youssef private workspace | ✅ Live |
 | Local Proxy | `proxy.py` | — relays Notion API + Daftra API | ✅ Live |
 
 ---
@@ -62,7 +62,7 @@ index.html                     — Vista Platform homepage
 daftra-pdf-generator_1.html    — Document Generator (invoices + quotations)
 social-dashboard.html          — Social Media Control Center  [live — Phase 2A + detail unification]
 financial-dashboard.html       — Financial Dashboard  [feature branch — not yet merged to stable-reviewed-history]
-personal-dashboard.html        — Personal Task Center  [planned]
+personal-dashboard.html        — Personal Task Center  [live — Phase 3 complete]
 proxy.py                       — Local proxy: serves HTML files + relays Notion API + Daftra API  [live]
 config.json                    — Live config: tokens + IDs  (git-ignored — never commit)
 config.example.json            — Safe template with placeholder values (safe to commit)

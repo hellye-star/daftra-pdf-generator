@@ -27,7 +27,7 @@ Every approved change must follow this order:
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A complete + detail unification |
 | Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
-| Personal Task Center | `personal-dashboard.html` | ⏳ Planned |
+| Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
 | Local Proxy | `proxy.py` | ✅ Live |
 | Config template | `config.example.json` | ✅ Done |
 | Git safety | `.gitignore` | ✅ Done — config.json excluded |
@@ -216,10 +216,11 @@ When Hussam adds a `Related Tasks` relation property, read it from the task prop
 - Requires write permission added to the integration.
 - Only build after Phase 2A is validated in daily use.
 
-### ⏳ Phase 3 — Personal Task Center
-- `personal-dashboard.html` for Youssef's private Notion workspace.
-- Separate integration token, separate database ID.
-- Homepage card flip from "Coming soon" to "Live" on completion.
+### ✅ Phase 3 — Personal Task Center (complete 2026-06-10)
+- `personal-dashboard.html` — standalone clean to-do dashboard for Youssef's private Notion workspace.
+- List all tasks, create new task, toggle Done inline, archive (soft-delete).
+- Due Date field with overdue highlighting; datetime+timezone syncs with Google Calendar via Notion.
+- Uses `/notion/personal/` proxy route with `notion.personal` token. No mixing with social dashboard.
 
 ### ⏳ Phase 4 — Google Drive Media Archive
 - Browse and link Google Drive assets from within the dashboard.

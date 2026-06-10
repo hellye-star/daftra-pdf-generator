@@ -2,6 +2,37 @@
 
 ---
 
+## [2026-06-10] — Personal Task Center (Phase 3)
+
+### personal-dashboard.html (new) · index.html · social-dashboard.html
+
+New standalone dashboard for Youssef's personal Notion to-do list. Separate from `social-dashboard.html` — uses a different Notion workspace, different token, different proxy route.
+
+**Database:** "To Do List DB" — data source ID `3624a590-47e4-80de-85ca-000bf4745dcd`.
+**Schema:** Name (title), Done (checkbox), Due Date (date — syncs with Google Calendar via Notion integration).
+**Proxy route:** `/notion/personal/` — existing route, no `proxy.py` changes needed.
+
+**Features:**
+- Task list with All / Active / Done filter tabs.
+- Tasks sorted: active first (overdue then by date then undated), done last.
+- Overdue tasks highlighted with red date and "Overdue" tag.
+- Inline checkbox to toggle Done — PATCH `/notion/personal/pages/{id}` with `{"properties": {"Done": {"checkbox": bool}}}`.
+- "New Task" button opens inline form (name required, due date optional with datetime-local picker).
+  - Creating with a date/time causes it to appear in Google Calendar automatically via Notion's sync.
+  - `parent: { type: 'data_source_id', data_source_id: '...' }` — same pattern as Vista task creation.
+- Archive button per row with confirmation strip — PATCH `/notion/personal/pages/{id}` with `{"archived": true}`. Soft-delete only; recoverable from Notion Trash.
+- No detail panel (schema is simple enough that all fields are visible in the row).
+- Keyboard: Enter in name field submits; Escape closes the new task form.
+
+**Navigation:**
+- `index.html` — new "Personal Task Center" card (Card 4), same-tab `<a href>`.
+- `social-dashboard.html` topbar — "Personal Tasks" link next to "← Platform Home".
+- `personal-dashboard.html` topbar — "Social Dashboard" and "← Platform Home" links.
+
+**No changes to:** `proxy.py`, `financial-dashboard.html`, `daftra-pdf-generator_1.html`, `config.json`, tags.
+
+---
+
 ## [2026-06-10] — Archive (Delete) Task — Social Media Control Center
 
 ### social-dashboard.html + proxy.py
