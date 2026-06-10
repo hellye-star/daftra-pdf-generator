@@ -2,27 +2,83 @@
 
 ---
 
+## [2026-06-11] — Personal Task Center: View Modes (Due Soon / Calendar / Board / All Tasks)
+
+### personal-dashboard.html only — no other files changed
+
+Added four view modes to the Personal Task Center. All views are client-side — rendered from the already-loaded `allTasks` array on first load. No extra Notion API calls, no view-metadata queries, no Google Calendar API or OAuth.
+
+**View switcher:** Tab bar above the filter bar (Due Soon / Calendar / Board / All Tasks). Filter bar (status tabs + priority dropdown) is only shown in All Tasks view.
+
+**Due Soon view:**
+- Two sections: Overdue (red header, danger border) and Upcoming — Next 7 Days (grey header).
+- Both sorted by due date ascending.
+- Full task cards with inline expand/edit/archive — same behaviour as All Tasks.
+- "You're all clear" empty state when nothing qualifies.
+
+**Calendar view:**
+- Tasks grouped by date buckets: Overdue / Today / Tomorrow / This Week / Next Week / Later / No Date.
+- Each group has a header with the bucket label and task count.
+- Rows show: status dot, time (if the due datetime includes a time component), task name, priority badge, tag badges.
+- Overdue header shown in red; Today header in dark.
+- Clicking a row switches to All Tasks view and expands that task's edit panel (scrolls into view).
+
+**Board view:**
+- 3 columns: Not started (grey dot) / In progress (blue dot) / Done (green dot).
+- Cards show: task name, priority badge, tag badges, due date (red + "· Overdue" if overdue).
+- Cards sorted by due date ascending within each column.
+- Clicking a card switches to All Tasks view and expands that task's edit panel.
+- Page max-width widened from 720px to 820px to accommodate 3-column layout comfortably.
+
+**All Tasks view (unchanged behaviour):**
+- Existing task list with status/priority filter bar.
+- Full inline expand/edit/archive panel on each task card.
+- Default view on page load.
+
+**`openInTable(id)` helper:** Switches to All Tasks, sets expandedId, re-renders, then scrolls the card into view with a smooth scroll after 80ms.
+
+**State variable added:** `currentView = 'table'` — controls which render function is dispatched.
+
+**Functions added:**
+- `switchView(v)` — updates active vtab, shows/hides filter bar, dispatches render
+- `openInTable(id)` — used by Calendar and Board click handlers
+- `renderCurrentView()` — dispatcher that also updates the page-meta count
+- `renderDueSoon()` — Due Soon logic
+- `renderCalendar()`, `buildCalRow(t)` — Calendar logic
+- `renderBoard()`, `buildBoardCard(t)` — Board logic
+
+**Functions renamed/refactored:**
+- `renderTasks()` → `renderTableView()` (scope-clarifying rename; same logic, now only called for All Tasks)
+- All previous callers of `renderTasks()` in loadTasks, saveEdit, confirmArchive updated to call `renderCurrentView()`
+
+**CSS added:** `.view-bar`, `.vtab`, `.board`, `.board-col`, `.board-col-header`, `.board-col-count`, `.board-cards`, `.board-card`, `.board-card-name`, `.board-card-meta`, `.board-card-due`, `.board-empty`, `.cal-group`, `.cal-group-header`, `.cal-group-count`, `.cal-task-row`, `.cal-time`, `.cal-task-name`, `.cal-chips`, `.due-section`, `.due-section-header`, `.due-section-count`
+
+**Files changed:** `personal-dashboard.html` only
+**Files NOT changed:** `proxy.py`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `daftra-pdf-generator_1.html`, `config.json`
+
+---
+
 ## [2026-06-10] — Personal Task Center (Phase 3)
 
 ### personal-dashboard.html (new) · index.html · social-dashboard.html
 
-New standalone dashboard for Youssef's personal Notion to-do list. Separate from `social-dashboard.html` — uses a different Notion workspace, different token, different proxy route.
+New standalone dashboard for Youssef's personal Notion task list. Separate from `social-dashboard.html` — uses a different Notion workspace, different token, different proxy route.
 
-**Database:** "To Do List DB" — data source ID `3624a590-47e4-80de-85ca-000bf4745dcd`.
-**Schema:** Name (title), Done (checkbox), Due Date (date — syncs with Google Calendar via Notion integration).
+**Database:** "Tasks" — data source ID `3b74a590-47e4-82cb-ab74-073bb96d4cba` (in "yous moka's Space" workspace).
+**Schema:** Name (title), Status (status: Not started/In progress/Done), Priority (select: High/Medium/Low), Assignee (people), Due (date — datetime with time syncs to Google Calendar via Notion), Tags (multi_select: Work/Personal/Finance/Follow-up/Important), Notes (rich_text).
 **Proxy route:** `/notion/personal/` — existing route, no `proxy.py` changes needed.
 
 **Features:**
-- Task list with All / Active / Done filter tabs.
-- Tasks sorted: active first (overdue then by date then undated), done last.
-- Overdue tasks highlighted with red date and "Overdue" tag.
-- Inline checkbox to toggle Done — PATCH `/notion/personal/pages/{id}` with `{"properties": {"Done": {"checkbox": bool}}}`.
-- "New Task" button opens inline form (name required, due date optional with datetime-local picker).
+- View switcher: Due Soon / Calendar / Board / All Tasks tabs (added in follow-up commit 2026-06-11; baseline commit has All Tasks only).
+- Task list with status/priority filter bar (All Tasks view).
+- Tasks sorted: active first (overdue → by date → undated), done last.
+- Overdue tasks highlighted with red date and "Overdue" tag. Done tasks struck through.
+- Inline expand/edit panel per task — edit Status, Priority, Due, Tags, Notes; Save changes.
+- "New Task" button → inline form (name, status, priority, due datetime-local, tags, notes).
   - Creating with a date/time causes it to appear in Google Calendar automatically via Notion's sync.
-  - `parent: { type: 'data_source_id', data_source_id: '...' }` — same pattern as Vista task creation.
-- Archive button per row with confirmation strip — PATCH `/notion/personal/pages/{id}` with `{"archived": true}`. Soft-delete only; recoverable from Notion Trash.
-- No detail panel (schema is simple enough that all fields are visible in the row).
-- Keyboard: Enter in name field submits; Escape closes the new task form.
+  - `parent: { type: 'data_source_id', data_source_id: '3b74a590-...' }` required for multi-data-source databases.
+- Archive button in edit panel with confirmation — PATCH `/notion/personal/pages/{id}` with `{"archived": true}`. Soft-delete only; recoverable from Notion Trash.
+- Keyboard: Enter in name field submits; Escape closes form or collapses expanded card.
 
 **Navigation:**
 - `index.html` — new "Personal Task Center" card (Card 4), same-tab `<a href>`.

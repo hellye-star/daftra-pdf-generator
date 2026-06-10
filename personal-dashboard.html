@@ -34,7 +34,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .topbar-link:hover { color: #fff; }
 
 /* ── Page shell ──────────────────────────────────────────────────────────── */
-.page { max-width: 720px; margin: 0 auto; padding: 44px 24px 80px; }
+.page { max-width: 820px; margin: 0 auto; padding: 44px 24px 80px; }
 
 /* ── Page header ─────────────────────────────────────────────────────────── */
 .page-header { display: flex; align-items: flex-start; justify-content: space-between;
@@ -80,6 +80,15 @@ textarea.field-input { resize: vertical; min-height: 64px; }
                    background: none; color: var(--mid); cursor: pointer; }
 .btn-cancel-form:hover { border-color: var(--mid); color: var(--dark); }
 .form-error { font-size: 11px; color: var(--danger); margin-top: 8px; display: none; }
+
+/* ── View switcher ───────────────────────────────────────────────────────── */
+.view-bar { display: flex; align-items: center; margin-bottom: 20px;
+            border-bottom: 2px solid var(--rule); }
+.vtab { font-family: 'Jost', sans-serif; font-size: 9.5px; font-weight: 400; letter-spacing: 0.13em;
+        text-transform: uppercase; padding: 10px 22px; border: none; border-bottom: 2px solid transparent;
+        background: none; color: var(--mid); cursor: pointer; margin-bottom: -2px; transition: all 0.15s; }
+.vtab.active { color: var(--dark); border-bottom-color: var(--dark); font-weight: 500; }
+.vtab:not(.active):hover { color: var(--dark); }
 
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
 .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -161,6 +170,57 @@ textarea.field-input { resize: vertical; min-height: 64px; }
 .btn-arch-no  { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 400; color: var(--mid);
                 background: none; border: 1px solid var(--rule); padding: 6px 12px; cursor: pointer; }
 .arch-err   { font-size: 10px; color: var(--danger); margin-top: 6px; display: none; }
+
+/* ── Board ───────────────────────────────────────────────────────────────── */
+.board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+.board-col { background: var(--cream); border: 1px solid var(--rule); }
+.board-col-header { font-size: 9.5px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase;
+                    color: var(--mid); padding: 12px 14px; border-bottom: 1px solid var(--rule);
+                    display: flex; align-items: center; gap: 8px; }
+.board-col-count { font-size: 9px; background: var(--rule); color: var(--mid);
+                   padding: 1px 6px; border-radius: 10px; font-weight: 400; margin-left: auto; }
+.board-cards { display: flex; flex-direction: column; }
+.board-card { background: var(--white); border-bottom: 1px solid var(--rule); padding: 12px 14px;
+              cursor: pointer; transition: background 0.12s; }
+.board-card:hover { background: #f5f3f0; }
+.board-card:last-child { border-bottom: none; }
+.board-card-name { font-size: 12px; font-weight: 400; color: var(--dark); line-height: 1.35; margin-bottom: 7px; }
+.board-card-name.done-name { color: var(--light); text-decoration: line-through; }
+.board-card-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+.board-card-due { font-size: 9.5px; font-weight: 300; color: var(--mid); margin-top: 2px; }
+.board-card-due.overdue { color: var(--danger); font-weight: 500; }
+.board-empty { font-size: 11px; color: var(--light); padding: 20px 14px; text-align: center; }
+
+/* ── Calendar ────────────────────────────────────────────────────────────── */
+.cal-group { margin-bottom: 22px; }
+.cal-group-header { font-size: 9.5px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+                    color: var(--mid); padding: 6px 0; border-bottom: 2px solid var(--rule);
+                    margin-bottom: 0; display: flex; align-items: center; gap: 10px; }
+.cal-group-header.is-overdue { color: var(--danger); border-bottom-color: var(--danger-border); }
+.cal-group-header.is-today { color: var(--dark); border-bottom-color: var(--dark); }
+.cal-group-count { font-size: 9px; background: var(--rule); color: var(--mid);
+                   padding: 1px 6px; border-radius: 10px; font-weight: 400; }
+.cal-task-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+                background: var(--white); border: 1px solid var(--rule); border-top: none;
+                cursor: pointer; transition: background 0.12s; }
+.cal-group .cal-task-row:first-of-type { border-top: 1px solid var(--rule); }
+.cal-task-row:hover { background: #f5f3f0; }
+.cal-time { font-size: 10px; font-weight: 500; color: var(--mid); min-width: 40px;
+            text-align: right; flex-shrink: 0; }
+.cal-time.overdue { color: var(--danger); }
+.cal-task-name { flex: 1; font-size: 12.5px; font-weight: 400; color: var(--dark); }
+.cal-task-name.done-name { color: var(--light); text-decoration: line-through; }
+.cal-chips { display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0; }
+
+/* ── Due Soon ────────────────────────────────────────────────────────────── */
+.due-section { margin-bottom: 28px; }
+.due-section-header { font-size: 9.5px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+                      padding: 6px 0; border-bottom: 2px solid var(--rule); margin-bottom: 4px;
+                      display: flex; align-items: center; gap: 10px; color: var(--mid); }
+.due-section-header.is-overdue { color: var(--danger); border-bottom-color: var(--danger-border); }
+.due-section-count { font-size: 9px; background: var(--rule); color: var(--mid);
+                     padding: 1px 6px; border-radius: 10px; font-weight: 400; }
+.due-section-header.is-overdue .due-section-count { background: var(--danger-bg); color: var(--danger); }
 
 /* ── Empty / loading ─────────────────────────────────────────────────────── */
 .state-msg { text-align: center; font-size: 13px; font-weight: 300; color: var(--light); padding: 48px 0; }
@@ -255,8 +315,16 @@ textarea.field-input { resize: vertical; min-height: 64px; }
     <div class="form-error" id="ntf-error"></div>
   </div>
 
-  <!-- Filter bar -->
-  <div class="filter-bar">
+  <!-- View switcher -->
+  <div class="view-bar">
+    <button class="vtab" id="vtab-due-soon" onclick="switchView('due-soon')">Due Soon</button>
+    <button class="vtab" id="vtab-calendar" onclick="switchView('calendar')">Calendar</button>
+    <button class="vtab" id="vtab-board"    onclick="switchView('board')">Board</button>
+    <button class="vtab active" id="vtab-table" onclick="switchView('table')">All Tasks</button>
+  </div>
+
+  <!-- Filter bar (Table view only) -->
+  <div class="filter-bar" id="filter-bar">
     <div class="filter-tabs">
       <button class="ftab active" id="ftab-all"         onclick="setStatusFilter('all')">All</button>
       <button class="ftab"        id="ftab-not-started" onclick="setStatusFilter('Not started')">Not started</button>
@@ -272,8 +340,8 @@ textarea.field-input { resize: vertical; min-height: 64px; }
     </select>
   </div>
 
-  <!-- Task list -->
-  <div class="task-list" id="task-list">
+  <!-- Task list / view container -->
+  <div id="task-list">
     <div class="spinner"></div>
   </div>
 
@@ -286,10 +354,11 @@ const QUERY_ENDPOINT = `/notion/personal/data_sources/${DATA_SOURCE_ID}/query`;
 const PAGES_ENDPOINT = `/notion/personal/pages`;
 
 /* ── State ───────────────────────────────────────────────────────────────── */
-let allTasks      = [];
-let statusFilter  = 'all';
+let allTasks       = [];
+let statusFilter   = 'all';
 let priorityFilter = 'all';
-let expandedId    = null;
+let expandedId     = null;
+let currentView    = 'table';
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 function esc(s) {
@@ -347,14 +416,45 @@ async function loadTasks() {
     if (!res.ok) throw new Error(`Notion ${res.status}`);
     const data = await res.json();
     allTasks = (data.results || []).filter(t => !t.archived && !t.in_trash);
-    renderTasks();
+    renderCurrentView();
   } catch (err) {
     document.getElementById('task-list').innerHTML = `<div class="state-msg">Failed to load: ${esc(err.message)}</div>`;
     document.getElementById('page-meta').textContent = 'Error loading tasks';
   }
 }
 
-/* ── Render ──────────────────────────────────────────────────────────────── */
+/* ── View switcher ───────────────────────────────────────────────────────── */
+function switchView(v) {
+  currentView = v;
+  ['due-soon','calendar','board','table'].forEach(k => {
+    document.getElementById('vtab-' + k)?.classList.remove('active');
+  });
+  document.getElementById('vtab-' + v)?.classList.add('active');
+  document.getElementById('filter-bar').style.display = (v === 'table') ? '' : 'none';
+  expandedId = null;
+  renderCurrentView();
+}
+
+function openInTable(id) {
+  switchView('table');
+  expandedId = id;
+  renderTableView();
+  setTimeout(() => document.getElementById('card-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+}
+
+/* ── Render dispatcher ───────────────────────────────────────────────────── */
+function renderCurrentView() {
+  const total  = allTasks.length;
+  const active = allTasks.filter(t => taskStatus(t) !== 'Done').length;
+  document.getElementById('page-meta').textContent = `${total} task${total !== 1 ? 's' : ''} · ${active} active`;
+
+  if (currentView === 'table')         renderTableView();
+  else if (currentView === 'due-soon') renderDueSoon();
+  else if (currentView === 'calendar') renderCalendar();
+  else if (currentView === 'board')    renderBoard();
+}
+
+/* ── Table view ──────────────────────────────────────────────────────────── */
 function setStatusFilter(v) {
   statusFilter = v;
   ['all','not-started','in-progress','done'].forEach(k => {
@@ -366,13 +466,13 @@ function setStatusFilter(v) {
     : 'ftab-done';
   document.getElementById(tabId)?.classList.add('active');
   expandedId = null;
-  renderTasks();
+  renderTableView();
 }
 
 function setPriorityFilter(v) {
   priorityFilter = v;
   expandedId = null;
-  renderTasks();
+  renderTableView();
 }
 
 function visibleTasks() {
@@ -383,14 +483,9 @@ function visibleTasks() {
   });
 }
 
-function renderTasks() {
-  const total  = allTasks.length;
-  const active = allTasks.filter(t => taskStatus(t) !== 'Done').length;
-  document.getElementById('page-meta').textContent = `${total} task${total !== 1 ? 's' : ''} · ${active} active`;
-
+function renderTableView() {
   const tasks = visibleTasks();
 
-  // Sort: overdue first, then by due date, then undated; done last
   const sorted = [...tasks].sort((a, b) => {
     const doneA = taskStatus(a) === 'Done' ? 1 : 0;
     const doneB = taskStatus(b) === 'Done' ? 1 : 0;
@@ -411,7 +506,8 @@ function renderTasks() {
     return;
   }
 
-  document.getElementById('task-list').innerHTML = sorted.map(t => buildCard(t)).join('');
+  document.getElementById('task-list').innerHTML =
+    `<div class="task-list">${sorted.map(t => buildCard(t)).join('')}</div>`;
 }
 
 function buildCard(t) {
@@ -438,17 +534,13 @@ function buildCard(t) {
     ? `<div class="task-due ${overdue ? 'overdue' : ''}">${esc(dueFmt)}${overdue ? '<span class="overdue-tag">Overdue</span>' : ''}</div>`
     : '';
 
-  // Build edit tag checkboxes
   const editTagsHtml = ['Work','Personal','Finance','Follow-up','Important'].map(tag => {
     const checked = tags.includes(tag) ? 'checked' : '';
     const cls     = tags.includes(tag) ? 'tag-check-label checked' : 'tag-check-label';
     return `<label class="${cls}" onclick="toggleTagChip(this)"><input type="checkbox" value="${esc(tag)}" ${checked}>${esc(tag)}</label>`;
   }).join('');
 
-  // Escape for attribute values
-  const safeName  = esc(name);
-  const safeNotes = notes;
-  const dueVal    = dueStr ? toLocalDatetimeInput(dueStr) : '';
+  const dueVal = dueStr ? toLocalDatetimeInput(dueStr) : '';
 
   return `
 <div class="task-card${expanded ? ' expanded' : ''}" id="card-${id}">
@@ -492,7 +584,7 @@ function buildCard(t) {
       </div>
       <div class="edit-full">
         <label class="field-label">Notes</label>
-        <textarea class="field-input" id="en-${id}">${safeNotes}</textarea>
+        <textarea class="field-input" id="en-${id}">${notes}</textarea>
       </div>
     </div>
     <div class="edit-actions">
@@ -514,6 +606,197 @@ function buildCard(t) {
     </div>
   </div>
 </div>`;
+}
+
+/* ── Due Soon view ───────────────────────────────────────────────────────── */
+function renderDueSoon() {
+  const now = new Date();
+  const in7 = new Date(now.getTime() + 7 * 86400000);
+
+  const overdue = allTasks
+    .filter(t => isOverdue(t))
+    .sort((a, b) => new Date(taskDue(a)) - new Date(taskDue(b)));
+
+  const upcoming = allTasks
+    .filter(t => {
+      const d = taskDue(t);
+      if (!d || taskStatus(t) === 'Done') return false;
+      const dt = new Date(d);
+      return dt >= now && dt <= in7;
+    })
+    .sort((a, b) => new Date(taskDue(a)) - new Date(taskDue(b)));
+
+  if (overdue.length === 0 && upcoming.length === 0) {
+    document.getElementById('task-list').innerHTML =
+      '<div class="state-msg">No overdue or upcoming tasks in the next 7 days. You\'re all clear.</div>';
+    return;
+  }
+
+  let html = '';
+
+  if (overdue.length > 0) {
+    html += `<div class="due-section">
+      <div class="due-section-header is-overdue">
+        Overdue <span class="due-section-count">${overdue.length}</span>
+      </div>
+      <div class="task-list">${overdue.map(t => buildCard(t)).join('')}</div>
+    </div>`;
+  }
+
+  if (upcoming.length > 0) {
+    html += `<div class="due-section">
+      <div class="due-section-header">
+        Upcoming — Next 7 Days <span class="due-section-count">${upcoming.length}</span>
+      </div>
+      <div class="task-list">${upcoming.map(t => buildCard(t)).join('')}</div>
+    </div>`;
+  }
+
+  document.getElementById('task-list').innerHTML = html;
+}
+
+/* ── Calendar view ───────────────────────────────────────────────────────── */
+function renderCalendar() {
+  const now         = new Date();
+  const today       = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow    = new Date(today.getTime() + 86400000);
+  const weekEnd     = new Date(today.getTime() +  7 * 86400000);
+  const nextWeekEnd = new Date(today.getTime() + 14 * 86400000);
+
+  function getBucket(dueStr) {
+    if (!dueStr) return 'no-date';
+    const datePart = dueStr.split('T')[0];
+    const dt = new Date(datePart + 'T00:00:00');
+    if (dt < today)                          return 'overdue';
+    if (dt.getTime() === today.getTime())    return 'today';
+    if (dt.getTime() === tomorrow.getTime()) return 'tomorrow';
+    if (dt < weekEnd)                        return 'this-week';
+    if (dt < nextWeekEnd)                    return 'next-week';
+    return 'later';
+  }
+
+  const buckets = {
+    overdue: [], today: [], tomorrow: [], 'this-week': [], 'next-week': [], later: [], 'no-date': []
+  };
+  allTasks.forEach(t => buckets[getBucket(taskDue(t))].push(t));
+
+  const sortByDue = arr => arr.sort((a, b) => {
+    const da = taskDue(a) ? new Date(taskDue(a)) : new Date('9999-01-01');
+    const db = taskDue(b) ? new Date(taskDue(b)) : new Date('9999-01-01');
+    return da - db;
+  });
+  Object.keys(buckets).forEach(k => sortByDue(buckets[k]));
+
+  const bucketMeta = {
+    overdue:     { label: 'Overdue',     cls: 'is-overdue' },
+    today:       { label: 'Today',       cls: 'is-today'   },
+    tomorrow:    { label: 'Tomorrow',    cls: ''           },
+    'this-week': { label: 'This Week',   cls: ''           },
+    'next-week': { label: 'Next Week',   cls: ''           },
+    later:       { label: 'Later',       cls: ''           },
+    'no-date':   { label: 'No Date',     cls: ''           },
+  };
+
+  const order = ['overdue','today','tomorrow','this-week','next-week','later','no-date'];
+  let html = '';
+
+  order.forEach(k => {
+    const tasks = buckets[k];
+    if (tasks.length === 0) return;
+    const { label, cls } = bucketMeta[k];
+    html += `<div class="cal-group">
+      <div class="cal-group-header ${cls}">${label} <span class="cal-group-count">${tasks.length}</span></div>
+      ${tasks.map(t => buildCalRow(t)).join('')}
+    </div>`;
+  });
+
+  if (!html) html = '<div class="state-msg">No tasks.</div>';
+  document.getElementById('task-list').innerHTML = html;
+}
+
+function buildCalRow(t) {
+  const id      = t.id;
+  const name    = esc(taskName(t));
+  const status  = taskStatus(t);
+  const priority = taskPriority(t);
+  const dueStr  = taskDue(t);
+  const hasTime = dueStr && dueStr.includes('T');
+  const overdue = isOverdue(t);
+  const isDone  = status === 'Done';
+
+  const timeStr = hasTime
+    ? new Date(dueStr).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', hour12:false })
+    : '';
+
+  const chips = [
+    priority ? `<span class="${priorityBadgeClass(priority)}">${esc(priority)}</span>` : '',
+    ...taskTags(t).map(tag => `<span class="badge badge-tag">${esc(tag)}</span>`),
+  ].filter(Boolean).join('');
+
+  return `<div class="cal-task-row" onclick="openInTable('${id}')">
+    <div class="task-status-dot ${dotClass(status)}"></div>
+    <div class="cal-time${overdue ? ' overdue' : ''}">${timeStr}</div>
+    <div class="cal-task-name${isDone ? ' done-name' : ''}">${name}</div>
+    ${chips ? `<div class="cal-chips">${chips}</div>` : ''}
+  </div>`;
+}
+
+/* ── Board view ──────────────────────────────────────────────────────────── */
+function renderBoard() {
+  const cols = [
+    { status: 'Not started', dot: 'dot-not-started' },
+    { status: 'In progress', dot: 'dot-in-progress' },
+    { status: 'Done',        dot: 'dot-done'        },
+  ];
+
+  const sortByDue = arr => [...arr].sort((a, b) => {
+    const da = taskDue(a) ? new Date(taskDue(a)) : null;
+    const db = taskDue(b) ? new Date(taskDue(b)) : null;
+    if (da && db) return da - db;
+    if (da) return -1;
+    if (db) return 1;
+    return 0;
+  });
+
+  const colHtml = cols.map(({ status, dot }) => {
+    const tasks = sortByDue(allTasks.filter(t => taskStatus(t) === status));
+    return `<div class="board-col">
+      <div class="board-col-header">
+        <div class="task-status-dot ${dot}"></div>
+        ${esc(status)}
+        <span class="board-col-count">${tasks.length}</span>
+      </div>
+      <div class="board-cards">
+        ${tasks.length === 0
+          ? '<div class="board-empty">No tasks</div>'
+          : tasks.map(t => buildBoardCard(t)).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('task-list').innerHTML = `<div class="board">${colHtml}</div>`;
+}
+
+function buildBoardCard(t) {
+  const id      = t.id;
+  const name    = esc(taskName(t));
+  const status  = taskStatus(t);
+  const priority = taskPriority(t);
+  const dueStr  = taskDue(t);
+  const dueFmt  = formatDue(dueStr);
+  const overdue = isOverdue(t);
+  const isDone  = status === 'Done';
+
+  const chips = [
+    priority ? `<span class="${priorityBadgeClass(priority)}">${esc(priority)}</span>` : '',
+    ...taskTags(t).map(tag => `<span class="badge badge-tag">${esc(tag)}</span>`),
+  ].filter(Boolean).join('');
+
+  return `<div class="board-card" onclick="openInTable('${id}')">
+    <div class="board-card-name${isDone ? ' done-name' : ''}">${name}</div>
+    ${chips ? `<div class="board-card-meta">${chips}</div>` : ''}
+    ${dueFmt ? `<div class="board-card-due${overdue ? ' overdue' : ''}">${esc(dueFmt)}${overdue ? ' · Overdue' : ''}</div>` : ''}
+  </div>`;
 }
 
 /* ── Expand / collapse ───────────────────────────────────────────────────── */
@@ -539,7 +822,6 @@ function toLocalDatetimeInput(s) {
 /* ── Tag chip toggle ─────────────────────────────────────────────────────── */
 function toggleTagChip(label) {
   const cb = label.querySelector('input[type=checkbox]');
-  // The click already fires before this runs — checkbox is toggled
   setTimeout(() => {
     label.classList.toggle('checked', cb.checked);
   }, 0);
@@ -589,7 +871,6 @@ async function saveEdit(id) {
     savedEl.style.display = 'inline';
     saveBtn.disabled    = false;
     saveBtn.textContent = 'Save changes';
-    // Update local state
     const task = allTasks.find(t => t.id === id);
     if (task) {
       if (status)   task.properties.Status.status         = { name: status };
@@ -599,7 +880,7 @@ async function saveEdit(id) {
       task.properties.Tags.multi_select = tags.map(t => ({ name: t }));
       task.properties.Notes.rich_text   = notes ? [{ plain_text: notes }] : [];
     }
-    setTimeout(() => { savedEl.style.display = 'none'; renderTasks(); expandedId = id; }, 1200);
+    setTimeout(() => { savedEl.style.display = 'none'; renderTableView(); expandedId = id; }, 1200);
   } catch (err) {
     errEl.textContent   = `Save failed: ${err.message}`;
     errEl.style.display = 'inline';
@@ -636,7 +917,7 @@ async function confirmArchive(id) {
     }
     allTasks = allTasks.filter(t => t.id !== id);
     expandedId = null;
-    renderTasks();
+    renderCurrentView();
   } catch (err) {
     errEl.textContent   = `Failed: ${err.message}`;
     errEl.style.display = 'block';
@@ -687,11 +968,11 @@ async function submitNewTask() {
   const properties = {
     Name: { title: [{ text: { content: name } }] },
   };
-  if (status)   properties['Status']   = { status: { name: status } };
-  if (priority) properties['Priority'] = { select: { name: priority } };
-  if (dueVal)   properties['Due']      = { date: { start: dueVal } };
-  if (tags.length) properties['Tags']  = { multi_select: tags.map(t => ({ name: t })) };
-  if (notes)    properties['Notes']    = { rich_text: [{ text: { content: notes } }] };
+  if (status)      properties['Status']   = { status: { name: status } };
+  if (priority)    properties['Priority'] = { select: { name: priority } };
+  if (dueVal)      properties['Due']      = { date: { start: dueVal } };
+  if (tags.length) properties['Tags']     = { multi_select: tags.map(t => ({ name: t })) };
+  if (notes)       properties['Notes']    = { rich_text: [{ text: { content: notes } }] };
 
   try {
     const res = await fetch(PAGES_ENDPOINT, {

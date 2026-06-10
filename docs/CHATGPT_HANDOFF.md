@@ -15,7 +15,7 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Module | File | Status |
 |---|---|---|
 | Homepage | `index.html` | ✅ Live |
-| Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A + 2A.5 complete |
+| Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A + 2A.5 + 2A.6 complete |
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
 | Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
@@ -299,7 +299,7 @@ Full local file manager for `C:\Users\YousefMokaled\Documents\Vista United Co\pu
 | Comments & @mentions (Phase 2B) | ❌ Blocked | All tasks return `403 restricted_resource`. Hussam must enable "Read Comments" on the "Youssef" integration in Notion (Saura Agency workspace). No code changes needed once enabled. |
 | Notion write-back / Mark Reviewed in Notion (Phase 2D) | ⏳ Not started | Requires Hussam to add a `Youssef Reviewed` checkbox to his database + write permission on the integration |
 | Notion `relation` property for Related Tasks | ⏳ Preferred future | Hussam adding a native Notion relation property would replace localStorage detection. `vista_task_relations_v1` can be retired once all existing links have Notion-side equivalents. |
-| Personal Task Center (Phase 3) | ✅ Done | `personal-dashboard.html` — list, create, toggle Done, archive; `/notion/personal/` proxy route |
+| Personal Task Center (Phase 3) | ✅ Done | `personal-dashboard.html` — Due Soon / Calendar / Board / All Tasks views; create, edit, archive; `/notion/personal/` route; data source `3b74a590-...` |
 | Google Drive Media Archive (Phase 4) | ⏳ Deferred | Scheduled after Personal Task Center |
 
 ---

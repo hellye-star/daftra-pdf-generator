@@ -122,7 +122,7 @@ Both directions stored explicitly. No Notion write permissions required.
 | Archive (delete) task | ✅ Done (2026-06-10) | "Archive this task…" button in detail panel → confirmation → `PATCH /notion/social/pages/{id}` with `{archived:true}`. Notion archive only — no hard delete. localStorage records not auto-cleaned. See "Archive Task" section below. |
 | Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
 | Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
-| Personal Task Center | ✅ Done (2026-06-10) | Phase 3 — `personal-dashboard.html`. Standalone dashboard, `/notion/personal/` route. See "Personal Task Center" section in CLAUDE_CONTEXT. |
+| Personal Task Center | ✅ Done (2026-06-10, views 2026-06-11) | Phase 3 — `personal-dashboard.html`. Standalone dashboard, `/notion/personal/` route. Data source: `3b74a590-...`. 7-property schema. 4 views: Due Soon / Calendar / Board / All Tasks. See "Personal Task Center" section in CLAUDE_CONTEXT. |
 
 #### Create New Task — LIVE ✅ (2026-06-10)
 
@@ -200,35 +200,52 @@ def do_PATCH(self):
 - Never attempt hard delete — Notion public API does not expose permanent deletion.
 - Do not auto-clean localStorage records on archive without explicit approval.
 
-#### Personal Task Center — LIVE ✅ (2026-06-10)
+#### Personal Task Center — LIVE ✅ (2026-06-10, views added 2026-06-11)
 
 **File:** `personal-dashboard.html` (standalone — no shared logic with `social-dashboard.html`)
 **Proxy route:** `/notion/personal/` only. Uses `notion.personal` token from `config.json`.
-**Data source ID:** `3624a590-47e4-80de-85ca-000bf4745dcd` ("To Do List DB")
+**Data source ID:** `3b74a590-47e4-82cb-ab74-073bb96d4cba` ("Tasks" database in yous moka's Space workspace)
 
-**Schema (3 properties only):**
+**Schema (7 properties):**
 | Property | Type | Notes |
 |---|---|---|
 | `Name` | `title` | Required — task name |
-| `Done` | `checkbox` | true/false |
-| `Due Date` | `date` | Optional. Supports datetime+timezone (syncs to Google Calendar) or date-only |
+| `Status` | `status` | "Not started" / "In progress" / "Done" |
+| `Priority` | `select` | "High" / "Medium" / "Low" |
+| `Assignee` | `people` | Optional |
+| `Due` | `date` | Optional. Datetime with time syncs to Google Calendar via Notion integration |
+| `Tags` | `multi_select` | "Work" / "Personal" / "Finance" / "Follow-up" / "Important" |
+| `Notes` | `rich_text` | Optional free-text notes |
 
 **Operations:**
-- List: `POST /notion/personal/data_sources/{DATA_SOURCE_ID}/query` with `{ page_size: 100 }`
-- Create: `POST /notion/personal/pages` — `parent: { type: 'data_source_id', data_source_id: '...' }`
-- Toggle Done: `PATCH /notion/personal/pages/{id}` — `{ properties: { Done: { checkbox: bool } } }`
+- List: `POST /notion/personal/data_sources/3b74a590-47e4-82cb-ab74-073bb96d4cba/query` with `{ page_size: 100 }`
+- Create: `POST /notion/personal/pages` — `parent: { type: 'data_source_id', data_source_id: '3b74a590-...' }`
+- Update: `PATCH /notion/personal/pages/{id}` — `{ properties: { Status: { status: { name: "..." } }, ... } }`
 - Archive: `PATCH /notion/personal/pages/{id}` — `{ archived: true }`
+
+**Note on Status type:** Uses `status` type (not `select`). Write as `{ status: { name: "Not started" } }`.
+
+**Views (client-side, no extra API calls — all from allTasks array):**
+
+| View | Tab label | Behaviour |
+|---|---|---|
+| Due Soon | "Due Soon" | Overdue tasks (red section) + upcoming 7 days (grey section). Full task cards with inline expand/edit. |
+| Calendar | "Calendar" | Tasks grouped by date bucket: Overdue / Today / Tomorrow / This Week / Next Week / Later / No Date. Time shown when present. Click → opens in All Tasks with expand. |
+| Board | "Board" | 3 columns by Status: Not started / In progress / Done. Compact read-only cards with badges. Click → opens in All Tasks with expand. |
+| All Tasks | "All Tasks" | Full task list with status/priority filter bar. Inline expand/edit/archive. Default view on load. |
+
+**Filter bar (Table/All Tasks view only):** Status tabs (All / Not started / In progress / Done) + Priority dropdown.
 
 **UI:**
 - Topbar: "Personal Tasks" tool name, links to social-dashboard.html and index.html (same tab).
-- Filter tabs: All / Active / Done.
-- Task rows: checkbox (inline toggle), name, due date with time if present, archive button per row.
-- Overdue tasks (date in past, not Done): red date + "Overdue" tag.
-- Done tasks: name struck through, date greyed out.
-- Sort: active first (overdue → by date → undated), done last.
-- "New Task" button → inline form (name + datetime-local picker). Enter key submits, Escape closes.
-- Archive confirmation: expands inline below the row (no modal). Soft-delete only.
-- No detail panel — schema is too simple to need one.
+- View switcher tabs above the filter bar: Due Soon / Calendar / Board / All Tasks.
+- "New Task" button always visible — opens inline create form (name, status, priority, due datetime-local, tags, notes).
+- Task cards (All Tasks and Due Soon): click to expand inline edit panel (status, priority, due, tags, notes, save, archive).
+- Overdue tasks: red date + "Overdue" tag.
+- Done tasks: name struck through.
+- Sort in All Tasks: active first (by date, undated last), done last.
+- Archive confirmation: expands inline inside the edit panel. Soft-delete only; recoverable from Notion Trash.
+- Keyboard: Enter in name field submits; Escape closes form or collapses expanded card.
 
 **Navigation added:**
 - `index.html`: Card 4 linking to `personal-dashboard.html` (same tab, `<a href>`).
@@ -237,8 +254,10 @@ def do_PATCH(self):
 **Locked rules:**
 - Never mix personal tasks with Vista/social tasks.
 - Never call `/notion/social/` from `personal-dashboard.html`.
-- No Google Calendar API or OAuth. Calendar sync happens automatically through Notion's integration.
+- No Google Calendar API or OAuth. Calendar sync happens automatically through Notion's integration when a due date includes a time.
 - No hard delete. Archive only.
+- Views are all client-side from `allTasks` — no Notion view-metadata calls, no extra API calls per view switch.
+- Do not touch `proxy.py` for personal dashboard features — the existing `/notion/personal/` route already handles all needed operations.
 
 #### Validation status (2026-06-05)
 - Programmatic validation passed: all 3 `openDetail` call-sites confirmed, all 7 `el.innerHTML` write points confirmed guarded, block fetch returning correct data for test task (372a2557), `renderMediaBlocks` returning `html` path (no fallback button) for task with confirmed content.

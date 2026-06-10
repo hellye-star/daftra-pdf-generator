@@ -216,10 +216,12 @@ When Hussam adds a `Related Tasks` relation property, read it from the task prop
 - Requires write permission added to the integration.
 - Only build after Phase 2A is validated in daily use.
 
-### ✅ Phase 3 — Personal Task Center (complete 2026-06-10)
-- `personal-dashboard.html` — standalone clean to-do dashboard for Youssef's private Notion workspace.
-- List all tasks, create new task, toggle Done inline, archive (soft-delete).
-- Due Date field with overdue highlighting; datetime+timezone syncs with Google Calendar via Notion.
+### ✅ Phase 3 — Personal Task Center (baseline 2026-06-10, views 2026-06-11)
+- `personal-dashboard.html` — standalone clean task dashboard for Youssef's private Notion workspace.
+- Database: "Tasks" (data source `3b74a590-...`). Schema: Name, Status, Priority, Assignee, Due, Tags, Notes.
+- **4 view modes (client-side, no extra API calls):** Due Soon (overdue + next 7 days) · Calendar (date-bucket groups with time) · Board (3 status columns) · All Tasks (full list with status/priority filter + inline edit).
+- Create task form (all 7 fields), inline expand/edit panel, archive with confirmation.
+- Due date with time syncs to Google Calendar automatically via Notion's integration — no Calendar API or OAuth needed.
 - Uses `/notion/personal/` proxy route with `notion.personal` token. No mixing with social dashboard.
 
 ### ⏳ Phase 4 — Google Drive Media Archive
