@@ -325,6 +325,24 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
                padding: 10px 12px; background: #F1F8F1; border: 1px solid #C3E6CB;
                margin: 0 20px 16px; }
 
+/* ── Delete Task (archive) ───────────────────────────────────────────────── */
+.detail-delete-zone { padding: 20px 32px 0; }
+.detail-delete-btn  { font-size: 11px; font-weight: 500; color: #C0392B; background: none;
+                      border: 1px solid #F5C6C6; border-radius: 4px; padding: 5px 12px;
+                      cursor: pointer; }
+.detail-delete-btn:hover { background: #FEF0F0; }
+.detail-delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.da-confirm { display: none; margin-top: 10px; padding: 14px 16px;
+              background: #FEF0F0; border: 1px solid #F5C6C6; border-radius: 6px; }
+.da-confirm p { font-size: 12px; color: #7a2020; margin: 0 0 10px; line-height: 1.5; }
+.da-confirm-btns { display: flex; gap: 8px; }
+.da-confirm-yes { font-size: 12px; font-weight: 600; color: #fff; background: #C0392B;
+                  border: none; border-radius: 4px; padding: 5px 14px; cursor: pointer; }
+.da-confirm-yes:disabled { opacity: 0.5; cursor: not-allowed; }
+.da-confirm-no  { font-size: 12px; font-weight: 500; color: #555; background: none;
+                  border: 1px solid var(--rule); border-radius: 4px; padding: 5px 14px; cursor: pointer; }
+.da-error { font-size: 12px; color: #C0392B; margin-top: 8px; display: none; }
+
 /* ── Media Library ───────────────────────────────────────────────────────── */
 .ml-header { display: flex; align-items: baseline; justify-content: space-between;
              margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
@@ -2007,6 +2025,19 @@ function buildDetailHTML(t) {
           <span class="detail-async-text">Checking for comments…</span>
         </div>
       </div>
+    </div>
+
+    <div class="detail-delete-zone">
+      <button class="detail-delete-btn" id="da-open-btn" onclick="showArchiveConfirm('${t.id}')">Archive this task…</button>
+      <div class="da-confirm" id="da-confirm-box">
+        <p>Archive <strong>${esc(taskName(t))}</strong>?<br>
+        It will be removed from all views. Recoverable from Notion Trash only.</p>
+        <div class="da-confirm-btns">
+          <button class="da-confirm-yes" id="da-confirm-yes" onclick="confirmArchive('${t.id}')">Yes, archive it</button>
+          <button class="da-confirm-no" onclick="cancelArchive()">Cancel</button>
+        </div>
+        <div class="da-error" id="da-error"></div>
+      </div>
     </div>`;
 }
 
@@ -2954,6 +2985,48 @@ async function submitNewTask() {
     errorEl.style.display = 'block';
     submitBtn.disabled    = false;
     submitBtn.textContent = 'Create Task';
+  }
+}
+
+// ── Archive Task ──────────────────────────────────────────────────────────────
+
+function showArchiveConfirm(id) {
+  document.getElementById('da-open-btn').style.display   = 'none';
+  document.getElementById('da-confirm-box').style.display = 'block';
+  document.getElementById('da-error').style.display      = 'none';
+  document.getElementById('da-error').textContent        = '';
+}
+
+function cancelArchive() {
+  document.getElementById('da-confirm-box').style.display = 'none';
+  document.getElementById('da-open-btn').style.display   = 'inline-block';
+}
+
+async function confirmArchive(id) {
+  const yesBtn = document.getElementById('da-confirm-yes');
+  const errEl  = document.getElementById('da-error');
+  yesBtn.disabled    = true;
+  yesBtn.textContent = 'Archiving…';
+  errEl.style.display = 'none';
+
+  try {
+    const res = await fetch(`/notion/${PROXY_ROUTE}/pages/${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ archived: true }),
+    });
+    if (!res.ok) {
+      let msg = `Notion returned ${res.status}`;
+      try { const j = await res.json(); msg = j.message || msg; } catch(_) {}
+      throw new Error(msg);
+    }
+    closeDetail();
+    loadAllTasks();
+  } catch (err) {
+    errEl.textContent   = `Archive failed: ${err.message}`;
+    errEl.style.display = 'block';
+    yesBtn.disabled     = false;
+    yesBtn.textContent  = 'Yes, archive it';
   }
 }
 

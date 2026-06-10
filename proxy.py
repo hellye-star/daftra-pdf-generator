@@ -108,7 +108,15 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self): self._block_daftra_write()
     def do_PUT(self):    self._block_daftra_write()
-    def do_PATCH(self):  self._block_daftra_write()
+    def do_PATCH(self):
+        if self.path.startswith('/daftra/'):
+            self._block_daftra_write()
+        else:
+            route = self._notion_route()
+            if route:
+                self._proxy_notion(*route)
+            else:
+                self._block_daftra_write()
 
     def _block_daftra_write(self):
         if self.path.startswith('/daftra/'):
@@ -541,6 +549,7 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.send_response(code)
         self._send_cors_headers()
         self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 

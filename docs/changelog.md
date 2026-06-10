@@ -2,6 +2,49 @@
 
 ---
 
+## [2026-06-10] — Archive (Delete) Task — Social Media Control Center
+
+### social-dashboard.html + proxy.py
+
+Added the ability to archive (soft-delete) any task from the Social Media Control Center detail panel. Archive = Notion `archived: true`. No hard delete. Page is recoverable from Notion Trash.
+
+**UI:**
+- "Archive this task…" button at the bottom of the detail panel (red outline, small, below the Comments section).
+- Clicking reveals an inline confirmation box (pink background) naming the task and warning it can only be recovered from Notion Trash.
+- "Yes, archive it" (red, disables immediately on click, shows "Archiving…") and "Cancel" (restores the button).
+- On success: detail panel closes, `loadAllTasks()` fires — task disappears from all views immediately.
+- On error: Notion's error message shown inline; button re-enables for retry.
+
+**Proxy route:** `PATCH /notion/social/pages/{page_id}` → `proxy.py` forwards to `https://api.notion.com/v1/pages/{page_id}` with social_media token. Body: `{"archived": true}`.
+
+**proxy.py changes (two fixes, both approved):**
+
+1. `do_PATCH` — updated to allow Notion routes while keeping Daftra blocked:
+```python
+def do_PATCH(self):
+    if self.path.startswith('/daftra/'):
+        self._block_daftra_write()
+    else:
+        route = self._notion_route()
+        if route:
+            self._proxy_notion(*route)
+        else:
+            self._block_daftra_write()
+```
+`/daftra/...` → 405 unconditionally. `/notion/social/` and `/notion/personal/` → proxied. Anything else → 405.
+
+2. `_json_error` — added `Content-Length` header. Without it, PATCH error responses (e.g. 405) closed the connection before the client could read the status code. Fix applies to all error responses.
+
+**localStorage:** Records for archived tasks in `vista_reviews_v1`, `vista_favorites_v1`, `vista_task_relations_v1` are left in place. Orphaned records are inert — the task no longer appears in `allTasks` so no visible UI issues.
+
+**Functions added:** `showArchiveConfirm(id)`, `cancelArchive()`, `confirmArchive(id)`
+**CSS added:** `.detail-delete-zone`, `.detail-delete-btn`, `.da-confirm`, `.da-confirm-btns`, `.da-confirm-yes`, `.da-confirm-no`, `.da-error`
+
+**Files changed:** `social-dashboard.html`, `proxy.py`
+**Files NOT changed:** `financial-dashboard.html`, `daftra-pdf-generator_1.html`, `index.html`, `config.json`
+
+---
+
 ## [2026-06-10] — Create New Task — Social Media Control Center
 
 ### social-dashboard.html only — proxy.py unchanged

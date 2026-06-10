@@ -119,6 +119,7 @@ Both directions stored explicitly. No Notion write permissions required.
 | Favorites | ✅ Done (Phase 2A.6) | localStorage only. `vista_favorites_v1`. `isFavorite(t)`, `addFavorite`, `removeFavorite`, `toggleFavoriteAction`. Star toggle (☆/★) on every task row + in detail panel. Favorites chip beside Reviewed. Done tasks always visible. No staleness concept. |
 | Meeting Agendas sidebar | ✅ Done (full) | Collapsible sidebar panel. Two tabs: Agendas (4 pages) and Notes (7 pages), newest first. Click page → full-width viewer replaces main content. Block renderer: heading_2/3, paragraph, ul/ol, divider, callout. Rich text: bold, italic, code, links, auto-URL. `MEETING_PROXY = 'social'`. Page IDs in `config.json` as `meeting_agenda_page_id` / `meeting_notes_page_id`. Graceful fallback for inaccessible pages. |
 | Create new task | ✅ Done (2026-06-10) | `+ New Task` sidebar button → modal form → `POST /notion/social/pages`. See "Create New Task" section below. |
+| Archive (delete) task | ✅ Done (2026-06-10) | "Archive this task…" button in detail panel → confirmation → `PATCH /notion/social/pages/{id}` with `{archived:true}`. Notion archive only — no hard delete. localStorage records not auto-cleaned. See "Archive Task" section below. |
 | Notion write-back | ❌ Not started | Phase 2D — requires write permission + Hussam adding a `Youssef Reviewed` checkbox to his database. |
 | Google Drive saving | ❌ Not started | Phase 4 — scheduled after Personal Task Center. |
 | Personal Task Center | ❌ Not started | Phase 3 — `personal-dashboard.html`. |
@@ -159,6 +160,45 @@ Hussam granted write permission on the Vista social_media integration. New tasks
 - Optional properties (`Category`, `Assignee`, `Due date`, `Description`) must be omitted entirely (not sent as null/empty) when blank — Notion returns 400 for properties sent with empty values when the field doesn't accept them.
 - The submit button must remain disabled after a successful create (re-enable only on error).
 - On success, always call `loadAllTasks()` so the new task appears in the Task Tracker without a manual refresh.
+
+#### Archive Task — LIVE ✅ (2026-06-10)
+
+**Proxy route:** `PATCH /notion/social/pages/{page_id}` with body `{"archived": true}`. Forwarded by `_proxy_notion()`. `do_PATCH` updated in `proxy.py` — Notion routes pass through, `/daftra/...` stays blocked (GET-only), unknown routes return 405.
+
+**UI:** "Archive this task…" button at the bottom of the detail panel. Clicking reveals an inline confirmation box with the task name and warning text. Two buttons: "Yes, archive it" (red, disables on click) and "Cancel" (restores button). Error message shown inline if Notion returns an error.
+
+**Behaviour:**
+- Archive = Notion `archived: true` only. No hard delete. Page is recoverable from Notion Trash.
+- On success: `closeDetail()` fires, then `loadAllTasks()` refreshes — archived task disappears from all views.
+- On error: Notion's error message shown inline; button re-enables for retry.
+- No bulk archive. Only the currently-open task can be archived.
+
+**localStorage:** Records in `vista_reviews_v1`, `vista_favorites_v1`, `vista_task_relations_v1` for the archived task are **not** cleaned automatically. Orphaned records are inert (task no longer appears in `allTasks`). No visible UI issues observed from orphaned records — task simply stops loading.
+
+**proxy.py change — `do_PATCH` (approved minimal change):**
+```python
+def do_PATCH(self):
+    if self.path.startswith('/daftra/'):
+        self._block_daftra_write()      # Daftra stays GET-only
+    else:
+        route = self._notion_route()
+        if route:
+            self._proxy_notion(*route)  # /notion/social/ and /notion/personal/ allowed
+        else:
+            self._block_daftra_write()  # unknown routes blocked
+```
+
+**proxy.py — `_json_error` fix:** Added `Content-Length` header to `_json_error()`. Without it, Python's HTTP/1.0 response handling caused PATCH error responses to close the connection before the client could read the status code. This is a correctness fix that applies to all error responses, not just PATCH.
+
+**Functions added:**
+- `showArchiveConfirm(id)` — hides button, shows confirmation box
+- `cancelArchive()` — hides confirmation box, restores button
+- `confirmArchive(id)` — sends `PATCH /notion/social/pages/{id}`, handles success/error
+
+**Locked rules:**
+- Never send `archived: false` to unarchive from this dashboard — no unarchive UI exists.
+- Never attempt hard delete — Notion public API does not expose permanent deletion.
+- Do not auto-clean localStorage records on archive without explicit approval.
 
 #### Validation status (2026-06-05)
 - Programmatic validation passed: all 3 `openDetail` call-sites confirmed, all 7 `el.innerHTML` write points confirmed guarded, block fetch returning correct data for test task (372a2557), `renderMediaBlocks` returning `html` path (no fallback button) for task with confirmed content.
