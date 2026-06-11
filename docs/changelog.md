@@ -2,6 +2,38 @@
 
 ---
 
+## [2026-06-12] — Marketing Intelligence Dashboard V1 (Static)
+
+### marketing-dashboard.html (new) · index.html
+
+New standalone Marketing Intelligence dashboard. V1 uses mock/sample data only — no APIs, no OAuth, no credentials, no AI API calls, and no ad budget or campaign write actions.
+
+**Files changed:**
+- `marketing-dashboard.html` — new standalone dashboard (no proxy dependency, no fetch calls)
+- `index.html` — homepage tile added (Card 5, `status-soon` badge "V1 · Static")
+
+**Files NOT changed:** `proxy.py`, `config.json`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+**Dashboard structure — 7 tabs:**
+- Overview — cross-channel summary (Total Spend · Total Reach · Total Leads · Blended CPL) + per-channel mini-cards (Instagram 1, Instagram 2, TikTok, Google Ads)
+- Instagram 1 — account-level metrics (Spend, Reach, Impressions, Follower Growth, CTR, CPC, Leads, Cost per Lead, Engagement Rate, Best/Weakest post), weekly bar charts
+- Instagram 2 — same layout as Instagram 1
+- TikTok — same layout with TikTok labels (Views instead of Reach), weekly bar charts
+- Google Ads — search-focused metrics (Impressions, Clicks, CTR, CPC, Cost per Lead, Search Impression Share, Avg. Position), Top/Weakest keywords table
+- LinkedIn — placeholder ("coming soon")
+- AI Report — 4 structured mock weekly recommendations with channel tags and a clear sample-data disclaimer
+
+**Mock data:** All values are static sample data hardcoded in a `const MOCK` object at the top of the script block. No external data source, no network requests. Replacing `MOCK` with live data in a future session is the intended upgrade path.
+
+**Validation performed (2026-06-12):**
+- All 7 tab IDs confirmed to match their 7 panel IDs exactly
+- HTTP 200 confirmed for both pages via `localhost:8080`
+- Static analysis: zero `fetch()`, `api_key`, `oauth`, `config.json`, `notion`, or `daftra` references in `marketing-dashboard.html`
+- Visual screenshot validation: topbar, tab bar, Overview summary cards, and all 4 channel breakdown cards confirmed rendering correctly
+- All protected files confirmed untouched vs HEAD (`git diff --name-only HEAD` = `index.html` only)
+
+---
+
 ## [2026-06-11] — Personal Task Center: View Modes (Due Soon / Calendar / Board / All Tasks)
 
 ### personal-dashboard.html only — no other files changed
