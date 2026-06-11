@@ -36,8 +36,8 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Item | Value |
 |---|---|
 | Active stable branch | `stable-reviewed-history` |
-| Latest pushed stable commit | `7c426ec` — Fix handoff stable state |
-| Previous commit | `2cbc7c5` — Update handoff and architecture docs |
+| Latest pushed stable commit | `30380a7` — Sync platform documentation state |
+| Previous commit | `7c426ec` — Fix handoff stable state |
 | Previous feature commit | `22c115e` — Add personal task views |
 | Personal Task Center baseline | `c13cbb2` — Add personal task center |
 | Social Dashboard archive | `4bd67de` — Add task archive action to social dashboard |
@@ -169,7 +169,7 @@ Live substring across task name, description, status, assignee, category, due da
 
 ## 7. Document Generator Status
 
-Stable. Three document types: Invoice, Quotation, Delivery Note. Also includes the Purchasing Invoice local file manager (introduced in commit `d0188c6`). The overall platform latest stable commit is `7c426ec` on `stable-reviewed-history`.
+Stable. Three document types: Invoice, Quotation, Delivery Note. Also includes the Purchasing Invoice local file manager (introduced in commit `d0188c6`). The overall platform latest stable commit is `30380a7` on `stable-reviewed-history`.
 
 ### Recent changes (commits `3cb3db9` and `b59995b`)
 
@@ -417,7 +417,7 @@ Before recommending or making any change, ChatGPT must:
 2. **Read `docs/changelog.md`** — shows what changed and when. The most recent entries reflect the current approved state.
 3. **Read `docs/roadmap.md`** — shows phase status, what is complete, what is blocked, and what is next.
 4. **Read `docs/decisions.md`** — explains the reasoning behind structural choices. Consult before proposing any architectural change.
-5. **Check `git log --oneline -10`** — confirm which branch you are on. The only active branch is `stable-reviewed-history` (latest pushed commit `7c426ec`). All modules — Social Dashboard, Personal Task Center, Financial Dashboard, Document Generator — are live on this branch. The `feature/financial-dashboard` branch is a historical artifact; the Financial Dashboard is already merged into `stable-reviewed-history`.
+5. **Check `git log --oneline -10`** — confirm which branch you are on. The only active branch is `stable-reviewed-history` (latest pushed commit `30380a7`). All modules — Social Dashboard, Personal Task Center, Financial Dashboard, Document Generator — are live on this branch. The `feature/financial-dashboard` branch is a historical artifact; the Financial Dashboard is already merged into `stable-reviewed-history`.
 6. **Check `git status`** — confirm working tree is clean before any work begins.
 7. **Read the relevant section of `social-dashboard.html`** before changing any JS function. Do not rely on summaries alone — the function signatures, guard conditions, and localStorage schemas matter exactly.
 8. **Do not suggest changes to locked items** (QR pipeline, html2pdf chain, `attentionFilter` + `isReviewedAndFresh` interaction, `openDetail` unification) without first confirming the lock is documented in `CLAUDE_CONTEXT.md` and has a clear reason to revisit.
