@@ -6,7 +6,15 @@ A compact reference for understanding the project, evaluating Claude responses, 
 
 ## 1. Project Overview
 
-Vista United Co. internal tooling — a suite of single-file HTML tools served by a local Python proxy. No build step. No cloud hosting. Everything opens from one folder at `http://localhost:8080`. Two active tools: a Notion-connected social media dashboard and a Daftra ERP PDF generator.
+Vista United Co. internal tooling — a suite of single-file HTML tools served by a local Python proxy. No build step. No cloud hosting. Everything opens from one folder at `http://localhost:8080`.
+
+**Live modules (all stable on `stable-reviewed-history`):**
+- `index.html` — Vista Platform homepage
+- `social-dashboard.html` — Social Media Control Center (Notion-connected)
+- `personal-dashboard.html` — Personal Task Center (Notion-connected, Youssef's workspace)
+- `financial-dashboard.html` — Financial Dashboard (Daftra ERP, via proxy)
+- `daftra-pdf-generator_1.html` — Document Generator (invoices, quotations, delivery notes, purchasing invoices)
+- `proxy.py` — Local proxy: serves all HTML files, relays Notion API, relays Daftra API (read-only)
 
 ---
 
@@ -17,7 +25,7 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Homepage | `index.html` | ✅ Live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A + 2A.5 + 2A.6 complete |
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
-| Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
+| Financial Dashboard | `financial-dashboard.html` | ✅ Live — merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
 | Local Proxy | `proxy.py` | ✅ Live |
 
@@ -28,11 +36,17 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Item | Value |
 |---|---|
 | Active stable branch | `stable-reviewed-history` |
-| Stable commit | `22c115e` |
-| Previous stable commit | `d0188c6` |
-| Restore tag | `stable-reviewed-history-v1` (points to `2d0faec` — original Social Dashboard stable snapshot) |
+| Latest pushed stable commit | `2cbc7c5` — Update handoff and architecture docs |
+| Previous feature commit | `22c115e` — Add personal task views |
+| Personal Task Center baseline | `c13cbb2` — Add personal task center |
+| Social Dashboard archive | `4bd67de` — Add task archive action to social dashboard |
+| Social Dashboard create | `d4ac3e9` — Add Vista task creation from social dashboard |
 
-**Note:** The Financial Dashboard (`feature/financial-dashboard`, latest commit `0bc03db`) is **not** included in `stable-reviewed-history`. That branch and tag reflect only the Social Media Control Center and Document Generator. The merge target for the Financial Dashboard branch will be decided after final review.
+**Tags (do not move or create):**
+- `stable-reviewed-history-v1` — points to `2d0faec` (original Social Dashboard stable snapshot — restore point)
+- `stable-reviewed-history-v2-financial-dashboard` — points to `01e288c` (Financial Dashboard milestone tag — historical reference only, not current HEAD)
+
+**All modules are live on `stable-reviewed-history`.** The Financial Dashboard is merged and stable on this branch. The `feature/financial-dashboard` branch is a historical artifact — the merge has already happened.
 
 **To restore stable at any time:**
 ```bash
@@ -55,6 +69,7 @@ python proxy.py
 |---|---|
 | `http://localhost:8080` | Vista Platform homepage |
 | `http://localhost:8080/social-dashboard.html` | Social Media Control Center |
+| `http://localhost:8080/personal-dashboard.html` | Personal Task Center |
 | `http://localhost:8080/daftra-pdf-generator_1.html` | Document Generator |
 | `http://localhost:8080/financial-dashboard.html` | Financial Dashboard |
 
@@ -244,10 +259,9 @@ Full local file manager for `C:\Users\YousefMokaled\Documents\Vista United Co\pu
 
 ---
 
-## 8. Financial Dashboard — Feature Branch Summary
+## 8. Financial Dashboard — Live on stable-reviewed-history ✅
 
-**Branch:** `feature/financial-dashboard` — not yet merged to `stable-reviewed-history`.
-**Latest commit:** `0bc03db`
+**Status:** Merged and live on `stable-reviewed-history`. The `feature/financial-dashboard` branch is a historical artifact — do not reference it as the active branch.
 
 **What it does:** Fetches sales invoices, purchase invoices, and expenses from Daftra via the `/daftra/...` proxy. Shows period-based revenue, costs, VAT, profit, and an estimated profit tax reserve.
 
@@ -257,14 +271,16 @@ Full local file manager for `C:\Users\YousefMokaled\Documents\Vista United Co\pu
 
 **Period selector:** Year to Date · This Month · Last Month · Q1 · Q2 · Q3 · Q4 · All Time. Does not affect the two top cards.
 
-**Personal Transfers panel:** 7 purchase invoices excluded from all business figures, shown separately. Identified by `supplier_business_name.trim().toLowerCase() === 'personal transfer'`.
+**Personal Transfers panel:** Purchase invoices where `supplier_business_name.trim().toLowerCase() === 'personal transfer'` are excluded from all business figures and shown separately.
 
-**Key locked rules:**
-- Browser calls `/daftra/...` only — never `daftra.com` directly.
-- No auto-fetch. Manual button only.
+**Key locked rules (permanent — do not change):**
+- Browser calls `/daftra/...` only — never `daftra.com` directly from `financial-dashboard.html`.
+- No auto-fetch. Manual Fetch Data button only. Zero `DOMContentLoaded`/`setInterval`/`setTimeout` data-fetch triggers.
 - VAT derived as `summary_total − summary_subtotal` (not `summary_tax1` — always null).
 - Purchase invoice number: `r.no` (e.g. `000048`), not `r.number`.
 - No localStorage / sessionStorage.
+- Personal transfers excluded from all business profit, VAT, and purchase totals — pre-filtered at top of `renderContent()`.
+- Financial values are management estimates only — labels reflect this. Not official tax filings.
 
 ---
 
@@ -375,9 +391,10 @@ The Reviewed chip was corrected from a "freshness filter" to a "permanent histor
 | Never force-push | Do not use `--force` or `--force-with-lease` unless the user explicitly approves with those words |
 | Never push broken experimental work | Only push to a backup/feature branch if the user asks for it by name |
 | Push only the active approved branch | Default push target is the approved branch for that module only |
-| `stable-reviewed-history` is the approved branch | Social Media / Notion dashboard approved branch |
-| `stable-reviewed-history-v1` is the restore tag | Points to `2d0faec` — the approved stable snapshot |
-| `feature/financial-dashboard` must not be pushed | Do not push unless the user explicitly approves |
+| `stable-reviewed-history` is the approved branch | All live modules are on this branch — it is the only push target |
+| `stable-reviewed-history-v1` is a restore tag | Points to `2d0faec` — original Social Dashboard stable snapshot. Do not move. |
+| `stable-reviewed-history-v2-financial-dashboard` is a milestone tag | Points to `01e288c` — Financial Dashboard merge milestone. Do not move. |
+| Do not create or move tags | Tags are historical markers only — never run `git tag -f` or push tags |
 
 ### localStorage — reviewed task history
 
@@ -399,7 +416,7 @@ Before recommending or making any change, ChatGPT must:
 2. **Read `docs/changelog.md`** — shows what changed and when. The most recent entries reflect the current approved state.
 3. **Read `docs/roadmap.md`** — shows phase status, what is complete, what is blocked, and what is next.
 4. **Read `docs/decisions.md`** — explains the reasoning behind structural choices. Consult before proposing any architectural change.
-5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (latest commit `22c115e`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
+5. **Check `git log --oneline -10`** — confirm which branch you are on. The only active branch is `stable-reviewed-history` (latest pushed commit `2cbc7c5`). All modules — Social Dashboard, Personal Task Center, Financial Dashboard, Document Generator — are live on this branch. The `feature/financial-dashboard` branch is a historical artifact; the Financial Dashboard is already merged into `stable-reviewed-history`.
 6. **Check `git status`** — confirm working tree is clean before any work begins.
 7. **Read the relevant section of `social-dashboard.html`** before changing any JS function. Do not rely on summaries alone — the function signatures, guard conditions, and localStorage schemas matter exactly.
 8. **Do not suggest changes to locked items** (QR pipeline, html2pdf chain, `attentionFilter` + `isReviewedAndFresh` interaction, `openDetail` unification) without first confirming the lock is documented in `CLAUDE_CONTEXT.md` and has a clear reason to revisit.
