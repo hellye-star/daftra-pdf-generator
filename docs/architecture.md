@@ -90,7 +90,7 @@ The Notion API does not include CORS headers. Any `fetch()` call to `api.notion.
 | Source | Purpose | Config key | Integration |
 |---|---|---|---|
 | **Social Media Control Center** | Hussam/Vista shared database — tasks, media, meetings, approvals | `notion.social_media` | Separate integration token, read-only |
-| **Personal Task Center** | Youssef's private database — personal reminders, follow-ups | `notion.personal` | Separate integration token, read-only |
+| **Personal Task Center** | Youssef's private database — personal tasks, follow-ups | `notion.personal` | Separate integration token, read-write (create + archive) |
 
 Each source has its own integration token and database ID(s). They are isolated — the Social Media integration cannot read the Personal workspace, and vice versa.
 
@@ -190,6 +190,49 @@ All file/image URLs returned by the Notion API are temporary signed links that *
 
 ### Notion file URL expiry
 All file/image URLs returned by the Notion API are temporary signed links that **expire after 1 hour**. The Media Library stores file metadata (name, type, source task) permanently in the page; the live URL is fetched fresh only when the user clicks "Open." Never cache or embed Notion file URLs as permanent links.
+
+---
+
+### Notion data flow (Personal Task Center)
+
+**Database:** "Tasks" — data source ID `3b74a590-47e4-82cb-ab74-073bb96d4cba` (Youssef's personal workspace, NOT the social workspace)
+
+**Schema:** Name (title), Status (status type), Priority (select), Assignee (people), Due (date), Tags (multi_select), Notes (rich_text)
+
+```
+Dashboard opens
+  → POST /notion/personal/data_sources/{DATA_SOURCE_ID}/query
+      proxy injects Authorization header → forwards to api.notion.com
+      → returns all tasks; stored in allTasks[]
+
+Views render client-side from allTasks[] — no additional API calls:
+  → Due Soon: filters overdue + upcoming (within 7 days), sorted by due date
+  → Calendar: bucketed by time (overdue/today/tomorrow/this-week/next-week/later/no-date)
+  → Board: 3-column Kanban (Not started / In progress / Done), sorted by due date
+  → All Tasks (table): full list with expand/edit/filter controls
+
+User creates a task
+  → POST /notion/personal/pages
+      body: { parent: { type: 'data_source_id', data_source_id: '3b74a590-...' }, properties: {...} }
+      Status uses Notion status type: { status: { name: "Not started" } }
+  → allTasks[] updated locally; view re-renders without re-fetch
+
+User archives a task (soft delete)
+  → PATCH /notion/personal/pages/{id}  { archived: true }
+  → Task removed from allTasks[]; view re-renders
+  → Recoverable from Notion Trash
+
+User edits a task
+  → PATCH /notion/personal/pages/{id}  { properties: {...} }
+  → allTasks[] updated locally; view re-renders without re-fetch
+```
+
+**Key rules:**
+- Never change `DATA_SOURCE_ID` (`3b74a590-47e4-82cb-ab74-073bb96d4cba`) — this is the "Tasks" database
+- Status property is Notion `status` type, NOT `select` — write as `{ status: { name: "..." } }`
+- New page creation must use `parent: { type: 'data_source_id', data_source_id: '...' }` (not `database_id`) — required by Notion API v2025-09-03 for multi-data-source databases
+- All view rendering is client-side from `allTasks[]`; no Google Calendar API or OAuth involved
+- Google Calendar sync happens automatically via Notion's built-in calendar integration when Due field includes a time
 
 ---
 

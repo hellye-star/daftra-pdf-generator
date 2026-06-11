@@ -28,8 +28,8 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Item | Value |
 |---|---|
 | Active stable branch | `stable-reviewed-history` |
-| Stable commit | `d0188c6` |
-| Previous stable commit | `b59995b` |
+| Stable commit | `22c115e` |
+| Previous stable commit | `d0188c6` |
 | Restore tag | `stable-reviewed-history-v1` (points to `2d0faec` — original Social Dashboard stable snapshot) |
 
 **Note:** The Financial Dashboard (`feature/financial-dashboard`, latest commit `0bc03db`) is **not** included in `stable-reviewed-history`. That branch and tag reflect only the Social Media Control Center and Document Generator. The merge target for the Financial Dashboard branch will be decided after final review.
@@ -399,7 +399,7 @@ Before recommending or making any change, ChatGPT must:
 2. **Read `docs/changelog.md`** — shows what changed and when. The most recent entries reflect the current approved state.
 3. **Read `docs/roadmap.md`** — shows phase status, what is complete, what is blocked, and what is next.
 4. **Read `docs/decisions.md`** — explains the reasoning behind structural choices. Consult before proposing any architectural change.
-5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (latest commit `d0188c6`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
+5. **Check `git log --oneline -10`** — confirm which branch you are on. Stable branch is `stable-reviewed-history` (latest commit `22c115e`). Financial Dashboard feature branch is `feature/financial-dashboard` (latest commit `0bc03db`). Do not assume the two are merged.
 6. **Check `git status`** — confirm working tree is clean before any work begins.
 7. **Read the relevant section of `social-dashboard.html`** before changing any JS function. Do not rely on summaries alone — the function signatures, guard conditions, and localStorage schemas matter exactly.
 8. **Do not suggest changes to locked items** (QR pipeline, html2pdf chain, `attentionFilter` + `isReviewedAndFresh` interaction, `openDetail` unification) without first confirming the lock is documented in `CLAUDE_CONTEXT.md` and has a clear reason to revisit.

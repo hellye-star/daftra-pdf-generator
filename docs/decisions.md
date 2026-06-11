@@ -86,6 +86,58 @@ A record of why key implementation choices were made. Consult this before changi
 
 ---
 
+## Personal Task Center
+
+---
+
+### Client-Side View Rendering — No Extra API Calls
+
+**Decision:** All four views (Due Soon, Calendar, Board, All Tasks) render directly from the `allTasks[]` array loaded at startup. Switching views never triggers a Notion API call.
+
+**Why:** The task list is small (personal use, not hundreds of tasks). Loading all tasks once on startup is fast. Re-querying Notion on every view switch would add latency and rate-limit risk for no benefit. Client-side rendering also keeps the views fully functional offline after initial load.
+
+**Rule:** Do not add per-view API calls. If new data is needed, expand the initial query — never add per-switch fetches.
+
+---
+
+### `openInTable(id)` Navigation Pattern
+
+**Decision:** Calendar and Board views are read-only. Clicking any task row/card calls `openInTable(id)`, which switches to the All Tasks view, expands the clicked task, and scrolls it into view.
+
+**Why:** Implementing full expand/edit/archive UI in three separate views is duplication. The All Tasks view already has complete edit functionality. The navigation is instant (client-side) and smooth (scrollIntoView). The user never loses context — the expanded task is centered in view.
+
+**Rule:** Calendar and Board must remain read-only surfaces that navigate to All Tasks for edit actions.
+
+---
+
+### Board Width — 820px Max
+
+**Decision:** The page `max-width` was widened from 720px to 820px specifically for the Board view's 3-column Kanban layout.
+
+**Why:** Three equal columns at 720px page width left column cards too narrow for readable content (task names, badges, due dates). 820px gives each column ~260px — sufficient for comfortable display without requiring horizontal scrolling.
+
+---
+
+### Status Property Is Notion `status` Type, Not `select`
+
+**Decision:** The Tasks database uses Notion's `status` property type. All reads use `t.properties.Status?.status?.name` and all writes use `{ status: { name: "..." } }`.
+
+**Why:** Notion has two superficially similar property types: `select` and `status`. They use different API keys (`select.name` vs `status.name`). The Tasks database was created with the `status` type. Using the wrong key silently returns undefined or fails the PATCH silently.
+
+**Rule:** Never write `{ select: { name: "..." } }` for the Status property. It is always `{ status: { name: "..." } }`.
+
+---
+
+### Page Creation Uses `data_source_id` Parent, Not `database_id`
+
+**Decision:** New tasks are created with `parent: { type: 'data_source_id', data_source_id: '3b74a590-47e4-82cb-ab74-073bb96d4cba' }`.
+
+**Why:** Notion API v2025-09-03 changed page creation for databases that are part of a multi-data-source setup. Using `parent: { database_id: '...' }` returns a 400 error for these databases. The `data_source_id` parent type is required.
+
+**Rule:** Never change the parent format for personal task creation. The data source ID is `3b74a590-47e4-82cb-ab74-073bb96d4cba`.
+
+---
+
 ## Social Media Control Center
 
 ---

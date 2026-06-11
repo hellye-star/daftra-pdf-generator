@@ -78,7 +78,7 @@ Two separate Notion workspaces are supported. Each has its own integration token
 | **Hussam / Vista shared** | `social-dashboard.html` | Social media tasks, media/assets, meeting agendas, items needing approval or review |
 | **Youssef personal** | `personal-dashboard.html` | Private task list, personal reminders, follow-ups, items tracked independently |
 
-Both use **read-only** Notion integration tokens. Write-back (e.g. marking a task reviewed in Notion) will be added in Phase 2 only after read-only flow is validated.
+The social_media integration is read-only. The personal integration is read-write — supports create (POST /pages) and archive (PATCH /pages/{id}) from `personal-dashboard.html`. Write-back for the social dashboard (e.g. marking a task reviewed in Notion) will be added in Phase 2 only after read-only flow is validated.
 
 ---
 
