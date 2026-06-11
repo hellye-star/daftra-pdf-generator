@@ -2,6 +2,26 @@
 
 ---
 
+## [2026-06-12] — Marketing Intelligence: Manual Instagram 1 JSON Import
+
+### marketing-dashboard.html
+
+Added a manual data import layer to the Marketing Intelligence dashboard. No new files. No APIs, OAuth, credentials, fetch calls, AI API calls, or ad write actions.
+
+**What was added:**
+- New **Data Source tab** (8th tab) with: mode status indicator, Instagram 1 JSON paste area, export instructions for all platforms (Instagram, TikTok, Google Ads, LinkedIn), full JSON schema examples for all 4 platforms, and a "what's next / API connection" note
+- **Instagram 1 JSON import:** user pastes post-level JSON, clicks Load, data is validated with `JSON.parse()` and stored in memory only — no localStorage, no network request, clears on page refresh
+- When imported JSON is loaded, the **Instagram 1 tab re-renders entirely from imported data**: organic metrics (reach, impressions, likes, comments, shares, saves, profile visits, website clicks, WhatsApp/message clicks, follows, unfollows, engagement rate, interaction rate), weekly bar charts bucketed by post publish date, content type comparison (Reel/Carousel/Static Post/Story), best content by reach/saves/shares/profile visits, weakest content with reason, audience insight text
+- **Paid spend section is hidden in imported mode** — no fake SAR figures mixed with real organic data. Replaced with an explanatory note
+- **Mock data remains the fallback** — if no JSON is loaded, all existing mock content is shown as before. Other tabs (Instagram 2, TikTok, Google Ads, LinkedIn, Overview, AI Report) remain on mock data
+- Topbar badge and Data Source mode chips update to reflect Instagram 1 import state
+- Reset-to-Mock button available in the imported data banner and Data Source tab
+- XSS-safe rendering via `esc()` helper on all user-supplied strings
+
+**Files NOT changed:** `proxy.py`, `config.json`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+---
+
 ## [2026-06-12] — Marketing Intelligence: Readability, Mock-Data Disclaimers, Organic Instagram Metrics
 
 ### marketing-dashboard.html
