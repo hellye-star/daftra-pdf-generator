@@ -21,13 +21,19 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 /* ── Topbar ── */
 .topbar { background: var(--dark); padding: 0 28px; display: flex; align-items: stretch; gap: 0; height: 48px; }
 .topbar-left { display: flex; align-items: center; gap: 12px; flex: 1; }
-.topbar-home { font-size: 7.5px; font-weight: 400; letter-spacing: 0.14em; text-transform: uppercase; color: var(--light); text-decoration: none; display: flex; align-items: center; gap: 6px; transition: color 0.15s; }
+.topbar-home { font-size: 10px; font-weight: 400; letter-spacing: 0.10em; text-transform: uppercase; color: var(--light); text-decoration: none; display: flex; align-items: center; gap: 6px; transition: color 0.15s; }
 .topbar-home:hover { color: #fff; }
 .topbar-div { width: 1px; background: #383836; margin: 0 14px; align-self: stretch; }
-.topbar-tool { font-weight: 300; font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--light); }
+.topbar-tool { font-weight: 300; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--light); }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
-.badge-static { font-size: 6px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 9px; background: #2E2E2C; color: var(--light); border: 1px solid #3A3A38; }
-.badge-mockdata { font-size: 6px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; padding: 3px 9px; background: #FEF3E7; color: var(--amber); }
+.badge-static { font-size: 9px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; padding: 4px 10px; background: #2E2E2C; color: var(--light); border: 1px solid #3A3A38; }
+.badge-mockdata { font-size: 9px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 10px; background: #FEF3E7; color: var(--amber); border: 1px solid #F0D5B0; }
+
+/* ── Mock data notice banner ── */
+.mock-notice { background: var(--amber-bg); border: 1px solid #F0D5B0; border-left: 3px solid var(--amber); padding: 11px 18px; display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+.mock-notice-icon { font-size: 14px; flex-shrink: 0; }
+.mock-notice-text { font-size: 13px; font-weight: 400; color: var(--amber); line-height: 1.5; }
+.mock-notice-text strong { font-weight: 600; }
 
 /* ── Layout ── */
 .page { max-width: 1100px; margin: 0 auto; padding: 36px 28px 80px; }
@@ -36,112 +42,150 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .page-header { margin-bottom: 32px; padding-bottom: 24px; border-bottom: 0.5px solid var(--rule); display: flex; align-items: flex-end; justify-content: space-between; }
 .page-title { font-family: 'Cormorant Garamond', serif; font-size: 32px; color: var(--dark); line-height: 1.1; }
 .page-title span { font-style: italic; }
-.page-subtitle { font-size: 8.5px; font-weight: 300; color: var(--mid); margin-top: 6px; letter-spacing: 0.04em; }
-.period-pill { font-size: 7px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mid); border: 1px solid var(--rule); padding: 5px 12px; background: var(--white); }
+.page-subtitle { font-size: 13px; font-weight: 300; color: var(--mid); margin-top: 8px; letter-spacing: 0.02em; line-height: 1.6; }
+.period-pill { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); border: 1px solid var(--rule); padding: 6px 14px; background: var(--white); white-space: nowrap; }
 
 /* ── Tabs ── */
 .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--rule); margin-bottom: 28px; overflow-x: auto; }
-.tab { font-size: 7.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); padding: 10px 18px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
+.tab { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); padding: 12px 20px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
 .tab:hover { color: var(--dark); }
 .tab.active { color: var(--dark); border-bottom-color: var(--dark); }
-.tab-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.tab-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 
 /* ── Panel ── */
 .panel { display: none; }
 .panel.active { display: block; }
 
 /* ── Summary cards (overview strip) ── */
-.summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
-.sum-card { background: var(--white); border: 1px solid var(--rule); padding: 18px 20px; }
-.sum-label { font-size: 6.5px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--light); margin-bottom: 8px; }
-.sum-value { font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--dark); line-height: 1; }
-.sum-sub { font-size: 7px; font-weight: 300; color: var(--mid); margin-top: 5px; }
-.sum-delta { font-size: 7px; font-weight: 500; margin-top: 4px; }
+.summary-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.sum-card { background: var(--white); border: 1px solid var(--rule); padding: 20px 22px; }
+.sum-label { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--light); margin-bottom: 10px; }
+.sum-value { font-family: 'Cormorant Garamond', serif; font-size: 28px; color: var(--dark); line-height: 1; }
+.sum-sub { font-size: 12px; font-weight: 300; color: var(--mid); margin-top: 6px; line-height: 1.5; }
+.sum-delta { font-size: 12px; font-weight: 500; margin-top: 5px; }
 .delta-up { color: var(--green); }
 .delta-dn { color: var(--red); }
 
 /* ── Channel mini-cards (overview) ── */
 .channel-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.ch-card { background: var(--white); border: 1px solid var(--rule); padding: 20px 22px; }
-.ch-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 0.5px solid var(--rule); }
-.ch-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.ch-name { font-size: 8px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dark); flex: 1; }
-.ch-handle { font-size: 7px; font-weight: 300; color: var(--mid); }
-.ch-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.ch-metric { }
-.ch-metric-label { font-size: 6px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--light); margin-bottom: 4px; }
-.ch-metric-value { font-size: 13px; font-weight: 400; color: var(--dark); }
-.ch-metric-sub { font-size: 6.5px; font-weight: 300; color: var(--mid); }
+.ch-card { background: var(--white); border: 1px solid var(--rule); padding: 22px 24px; }
+.ch-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 0.5px solid var(--rule); }
+.ch-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.ch-name { font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--dark); flex: 1; }
+.ch-handle { font-size: 12px; font-weight: 300; color: var(--mid); }
+.ch-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ch-metric-label { font-size: 9px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--light); margin-bottom: 6px; }
+.ch-metric-value { font-size: 16px; font-weight: 400; color: var(--dark); line-height: 1.2; }
+.ch-metric-sub { font-size: 11px; font-weight: 300; color: var(--mid); margin-top: 2px; }
 
 /* ── Section label ── */
-.section-label { font-size: 6.5px; font-weight: 500; letter-spacing: 0.28em; text-transform: uppercase; color: var(--light); margin-bottom: 14px; margin-top: 28px; }
+.section-label { font-size: 9px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--light); margin-bottom: 14px; margin-top: 28px; }
+
+/* ── Sub-section label (within a panel) ── */
+.subsection-label { font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mid); margin-bottom: 12px; margin-top: 24px; padding-bottom: 8px; border-bottom: 0.5px solid var(--rule); }
 
 /* ── Metrics table ── */
 .metrics-table { width: 100%; border-collapse: collapse; background: var(--white); border: 1px solid var(--rule); }
-.metrics-table th { font-size: 6.5px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--light); padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-.metrics-table td { font-size: 12px; padding: 11px 16px; border-bottom: 0.5px solid var(--rule); color: var(--dark); }
+.metrics-table th { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--light); padding: 12px 18px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.metrics-table td { font-size: 14px; padding: 13px 18px; border-bottom: 0.5px solid var(--rule); color: var(--dark); }
 .metrics-table tr:last-child td { border-bottom: none; }
-.metrics-table .metric-name { font-size: 7.5px; font-weight: 500; letter-spacing: 0.06em; color: var(--mid); }
-.metrics-table .val { font-family: 'Cormorant Garamond', serif; font-size: 20px; }
-.metrics-table .val-sub { font-size: 7px; font-weight: 300; color: var(--light); display: block; margin-top: 1px; }
-.metrics-table .badge { font-size: 6px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; padding: 2px 7px; }
+.metrics-table .metric-name { font-size: 13px; font-weight: 500; color: var(--mid); }
+.metrics-table .val { font-family: 'Cormorant Garamond', serif; font-size: 22px; }
+.metrics-table .val-sub { font-size: 11px; font-weight: 300; color: var(--mid); display: block; margin-top: 2px; }
+.metrics-table .badge { font-size: 9px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; }
 .badge-best { background: var(--green-bg); color: var(--green); }
 .badge-weak { background: var(--red-bg); color: var(--red); }
+.badge-type { background: #F0F0EE; color: var(--mid); font-size: 9px; font-weight: 500; padding: 2px 7px; letter-spacing: 0.06em; }
 
 /* ── Weekly bar chart ── */
-.chart-wrap { background: var(--white); border: 1px solid var(--rule); padding: 20px 22px; margin-bottom: 20px; }
-.chart-title { font-size: 7px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); margin-bottom: 16px; }
+.chart-wrap { background: var(--white); border: 1px solid var(--rule); padding: 22px 24px; margin-bottom: 20px; }
+.chart-title { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mid); margin-bottom: 16px; }
 .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 80px; }
 .bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .bar { width: 100%; background: var(--rule); position: relative; min-height: 2px; transition: background 0.15s; }
 .bar:hover { background: var(--dark); }
-.bar-label { font-size: 6.5px; font-weight: 300; color: var(--light); white-space: nowrap; }
-.bar-val { font-size: 6.5px; font-weight: 500; color: var(--mid); }
+.bar-label { font-size: 10px; font-weight: 300; color: var(--mid); white-space: nowrap; }
+.bar-val { font-size: 10px; font-weight: 500; color: var(--dark); }
 .chart-legend { display: flex; gap: 16px; margin-top: 12px; padding-top: 10px; border-top: 0.5px solid var(--rule); }
-.legend-item { display: flex; align-items: center; gap: 5px; font-size: 6.5px; font-weight: 300; color: var(--mid); }
-.legend-swatch { width: 10px; height: 4px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 300; color: var(--mid); }
+.legend-swatch { width: 12px; height: 4px; }
 
-/* ── Posts table ── */
+/* ── Posts / content table ── */
 .posts-table { width: 100%; border-collapse: collapse; background: var(--white); border: 1px solid var(--rule); }
-.posts-table th { font-size: 6.5px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--light); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-.posts-table td { font-size: 11px; padding: 10px 14px; border-bottom: 0.5px solid var(--rule); color: var(--dark); vertical-align: middle; }
+.posts-table th { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--light); padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.posts-table td { font-size: 14px; padding: 12px 16px; border-bottom: 0.5px solid var(--rule); color: var(--dark); vertical-align: middle; }
 .posts-table tr:last-child td { border-bottom: none; }
-.post-name { font-size: 8px; font-weight: 400; color: var(--dark); max-width: 220px; }
-.post-date { font-size: 7px; font-weight: 300; color: var(--light); margin-top: 2px; }
+.post-name { font-size: 13px; font-weight: 400; color: var(--dark); max-width: 260px; line-height: 1.4; }
+.post-date { font-size: 11px; font-weight: 300; color: var(--mid); margin-top: 3px; }
+.post-reason { font-size: 11px; font-weight: 300; color: var(--mid); margin-top: 3px; font-style: italic; line-height: 1.4; }
+
+/* ── Content type comparison grid ── */
+.type-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.type-card { background: var(--white); border: 1px solid var(--rule); padding: 18px 20px; }
+.type-card-name { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mid); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 0.5px solid var(--rule); }
+.type-metric { margin-bottom: 10px; }
+.type-metric-label { font-size: 9px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--light); margin-bottom: 3px; }
+.type-metric-value { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--dark); }
+.type-metric-sub { font-size: 11px; font-weight: 300; color: var(--mid); }
+
+/* ── Insight card ── */
+.insight-card { background: var(--white); border: 1px solid var(--rule); padding: 22px 26px; }
+.insight-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 0.5px solid var(--rule); }
+.insight-row:last-child { border-bottom: none; padding-bottom: 0; }
+.insight-row:first-child { padding-top: 0; }
+.insight-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.insight-body { }
+.insight-title { font-size: 13px; font-weight: 500; color: var(--dark); margin-bottom: 4px; }
+.insight-desc { font-size: 13px; font-weight: 300; color: var(--mid); line-height: 1.7; }
 
 /* ── Recommendation block ── */
-.reco-block { background: var(--white); border: 1px solid var(--rule); padding: 24px 26px; }
-.reco-header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 0.5px solid var(--rule); }
-.reco-icon { font-size: 18px; }
-.reco-title { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--dark); }
-.reco-sub { font-size: 7px; font-weight: 300; color: var(--mid); margin-top: 2px; }
-.reco-items { display: flex; flex-direction: column; gap: 14px; }
-.reco-item { display: flex; gap: 14px; }
-.reco-num { font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--rule); line-height: 1; flex-shrink: 0; width: 24px; }
-.reco-body { }
-.reco-body-title { font-size: 8.5px; font-weight: 500; color: var(--dark); margin-bottom: 4px; }
-.reco-body-desc { font-size: 8px; font-weight: 300; color: var(--mid); line-height: 1.7; }
-.reco-channel-tags { display: flex; gap: 6px; margin-top: 6px; }
-.reco-tag { font-size: 6px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; padding: 2px 7px; border: 1px solid var(--rule); color: var(--mid); }
-.reco-placeholder-note { font-size: 7px; font-weight: 300; color: var(--light); margin-top: 20px; padding-top: 14px; border-top: 0.5px solid var(--rule); font-style: italic; }
+.reco-block { background: var(--white); border: 1px solid var(--rule); padding: 28px 30px; }
+.reco-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 0.5px solid var(--rule); }
+.reco-icon { font-size: 20px; flex-shrink: 0; }
+.reco-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--dark); }
+.reco-sub { font-size: 12px; font-weight: 300; color: var(--mid); margin-top: 4px; line-height: 1.6; }
+.reco-items { display: flex; flex-direction: column; gap: 22px; }
+.reco-item { display: flex; gap: 16px; }
+.reco-num { font-family: 'Cormorant Garamond', serif; font-size: 28px; color: var(--rule); line-height: 1; flex-shrink: 0; width: 28px; }
+.reco-body { flex: 1; }
+.reco-body-title { font-size: 14px; font-weight: 500; color: var(--dark); margin-bottom: 6px; line-height: 1.4; }
+.reco-body-desc { font-size: 13px; font-weight: 300; color: var(--mid); line-height: 1.75; }
+.reco-channel-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.reco-tag { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 9px; border: 1px solid var(--rule); color: var(--mid); }
+.reco-mock-note { font-size: 12px; font-weight: 400; color: var(--amber); margin-top: 22px; padding: 12px 16px; border: 1px solid #F0D5B0; background: var(--amber-bg); line-height: 1.6; }
+
+/* ── Action list ── */
+.action-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.action-item { display: flex; gap: 10px; align-items: flex-start; }
+.action-num { font-size: 11px; font-weight: 600; color: var(--white); background: var(--dark); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.action-text { font-size: 13px; font-weight: 300; color: var(--mid); line-height: 1.6; }
 
 /* ── Placeholder panels ── */
-.placeholder-panel { background: var(--white); border: 1px solid var(--rule); padding: 48px 32px; text-align: center; }
-.placeholder-icon { font-size: 28px; margin-bottom: 14px; }
-.placeholder-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--dark); margin-bottom: 8px; }
-.placeholder-desc { font-size: 8px; font-weight: 300; color: var(--mid); line-height: 1.8; max-width: 340px; margin: 0 auto; }
+.placeholder-panel { background: var(--white); border: 1px solid var(--rule); padding: 56px 32px; text-align: center; }
+.placeholder-icon { font-size: 32px; margin-bottom: 16px; }
+.placeholder-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--dark); margin-bottom: 10px; }
+.placeholder-desc { font-size: 14px; font-weight: 300; color: var(--mid); line-height: 1.8; max-width: 360px; margin: 0 auto; }
 
-/* ── Two-col layout for channel tabs ── */
+/* ── Two-col layout ── */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+/* ── Spend note (small inline clarification) ── */
+.spend-note { font-size: 11px; font-weight: 300; color: var(--light); font-style: italic; margin-top: 4px; }
+
+@media (max-width: 900px) {
+  .type-grid { grid-template-columns: repeat(2, 1fr); }
+}
 @media (max-width: 800px) {
   .summary-strip { grid-template-columns: repeat(2, 1fr); }
   .channel-grid { grid-template-columns: 1fr; }
   .two-col { grid-template-columns: 1fr; }
   .ch-metrics { grid-template-columns: repeat(2, 1fr); }
+  .type-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 520px) {
   .summary-strip { grid-template-columns: 1fr 1fr; }
-  .tab { padding: 10px 12px; font-size: 7px; }
+  .tab { padding: 10px 14px; font-size: 10px; }
+  .type-grid { grid-template-columns: 1fr 1fr; }
 }
 </style>
 </head>
@@ -160,7 +204,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
     <div class="topbar-tool">Marketing Intelligence</div>
   </div>
   <div class="topbar-right">
-    <div class="badge-mockdata">Sample Data</div>
+    <div class="badge-mockdata">Mock Data</div>
     <div class="badge-static">V1 · Static</div>
   </div>
 </div>
@@ -192,11 +236,17 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   ══════════════════════════════════════════ -->
   <div id="panel-overview" class="panel active">
 
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Mock data only.</strong> All figures shown are sample/static data for dashboard demonstration purposes. No live API is connected. Spend figures are illustrative sample advertising spend — not actual amounts.</div>
+    </div>
+
     <div class="summary-strip">
       <div class="sum-card">
-        <div class="sum-label">Total Spend</div>
+        <div class="sum-label">Sample Ad Spend</div>
         <div class="sum-value">SAR 4,820</div>
         <div class="sum-sub">All channels · 2 weeks</div>
+        <div class="spend-note">Sample figure — not actual spend</div>
         <div class="sum-delta delta-up">↑ 12% vs prior period</div>
       </div>
       <div class="sum-card">
@@ -214,7 +264,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
       <div class="sum-card">
         <div class="sum-label">Blended CPL</div>
         <div class="sum-value">SAR 51.3</div>
-        <div class="sum-sub">Cost per lead · all channels</div>
+        <div class="sum-sub">Sample cost per lead · all channels</div>
         <div class="sum-delta delta-dn">↑ 3% vs prior period</div>
       </div>
     </div>
@@ -222,7 +272,6 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
     <div class="section-label">Channel Breakdown</div>
     <div class="channel-grid">
 
-      <!-- Instagram 1 -->
       <div class="ch-card">
         <div class="ch-header">
           <div class="ch-dot" style="background:var(--ig1)"></div>
@@ -231,9 +280,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
         <div class="ch-metrics">
           <div class="ch-metric">
-            <div class="ch-metric-label">Spend</div>
+            <div class="ch-metric-label">Ad Spend</div>
             <div class="ch-metric-value">1,800</div>
-            <div class="ch-metric-sub">SAR</div>
+            <div class="ch-metric-sub">SAR · sample</div>
           </div>
           <div class="ch-metric">
             <div class="ch-metric-label">Reach</div>
@@ -246,14 +295,13 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
             <div class="ch-metric-sub">messages</div>
           </div>
           <div class="ch-metric">
-            <div class="ch-metric-label">CPL</div>
-            <div class="ch-metric-value">SAR 47</div>
-            <div class="ch-metric-sub">per lead</div>
+            <div class="ch-metric-label">Eng. Rate</div>
+            <div class="ch-metric-value">4.2%</div>
+            <div class="ch-metric-sub">organic</div>
           </div>
         </div>
       </div>
 
-      <!-- Instagram 2 -->
       <div class="ch-card">
         <div class="ch-header">
           <div class="ch-dot" style="background:var(--ig2)"></div>
@@ -262,9 +310,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
         <div class="ch-metrics">
           <div class="ch-metric">
-            <div class="ch-metric-label">Spend</div>
+            <div class="ch-metric-label">Ad Spend</div>
             <div class="ch-metric-value">1,200</div>
-            <div class="ch-metric-sub">SAR</div>
+            <div class="ch-metric-sub">SAR · sample</div>
           </div>
           <div class="ch-metric">
             <div class="ch-metric-label">Reach</div>
@@ -277,14 +325,13 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
             <div class="ch-metric-sub">messages</div>
           </div>
           <div class="ch-metric">
-            <div class="ch-metric-label">CPL</div>
-            <div class="ch-metric-value">SAR 55</div>
-            <div class="ch-metric-sub">per lead</div>
+            <div class="ch-metric-label">Eng. Rate</div>
+            <div class="ch-metric-value">3.6%</div>
+            <div class="ch-metric-sub">organic</div>
           </div>
         </div>
       </div>
 
-      <!-- TikTok -->
       <div class="ch-card">
         <div class="ch-header">
           <div class="ch-dot" style="background:#555"></div>
@@ -293,9 +340,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
         <div class="ch-metrics">
           <div class="ch-metric">
-            <div class="ch-metric-label">Spend</div>
+            <div class="ch-metric-label">Ad Spend</div>
             <div class="ch-metric-value">820</div>
-            <div class="ch-metric-sub">SAR</div>
+            <div class="ch-metric-sub">SAR · sample</div>
           </div>
           <div class="ch-metric">
             <div class="ch-metric-label">Views</div>
@@ -308,14 +355,13 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
             <div class="ch-metric-sub">messages</div>
           </div>
           <div class="ch-metric">
-            <div class="ch-metric-label">CPL</div>
-            <div class="ch-metric-value">SAR 43</div>
-            <div class="ch-metric-sub">per lead</div>
+            <div class="ch-metric-label">Eng. Rate</div>
+            <div class="ch-metric-value">5.1%</div>
+            <div class="ch-metric-sub">all videos</div>
           </div>
         </div>
       </div>
 
-      <!-- Google Ads -->
       <div class="ch-card">
         <div class="ch-header">
           <div class="ch-dot" style="background:var(--ga)"></div>
@@ -324,9 +370,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
         <div class="ch-metrics">
           <div class="ch-metric">
-            <div class="ch-metric-label">Spend</div>
+            <div class="ch-metric-label">Ad Spend</div>
             <div class="ch-metric-value">1,000</div>
-            <div class="ch-metric-sub">SAR</div>
+            <div class="ch-metric-sub">SAR · sample</div>
           </div>
           <div class="ch-metric">
             <div class="ch-metric-label">Clicks</div>
@@ -339,9 +385,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
             <div class="ch-metric-sub">form fills</div>
           </div>
           <div class="ch-metric">
-            <div class="ch-metric-label">CPL</div>
-            <div class="ch-metric-value">SAR 67</div>
-            <div class="ch-metric-sub">per lead</div>
+            <div class="ch-metric-label">CTR</div>
+            <div class="ch-metric-value">26.3%</div>
+            <div class="ch-metric-sub">clicks ÷ impr.</div>
           </div>
         </div>
       </div>
@@ -354,30 +400,36 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   ══════════════════════════════════════════ -->
   <div id="panel-ig1" class="panel">
 
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Mock data only.</strong> All metrics below are sample figures. Spend values are sample advertising spend — not actual amounts. Connect Instagram Insights to populate live data.</div>
+    </div>
+
     <div class="section-label">Account — @vistaunited.co</div>
 
     <div class="summary-strip">
       <div class="sum-card">
-        <div class="sum-label">Spend</div>
-        <div class="sum-value">SAR 1,800</div>
-        <div class="sum-sub">2-week period</div>
-      </div>
-      <div class="sum-card">
         <div class="sum-label">Reach</div>
         <div class="sum-value">52,100</div>
-        <div class="sum-sub">Unique accounts</div>
-        <div class="sum-delta delta-up">↑ 14%</div>
+        <div class="sum-sub">Unique accounts reached</div>
+        <div class="sum-delta delta-up">↑ 14% vs prior period</div>
       </div>
       <div class="sum-card">
         <div class="sum-label">Impressions</div>
         <div class="sum-value">89,400</div>
-        <div class="sum-sub">Total impressions</div>
+        <div class="sum-sub">Total impressions (paid + organic)</div>
       </div>
       <div class="sum-card">
-        <div class="sum-label">Follower Growth</div>
+        <div class="sum-label">Interactions</div>
+        <div class="sum-value">3,748</div>
+        <div class="sum-sub">Likes + Comments + Saves + Shares</div>
+        <div class="sum-delta delta-up">↑ 11% vs prior period</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Follows Gained</div>
         <div class="sum-value">+142</div>
-        <div class="sum-sub">New followers</div>
-        <div class="sum-delta delta-up">↑ 9%</div>
+        <div class="sum-sub">New followers this period</div>
+        <div class="sum-delta delta-up">↑ 9% vs prior period</div>
       </div>
     </div>
 
@@ -390,64 +442,158 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
       </div>
       <div class="chart-wrap">
-        <div class="chart-title">Weekly Spend (SAR)</div>
-        <div class="bar-chart" id="ig1-spend-chart"></div>
+        <div class="chart-title">Weekly Interactions</div>
+        <div class="bar-chart" id="ig1-inter-chart"></div>
         <div class="chart-legend">
-          <div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Spend</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#E1306C;opacity:0.4"></div>Interactions</div>
         </div>
       </div>
     </div>
 
-    <div class="section-label">Key Metrics</div>
+    <div class="subsection-label">Organic Engagement Metrics</div>
     <table class="metrics-table">
-      <thead>
-        <tr>
-          <th>Metric</th>
-          <th>Value</th>
-          <th>Notes</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td class="metric-name">Clicks</td><td><span class="val">3,480</span><span class="val-sub">link clicks</span></td><td style="font-size:8px;color:var(--mid)">Profile + ad clicks</td></tr>
-        <tr><td class="metric-name">CTR</td><td><span class="val">3.89%</span></td><td style="font-size:8px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
-        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.52</span></td><td style="font-size:8px;color:var(--mid)">Cost per click</td></tr>
-        <tr><td class="metric-name">Leads / Messages</td><td><span class="val">38</span><span class="val-sub">DMs received</span></td><td style="font-size:8px;color:var(--mid)">From ads + organic</td></tr>
-        <tr><td class="metric-name">Cost per Lead</td><td><span class="val">SAR 47.4</span></td><td style="font-size:8px;color:var(--mid)">Spend ÷ leads</td></tr>
-        <tr><td class="metric-name">Engagement Rate</td><td><span class="val">4.2%</span></td><td style="font-size:8px;color:var(--mid)">(Likes + Comments + Saves) ÷ Reach</td></tr>
+        <tr><td class="metric-name">Likes</td><td><span class="val">2,840</span></td><td style="font-size:13px;color:var(--mid)">Across all posts this period</td></tr>
+        <tr><td class="metric-name">Comments</td><td><span class="val">312</span></td><td style="font-size:13px;color:var(--mid)">Total comments received</td></tr>
+        <tr><td class="metric-name">Shares</td><td><span class="val">184</span></td><td style="font-size:13px;color:var(--mid)">Post shares (stories + direct)</td></tr>
+        <tr><td class="metric-name">Saves</td><td><span class="val">412</span></td><td style="font-size:13px;color:var(--mid)">Saves are a strong intent signal</td></tr>
+        <tr><td class="metric-name">Engagement Rate</td><td><span class="val">4.2%</span></td><td style="font-size:13px;color:var(--mid)">(Likes + Comments + Saves) ÷ Reach</td></tr>
+        <tr><td class="metric-name">Interaction Rate</td><td><span class="val">7.2%</span></td><td style="font-size:13px;color:var(--mid)">(All interactions) ÷ Reach — includes shares</td></tr>
+        <tr><td class="metric-name">Profile Visits</td><td><span class="val">1,840</span></td><td style="font-size:13px;color:var(--mid)">Visits driven by posts and stories</td></tr>
+        <tr><td class="metric-name">Website Clicks</td><td><span class="val">620</span></td><td style="font-size:13px;color:var(--mid)">Link-in-bio clicks from profile</td></tr>
+        <tr><td class="metric-name">WhatsApp / Message Clicks</td><td><span class="val">38</span></td><td style="font-size:13px;color:var(--mid)">DMs + WhatsApp button taps from ads</td></tr>
+        <tr><td class="metric-name">Unfollows</td><td><span class="val">−24</span></td><td style="font-size:13px;color:var(--mid)">Net: +118 after unfollows</td></tr>
       </tbody>
     </table>
 
-    <div class="section-label">Top & Bottom Posts</div>
+    <div class="subsection-label">Paid Ad Metrics — Sample Advertising Spend</div>
+    <table class="metrics-table">
+      <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="metric-name">Sample Ad Spend</td><td><span class="val">SAR 1,800</span><span class="val-sub">Sample figure — not actual spend</span></td><td style="font-size:13px;color:var(--mid)">2-week period</td></tr>
+        <tr><td class="metric-name">Ad Reach</td><td><span class="val">38,200</span></td><td style="font-size:13px;color:var(--mid)">Paid reach (subset of total)</td></tr>
+        <tr><td class="metric-name">Ad Impressions</td><td><span class="val">64,100</span></td><td style="font-size:13px;color:var(--mid)">Paid impressions</td></tr>
+        <tr><td class="metric-name">Clicks</td><td><span class="val">3,480</span><span class="val-sub">link clicks</span></td><td style="font-size:13px;color:var(--mid)">Profile + ad link clicks</td></tr>
+        <tr><td class="metric-name">CTR</td><td><span class="val">3.89%</span></td><td style="font-size:13px;color:var(--mid)">Clicks ÷ Ad Impressions</td></tr>
+        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.52</span></td><td style="font-size:13px;color:var(--mid)">Sample cost per click</td></tr>
+        <tr><td class="metric-name">Sample Cost per Lead</td><td><span class="val">SAR 47.4</span></td><td style="font-size:13px;color:var(--mid)">Sample spend ÷ leads</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-label">Content Type Comparison</div>
+    <div class="type-grid">
+      <div class="type-card">
+        <div class="type-card-name">Reels</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Reach</div><div class="type-metric-value">14,200</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Eng. Rate</div><div class="type-metric-value">5.8%</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Saves</div><div class="type-metric-value">142</div><div class="type-metric-sub">highest save rate</div></div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Carousels</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Reach</div><div class="type-metric-value">7,800</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Eng. Rate</div><div class="type-metric-value">4.6%</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Saves</div><div class="type-metric-value">98</div><div class="type-metric-sub">good for portfolio</div></div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Static Posts</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Reach</div><div class="type-metric-value">3,200</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Eng. Rate</div><div class="type-metric-value">2.1%</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Saves</div><div class="type-metric-value">24</div><div class="type-metric-sub">lower discovery</div></div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Stories</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Views</div><div class="type-metric-value">2,640</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Replies</div><div class="type-metric-value">18</div></div>
+        <div class="type-metric"><div class="type-metric-label">Link Taps</div><div class="type-metric-value">84</div><div class="type-metric-sub">strong for CTAs</div></div>
+      </div>
+    </div>
+
+    <div class="section-label">Best Content — by Metric</div>
     <table class="posts-table">
-      <thead>
-        <tr>
-          <th></th>
-          <th>Post</th>
-          <th>Type</th>
-          <th>Reach</th>
-          <th>Engagement</th>
-          <th>Leads</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Metric</th><th>Best Post</th><th>Type</th><th>Value</th></tr></thead>
       <tbody>
         <tr>
-          <td><span class="badge badge-best">Best</span></td>
-          <td><div class="post-name">Brand Identity Showcase — Before & After</div><div class="post-date">2 Jun 2026</div></td>
-          <td style="font-size:8px;color:var(--mid)">Reel</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">18,400</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">6.8%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">14</td>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Reach</td>
+          <td><div class="post-name">Brand Identity Showcase — Before &amp; After</div><div class="post-date">2 Jun 2026</div></td>
+          <td><span class="badge-type">Reel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">18,400</td>
         </tr>
         <tr>
-          <td><span class="badge badge-weak">Weakest</span></td>
-          <td><div class="post-name">Company Culture — Team Lunch</div><div class="post-date">5 Jun 2026</div></td>
-          <td style="font-size:8px;color:var(--mid)">Static</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">2,100</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">1.1%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">0</td>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Saves</td>
+          <td><div class="post-name">Logo Design: From Sketch to Final</div><div class="post-date">4 Jun 2026</div></td>
+          <td><span class="badge-type">Carousel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">198 saves</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Shares</td>
+          <td><div class="post-name">Brand Identity Showcase — Before &amp; After</div><div class="post-date">2 Jun 2026</div></td>
+          <td><span class="badge-type">Reel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">94 shares</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Profile Visits</td>
+          <td><div class="post-name">Client Result: Packaging Redesign</div><div class="post-date">6 Jun 2026</div></td>
+          <td><span class="badge-type">Reel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">420 visits</td>
         </tr>
       </tbody>
     </table>
+
+    <div class="section-label">Weakest Content — with Possible Reasons</div>
+    <table class="posts-table">
+      <thead><tr><th></th><th>Post</th><th>Type</th><th>Reach</th><th>Eng. Rate</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-weak">Weak</span></td>
+          <td>
+            <div class="post-name">Company Culture — Team Lunch</div>
+            <div class="post-date">5 Jun 2026</div>
+            <div class="post-reason">Possible reason: No clear value to the audience; personal content performs below average unless tied to a client story or result. Static image format limits reach distribution.</div>
+          </td>
+          <td><span class="badge-type">Static</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">2,100</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">1.1%</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-weak">Weak</span></td>
+          <td>
+            <div class="post-name">Vista at the Design Expo — Event Photos</div>
+            <div class="post-date">8 Jun 2026</div>
+            <div class="post-reason">Possible reason: Event attendance posts without a creative hook tend to underperform. Weak CTA — no question, no interactive element. Consider a "what we learned" format instead.</div>
+          </td>
+          <td><span class="badge-type">Carousel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">1,980</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">0.8%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-label">Audience &amp; Engagement Insight</div>
+    <div class="insight-card">
+      <div class="insight-row">
+        <div class="insight-icon">📉</div>
+        <div class="insight-body">
+          <div class="insight-title">Why interaction may be low on certain posts</div>
+          <div class="insight-desc">Static image posts receive 60% less reach than Reels on average, because Instagram's algorithm deprioritises non-video formats in the Explore feed. If a post has high reach but low saves and shares, the issue is likely weak content hook — not posting time. If reach itself is low, the issue is format or hashtag relevance.</div>
+        </div>
+      </div>
+      <div class="insight-row">
+        <div class="insight-icon">🎯</div>
+        <div class="insight-body">
+          <div class="insight-title">Why the Before &amp; After Reel attracted more profile visits</div>
+          <div class="insight-desc">Transformation content (before/after, process reveal, client result) creates strong curiosity and immediate relevance for potential clients. Viewers who see a result they want are significantly more likely to visit the profile to explore more work. This format also drives saves, which signals the algorithm to show the post to a broader audience over time.</div>
+        </div>
+      </div>
+      <div class="insight-row">
+        <div class="insight-icon">💬</div>
+        <div class="insight-body">
+          <div class="insight-title">Low comments — possible weak call-to-action</div>
+          <div class="insight-desc">Only 8.3% of posts this period had a clear question or CTA in the caption. Posts with a direct question in the caption average 2.4× more comments. Adding a simple "Which version do you prefer?" or "Tag a brand that needs this" at the end of the caption costs nothing and significantly improves comment rate.</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -455,30 +601,36 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   ══════════════════════════════════════════ -->
   <div id="panel-ig2" class="panel">
 
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Mock data only.</strong> All metrics below are sample figures. Spend values are sample advertising spend — not actual amounts. Connect Instagram Insights to populate live data.</div>
+    </div>
+
     <div class="section-label">Account — @vista.branding</div>
 
     <div class="summary-strip">
       <div class="sum-card">
-        <div class="sum-label">Spend</div>
-        <div class="sum-value">SAR 1,200</div>
-        <div class="sum-sub">2-week period</div>
-      </div>
-      <div class="sum-card">
         <div class="sum-label">Reach</div>
         <div class="sum-value">34,600</div>
-        <div class="sum-sub">Unique accounts</div>
-        <div class="sum-delta delta-up">↑ 6%</div>
+        <div class="sum-sub">Unique accounts reached</div>
+        <div class="sum-delta delta-up">↑ 6% vs prior period</div>
       </div>
       <div class="sum-card">
         <div class="sum-label">Impressions</div>
         <div class="sum-value">58,200</div>
-        <div class="sum-sub">Total impressions</div>
+        <div class="sum-sub">Total impressions (paid + organic)</div>
       </div>
       <div class="sum-card">
-        <div class="sum-label">Follower Growth</div>
+        <div class="sum-label">Interactions</div>
+        <div class="sum-value">2,246</div>
+        <div class="sum-sub">Likes + Comments + Saves + Shares</div>
+        <div class="sum-delta delta-up">↑ 7% vs prior period</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Follows Gained</div>
         <div class="sum-value">+87</div>
-        <div class="sum-sub">New followers</div>
-        <div class="sum-delta delta-up">↑ 5%</div>
+        <div class="sum-sub">New followers this period</div>
+        <div class="sum-delta delta-up">↑ 5% vs prior period</div>
       </div>
     </div>
 
@@ -491,49 +643,139 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
       </div>
       <div class="chart-wrap">
-        <div class="chart-title">Weekly Spend (SAR)</div>
-        <div class="bar-chart" id="ig2-spend-chart"></div>
+        <div class="chart-title">Weekly Interactions</div>
+        <div class="bar-chart" id="ig2-inter-chart"></div>
         <div class="chart-legend">
-          <div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Spend</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#833AB4;opacity:0.4"></div>Interactions</div>
         </div>
       </div>
     </div>
 
-    <div class="section-label">Key Metrics</div>
+    <div class="subsection-label">Organic Engagement Metrics</div>
     <table class="metrics-table">
       <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td class="metric-name">Clicks</td><td><span class="val">2,190</span></td><td style="font-size:8px;color:var(--mid)">Link + profile clicks</td></tr>
-        <tr><td class="metric-name">CTR</td><td><span class="val">3.76%</span></td><td style="font-size:8px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
-        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.55</span></td><td style="font-size:8px;color:var(--mid)">Cost per click</td></tr>
-        <tr><td class="metric-name">Leads / Messages</td><td><span class="val">22</span><span class="val-sub">DMs received</span></td><td style="font-size:8px;color:var(--mid)">From ads + organic</td></tr>
-        <tr><td class="metric-name">Cost per Lead</td><td><span class="val">SAR 54.5</span></td><td style="font-size:8px;color:var(--mid)">Spend ÷ leads</td></tr>
-        <tr><td class="metric-name">Engagement Rate</td><td><span class="val">3.6%</span></td><td style="font-size:8px;color:var(--mid)">(Likes + Comments + Saves) ÷ Reach</td></tr>
+        <tr><td class="metric-name">Likes</td><td><span class="val">1,680</span></td><td style="font-size:13px;color:var(--mid)">Across all posts this period</td></tr>
+        <tr><td class="metric-name">Comments</td><td><span class="val">218</span></td><td style="font-size:13px;color:var(--mid)">Total comments received</td></tr>
+        <tr><td class="metric-name">Shares</td><td><span class="val">142</span></td><td style="font-size:13px;color:var(--mid)">Post shares (stories + direct)</td></tr>
+        <tr><td class="metric-name">Saves</td><td><span class="val">206</span></td><td style="font-size:13px;color:var(--mid)">Lower than IG1 — consider more carousel/portfolio content</td></tr>
+        <tr><td class="metric-name">Engagement Rate</td><td><span class="val">3.6%</span></td><td style="font-size:13px;color:var(--mid)">(Likes + Comments + Saves) ÷ Reach</td></tr>
+        <tr><td class="metric-name">Interaction Rate</td><td><span class="val">6.5%</span></td><td style="font-size:13px;color:var(--mid)">(All interactions) ÷ Reach</td></tr>
+        <tr><td class="metric-name">Profile Visits</td><td><span class="val">1,120</span></td><td style="font-size:13px;color:var(--mid)">Visits driven by posts and stories</td></tr>
+        <tr><td class="metric-name">Website Clicks</td><td><span class="val">380</span></td><td style="font-size:13px;color:var(--mid)">Link-in-bio clicks from profile</td></tr>
+        <tr><td class="metric-name">WhatsApp / Message Clicks</td><td><span class="val">22</span></td><td style="font-size:13px;color:var(--mid)">DMs + WhatsApp button taps from ads</td></tr>
+        <tr><td class="metric-name">Unfollows</td><td><span class="val">−18</span></td><td style="font-size:13px;color:var(--mid)">Net: +69 after unfollows</td></tr>
       </tbody>
     </table>
 
-    <div class="section-label">Top & Bottom Posts</div>
+    <div class="subsection-label">Paid Ad Metrics — Sample Advertising Spend</div>
+    <table class="metrics-table">
+      <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="metric-name">Sample Ad Spend</td><td><span class="val">SAR 1,200</span><span class="val-sub">Sample figure — not actual spend</span></td><td style="font-size:13px;color:var(--mid)">2-week period</td></tr>
+        <tr><td class="metric-name">Ad Reach</td><td><span class="val">24,400</span></td><td style="font-size:13px;color:var(--mid)">Paid reach (subset of total)</td></tr>
+        <tr><td class="metric-name">Clicks</td><td><span class="val">2,190</span></td><td style="font-size:13px;color:var(--mid)">Link + profile clicks</td></tr>
+        <tr><td class="metric-name">CTR</td><td><span class="val">3.76%</span></td><td style="font-size:13px;color:var(--mid)">Clicks ÷ Ad Impressions</td></tr>
+        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.55</span></td><td style="font-size:13px;color:var(--mid)">Sample cost per click</td></tr>
+        <tr><td class="metric-name">Sample Cost per Lead</td><td><span class="val">SAR 54.5</span></td><td style="font-size:13px;color:var(--mid)">Sample spend ÷ leads</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-label">Content Type Comparison</div>
+    <div class="type-grid">
+      <div class="type-card">
+        <div class="type-card-name">Reels</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Reach</div><div class="type-metric-value">11,400</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Eng. Rate</div><div class="type-metric-value">4.8%</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Saves</div><div class="type-metric-value">82</div><div class="type-metric-sub">best format overall</div></div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Carousels</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Reach</div><div class="type-metric-value">5,900</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Eng. Rate</div><div class="type-metric-value">4.1%</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Saves</div><div class="type-metric-value">64</div><div class="type-metric-sub">good for brand work</div></div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Static Posts</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Reach</div><div class="type-metric-value">2,400</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Eng. Rate</div><div class="type-metric-value">1.8%</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Saves</div><div class="type-metric-value">14</div><div class="type-metric-sub">lowest performer</div></div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Stories</div>
+        <div class="type-metric"><div class="type-metric-label">Avg Views</div><div class="type-metric-value">1,840</div></div>
+        <div class="type-metric"><div class="type-metric-label">Avg Replies</div><div class="type-metric-value">12</div></div>
+        <div class="type-metric"><div class="type-metric-label">Link Taps</div><div class="type-metric-value">56</div><div class="type-metric-sub">useful for offers</div></div>
+      </div>
+    </div>
+
+    <div class="section-label">Best Content — by Metric</div>
     <table class="posts-table">
-      <thead><tr><th></th><th>Post</th><th>Type</th><th>Reach</th><th>Engagement</th><th>Leads</th></tr></thead>
+      <thead><tr><th>Metric</th><th>Best Post</th><th>Type</th><th>Value</th></tr></thead>
       <tbody>
         <tr>
-          <td><span class="badge badge-best">Best</span></td>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Reach</td>
           <td><div class="post-name">Logo Design Process — Timelapse</div><div class="post-date">3 Jun 2026</div></td>
-          <td style="font-size:8px;color:var(--mid)">Reel</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">12,800</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">5.4%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">9</td>
+          <td><span class="badge-type">Reel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">12,800</td>
         </tr>
         <tr>
-          <td><span class="badge badge-weak">Weakest</span></td>
-          <td><div class="post-name">Industry Event Attendance</div><div class="post-date">7 Jun 2026</div></td>
-          <td style="font-size:8px;color:var(--mid)">Static</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">1,840</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">0.9%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">0</td>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Saves</td>
+          <td><div class="post-name">Brand Colours Guide — How We Choose</div><div class="post-date">5 Jun 2026</div></td>
+          <td><span class="badge-type">Carousel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">124 saves</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Shares</td>
+          <td><div class="post-name">Logo Design Process — Timelapse</div><div class="post-date">3 Jun 2026</div></td>
+          <td><span class="badge-type">Reel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">72 shares</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px;color:var(--mid);font-weight:500">Best by Profile Visits</td>
+          <td><div class="post-name">Logo Design Process — Timelapse</div><div class="post-date">3 Jun 2026</div></td>
+          <td><span class="badge-type">Reel</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">310 visits</td>
         </tr>
       </tbody>
     </table>
+
+    <div class="section-label">Weakest Content — with Possible Reasons</div>
+    <table class="posts-table">
+      <thead><tr><th></th><th>Post</th><th>Type</th><th>Reach</th><th>Eng. Rate</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-weak">Weak</span></td>
+          <td>
+            <div class="post-name">Industry Event Attendance</div>
+            <div class="post-date">7 Jun 2026</div>
+            <div class="post-reason">Possible reason: Event documentation without a creative angle performs poorly. No clear benefit shown to the viewer. Audience does not engage with attendance announcements unless tied to a takeaway or insight.</div>
+          </td>
+          <td><span class="badge-type">Static</span></td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">1,840</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">0.9%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-label">Audience &amp; Engagement Insight</div>
+    <div class="insight-card">
+      <div class="insight-row">
+        <div class="insight-icon">📊</div>
+        <div class="insight-body">
+          <div class="insight-title">The issue on low-reach posts is format, not time of posting</div>
+          <div class="insight-desc">Static posts on this account average 2,400 reach vs 11,400 for Reels. Posting time has minimal effect compared to format choice. The algorithm distributes Reels to a broader non-follower audience. Switching event or culture content to short Reels (15–30 sec) would likely double reach without changing the content topic.</div>
+        </div>
+      </div>
+      <div class="insight-row">
+        <div class="insight-icon">💾</div>
+        <div class="insight-body">
+          <div class="insight-title">Saves are lower on this account vs Instagram 1 — indicates less educational content</div>
+          <div class="insight-desc">IG1 averages 142 saves/post on Reels; this account averages 82. Saves are driven by content people want to return to: tips, guides, before/after, how-to carousels. Adding 1–2 educational carousel posts per week (e.g. "5 things to check before finalising a logo") could significantly increase the save rate and push content into more feeds over time.</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -541,18 +783,23 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   ══════════════════════════════════════════ -->
   <div id="panel-tiktok" class="panel">
 
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Mock data only.</strong> All figures are sample/static data. Spend values are sample advertising spend — not actual amounts.</div>
+    </div>
+
     <div class="section-label">Account — @vistaunited</div>
 
     <div class="summary-strip">
       <div class="sum-card">
-        <div class="sum-label">Spend</div>
+        <div class="sum-label">Sample Ad Spend</div>
         <div class="sum-value">SAR 820</div>
-        <div class="sum-sub">2-week period</div>
+        <div class="sum-sub">Sample · 2-week period</div>
       </div>
       <div class="sum-card">
         <div class="sum-label">Video Views</div>
         <div class="sum-value">28,900</div>
-        <div class="sum-sub">Total views</div>
+        <div class="sum-sub">Total views this period</div>
         <div class="sum-delta delta-up">↑ 31%</div>
       </div>
       <div class="sum-card">
@@ -561,7 +808,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         <div class="sum-sub">Total impressions</div>
       </div>
       <div class="sum-card">
-        <div class="sum-label">Follower Growth</div>
+        <div class="sum-label">Follows Gained</div>
         <div class="sum-value">+64</div>
         <div class="sum-sub">New followers</div>
         <div class="sum-delta delta-up">↑ 18%</div>
@@ -577,10 +824,10 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
       </div>
       <div class="chart-wrap">
-        <div class="chart-title">Weekly Spend (SAR)</div>
+        <div class="chart-title">Weekly Sample Ad Spend (SAR)</div>
         <div class="bar-chart" id="tk-spend-chart"></div>
         <div class="chart-legend">
-          <div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Spend</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Sample Spend</div>
         </div>
       </div>
     </div>
@@ -589,34 +836,38 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
     <table class="metrics-table">
       <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td class="metric-name">Clicks</td><td><span class="val">1,640</span></td><td style="font-size:8px;color:var(--mid)">Profile + link-in-bio clicks</td></tr>
-        <tr><td class="metric-name">CTR</td><td><span class="val">3.98%</span></td><td style="font-size:8px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
-        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.50</span></td><td style="font-size:8px;color:var(--mid)">Cost per click</td></tr>
-        <tr><td class="metric-name">Leads / Messages</td><td><span class="val">19</span><span class="val-sub">DMs + link actions</span></td><td style="font-size:8px;color:var(--mid)">From ads + organic</td></tr>
-        <tr><td class="metric-name">Cost per Lead</td><td><span class="val">SAR 43.2</span></td><td style="font-size:8px;color:var(--mid)">Spend ÷ leads</td></tr>
-        <tr><td class="metric-name">Engagement Rate</td><td><span class="val">5.1%</span></td><td style="font-size:8px;color:var(--mid)">(Likes + Comments + Shares) ÷ Views</td></tr>
+        <tr><td class="metric-name">Clicks</td><td><span class="val">1,640</span></td><td style="font-size:13px;color:var(--mid)">Profile + link-in-bio clicks</td></tr>
+        <tr><td class="metric-name">CTR</td><td><span class="val">3.98%</span></td><td style="font-size:13px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
+        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.50</span></td><td style="font-size:13px;color:var(--mid)">Sample cost per click</td></tr>
+        <tr><td class="metric-name">Leads / Messages</td><td><span class="val">19</span><span class="val-sub">DMs + link actions</span></td><td style="font-size:13px;color:var(--mid)">From ads + organic</td></tr>
+        <tr><td class="metric-name">Sample Cost per Lead</td><td><span class="val">SAR 43.2</span></td><td style="font-size:13px;color:var(--mid)">Sample spend ÷ leads</td></tr>
+        <tr><td class="metric-name">Engagement Rate</td><td><span class="val">5.1%</span></td><td style="font-size:13px;color:var(--mid)">(Likes + Comments + Shares) ÷ Views</td></tr>
       </tbody>
     </table>
 
-    <div class="section-label">Top & Bottom Videos</div>
+    <div class="section-label">Top &amp; Bottom Videos</div>
     <table class="posts-table">
       <thead><tr><th></th><th>Video</th><th>Duration</th><th>Views</th><th>Engagement</th><th>Leads</th></tr></thead>
       <tbody>
         <tr>
           <td><span class="badge badge-best">Best</span></td>
           <td><div class="post-name">Packaging Design Reveal — Client Project</div><div class="post-date">1 Jun 2026</div></td>
-          <td style="font-size:8px;color:var(--mid)">0:32</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">11,200</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">7.2%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">8</td>
+          <td style="font-size:13px;color:var(--mid)">0:32</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">11,200</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">7.2%</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">8</td>
         </tr>
         <tr>
           <td><span class="badge badge-weak">Weakest</span></td>
-          <td><div class="post-name">Office Tour — Behind the Scenes</div><div class="post-date">8 Jun 2026</div></td>
-          <td style="font-size:8px;color:var(--mid)">1:04</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">2,400</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">1.4%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">1</td>
+          <td>
+            <div class="post-name">Office Tour — Behind the Scenes</div>
+            <div class="post-date">8 Jun 2026</div>
+            <div class="post-reason">Possible reason: Long-form (over 60 sec), no hook in first 3 seconds, no CTA overlay. Office tours perform well only with strong personality or humour — plain tours are ignored on TikTok.</div>
+          </td>
+          <td style="font-size:13px;color:var(--mid)">1:04</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">2,400</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">1.4%</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">1</td>
         </tr>
       </tbody>
     </table>
@@ -627,13 +878,18 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   ══════════════════════════════════════════ -->
   <div id="panel-google" class="panel">
 
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Mock data only.</strong> All figures are sample/static data. Spend values are sample advertising spend — not actual amounts.</div>
+    </div>
+
     <div class="section-label">Campaign — vistaunited.co</div>
 
     <div class="summary-strip">
       <div class="sum-card">
-        <div class="sum-label">Spend</div>
+        <div class="sum-label">Sample Ad Spend</div>
         <div class="sum-value">SAR 1,000</div>
-        <div class="sum-sub">2-week period</div>
+        <div class="sum-sub">Sample · 2-week period</div>
       </div>
       <div class="sum-card">
         <div class="sum-label">Impressions</div>
@@ -664,10 +920,10 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         </div>
       </div>
       <div class="chart-wrap">
-        <div class="chart-title">Weekly Spend (SAR)</div>
+        <div class="chart-title">Weekly Sample Ad Spend (SAR)</div>
         <div class="bar-chart" id="ga-spend-chart"></div>
         <div class="chart-legend">
-          <div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Spend</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Sample Spend</div>
         </div>
       </div>
     </div>
@@ -676,11 +932,11 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
     <table class="metrics-table">
       <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
       <tbody>
-        <tr><td class="metric-name">CTR</td><td><span class="val">26.3%</span></td><td style="font-size:8px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
-        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.078</span></td><td style="font-size:8px;color:var(--mid)">Cost per click</td></tr>
-        <tr><td class="metric-name">Cost per Lead</td><td><span class="val">SAR 66.7</span></td><td style="font-size:8px;color:var(--mid)">Spend ÷ form fills</td></tr>
-        <tr><td class="metric-name">Search Impr. Share</td><td><span class="val">~38%</span></td><td style="font-size:8px;color:var(--mid)">Sample estimate — connect Search Console for live data</td></tr>
-        <tr><td class="metric-name">Avg. Position</td><td><span class="val">2.4</span></td><td style="font-size:8px;color:var(--mid)">Average ad position in results</td></tr>
+        <tr><td class="metric-name">CTR</td><td><span class="val">26.3%</span></td><td style="font-size:13px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
+        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.078</span></td><td style="font-size:13px;color:var(--mid)">Sample cost per click</td></tr>
+        <tr><td class="metric-name">Sample Cost per Lead</td><td><span class="val">SAR 66.7</span></td><td style="font-size:13px;color:var(--mid)">Sample spend ÷ form fills</td></tr>
+        <tr><td class="metric-name">Search Impr. Share</td><td><span class="val">~38%</span></td><td style="font-size:13px;color:var(--mid)">Sample estimate — connect Search Console for live data</td></tr>
+        <tr><td class="metric-name">Avg. Position</td><td><span class="val">2.4</span></td><td style="font-size:13px;color:var(--mid)">Average ad position in results</td></tr>
       </tbody>
     </table>
 
@@ -691,18 +947,21 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         <tr>
           <td><span class="badge badge-best">Best</span></td>
           <td><div class="post-name">brand identity design jeddah</div></td>
-          <td style="font-size:8px;color:var(--mid)">Phrase</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">3,800</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">31%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">6</td>
+          <td style="font-size:13px;color:var(--mid)">Phrase</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">3,800</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">31%</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">6</td>
         </tr>
         <tr>
           <td><span class="badge badge-weak">Weakest</span></td>
-          <td><div class="post-name">graphic design</div></td>
-          <td style="font-size:8px;color:var(--mid)">Broad</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">920</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">9%</td>
-          <td style="font-family:'Cormorant Garamond',serif;font-size:18px">0</td>
+          <td>
+            <div class="post-name">graphic design</div>
+            <div class="post-reason">Zero conversions. Too broad — attracts students and hobbyists, not buyers. Pause or narrow to phrase/exact match with a location modifier.</div>
+          </td>
+          <td style="font-size:13px;color:var(--mid)">Broad</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">920</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">9%</td>
+          <td style="font-family:'Cormorant Garamond',serif;font-size:20px">0</td>
         </tr>
       </tbody>
     </table>
@@ -715,7 +974,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
     <div class="placeholder-panel">
       <div class="placeholder-icon">💼</div>
       <div class="placeholder-title">LinkedIn tracking coming soon</div>
-      <div class="placeholder-desc">LinkedIn Ads and organic analytics will appear here once the account is connected. Metrics will follow the same structure as Instagram and TikTok tabs.</div>
+      <div class="placeholder-desc">LinkedIn Ads and organic analytics will appear here once the account is connected. Metrics will follow the same structure as the Instagram tabs.</div>
     </div>
   </div>
 
@@ -724,26 +983,33 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
   ══════════════════════════════════════════ -->
   <div id="panel-aireport" class="panel">
 
-    <div class="section-label">Weekly Recommendations — Sample</div>
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Recommendations are examples based on mock data.</strong> These insights are written as if the sample data were real, to demonstrate what the AI Report section will look like. Once live data is connected, this section will reflect actual performance analysis for the period.</div>
+    </div>
+
+    <div class="section-label">Weekly Performance Analysis — Example</div>
     <div class="reco-block">
       <div class="reco-header">
         <div class="reco-icon">◈</div>
         <div>
           <div class="reco-title">Performance Summary — Week of 2 Jun 2026</div>
-          <div class="reco-sub">Sample recommendations · AI analysis will populate this section once live data is connected</div>
+          <div class="reco-sub">Cross-channel analysis across Instagram 1, Instagram 2, TikTok, and Google Ads · All figures are sample mock data</div>
         </div>
       </div>
 
       <div class="reco-items">
+
         <div class="reco-item">
           <div class="reco-num">01</div>
           <div class="reco-body">
-            <div class="reco-body-title">Increase budget allocation to TikTok — lowest CPL this period</div>
-            <div class="reco-body-desc">TikTok delivered the lowest cost per lead (SAR 43) and the highest engagement rate (5.1%) across all channels. Consider shifting 15–20% of the Instagram 2 budget to TikTok to improve blended efficiency. Monitor for 2 weeks before a permanent reallocation decision.</div>
+            <div class="reco-body-title">Why engagement is low on certain posts — and what to fix</div>
+            <div class="reco-body-desc">Across both Instagram accounts, static image posts average 1.5–2.1% engagement, while Reels average 4.8–5.8%. The issue is not posting time, hashtags, or frequency — it is content format. Instagram's algorithm gives Reels 3–4× more distribution to non-followers. Posts with no question or CTA in the caption average 60% fewer comments than those that do. Low saves on IG2 specifically suggest the content is not creating a "save for later" moment — educational posts, process breakdowns, and client result reveals are the strongest drivers of saves.</div>
             <div class="reco-channel-tags">
-              <div class="reco-tag">TikTok</div>
+              <div class="reco-tag">Instagram 1</div>
               <div class="reco-tag">Instagram 2</div>
-              <div class="reco-tag">Budget</div>
+              <div class="reco-tag">Engagement</div>
+              <div class="reco-tag">Content Format</div>
             </div>
           </div>
         </div>
@@ -751,12 +1017,13 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         <div class="reco-item">
           <div class="reco-num">02</div>
           <div class="reco-body">
-            <div class="reco-body-title">Replicate "Before & After" Reel format — highest reach on Instagram 1</div>
-            <div class="reco-body-desc">The Brand Identity Showcase Reel achieved 18,400 reach and 6.8% engagement — 3.5× the account average. The Before & After visual format is a proven performer. Plan at least two more posts in this format in the next 30 days across both Instagram accounts.</div>
+            <div class="reco-body-title">Why the Before &amp; After Reel attracted more profile visits — and how to replicate it</div>
+            <div class="reco-body-desc">The "Brand Identity Showcase — Before &amp; After" Reel on Instagram 1 generated 420 profile visits — 3× the account average. Transformation content works because it demonstrates value visually in under 30 seconds, creates immediate relevance for potential clients who recognise their own problem, and drives saves which extend the post's lifespan in the algorithm. The key elements that made it work: (1) the hook was the visual contrast in the first frame, not text, (2) it showed a real client result, not a generic example, (3) it was under 35 seconds. Replicate this format with 2–3 more client results over the next 4 weeks.</div>
             <div class="reco-channel-tags">
               <div class="reco-tag">Instagram 1</div>
-              <div class="reco-tag">Instagram 2</div>
-              <div class="reco-tag">Content</div>
+              <div class="reco-tag">Reels</div>
+              <div class="reco-tag">Profile Visits</div>
+              <div class="reco-tag">Content Strategy</div>
             </div>
           </div>
         </div>
@@ -764,11 +1031,13 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         <div class="reco-item">
           <div class="reco-num">03</div>
           <div class="reco-body">
-            <div class="reco-body-title">Pause or narrow the "graphic design" broad-match keyword on Google Ads</div>
-            <div class="reco-body-desc">The "graphic design" broad-match keyword has 920 clicks, 9% CTR, and zero conversions this period. It is generating traffic but no leads, suggesting a mismatch between search intent and the landing page offer. Consider switching to phrase match with a more specific term, or pausing to reallocate budget to proven keywords.</div>
+            <div class="reco-body-title">Content type performance this period — Reels &gt; Carousels &gt; Static &gt; Stories</div>
+            <div class="reco-body-desc">Reels are the top-performing format on both Instagram accounts by every metric: reach, engagement rate, saves, profile visits, and leads. Carousels perform well for saves and are effective for portfolio and educational content. Static posts underperform consistently — the main issue is limited algorithm distribution, not content quality. Stories generate link taps and replies but limited new discovery. The clearest action is reducing static posts to 1 per week maximum and replacing them with short Reels (under 35 seconds) or educational carousels.</div>
             <div class="reco-channel-tags">
-              <div class="reco-tag">Google Ads</div>
-              <div class="reco-tag">Keywords</div>
+              <div class="reco-tag">Instagram 1</div>
+              <div class="reco-tag">Instagram 2</div>
+              <div class="reco-tag">TikTok</div>
+              <div class="reco-tag">Content Mix</div>
             </div>
           </div>
         </div>
@@ -776,19 +1045,48 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         <div class="reco-item">
           <div class="reco-num">04</div>
           <div class="reco-body">
-            <div class="reco-body-title">Avoid company culture / behind-the-scenes posts in paid amplification</div>
-            <div class="reco-body-desc">Culture and office posts are the weakest performers across Instagram 1, Instagram 2, and TikTok — consistently low reach, engagement below 1.5%, and zero leads. Reserve these for organic posting only. Paid budget should be directed at project showcases, client results, and process reels.</div>
+            <div class="reco-body-title">The Google Ads conversion problem is search intent mismatch, not budget</div>
+            <div class="reco-body-desc">The "graphic design" broad-match keyword has 920 clicks and zero conversions. This is a classic intent mismatch: people searching "graphic design" are looking for tutorials, tools, and inspiration — not to hire a studio. The click-through rate (9%) is also significantly lower than the best keyword (31%), confirming the traffic is low-quality. Pausing this keyword and reallocating its sample budget to "brand identity design jeddah" or similar phrase-match terms would likely double conversions without increasing total spend.</div>
             <div class="reco-channel-tags">
-              <div class="reco-tag">Instagram 1</div>
-              <div class="reco-tag">Instagram 2</div>
-              <div class="reco-tag">TikTok</div>
-              <div class="reco-tag">Content Strategy</div>
+              <div class="reco-tag">Google Ads</div>
+              <div class="reco-tag">Keywords</div>
+              <div class="reco-tag">Conversion</div>
             </div>
           </div>
         </div>
+
+        <div class="reco-item">
+          <div class="reco-num">05</div>
+          <div class="reco-body">
+            <div class="reco-body-title">TikTok has the lowest sample CPL — consider shifting budget from Instagram 2</div>
+            <div class="reco-body-desc">TikTok delivered a sample cost per lead of SAR 43, compared to SAR 55 on Instagram 2 and SAR 47 on Instagram 1. Engagement rate (5.1%) is also the highest across all paid channels. The short-video format on TikTok rewards the same content types that work on Instagram Reels, so existing content can be cross-posted with minimal adaptation. Shifting 15–20% of the Instagram 2 ad budget to TikTok for 2 weeks and comparing results would provide a meaningful real-data comparison.</div>
+            <div class="reco-channel-tags">
+              <div class="reco-tag">TikTok</div>
+              <div class="reco-tag">Instagram 2</div>
+              <div class="reco-tag">Budget Allocation</div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <div class="reco-placeholder-note">These recommendations are generated from sample/mock data for demonstration purposes. Once real channel data is connected, this section will reflect actual weekly performance analysis.</div>
+      <div class="section-label" style="margin-top:28px">3 Practical Next Actions — This Week</div>
+      <div class="action-list">
+        <div class="action-item">
+          <div class="action-num">1</div>
+          <div class="action-text"><strong>Post 1 Before &amp; After Reel on each Instagram account</strong> using an existing client project. Keep it under 35 seconds. No text-heavy intro — open with the visual contrast. Add one question in the caption.</div>
+        </div>
+        <div class="action-item">
+          <div class="action-num">2</div>
+          <div class="action-text"><strong>Pause the "graphic design" broad-match keyword on Google Ads</strong> and move its sample weekly budget to the best-performing phrase-match keyword. Review after 7 days.</div>
+        </div>
+        <div class="action-item">
+          <div class="action-num">3</div>
+          <div class="action-text"><strong>Add an educational carousel to Instagram 2</strong> — e.g. "5 signs your brand identity needs an update." Carousels with clear educational value drive saves, which extend post reach over 2–4 weeks beyond the initial post date.</div>
+        </div>
+      </div>
+
+      <div class="reco-mock-note">⚠ These recommendations are written as examples based on mock/sample data to demonstrate the AI Report format. Once live Instagram, TikTok, and Google Ads data is connected, this section will reflect the actual performance of your accounts for the current period.</div>
     </div>
   </div>
 
@@ -798,16 +1096,16 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 // ── Mock data ──────────────────────────────────────────────────────────────
 const MOCK = {
   ig1: {
-    reach:  [11400, 14200, 13600, 12900],
-    spend:  [440,   480,   430,   450]
+    reach:        [11400, 14200, 13600, 12900],
+    interactions: [820,   1040,  960,   928]
   },
   ig2: {
-    reach:  [7800,  9200,  8700,  8900],
-    spend:  [290,   320,   295,   295]
+    reach:        [7800,  9200,  8700,  8900],
+    interactions: [510,   640,   580,   516]
   },
   tiktok: {
-    views:  [5600,  8400,  7200,  7700],
-    spend:  [190,   220,   200,   210]
+    views: [5600,  8400,  7200,  7700],
+    spend: [190,   220,   200,   210]
   },
   google: {
     clicks: [2800,  3400,  3100,  3500],
@@ -820,10 +1118,9 @@ const WEEKS = ['W1', 'W2', 'W3', 'W4'];
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  const tabs = document.querySelectorAll('.tab');
-  const panels = document.querySelectorAll('.panel');
   const order = ['overview', 'ig1', 'ig2', 'tiktok', 'google', 'linkedin', 'aireport'];
   const idx = order.indexOf(id);
+  const tabs = document.querySelectorAll('.tab');
   if (idx >= 0 && tabs[idx]) tabs[idx].classList.add('active');
   const panel = document.getElementById('panel-' + id);
   if (panel) panel.classList.add('active');
@@ -847,14 +1144,14 @@ function renderBarChart(containerId, data, color, labelFn) {
 
 // ── Init charts ────────────────────────────────────────────────────────────
 function initCharts() {
-  renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,    '#E1306C');
-  renderBarChart('ig1-spend-chart',  MOCK.ig1.spend,    '#D8D5CF', v => 'SAR ' + v);
-  renderBarChart('ig2-reach-chart',  MOCK.ig2.reach,    '#833AB4');
-  renderBarChart('ig2-spend-chart',  MOCK.ig2.spend,    '#D8D5CF', v => 'SAR ' + v);
-  renderBarChart('tk-views-chart',   MOCK.tiktok.views,  '#555');
-  renderBarChart('tk-spend-chart',   MOCK.tiktok.spend,  '#D8D5CF', v => 'SAR ' + v);
-  renderBarChart('ga-clicks-chart',  MOCK.google.clicks, '#4285F4');
-  renderBarChart('ga-spend-chart',   MOCK.google.spend,  '#D8D5CF', v => 'SAR ' + v);
+  renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,        '#E1306C');
+  renderBarChart('ig1-inter-chart',  MOCK.ig1.interactions, '#E1306C66');
+  renderBarChart('ig2-reach-chart',  MOCK.ig2.reach,        '#833AB4');
+  renderBarChart('ig2-inter-chart',  MOCK.ig2.interactions, '#833AB466');
+  renderBarChart('tk-views-chart',   MOCK.tiktok.views,     '#555');
+  renderBarChart('tk-spend-chart',   MOCK.tiktok.spend,     '#D8D5CF', v => 'SAR ' + v);
+  renderBarChart('ga-clicks-chart',  MOCK.google.clicks,    '#4285F4');
+  renderBarChart('ga-spend-chart',   MOCK.google.spend,     '#D8D5CF', v => 'SAR ' + v);
 }
 
 initCharts();

@@ -2,6 +2,29 @@
 
 ---
 
+## [2026-06-12] — Marketing Intelligence: Readability, Mock-Data Disclaimers, Organic Instagram Metrics
+
+### marketing-dashboard.html
+
+Improvement pass on the V1 Marketing Intelligence dashboard. No new files. No APIs, OAuth, credentials, AI API calls, or ad write actions introduced.
+
+**Changes:**
+- Improved overall readability (font sizes, line-height, secondary text contrast)
+- Topbar badge changed from "Sample Data" → "Mock Data" for clarity
+- Added amber mock-data disclaimer banners to every panel (Overview, IG1, IG2, TikTok, Google Ads, AI Report), clearly stating all figures are sample/static and spend values are illustrative
+- **Instagram 1 & 2 — richer organic metrics added:** Interactions total, Likes, Comments, Shares, Saves, Engagement Rate, Interaction Rate, Profile Visits, Website Clicks, WhatsApp/Message Clicks, Follows Gained, Unfollows
+- **Content type comparison grids:** Reels vs Carousels vs Static Posts vs Stories — average reach, engagement rate, and saves per format
+- Best content tables by: Reach, Saves, Shares, Profile Visits
+- Weakest content section with possible reason per post
+- Audience & engagement insight blocks (why interaction is low, why certain posts drive profile visits, CTA gap analysis)
+- Weekly interaction bar charts added alongside reach charts on both IG tabs
+- `const MOCK` object expanded with interaction arrays for IG1 and IG2
+- **AI Report rewritten:** 5 analysis items (engagement issue diagnosis, Before&After reel explanation, content type ranking, Google keyword intent mismatch, TikTok CPL opportunity) + 3 practical next actions + mock-data disclaimer at top and bottom
+
+**Files NOT changed:** `proxy.py`, `config.json`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+---
+
 ## [2026-06-12] — Marketing Intelligence Dashboard V1 (Static)
 
 ### marketing-dashboard.html (new) · index.html
