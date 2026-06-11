@@ -20,10 +20,10 @@ These rules apply to every session on every Vista Platform module. Read before m
 | Never push `config.json` or secrets | `config.json` is git-ignored; never force-add, never echo its contents |
 | Never force-push | Do not use `--force` or `--force-with-lease` unless the user explicitly approves with those words |
 | Never push broken experimental work | Only push to a backup/feature branch if the user asks for it by name |
-| Push only the active approved branch | Default push target is the approved branch for that module — do not push other branches without explicit instruction |
-| `stable-reviewed-history` is the approved branch | This is the Social Media / Notion dashboard approved branch |
-| `stable-reviewed-history-v1` is the restore tag | Points to commit `2d0faec` — the approved stable snapshot |
-| `feature/financial-dashboard` must not be pushed | Do not push this branch unless the user explicitly approves |
+| Push only `stable-reviewed-history` | This is the only active branch — all live modules are on it. Do not push other branches without explicit instruction. |
+| `stable-reviewed-history-v1` is a restore tag | Points to `2d0faec` — original Social Dashboard stable snapshot. Do not move or recreate. |
+| `stable-reviewed-history-v2-financial-dashboard` is a milestone tag | Points to `01e288c` — Financial Dashboard merge milestone. Do not move or recreate. |
+| Do not create or move tags | Never run `git tag -f` or push tags without explicit user approval |
 
 ### localStorage — reviewed task history
 
@@ -1123,8 +1123,9 @@ After upload, frontend clears `purchasingSearch` and the search input value, the
 
 ## Branch and Status
 
-Branch: `feature/financial-dashboard` — not yet merged to `stable-reviewed-history`.
-Latest commit: `0bc03db` — Add Financial Dashboard card to homepage.
+Branch: `stable-reviewed-history` — Financial Dashboard is merged and live on this branch.
+The `feature/financial-dashboard` branch is a historical artifact — do not treat it as active.
+Latest stable commit: `7c426ec` — Fix handoff stable state.
 
 ---
 

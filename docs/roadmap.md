@@ -11,9 +11,10 @@ Every approved change must follow this order:
 4. Push to GitHub only after user approval
 
 **Branch assignments:**
-- `stable-reviewed-history` — approved Social Media / Notion dashboard branch (push target)
-- `stable-reviewed-history-v1` — restore tag, points to `2d0faec`
-- `feature/financial-dashboard` — do not push unless user explicitly approves
+- `stable-reviewed-history` — the only active branch; all live modules are on it (push target)
+- `stable-reviewed-history-v1` — restore tag, points to `2d0faec` (original Social Dashboard snapshot). Do not move.
+- `stable-reviewed-history-v2-financial-dashboard` — milestone tag, points to `01e288c` (Financial Dashboard merge). Do not move.
+- `feature/financial-dashboard` — historical artifact only; Financial Dashboard is already merged into `stable-reviewed-history`
 
 **Never push:** `config.json`, force-push, or broken experimental work without explicit user instruction.
 
@@ -26,7 +27,7 @@ Every approved change must follow this order:
 | Vista Homepage | `index.html` | ✅ Live |
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A complete + detail unification |
-| Financial Dashboard | `financial-dashboard.html` | 🌿 Feature branch ready — live on `feature/financial-dashboard`, not yet merged to `stable-reviewed-history` |
+| Financial Dashboard | `financial-dashboard.html` | ✅ Live — merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
 | Local Proxy | `proxy.py` | ✅ Live |
 | Config template | `config.example.json` | ✅ Done |
@@ -34,10 +35,9 @@ Every approved change must follow this order:
 
 ---
 
-## Financial Dashboard — Feature Branch Status
+## Financial Dashboard — Live on stable-reviewed-history ✅
 
-**Branch:** `feature/financial-dashboard`
-**Status:** Not yet merged to `stable-reviewed-history`. Merge target to be decided after final review.
+**Status:** Merged and live on `stable-reviewed-history`. The `feature/financial-dashboard` branch is a historical artifact — do not treat it as the active branch or push target.
 
 ### Commits (oldest → newest)
 
@@ -61,11 +61,6 @@ Every approved change must follow this order:
 - Sales / purchases / expenses panels with ex-VAT and VAT breakdown
 - Personal Transfers section (7 records excluded from business totals, shown separately)
 - Homepage card updated to Live on `index.html`
-
-### Not yet done
-
-- Merge to `stable-reviewed-history` (pending final review and docs approval)
-- Docs update (in progress)
 
 ---
 
