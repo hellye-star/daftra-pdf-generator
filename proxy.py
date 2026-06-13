@@ -85,6 +85,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/purchasing-invoices/'):
             self._handle_purchasing_get()
+        elif self.path.startswith('/api/setup/'):
+            self._handle_setup_get()
         elif self.path.startswith('/api/ga4/'):
             self._handle_ga4_get()
         elif self.path.startswith('/daftra/'):
@@ -101,6 +103,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._combine_purchasing()
         elif self.path.startswith('/purchasing-invoices/upload'):
             self._upload_purchasing()
+        elif self.path.startswith('/api/setup/'):
+            self._handle_setup_post()
         elif self.path.startswith('/api/ga4/'):
             self._json_error(405, 'Method not allowed. GA4 API proxy is read-only (GET only).')
         elif self.path.startswith('/daftra/'):
@@ -758,6 +762,262 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(result)
 
+    # ── GA4 Setup endpoints (localhost-only, read-write config) ─────────────
+
+    _VISTA_KEYS_DIR   = os.path.join(os.path.expanduser('~'), '.vista-platform', 'keys')
+    _GA4_SA_FILENAME  = 'ga4-service-account.json'
+
+    def _require_localhost(self):
+        """Block non-localhost clients. Returns True if allowed, sends 403 and returns False otherwise."""
+        if self.client_address[0] != '127.0.0.1':
+            self._json_error(403, 'Setup endpoints are only accessible from localhost.')
+            return False
+        return True
+
+    def _handle_setup_get(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/setup/ga4/status':
+            self._ga4_setup_status()
+        else:
+            self._json_error(404, 'Setup endpoint not found.')
+
+    def _handle_setup_post(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/setup/ga4/save':
+            self._ga4_setup_save()
+        elif parsed.path == '/api/setup/ga4/test':
+            self._ga4_setup_test()
+        else:
+            self._json_error(404, 'Setup endpoint not found.')
+
+    def _ga4_setup_status(self):
+        """Return masked GA4 config state — never returns credential values."""
+        pid_ok   = _token_ready(_ga4_property_id)
+        creds_ok = bool(_ga4_creds_path) and not _ga4_creds_path.startswith('REPLACE_')
+        file_ok  = creds_ok and os.path.isfile(_ga4_creds_path)
+        try:
+            import google.oauth2.service_account  # noqa: F401
+            gauth_ok = True
+        except ImportError:
+            gauth_ok = False
+
+        configured = pid_ok and file_ok and gauth_ok
+
+        # Mask property ID — show last 4 digits only
+        masked = ''
+        if pid_ok:
+            masked = ('****' + _ga4_property_id[-4:]) if len(_ga4_property_id) >= 4 else '****'
+
+        msgs = []
+        if not pid_ok:
+            msgs.append('GA4 property ID is not configured.')
+        if not creds_ok:
+            msgs.append('GA4 credentials path is not configured.')
+        elif not file_ok:
+            msgs.append('GA4 credentials file is missing or inaccessible.')
+        if not gauth_ok:
+            msgs.append('google-auth is not installed. Run: pip install google-auth requests')
+
+        body = json.dumps({
+            'configured':          configured,
+            'property_id_set':     pid_ok,
+            'property_id_masked':  masked,
+            'creds_file_exists':   file_ok,
+            'gauth_installed':     gauth_ok,
+            'message':             'Ready.' if configured else (' '.join(msgs) if msgs else 'Not configured.'),
+        }).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _ga4_setup_save(self):
+        """Validate, save SA JSON outside repo, update config.json atomically."""
+        global _ga4_property_id, _ga4_creds_path   # declared first — used later in this function
+
+        if not self._require_localhost():
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length > 64 * 1024:
+            self._json_error(413, 'Request body too large.')
+            return
+        raw = self.rfile.read(content_length)
+
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            self._json_error(400, 'Invalid JSON body.')
+            return
+
+        property_id = str(payload.get('property_id', '')).strip()
+        sa_json_raw = payload.get('service_account_json', '')
+
+        # ── Validate property ID ─────────────────────────────────────────────
+        if not property_id:
+            self._json_error(400, 'GA4 property ID is required.')
+            return
+        if not property_id.isdigit():
+            self._json_error(400, 'GA4 property ID must be numeric (digits only, no dashes or prefixes).')
+            return
+
+        # ── Validate service account JSON (if provided) ──────────────────────
+        sa_dict = None
+        if sa_json_raw and sa_json_raw.strip():
+            try:
+                sa_dict = json.loads(sa_json_raw) if isinstance(sa_json_raw, str) else sa_json_raw
+            except json.JSONDecodeError:
+                self._json_error(400, 'Service account JSON is not valid JSON.')
+                return
+
+            if sa_dict.get('type') != 'service_account':
+                self._json_error(400, "Invalid service account file — 'type' must be 'service_account'.")
+                return
+            for field in ('project_id', 'private_key', 'private_key_id', 'client_email', 'token_uri'):
+                if not sa_dict.get(field):
+                    self._json_error(400, f"Invalid service account file — required field '{field}' is missing.")
+                    return
+        else:
+            # No SA JSON provided — only allowed if a key file already exists
+            if not (_ga4_creds_path and os.path.isfile(_ga4_creds_path)):
+                self._json_error(400, 'Service account JSON is required — no existing credentials found.')
+                return
+
+        # ── All validation passed — write files ──────────────────────────────
+        sa_path = os.path.join(self._VISTA_KEYS_DIR, self._GA4_SA_FILENAME)
+
+        if sa_dict is not None:
+            try:
+                os.makedirs(self._VISTA_KEYS_DIR, exist_ok=True)
+            except OSError:
+                self._json_error(500, 'Could not create keys directory.')
+                return
+            sa_tmp = sa_path + '.tmp'
+            try:
+                with open(sa_tmp, 'w', encoding='utf-8') as f:
+                    json.dump(sa_dict, f, indent=2)
+                os.replace(sa_tmp, sa_path)
+            except OSError:
+                self._json_error(500, 'Could not save service account file.')
+                return
+        else:
+            # Keep existing key file path
+            sa_path = _ga4_creds_path
+
+        # ── Update config.json atomically ────────────────────────────────────
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+            cfg.setdefault('marketing_apis', {})
+            cfg['marketing_apis'].setdefault('google', {})
+            cfg['marketing_apis']['google'].setdefault('ga4', {})
+            cfg['marketing_apis']['google']['ga4']['property_id']         = property_id
+            cfg['marketing_apis']['google']['ga4']['credentials_json_path'] = sa_path
+            cfg_tmp = CONFIG_PATH + '.tmp'
+            with open(cfg_tmp, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+            os.replace(cfg_tmp, CONFIG_PATH)
+        except (OSError, json.JSONDecodeError):
+            self._json_error(500,
+                'Service account file saved but config.json could not be updated. '
+                'Check file permissions.')
+            return
+
+        # ── Reload in-memory config vars (no restart needed) ─────────────────
+        _ga4_property_id = property_id
+        _ga4_creds_path  = sa_path
+
+        print('  [setup]  GA4 configured — property ID and credentials updated.')
+
+        body = json.dumps({'ok': True, 'message': 'GA4 configuration saved successfully.'}).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _ga4_setup_test(self):
+        """Authenticate with GA4 and run a minimal 1-row report to confirm access."""
+        if not self._require_localhost():
+            return
+
+        # Consume (and discard) any request body
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length:
+            self.rfile.read(min(content_length, 1024))
+
+        try:
+            from google.oauth2 import service_account as _sa
+            import google.auth.transport.requests as _ga_transport
+        except ImportError:
+            self._json_error(503,
+                'google-auth is not installed. Run: pip install google-auth requests then restart proxy.py.')
+            return
+
+        if not _token_ready(_ga4_property_id):
+            self._json_error(503, 'GA4 property ID is not configured. Complete the setup first.')
+            return
+        if not _ga4_creds_path or not os.path.isfile(_ga4_creds_path):
+            self._json_error(503, 'GA4 credentials file not found. Complete the setup first.')
+            return
+
+        try:
+            SCOPES = ['https://www.googleapis.com/auth/analytics.readonly']
+            creds  = _sa.Credentials.from_service_account_file(_ga4_creds_path, scopes=SCOPES)
+            creds.refresh(_ga_transport.Request())
+            access_token = creds.token
+        except Exception:
+            self._json_error(503,
+                'Authentication failed. Check that the service account JSON file is valid.')
+            return
+
+        test_body = json.dumps({
+            'dateRanges': [{'startDate': '7daysAgo', 'endDate': 'today'}],
+            'dimensions': [{'name': 'pagePath'}],
+            'metrics':    [{'name': 'sessions'}],
+            'limit': 1,
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            f'https://analyticsdata.googleapis.com/v1beta/properties/{_ga4_property_id}:runReport',
+            data=test_body, method='POST',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type':  'application/json',
+            })
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data      = json.loads(resp.read())
+                row_count = data.get('rowCount', 0)
+                body = json.dumps({
+                    'ok':      True,
+                    'message': f'Connection successful — GA4 property is accessible. {row_count} page(s) found in the last 7 days.',
+                }).encode('utf-8')
+                self.send_response(200)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(body)
+        except urllib.error.HTTPError as e:
+            try:
+                err  = json.loads(e.read().decode('utf-8', errors='replace'))
+                code = err.get('error', {}).get('code', e.code)
+            except Exception:
+                code = e.code
+            if code in (401, 403):
+                self._json_error(502,
+                    'Service account does not have access to this GA4 property. '
+                    'Grant Viewer role in GA4 Admin > Property Access Management.')
+            else:
+                self._json_error(502, f'GA4 API returned error {code}.')
+        except urllib.error.URLError:
+            self._json_error(502, 'Could not reach GA4 API. Check internet connection.')
+        except Exception:
+            self._json_error(500, 'Unexpected error during connection test.')
+
     # ── Notion proxy ─────────────────────────────────────────────────────────
 
     def _notion_route(self):
@@ -838,6 +1098,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [purch]  {self.command} {self.path}  ->  {fmt % args}')
         elif '/api/ga4/' in self.path:
             print(f'  [ga4]    {self.command} {self.path}  ->  {fmt % args}')
+        elif '/api/setup/' in self.path:
+            print(f'  [setup]  {self.command} {self.path}  ->  {fmt % args}')
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────

@@ -2,6 +2,27 @@
 
 ---
 
+## [2026-06-13] — Marketing Intelligence: GA4 Setup Center
+
+### proxy.py + marketing-dashboard.html
+
+Added a local-only GA4 Setup Center so credentials can be configured through the browser UI without ever storing secrets client-side. All credential handling is server-side only.
+
+**What was added:**
+
+- **`GET /api/setup/ga4/status`** — returns masked configuration state: `{configured, property_id_set, property_id_masked (****1234), creds_file_exists, gauth_installed, message}`; never returns credential values, file paths, or tokens
+- **`POST /api/setup/ga4/save`** — accepts `{property_id, service_account_json}` from the browser; validates the SA JSON (5 required fields, correct `type`), saves the key file atomically to `%USERPROFILE%\.vista-platform\keys\ga4-service-account.json` (outside the git repo), and updates `config.json` atomically via `os.replace()`; reloads in-memory config vars without proxy restart; returns only `{ok, message}` — no path, no secret echoed back; SA JSON textarea is cleared by the browser immediately after successful save
+- **`POST /api/setup/ga4/test`** — authenticates with the saved service account and runs a minimal 1-row GA4 report to confirm property access; returns `{ok, message}` with safe error strings only
+- **Setup endpoints are localhost-only** — each POST handler checks `client_address[0] == '127.0.0.1'` and returns 403 otherwise; proxy bind host remains `127.0.0.1` unchanged
+- **GA4 Setup block in Data Source tab** — Property ID input, Service Account JSON textarea, Save Locally button, Test Connection button, status badge cycling Not Configured → Configured → (Connected after test); SA JSON textarea is always empty on load and cleared after save; `ga4SetupCheckStatus()` runs at boot to populate the badge silently if proxy is running
+- **No secrets in tracked files** — key file at `%USERPROFILE%\.vista-platform\keys\` is outside the repo; `config.json` is git-ignored and was not printed, staged, committed, or pushed; no credential value appears in any HTTP response or log line
+
+**Not added (scope boundary):**
+- Google Ads, Meta/Instagram, or TikTok API setup — zero lines for these platforms
+- Manual GA4 paste import and GA4 API fetch button remain fully working alongside the new setup block
+
+---
+
 ## [2026-06-13] — Marketing Intelligence: GA4 API Pilot
 
 ### proxy.py + marketing-dashboard.html

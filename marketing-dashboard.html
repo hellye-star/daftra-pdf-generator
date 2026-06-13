@@ -614,6 +614,41 @@ details[open] summary::after { content: '−'; }
       <div id="gads-import-msg" style="display:none" class="ds-msg"></div>
     </div>
 
+    <!-- GA4 API Setup Center -->
+    <div class="ds-import-block" id="ga4-setup-block">
+      <div class="ds-import-header">
+        <div class="ds-import-dot" style="background:var(--ga4)"></div>
+        <div class="ds-import-title">GA4 API Setup</div>
+        <div id="ga4-setup-badge" class="ds-import-status-badge badge-mockdata">Not Configured</div>
+      </div>
+      <p class="ds-import-desc">Configure live GA4 API access. Your service account JSON is sent once to the local proxy and saved on this machine — never stored in the browser, never sent to any external server, and never displayed again after saving.</p>
+
+      <!-- Configured state notice -->
+      <div id="ga4-setup-configured-notice" style="display:none;padding:10px 12px;background:var(--bg-hover);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;font-size:13px;line-height:1.7;">
+        <div><strong>Property ID:</strong> <span id="ga4-setup-masked-pid" style="font-family:monospace;"></span></div>
+        <div id="ga4-setup-file-status"></div>
+        <div id="ga4-setup-gauth-status"></div>
+      </div>
+
+      <!-- Setup form — always visible; SA JSON always empty -->
+      <div id="ga4-setup-form">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">GA4 Property ID <span style="font-weight:400;text-transform:none;">(numeric, no dashes or prefix)</span></div>
+        <input type="text" id="ga4-setup-property-id" inputmode="numeric"
+          placeholder="e.g. 123456789"
+          style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:10px;outline:none;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">Service Account JSON <span style="font-weight:400;text-transform:none;">— leave blank to keep existing credentials</span></div>
+        <textarea id="ga4-setup-sa-json" class="ds-textarea"
+          placeholder='Paste the full service account JSON here ({"type":"service_account",...}). Sent once to local proxy — cleared from browser after save.'
+          style="height:100px;font-family:monospace;font-size:11px;"></textarea>
+        <div class="ds-btn-row" style="margin-top:8px;">
+          <button class="ds-btn ds-btn-primary" onclick="ga4SetupSave(event)">Save Locally</button>
+          <button class="ds-btn" onclick="ga4SetupTest(event)"
+            style="background:var(--ga4);color:#fff;border:none;">Test Connection</button>
+        </div>
+      </div>
+      <div id="ga4-setup-msg" style="display:none;margin-top:8px;" class="ds-msg"></div>
+    </div>
+
     <!-- GA4 — wired import -->
     <div class="ds-import-block">
       <div class="ds-import-header">
@@ -2459,6 +2494,111 @@ function renderGA4Panel() {
   }
 }
 
+// ── GA4 Setup Center ───────────────────────────────────────────────────────
+function ga4SetupCheckStatus() {
+  fetch('/api/setup/ga4/status')
+    .then(r => r.json())
+    .then(s => {
+      const badge   = document.getElementById('ga4-setup-badge');
+      const notice  = document.getElementById('ga4-setup-configured-notice');
+      const maskedEl = document.getElementById('ga4-setup-masked-pid');
+      const fileEl  = document.getElementById('ga4-setup-file-status');
+      const gauthEl = document.getElementById('ga4-setup-gauth-status');
+      if (!badge) return;
+
+      if (s.configured) {
+        badge.textContent = 'Configured';
+        badge.className = 'ds-import-status-badge badge-best';
+      } else if (s.property_id_set || s.creds_file_exists) {
+        badge.textContent = 'Needs Fix';
+        badge.className = 'ds-import-status-badge badge-warn';
+      } else {
+        badge.textContent = 'Not Configured';
+        badge.className = 'ds-import-status-badge badge-mockdata';
+      }
+
+      if (s.property_id_set && notice) {
+        notice.style.display = 'block';
+        if (maskedEl) maskedEl.textContent = s.property_id_masked || '****';
+        if (fileEl)   fileEl.textContent   = s.creds_file_exists ? '✓ Credentials file found' : '✗ Credentials file missing';
+        if (gauthEl)  gauthEl.textContent  = s.gauth_installed   ? '✓ google-auth installed'  : '✗ google-auth not installed — run: pip install google-auth requests';
+      } else if (notice) {
+        notice.style.display = 'none';
+      }
+    })
+    .catch(() => {}); // proxy not running — silent, form stays visible
+}
+
+function ga4SetupSave(evt) {
+  const propId  = ((document.getElementById('ga4-setup-property-id') || {}).value || '').trim();
+  const saJson  = ((document.getElementById('ga4-setup-sa-json')     || {}).value || '').trim();
+  const msgEl   = document.getElementById('ga4-setup-msg');
+  const btn     = evt && evt.target;
+
+  function showMsg(text, ok) {
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.className = 'ds-msg ' + (ok ? 'ds-msg-success' : 'ds-msg-error');
+  }
+
+  if (!propId) { showMsg('GA4 Property ID is required.', false); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  fetch('/api/setup/ga4/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ property_id: propId, service_account_json: saJson }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Locally'; }
+      if (d.ok) {
+        // Clear SA JSON from DOM immediately after successful save
+        const saEl = document.getElementById('ga4-setup-sa-json');
+        if (saEl) saEl.value = '';
+        showMsg('Saved. Service account JSON has been cleared from the browser.', true);
+        ga4SetupCheckStatus();
+      } else {
+        showMsg(d.error || 'Save failed.', false);
+      }
+    })
+    .catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Locally'; }
+      showMsg('Could not reach proxy. Is proxy.py running?', false);
+    });
+}
+
+function ga4SetupTest(evt) {
+  const msgEl = document.getElementById('ga4-setup-msg');
+  const btn   = evt && evt.target;
+
+  function showMsg(text, ok) {
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.className = 'ds-msg ' + (ok ? 'ds-msg-success' : 'ds-msg-error');
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Testing…'; }
+
+  fetch('/api/setup/ga4/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
+      showMsg(d.message || d.error || 'Unknown result.', !!d.ok);
+      if (d.ok) ga4SetupCheckStatus();
+    })
+    .catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
+      showMsg('Could not reach proxy. Is proxy.py running?', false);
+    });
+}
+
 // ── GA4 load / clear ───────────────────────────────────────────────────────
 function loadGA4Data() {
   const raw = (document.getElementById('ga4-json-input') || {}).value || '';
@@ -3596,6 +3736,7 @@ renderGA4Panel();       // render GA4 placeholder on load
 renderAICoachPanel();   // render AI Coach on load
 initCharts();
 updateDSModeIndicator();
+ga4SetupCheckStatus();  // populate GA4 Setup badge from proxy status (silent if proxy not running)
 </script>
 </body>
 </html>
