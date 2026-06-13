@@ -552,6 +552,48 @@ details[open] summary::after { content: '−'; }
       </div>
     </div>
 
+    <!-- Meta / Instagram API Setup Center -->
+    <div class="ds-import-block" id="meta-setup-block">
+      <div class="ds-import-header">
+        <div class="ds-import-dot" style="background:var(--ig1)"></div>
+        <div class="ds-import-title">Instagram 1 — API Setup</div>
+        <div id="meta-setup-badge" class="ds-import-status-badge badge-mockdata">Not Configured</div>
+      </div>
+      <p class="ds-import-desc">Configure live Instagram Insights API access for @vistaunited.co. Your access token is sent once to the local proxy and saved on this machine — never stored in the browser, never sent to any external server, and never displayed again after saving.</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:-6px;margin-bottom:8px;line-height:1.6;">
+        <strong>Instagram 1 only.</strong> Account must be <strong>Business or Creator</strong> type and linked to a Facebook Page. Token must have <code>instagram_basic</code> and <code>instagram_manage_insights</code> scopes.
+      </p>
+      <div id="meta-setup-configured-notice" style="display:none;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px;font-size:13px;line-height:1.7;">
+        <div><strong>Instagram Account ID:</strong> <span id="meta-setup-masked-acct"></span></div>
+        <div id="meta-setup-page-row" style="display:none;"><strong>Page ID:</strong> <span id="meta-setup-masked-page"></span></div>
+        <div id="meta-setup-file-status"></div>
+      </div>
+      <div id="meta-setup-form">
+        <div style="margin-bottom:8px;">
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">Long-lived Access Token <span style="color:var(--danger)">*</span></label>
+          <input type="password" id="meta-setup-token" class="ds-input" style="width:100%;box-sizing:border-box;" placeholder="EAAB... (long-lived Page or System User token)" autocomplete="off">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">Instagram Business Account ID <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="meta-setup-ig-acct-id" class="ds-input" placeholder="17841412345678901" autocomplete="off">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">Facebook Page ID <span style="font-style:italic;">(optional)</span></label>
+            <input type="text" id="meta-setup-page-id" class="ds-input" placeholder="Leave blank if unsure" autocomplete="off">
+          </div>
+        </div>
+        <div class="ds-btn-row">
+          <button class="ds-btn ds-btn-primary" onclick="metaSetupSave(event)">Save Locally</button>
+          <button class="ds-btn" onclick="metaSetupTest(event)" style="background:var(--ig1);color:#fff;border:none;">Test Connection</button>
+        </div>
+      </div>
+      <div id="meta-setup-msg" style="display:none;" class="ds-msg"></div>
+      <p style="font-size:11px;color:var(--text-secondary);margin-top:8px;margin-bottom:0;">
+        Token saved to <code>~/.vista-platform/keys/meta-access-token.json</code> — outside this project folder. Instagram 1 report fetch will be added after connection test passes.
+      </p>
+    </div>
+
     <!-- Instagram 1 Import -->
     <div class="ds-import-block">
       <div class="ds-import-header">
@@ -2782,6 +2824,125 @@ function gadsSetupTest(evt) {
     });
 }
 
+// ── Meta / Instagram Setup Center ─────────────────────────────────────────
+function metaSetupCheckStatus() {
+  fetch('/api/setup/meta/status')
+    .then(r => r.json())
+    .then(s => {
+      const badge   = document.getElementById('meta-setup-badge');
+      const notice  = document.getElementById('meta-setup-configured-notice');
+      const acctEl  = document.getElementById('meta-setup-masked-acct');
+      const pageRow = document.getElementById('meta-setup-page-row');
+      const pageEl  = document.getElementById('meta-setup-masked-page');
+      const fileEl  = document.getElementById('meta-setup-file-status');
+      if (!badge) return;
+
+      if (s.configured) {
+        badge.textContent = 'Configured';
+        badge.className = 'ds-import-status-badge badge-best';
+      } else if (s.ig_account_id_set || s.token_file_exists) {
+        badge.textContent = 'Needs Fix';
+        badge.className = 'ds-import-status-badge badge-warn';
+      } else {
+        badge.textContent = 'Not Configured';
+        badge.className = 'ds-import-status-badge badge-mockdata';
+      }
+
+      if (s.ig_account_id_set && notice) {
+        notice.style.display = 'block';
+        if (acctEl) acctEl.textContent = s.ig_account_id_masked || '****';
+        if (pageRow && pageEl) {
+          if (s.page_id_masked) {
+            pageRow.style.display = 'block';
+            pageEl.textContent = s.page_id_masked;
+          } else {
+            pageRow.style.display = 'none';
+          }
+        }
+        if (fileEl) fileEl.textContent = s.token_file_exists ? '✓ Token file found' : '✗ Token file missing';
+      } else if (notice) {
+        notice.style.display = 'none';
+      }
+    })
+    .catch(() => {}); // proxy not running — silent, form stays visible
+}
+
+function metaSetupSave(evt) {
+  const token   = ((document.getElementById('meta-setup-token')      || {}).value || '').trim();
+  const acctId  = ((document.getElementById('meta-setup-ig-acct-id') || {}).value || '').trim();
+  const pageId  = ((document.getElementById('meta-setup-page-id')    || {}).value || '').trim();
+  const msgEl   = document.getElementById('meta-setup-msg');
+  const btn     = evt && evt.target;
+
+  function showMsg(text, ok) {
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.className = 'ds-msg ' + (ok ? 'ds-msg-success' : 'ds-msg-error');
+  }
+
+  if (!token)  { showMsg('Access token is required.', false); return; }
+  if (!acctId) { showMsg('Instagram Business Account ID is required.', false); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  fetch('/api/setup/meta/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      access_token:                    token,
+      instagram_business_account_id:   acctId,
+      page_id:                         pageId,
+    }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Locally'; }
+      if (d.ok) {
+        // Clear token from DOM immediately after successful save
+        const tokenEl = document.getElementById('meta-setup-token');
+        if (tokenEl) tokenEl.value = '';
+        showMsg('Saved. Access token has been cleared from the browser.', true);
+        metaSetupCheckStatus();
+      } else {
+        showMsg(d.error || 'Save failed.', false);
+      }
+    })
+    .catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Locally'; }
+      showMsg('Could not reach proxy. Is proxy.py running?', false);
+    });
+}
+
+function metaSetupTest(evt) {
+  const msgEl = document.getElementById('meta-setup-msg');
+  const btn   = evt && evt.target;
+
+  function showMsg(text, ok) {
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.className = 'ds-msg ' + (ok ? 'ds-msg-success' : 'ds-msg-error');
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Testing…'; }
+
+  fetch('/api/setup/meta/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
+      showMsg(d.message || d.error || 'Unknown result.', !!d.ok);
+      if (d.ok) metaSetupCheckStatus();
+    })
+    .catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
+      showMsg('Could not reach proxy. Is proxy.py running?', false);
+    });
+}
+
 // ── GA4 load / clear ───────────────────────────────────────────────────────
 function loadGA4Data() {
   const raw = (document.getElementById('ga4-json-input') || {}).value || '';
@@ -3921,6 +4082,7 @@ initCharts();
 updateDSModeIndicator();
 ga4SetupCheckStatus();   // populate GA4 Setup badge from proxy status (silent if proxy not running)
 gadsSetupCheckStatus(); // populate Google Ads Setup badge from proxy status (silent if proxy not running)
+metaSetupCheckStatus(); // populate Meta/Instagram Setup badge from proxy status (silent if proxy not running)
 </script>
 </body>
 </html>

@@ -2,6 +2,32 @@
 
 ---
 
+## [2026-06-14] — Marketing Intelligence: Meta / Instagram Setup Center
+
+### proxy.py + marketing-dashboard.html
+
+Added a local-only Meta / Instagram Setup Center for Instagram 1 so credentials can be configured through the browser UI without ever storing secrets client-side. All credential handling is server-side only.
+
+**What was added:**
+
+- **`GET /api/setup/meta/status`** — returns masked configuration state: `{configured, token_file_exists, ig_account_id_set, ig_account_id_masked (****1234), page_id_masked, message}`; never returns token value, file path, full account ID, or traceback
+- **`POST /api/setup/meta/save`** — localhost-only; accepts `{access_token, instagram_business_account_id, page_id (optional)}`; validates token is non-empty, account ID is numeric, page ID is numeric if provided; saves token to `%USERPROFILE%\.vista-platform\keys\meta-access-token.json` (outside git repo); updates `config.json` atomically via `os.replace()` with `{token_path, instagram_business_account_id, page_id}` only — token never written to `config.json`; reloads in-memory vars without proxy restart; returns only `{ok, message}` with masked account ID; token field cleared from browser DOM immediately after successful save
+- **`POST /api/setup/meta/test`** — localhost-only; reads token from keys file; calls `GET /{ig_business_account_id}?fields=username,followers_count` via plain `urllib.request` (no new Python package required); returns `{ok, message}` with username and follower count on success, or a safe categorised error string on failure — no token, path, or traceback returned; error codes 190/100/10/4/200 mapped to safe readable messages
+- **`GET /api/meta/status`** — runtime status endpoint (same response shape as setup status); accessible for future report fetch flow
+- **`POST /api/meta/*` → 405** — explicit block; all other existing routes unaffected
+- **Meta Setup block in Data Source tab** — long-lived access token password input (full width), Instagram Business Account ID and Facebook Page ID (optional) in 2-column grid; Save Locally and Test Connection buttons; status badge cycling Not Configured → Needs Fix → Configured; `metaSetupCheckStatus()` runs at boot to populate badge silently; block is positioned above the existing Instagram 1 manual import block
+- **Startup status line** — proxy now prints `Meta / Instagram API : OK - configured` or `NOT SET - use Meta Setup Center`; no token value or path printed
+- **No secrets in tracked files** — token file at `%USERPROFILE%\.vista-platform\keys\meta-access-token.json` is outside the repo; `config.json` is git-ignored and was not printed, staged, committed, or pushed; no token value appears in any HTTP response or log line
+
+**Not added (scope boundary):**
+- `GET /api/meta/report` — no report fetch endpoint yet
+- No "Fetch Instagram 1 from API" active button — informational note only that it is coming after test passes
+- No Instagram 2, TikTok, or Google Ads report endpoint
+- No write, publish, or ad actions
+- Manual Instagram 1 JSON import (textarea + Load/Reset buttons) remains unchanged and fully working
+
+---
+
 ## [2026-06-14] — Marketing Intelligence: Google Ads Setup Center
 
 ### proxy.py + marketing-dashboard.html

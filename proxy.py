@@ -67,6 +67,11 @@ _gads_oauth_path    = _gads_cfg.get('oauth_json_path', '')
 _gads_customer_id   = _gads_cfg.get('customer_id', '')
 _gads_login_cust_id = _gads_cfg.get('login_customer_id', '')
 
+_meta_cfg        = CONFIG.get('marketing_apis', {}).get('meta', {})
+_meta_token_path = _meta_cfg.get('token_path', '')
+_meta_ig_acct_id = _meta_cfg.get('instagram_business_account_id', '')
+_meta_page_id    = _meta_cfg.get('page_id', '')
+
 def _token_ready(t):
     return bool(t) and not t.startswith('PASTE_') and not t.startswith('REPLACE_')
 
@@ -96,6 +101,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._handle_ga4_get()
         elif self.path.startswith('/api/google-ads/'):
             self._handle_gads_get()
+        elif self.path.startswith('/api/meta/'):
+            self._handle_meta_get()
         elif self.path.startswith('/daftra/'):
             self._proxy_daftra()
         else:
@@ -116,6 +123,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._json_error(405, 'Method not allowed. GA4 API proxy is read-only (GET only).')
         elif self.path.startswith('/api/google-ads/'):
             self._json_error(405, 'Method not allowed. Google Ads API proxy is read-only (GET only).')
+        elif self.path.startswith('/api/meta/'):
+            self._json_error(405, 'Method not allowed. Meta API proxy is read-only (GET only).')
         elif self.path.startswith('/daftra/'):
             self._block_daftra_write()
         else:
@@ -789,6 +798,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._ga4_setup_status()
         elif parsed.path == '/api/setup/google-ads/status':
             self._gads_setup_status()
+        elif parsed.path == '/api/setup/meta/status':
+            self._meta_setup_status()
         else:
             self._json_error(404, 'Setup endpoint not found.')
 
@@ -802,6 +813,10 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._gads_setup_save()
         elif parsed.path == '/api/setup/google-ads/test':
             self._gads_setup_test()
+        elif parsed.path == '/api/setup/meta/save':
+            self._meta_setup_save()
+        elif parsed.path == '/api/setup/meta/test':
+            self._meta_setup_test()
         else:
             self._json_error(404, 'Setup endpoint not found.')
 
@@ -1280,6 +1295,225 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
                 msg = 'Google Ads API connection failed. Check all credentials and try again.'
             self._json_error(502, msg)
 
+    # ── Meta / Instagram Setup endpoints (localhost-only, read-write config) ──
+
+    _META_TOKEN_FILENAME = 'meta-access-token.json'
+
+    def _handle_meta_get(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/meta/status':
+            self._meta_setup_status()
+        else:
+            self._json_error(404, 'Meta API endpoint not found.')
+
+    def _meta_setup_status(self):
+        """Return masked Meta config state — never returns token value, path, or IDs in full."""
+        token_ok   = _token_ready(_meta_token_path)
+        file_ok    = token_ok and os.path.isfile(_meta_token_path)
+        acct_ok    = bool(_meta_ig_acct_id) and _meta_ig_acct_id.isdigit()
+
+        configured = file_ok and acct_ok
+
+        # Mask Instagram Business Account ID — last 4 digits only
+        acct_masked = ''
+        if acct_ok:
+            acct_masked = ('****' + _meta_ig_acct_id[-4:]) if len(_meta_ig_acct_id) >= 4 else '****'
+
+        # Mask page_id if present
+        page_masked = ''
+        if _meta_page_id and _meta_page_id.isdigit():
+            page_masked = ('****' + _meta_page_id[-4:]) if len(_meta_page_id) >= 4 else '****'
+
+        msgs = []
+        if not acct_ok:
+            msgs.append('Instagram Business Account ID is not configured.')
+        if not token_ok:
+            msgs.append('Meta access token path is not configured.')
+        elif not file_ok:
+            msgs.append('Meta access token file is missing or inaccessible.')
+
+        body = json.dumps({
+            'configured':        configured,
+            'token_file_exists': file_ok,
+            'ig_account_id_set': acct_ok,
+            'ig_account_id_masked': acct_masked,
+            'page_id_masked':    page_masked,
+            'message':           'Ready.' if configured else (' '.join(msgs) if msgs else 'Not configured.'),
+        }).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _meta_setup_save(self):
+        global _meta_token_path, _meta_ig_acct_id, _meta_page_id
+        if not self._require_localhost():
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length == 0:
+            self._json_error(400, 'Empty request body.')
+            return
+        raw = self.rfile.read(min(content_length, 64 * 1024))  # tokens can be long; cap at 64 KB
+        try:
+            payload = json.loads(raw.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._json_error(400, 'Invalid JSON body.')
+            return
+
+        access_token = (payload.get('access_token') or '').strip()
+        ig_acct_id   = (payload.get('instagram_business_account_id') or '').strip().replace(' ', '')
+        page_id_raw  = (payload.get('page_id') or '').strip().replace(' ', '')
+
+        if not access_token:
+            self._json_error(400, 'access_token is required.')
+            return
+        if not ig_acct_id:
+            self._json_error(400, 'instagram_business_account_id is required.')
+            return
+        if not ig_acct_id.isdigit():
+            self._json_error(400, 'instagram_business_account_id must be digits only. Find it via the Meta Graph API Explorer: GET /me/accounts, then GET /{page-id}?fields=instagram_business_account.')
+            return
+        if page_id_raw and not page_id_raw.isdigit():
+            self._json_error(400, 'page_id must be digits only when provided. Leave blank if unsure.')
+            return
+
+        # ── Write token to keys file (outside repo) ─────────────────────────
+        token_path = os.path.join(self._VISTA_KEYS_DIR, self._META_TOKEN_FILENAME)
+        try:
+            os.makedirs(self._VISTA_KEYS_DIR, exist_ok=True)
+        except OSError as e:
+            self._json_error(500, f'Could not create keys directory: {e.strerror}')
+            return
+
+        token_data = {'access_token': access_token}
+        token_tmp  = token_path + '.tmp'
+        try:
+            with open(token_tmp, 'w', encoding='utf-8') as f:
+                json.dump(token_data, f, indent=2)
+            os.replace(token_tmp, token_path)
+        except OSError as e:
+            self._json_error(500, f'Failed to write token file: {e.strerror}')
+            return
+
+        # ── Update config.json atomically ───────────────────────────────────
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            self._json_error(500, f'Failed to read config.json: {e}')
+            return
+
+        cfg.setdefault('marketing_apis', {}).setdefault('meta', {})
+        cfg['marketing_apis']['meta']['token_path']                    = token_path
+        cfg['marketing_apis']['meta']['instagram_business_account_id'] = ig_acct_id
+        cfg['marketing_apis']['meta']['page_id']                       = page_id_raw
+
+        cfg_tmp = CONFIG_PATH + '.tmp'
+        try:
+            with open(cfg_tmp, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=2)
+            os.replace(cfg_tmp, CONFIG_PATH)
+        except OSError as e:
+            self._json_error(500, f'Failed to update config.json: {e.strerror}')
+            return
+
+        # ── Reload in-memory vars ───────────────────────────────────────────
+        _meta_token_path = token_path
+        _meta_ig_acct_id = ig_acct_id
+        _meta_page_id    = page_id_raw
+
+        acct_masked = ('****' + ig_acct_id[-4:]) if len(ig_acct_id) >= 4 else '****'
+        body = json.dumps({
+            'ok':      True,
+            'message': f'Meta credentials saved. Instagram Business Account ID ending {acct_masked}.',
+        }).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _meta_setup_test(self):
+        """Call Meta Graph API with the saved token — minimal read-only account lookup."""
+        if not self._require_localhost():
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length:
+            self.rfile.read(min(content_length, 1024))
+
+        if not _meta_token_path or not os.path.isfile(_meta_token_path):
+            self._json_error(400, 'Meta token file not found. Use Save first.')
+            return
+        if not _meta_ig_acct_id or not _meta_ig_acct_id.isdigit():
+            self._json_error(400, 'Instagram Business Account ID is not configured. Use Save first.')
+            return
+
+        try:
+            with open(_meta_token_path, 'r', encoding='utf-8') as f:
+                token_data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            self._json_error(500, 'Meta token file is missing or invalid.')
+            return
+
+        token = token_data.get('access_token', '')
+        if not token:
+            self._json_error(400, 'Token file exists but access_token field is empty. Re-save your credentials.')
+            return
+
+        # Minimal read-only call — account username and follower count only
+        url = (
+            f'https://graph.facebook.com/v20.0/{_meta_ig_acct_id}'
+            f'?fields=username,followers_count'
+            f'&access_token={token}'
+        )
+        req = urllib.request.Request(url, method='GET',
+                                     headers={'User-Agent': 'VistaProxy/1.0'})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            username  = data.get('username', '')
+            followers = data.get('followers_count', '')
+            handle = f'@{username}' if username else '(account found)'
+            body = json.dumps({
+                'ok':      True,
+                'message': f'Connection successful — {handle}, {followers:,} followers.' if isinstance(followers, int) else f'Connection successful — {handle}.',
+            }).encode('utf-8')
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+        except urllib.error.HTTPError as e:
+            try:
+                err  = json.loads(e.read().decode('utf-8', errors='replace'))
+                code = err.get('error', {}).get('code', e.code)
+                emsg = err.get('error', {}).get('message', '')
+            except Exception:
+                code, emsg = e.code, ''
+            if code == 190 or 'token' in emsg.lower():
+                msg = 'Access token is invalid or expired. Generate a new long-lived token in Meta Graph API Explorer.'
+            elif code == 100 or 'does not exist' in emsg.lower() or 'unsupported' in emsg.lower():
+                msg = 'Instagram Business Account ID not found. Verify the numeric ID and ensure the account is Business/Creator type linked to a Facebook Page.'
+            elif code == 10 or 'permission' in emsg.lower():
+                msg = 'Insufficient token permissions. Ensure instagram_basic and instagram_manage_insights scopes are granted.'
+            elif code == 4 or 'rate' in emsg.lower():
+                msg = 'Meta API rate limit hit. Try again in a few minutes.'
+            elif code == 200 or 'page' in emsg.lower():
+                msg = 'Page permission error. Ensure the Facebook Page is linked to the Instagram Business account.'
+            else:
+                msg = f'Meta API returned error {code}. Check token, account ID, and app permissions.'
+            self._json_error(502, msg)
+        except urllib.error.URLError:
+            self._json_error(502, 'Could not reach Meta API. Check internet connection.')
+        except Exception:
+            self._json_error(500, 'Unexpected error during connection test.')
+
     # ── Notion proxy ─────────────────────────────────────────────────────────
 
     def _notion_route(self):
@@ -1362,6 +1596,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [ga4]    {self.command} {self.path}  ->  {fmt % args}')
         elif '/api/google-ads/' in self.path:
             print(f'  [gads]   {self.command} {self.path}  ->  {fmt % args}')
+        elif '/api/meta/' in self.path:
+            print(f'  [meta]   {self.command} {self.path}  ->  {fmt % args}')
         elif '/api/setup/' in self.path:
             print(f'  [setup]  {self.command} {self.path}  ->  {fmt % args}')
 
@@ -1389,6 +1625,10 @@ if __name__ == '__main__':
     _gads_oauth_ok = (bool(_gads_oauth_path) and not _gads_oauth_path.startswith('REPLACE_')
                       and os.path.isfile(_gads_oauth_path))
     print(f'  Google Ads API       : {"OK - configured" if (_gads_cust_ok and _gads_oauth_ok) else "NOT SET - use Google Ads Setup Center"}')
+    _meta_acct_ok  = bool(_meta_ig_acct_id) and _meta_ig_acct_id.isdigit()
+    _meta_file_ok  = (bool(_meta_token_path) and not _meta_token_path.startswith('REPLACE_')
+                      and os.path.isfile(_meta_token_path))
+    print(f'  Meta / Instagram API : {"OK - configured" if (_meta_acct_ok and _meta_file_ok) else "NOT SET - use Meta Setup Center"}')
     print()
     print('  Press Ctrl+C to stop.')
     print()
