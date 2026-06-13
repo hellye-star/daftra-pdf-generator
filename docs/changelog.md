@@ -2,6 +2,32 @@
 
 ---
 
+## [2026-06-14] — Marketing Intelligence: Google Ads Setup Center
+
+### proxy.py + marketing-dashboard.html
+
+Added a local-only Google Ads Setup Center so credentials can be configured through the browser UI without ever storing secrets client-side. All credential handling is server-side only.
+
+**What was added:**
+
+- **`GET /api/setup/google-ads/status`** — returns masked configuration state: `{configured, customer_id_set, customer_id_masked (****1234), login_customer_id_masked, oauth_file_exists, gads_lib_installed, message}`; never returns developer token, client secret, refresh token, access token, file path, or traceback
+- **`POST /api/setup/google-ads/save`** — accepts `{developer_token, client_id, client_secret, refresh_token, customer_id, login_customer_id (optional)}`; validates all required fields and that customer IDs are numeric (hyphens stripped automatically); saves OAuth secrets to `%USERPROFILE%\.vista-platform\keys\google-ads-oauth.json` (outside the git repo); updates `config.json` atomically via `os.replace()` with `{oauth_json_path, customer_id, login_customer_id}` only — no secrets written to `config.json`; reloads in-memory vars without proxy restart; returns only `{ok, message}` with masked customer ID; secret fields are cleared from the browser DOM immediately after successful save
+- **`POST /api/setup/google-ads/test`** — lazy-imports `google.ads.googleads.client`; if missing returns safe 503 with `python -m pip install google-ads`; if installed, calls `CustomerService.list_accessible_customers()` (smallest possible read-only API call); returns `{ok, message}` with accessible account count or a safe categorised error string — no token, path, or traceback returned
+- **`GET /api/google-ads/status`** — runtime status endpoint (same response shape as setup status); accessible without localhost restriction for future use by the report fetch flow
+- **Setup save/test endpoints are localhost-only** — `_require_localhost()` check on each POST; proxy bind host remains `127.0.0.1` unchanged
+- **Google Ads Setup block in Data Source tab** — 6-field 2-column form (Developer Token, OAuth Client ID, OAuth Client Secret, Refresh Token, Customer ID, Login Customer ID); all secret fields use `type="password"`; Save Locally and Test Connection buttons; status badge cycling Not Configured → Needs Fix → Configured; `gadsSetupCheckStatus()` runs at boot to populate badge silently; block is positioned above the existing manual Google Ads import block
+- **Startup status line** — proxy now prints `Google Ads API : OK - configured` or `NOT SET - use Google Ads Setup Center`; no credential value or path printed
+- **No secrets in tracked files** — key file at `%USERPROFILE%\.vista-platform\keys\google-ads-oauth.json` is outside the repo; `config.json` is git-ignored and was not printed, staged, committed, or pushed; no credential value appears in any HTTP response or log line
+
+**Not added (scope boundary):**
+- `GET /api/google-ads/report` — no report fetch endpoint yet
+- No "Fetch Google Ads from API" active button — only informational note that it is coming after test passes
+- No Google Ads write actions
+- Manual Google Ads JSON import (textarea + Load/Reset buttons) remains unchanged and fully working
+- Meta/Instagram, TikTok API setup — zero lines for these platforms
+
+---
+
 ## [2026-06-13] — Marketing Intelligence: GA4 Setup Center
 
 ### proxy.py + marketing-dashboard.html

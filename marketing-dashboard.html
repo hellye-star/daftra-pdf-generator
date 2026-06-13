@@ -598,6 +598,58 @@ details[open] summary::after { content: '−'; }
       <div id="tiktok-import-msg" style="display:none" class="ds-msg"></div>
     </div>
 
+    <!-- Google Ads API Setup Center -->
+    <div class="ds-import-block" id="gads-setup-block">
+      <div class="ds-import-header">
+        <div class="ds-import-dot" style="background:var(--ga)"></div>
+        <div class="ds-import-title">Google Ads API Setup</div>
+        <div id="gads-setup-badge" class="ds-import-status-badge badge-mockdata">Not Configured</div>
+      </div>
+      <p class="ds-import-desc">Configure live Google Ads API access using your OAuth 2.0 credentials and developer token. Credentials are sent once to the local proxy and saved on this machine — never stored in the browser, never sent to any external server, and never displayed again after saving.</p>
+      <div id="gads-setup-configured-notice" style="display:none;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:10px;font-size:13px;line-height:1.7;">
+        <div><strong>Customer ID:</strong> <span id="gads-setup-masked-cid"></span></div>
+        <div id="gads-setup-lcid-row" style="display:none;"><strong>Login Customer ID:</strong> <span id="gads-setup-masked-lcid"></span></div>
+        <div id="gads-setup-file-status"></div>
+        <div id="gads-setup-lib-status"></div>
+      </div>
+      <div id="gads-setup-form">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">Developer Token <span style="color:var(--danger)">*</span></label>
+            <input type="password" id="gads-setup-dev-token" class="ds-input" placeholder="devel0p3r_t0ken..." autocomplete="off">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">OAuth Client ID <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="gads-setup-client-id" class="ds-input" placeholder="123456789-abc.apps.googleusercontent.com" autocomplete="off">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">OAuth Client Secret <span style="color:var(--danger)">*</span></label>
+            <input type="password" id="gads-setup-client-secret" class="ds-input" placeholder="REPLACE_WITH_CLIENT_SECRET" autocomplete="off">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">Refresh Token <span style="color:var(--danger)">*</span></label>
+            <input type="password" id="gads-setup-refresh-token" class="ds-input" placeholder="1//..." autocomplete="off">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">Customer ID <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="gads-setup-customer-id" class="ds-input" placeholder="123-456-7890" autocomplete="off">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:3px;">Login Customer ID <span style="font-style:italic;">(MCC only, optional)</span></label>
+            <input type="text" id="gads-setup-login-cid" class="ds-input" placeholder="Leave blank if not MCC" autocomplete="off">
+          </div>
+        </div>
+        <div class="ds-btn-row">
+          <button class="ds-btn ds-btn-primary" onclick="gadsSetupSave(event)">Save Locally</button>
+          <button class="ds-btn" onclick="gadsSetupTest(event)" style="background:var(--ga);color:#fff;border:none;">Test Connection</button>
+        </div>
+      </div>
+      <div id="gads-setup-msg" style="display:none;" class="ds-msg"></div>
+      <p style="font-size:11px;color:var(--text-secondary);margin-top:8px;margin-bottom:0;">
+        Saved to <code>~/.vista-platform/keys/google-ads-oauth.json</code> — outside this project folder. Live report fetch coming after connection test passes.
+      </p>
+    </div>
+
     <!-- Google Ads — wired import -->
     <div class="ds-import-block">
       <div class="ds-import-header">
@@ -2599,6 +2651,137 @@ function ga4SetupTest(evt) {
     });
 }
 
+// ── Google Ads Setup Center ────────────────────────────────────────────────
+function gadsSetupCheckStatus() {
+  fetch('/api/setup/google-ads/status')
+    .then(r => r.json())
+    .then(s => {
+      const badge   = document.getElementById('gads-setup-badge');
+      const notice  = document.getElementById('gads-setup-configured-notice');
+      const cidEl   = document.getElementById('gads-setup-masked-cid');
+      const lcidRow = document.getElementById('gads-setup-lcid-row');
+      const lcidEl  = document.getElementById('gads-setup-masked-lcid');
+      const fileEl  = document.getElementById('gads-setup-file-status');
+      const libEl   = document.getElementById('gads-setup-lib-status');
+      if (!badge) return;
+
+      if (s.configured) {
+        badge.textContent = 'Configured';
+        badge.className = 'ds-import-status-badge badge-best';
+      } else if (s.customer_id_set || s.oauth_file_exists) {
+        badge.textContent = 'Needs Fix';
+        badge.className = 'ds-import-status-badge badge-warn';
+      } else {
+        badge.textContent = 'Not Configured';
+        badge.className = 'ds-import-status-badge badge-mockdata';
+      }
+
+      if (s.customer_id_set && notice) {
+        notice.style.display = 'block';
+        if (cidEl)  cidEl.textContent  = s.customer_id_masked || '****';
+        if (lcidRow && lcidEl) {
+          if (s.login_customer_id_masked) {
+            lcidRow.style.display = 'block';
+            lcidEl.textContent = s.login_customer_id_masked;
+          } else {
+            lcidRow.style.display = 'none';
+          }
+        }
+        if (fileEl) fileEl.textContent = s.oauth_file_exists  ? '✓ Credentials file found'      : '✗ Credentials file missing';
+        if (libEl)  libEl.textContent  = s.gads_lib_installed ? '✓ google-ads library installed' : '✗ google-ads not installed — run: python -m pip install google-ads';
+      } else if (notice) {
+        notice.style.display = 'none';
+      }
+    })
+    .catch(() => {}); // proxy not running — silent, form stays visible
+}
+
+function gadsSetupSave(evt) {
+  const devToken    = ((document.getElementById('gads-setup-dev-token')      || {}).value || '').trim();
+  const clientId    = ((document.getElementById('gads-setup-client-id')      || {}).value || '').trim();
+  const clientSec   = ((document.getElementById('gads-setup-client-secret')  || {}).value || '').trim();
+  const refreshTok  = ((document.getElementById('gads-setup-refresh-token')  || {}).value || '').trim();
+  const customerId  = ((document.getElementById('gads-setup-customer-id')    || {}).value || '').trim();
+  const loginCid    = ((document.getElementById('gads-setup-login-cid')      || {}).value || '').trim();
+  const msgEl       = document.getElementById('gads-setup-msg');
+  const btn         = evt && evt.target;
+
+  function showMsg(text, ok) {
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.className = 'ds-msg ' + (ok ? 'ds-msg-success' : 'ds-msg-error');
+  }
+
+  if (!devToken || !clientId || !clientSec || !refreshTok || !customerId) {
+    showMsg('All fields except Login Customer ID are required.', false);
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  fetch('/api/setup/google-ads/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      developer_token:    devToken,
+      client_id:          clientId,
+      client_secret:      clientSec,
+      refresh_token:      refreshTok,
+      customer_id:        customerId,
+      login_customer_id:  loginCid,
+    }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Locally'; }
+      if (d.ok) {
+        // Clear all secret fields from DOM immediately after successful save
+        ['gads-setup-dev-token', 'gads-setup-client-secret', 'gads-setup-refresh-token'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        showMsg('Saved. Secret fields have been cleared from the browser.', true);
+        gadsSetupCheckStatus();
+      } else {
+        showMsg(d.error || 'Save failed.', false);
+      }
+    })
+    .catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Locally'; }
+      showMsg('Could not reach proxy. Is proxy.py running?', false);
+    });
+}
+
+function gadsSetupTest(evt) {
+  const msgEl = document.getElementById('gads-setup-msg');
+  const btn   = evt && evt.target;
+
+  function showMsg(text, ok) {
+    if (!msgEl) return;
+    msgEl.textContent = text;
+    msgEl.style.display = 'block';
+    msgEl.className = 'ds-msg ' + (ok ? 'ds-msg-success' : 'ds-msg-error');
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Testing…'; }
+
+  fetch('/api/setup/google-ads/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
+      showMsg(d.message || d.error || 'Unknown result.', !!d.ok);
+      if (d.ok) gadsSetupCheckStatus();
+    })
+    .catch(() => {
+      if (btn) { btn.disabled = false; btn.textContent = 'Test Connection'; }
+      showMsg('Could not reach proxy. Is proxy.py running?', false);
+    });
+}
+
 // ── GA4 load / clear ───────────────────────────────────────────────────────
 function loadGA4Data() {
   const raw = (document.getElementById('ga4-json-input') || {}).value || '';
@@ -3736,7 +3919,8 @@ renderGA4Panel();       // render GA4 placeholder on load
 renderAICoachPanel();   // render AI Coach on load
 initCharts();
 updateDSModeIndicator();
-ga4SetupCheckStatus();  // populate GA4 Setup badge from proxy status (silent if proxy not running)
+ga4SetupCheckStatus();   // populate GA4 Setup badge from proxy status (silent if proxy not running)
+gadsSetupCheckStatus(); // populate Google Ads Setup badge from proxy status (silent if proxy not running)
 </script>
 </body>
 </html>

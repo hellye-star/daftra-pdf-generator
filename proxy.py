@@ -62,6 +62,11 @@ _ga4_cfg         = CONFIG.get('marketing_apis', {}).get('google', {}).get('ga4',
 _ga4_property_id = _ga4_cfg.get('property_id', '')
 _ga4_creds_path  = _ga4_cfg.get('credentials_json_path', '')
 
+_gads_cfg           = CONFIG.get('marketing_apis', {}).get('google', {}).get('ads', {})
+_gads_oauth_path    = _gads_cfg.get('oauth_json_path', '')
+_gads_customer_id   = _gads_cfg.get('customer_id', '')
+_gads_login_cust_id = _gads_cfg.get('login_customer_id', '')
+
 def _token_ready(t):
     return bool(t) and not t.startswith('PASTE_') and not t.startswith('REPLACE_')
 
@@ -89,6 +94,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._handle_setup_get()
         elif self.path.startswith('/api/ga4/'):
             self._handle_ga4_get()
+        elif self.path.startswith('/api/google-ads/'):
+            self._handle_gads_get()
         elif self.path.startswith('/daftra/'):
             self._proxy_daftra()
         else:
@@ -107,6 +114,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._handle_setup_post()
         elif self.path.startswith('/api/ga4/'):
             self._json_error(405, 'Method not allowed. GA4 API proxy is read-only (GET only).')
+        elif self.path.startswith('/api/google-ads/'):
+            self._json_error(405, 'Method not allowed. Google Ads API proxy is read-only (GET only).')
         elif self.path.startswith('/daftra/'):
             self._block_daftra_write()
         else:
@@ -778,6 +787,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/api/setup/ga4/status':
             self._ga4_setup_status()
+        elif parsed.path == '/api/setup/google-ads/status':
+            self._gads_setup_status()
         else:
             self._json_error(404, 'Setup endpoint not found.')
 
@@ -787,6 +798,10 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._ga4_setup_save()
         elif parsed.path == '/api/setup/ga4/test':
             self._ga4_setup_test()
+        elif parsed.path == '/api/setup/google-ads/save':
+            self._gads_setup_save()
+        elif parsed.path == '/api/setup/google-ads/test':
+            self._gads_setup_test()
         else:
             self._json_error(404, 'Setup endpoint not found.')
 
@@ -1018,6 +1033,253 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         except Exception:
             self._json_error(500, 'Unexpected error during connection test.')
 
+    # ── Google Ads Setup endpoints (localhost-only, read-write config) ─────────
+
+    _GADS_OAUTH_FILENAME = 'google-ads-oauth.json'
+
+    def _handle_gads_get(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/google-ads/status':
+            self._gads_setup_status()
+        else:
+            self._json_error(404, 'Google Ads API endpoint not found.')
+
+    def _gads_setup_status(self):
+        """Return masked Google Ads config state — never returns credential values."""
+        cust_ok  = _token_ready(_gads_customer_id)
+        oauth_ok = bool(_gads_oauth_path) and not _gads_oauth_path.startswith('REPLACE_')
+        file_ok  = oauth_ok and os.path.isfile(_gads_oauth_path)
+        try:
+            import google.ads.googleads.client  # noqa: F401
+            gads_lib_ok = True
+        except ImportError:
+            gads_lib_ok = False
+
+        configured = cust_ok and file_ok and gads_lib_ok
+
+        # Mask customer ID — show last 4 digits only
+        masked = ''
+        if cust_ok:
+            masked = ('****' + _gads_customer_id[-4:]) if len(_gads_customer_id) >= 4 else '****'
+        login_cust_masked = ''
+        if _gads_login_cust_id:
+            login_cust_masked = ('****' + _gads_login_cust_id[-4:]) if len(_gads_login_cust_id) >= 4 else '****'
+
+        msgs = []
+        if not cust_ok:
+            msgs.append('Google Ads customer ID is not configured.')
+        if not oauth_ok:
+            msgs.append('Google Ads credentials path is not configured.')
+        elif not file_ok:
+            msgs.append('Google Ads credentials file is missing or inaccessible.')
+        if not gads_lib_ok:
+            msgs.append('google-ads package is not installed. Run: python -m pip install google-ads')
+
+        body = json.dumps({
+            'configured':          configured,
+            'customer_id_set':     cust_ok,
+            'customer_id_masked':  masked,
+            'login_customer_id_masked': login_cust_masked,
+            'oauth_file_exists':   file_ok,
+            'gads_lib_installed':  gads_lib_ok,
+            'message':             'Ready.' if configured else (' '.join(msgs) if msgs else 'Not configured.'),
+        }).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _gads_setup_save(self):
+        global _gads_oauth_path, _gads_customer_id, _gads_login_cust_id
+        if not self._require_localhost():
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length == 0:
+            self._json_error(400, 'Empty request body.')
+            return
+        raw = self.rfile.read(min(content_length, 256 * 1024))
+        try:
+            payload = json.loads(raw.decode('utf-8'))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._json_error(400, 'Invalid JSON body.')
+            return
+
+        # ── Extract and validate required fields ────────────────────────────
+        def _strip_cid(s):
+            return s.replace('-', '').replace(' ', '')
+
+        developer_token = (payload.get('developer_token') or '').strip()
+        client_id       = (payload.get('client_id') or '').strip()
+        client_secret   = (payload.get('client_secret') or '').strip()
+        refresh_token   = (payload.get('refresh_token') or '').strip()
+        customer_id_raw = (payload.get('customer_id') or '').strip()
+        login_cust_raw  = (payload.get('login_customer_id') or '').strip()
+
+        missing = [n for n, v in [
+            ('developer_token', developer_token),
+            ('client_id',       client_id),
+            ('client_secret',   client_secret),
+            ('refresh_token',   refresh_token),
+            ('customer_id',     customer_id_raw),
+        ] if not v]
+        if missing:
+            self._json_error(400, f'Missing required field(s): {", ".join(missing)}.')
+            return
+
+        customer_id_clean = _strip_cid(customer_id_raw)
+        if not customer_id_clean.isdigit() or len(customer_id_clean) < 5:
+            self._json_error(400, 'customer_id must be digits only (hyphens are stripped automatically). Example: 123-456-7890 or 1234567890.')
+            return
+
+        login_cust_clean = ''
+        if login_cust_raw:
+            login_cust_clean = _strip_cid(login_cust_raw)
+            if not login_cust_clean.isdigit() or len(login_cust_clean) < 5:
+                self._json_error(400, 'login_customer_id must be digits only when provided. Leave blank if not using an MCC account.')
+                return
+
+        # ── Write credentials to keys file (outside repo) ───────────────────
+        oauth_path = os.path.join(self._VISTA_KEYS_DIR, self._GADS_OAUTH_FILENAME)
+        try:
+            os.makedirs(self._VISTA_KEYS_DIR, exist_ok=True)
+        except OSError as e:
+            self._json_error(500, f'Could not create keys directory: {e.strerror}')
+            return
+
+        oauth_data = {
+            'developer_token': developer_token,
+            'client_id':       client_id,
+            'client_secret':   client_secret,
+            'refresh_token':   refresh_token,
+        }
+        oauth_tmp = oauth_path + '.tmp'
+        try:
+            with open(oauth_tmp, 'w', encoding='utf-8') as f:
+                json.dump(oauth_data, f, indent=2)
+            os.replace(oauth_tmp, oauth_path)
+        except OSError as e:
+            self._json_error(500, f'Failed to write credentials file: {e.strerror}')
+            return
+
+        # ── Update config.json atomically ───────────────────────────────────
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            self._json_error(500, f'Failed to read config.json: {e}')
+            return
+
+        cfg.setdefault('marketing_apis', {}).setdefault('google', {}).setdefault('ads', {})
+        cfg['marketing_apis']['google']['ads']['oauth_json_path']    = oauth_path
+        cfg['marketing_apis']['google']['ads']['customer_id']        = customer_id_clean
+        cfg['marketing_apis']['google']['ads']['login_customer_id']  = login_cust_clean
+
+        cfg_tmp = CONFIG_PATH + '.tmp'
+        try:
+            with open(cfg_tmp, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=2)
+            os.replace(cfg_tmp, CONFIG_PATH)
+        except OSError as e:
+            self._json_error(500, f'Failed to update config.json: {e.strerror}')
+            return
+
+        # ── Reload in-memory vars ───────────────────────────────────────────
+        _gads_oauth_path    = oauth_path
+        _gads_customer_id   = customer_id_clean
+        _gads_login_cust_id = login_cust_clean
+
+        masked = ('****' + customer_id_clean[-4:]) if len(customer_id_clean) >= 4 else '****'
+        body = json.dumps({
+            'ok':      True,
+            'message': f'Google Ads credentials saved. Customer ID ending {masked}.',
+        }).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _gads_setup_test(self):
+        """Authenticate with Google Ads API and list accessible customer accounts."""
+        if not self._require_localhost():
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if content_length:
+            self.rfile.read(min(content_length, 1024))
+
+        if not _gads_oauth_path or not os.path.isfile(_gads_oauth_path):
+            self._json_error(400, 'Google Ads credentials file is not configured. Use Save first.')
+            return
+        if not _token_ready(_gads_customer_id):
+            self._json_error(400, 'Google Ads customer ID is not configured. Use Save first.')
+            return
+
+        try:
+            from google.ads.googleads.client import GoogleAdsClient
+        except ImportError:
+            self._json_error(503, 'google-ads package is not installed. Run: python -m pip install google-ads')
+            return
+
+        try:
+            with open(_gads_oauth_path, 'r', encoding='utf-8') as f:
+                creds = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            self._json_error(500, 'Google Ads credentials file is missing or invalid.')
+            return
+
+        for field in ('developer_token', 'client_id', 'client_secret', 'refresh_token'):
+            if not creds.get(field):
+                self._json_error(400, f'Credentials file is missing field: {field}. Re-save your credentials.')
+                return
+
+        ads_config = {
+            'developer_token': creds['developer_token'],
+            'client_id':       creds['client_id'],
+            'client_secret':   creds['client_secret'],
+            'refresh_token':   creds['refresh_token'],
+            'use_proto_plus':  True,
+        }
+        if _gads_login_cust_id:
+            ads_config['login_customer_id'] = _gads_login_cust_id
+
+        try:
+            client  = GoogleAdsClient.load_from_dict(ads_config)
+            svc     = client.get_service('CustomerService')
+            result  = svc.list_accessible_customers()
+            count   = len(result.resource_names)
+            body = json.dumps({
+                'ok':      True,
+                'message': f'Connection successful — {count} Google Ads account(s) accessible.',
+            }).encode('utf-8')
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as e:
+            err = str(e)
+            if 'OAUTH_TOKEN_INVALID' in err or 'invalid_grant' in err:
+                msg = 'OAuth refresh token is invalid or expired. Re-authorise via Google OAuth.'
+            elif 'DEVELOPER_TOKEN_NOT_APPROVED' in err or 'not approved' in err.lower():
+                msg = 'Developer token not approved for production use. Apply for standard access in Google Ads API Centre.'
+            elif 'CUSTOMER_NOT_FOUND' in err:
+                msg = 'Customer ID not found. Check the ID in your Google Ads account settings.'
+            elif 'PERMISSION_DENIED' in err:
+                msg = 'Permission denied. Check developer token access level and account permissions.'
+            elif 'invalid_client' in err:
+                msg = 'OAuth client credentials are invalid. Check client ID and client secret.'
+            elif 'quota' in err.lower():
+                msg = 'API quota exceeded. Try again later.'
+            else:
+                msg = 'Google Ads API connection failed. Check all credentials and try again.'
+            self._json_error(502, msg)
+
     # ── Notion proxy ─────────────────────────────────────────────────────────
 
     def _notion_route(self):
@@ -1098,6 +1360,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [purch]  {self.command} {self.path}  ->  {fmt % args}')
         elif '/api/ga4/' in self.path:
             print(f'  [ga4]    {self.command} {self.path}  ->  {fmt % args}')
+        elif '/api/google-ads/' in self.path:
+            print(f'  [gads]   {self.command} {self.path}  ->  {fmt % args}')
         elif '/api/setup/' in self.path:
             print(f'  [setup]  {self.command} {self.path}  ->  {fmt % args}')
 
@@ -1121,6 +1385,10 @@ if __name__ == '__main__':
     _ga4_creds_ok = (bool(_ga4_creds_path) and not _ga4_creds_path.startswith('REPLACE_')
                      and os.path.isfile(_ga4_creds_path))
     print(f'  GA4 API              : {"OK - configured" if (_ga4_pid_ok and _ga4_creds_ok) else "NOT SET - edit config.json (marketing_apis.google.ga4)"}')
+    _gads_cust_ok  = _token_ready(_gads_customer_id)
+    _gads_oauth_ok = (bool(_gads_oauth_path) and not _gads_oauth_path.startswith('REPLACE_')
+                      and os.path.isfile(_gads_oauth_path))
+    print(f'  Google Ads API       : {"OK - configured" if (_gads_cust_ok and _gads_oauth_ok) else "NOT SET - use Google Ads Setup Center"}')
     print()
     print('  Press Ctrl+C to stop.')
     print()
