@@ -2,6 +2,29 @@
 
 ---
 
+## [2026-06-13] — Marketing Intelligence: Website / GA4 Tab + Expanded Data Source Schemas
+
+### marketing-dashboard.html
+
+Extended the Marketing Intelligence dashboard with a new Website Analytics tab and richer Data Source guidance. No new files. No APIs, OAuth, credentials, fetch calls, AI API calls, or ad write actions.
+
+**What was added:**
+- New **Website / GA4 tab** (between Google Ads and LinkedIn) — placeholder panel explaining the 6 analytical questions GA4 will answer once data is imported: which landing pages bring visitors, which pages keep people longest, which pages have weak engagement, which pages produce WhatsApp/contact/form actions, which source sends traffic that does not convert, which pages need a better CTA
+- Each question card shows the specific JSON fields that drive the answer (`landingPage`, `sourceMedium`, `averageEngagementTime`, `whatsappClicks`, `keyEvents`, `formSubmits`, etc.)
+- **Google Ads vs GA4 distinction panel** in the Data Source tab — clearly explains Google Ads = before-the-click (campaign, keyword, spend, CTR, CPC, conversions) vs GA4 = after-the-click (landing page behaviour, engagement time, events, WhatsApp/contact/form actions)
+- **TikTok schema** expanded with `contentType`, `avgWatchTimeSec`, `completionRate`, `profileVisits`, `websiteClicks` — 2 example videos in schema
+- **Google Ads schema** expanded with `searchTerm`, `finalUrl`, `landingPage` — 2 example rows (best vs weak keyword)
+- **GA4 schema** fully defined for the first time — all 15 fields including `landingPage`, `pagePath`, `pageTitle`, `sourceMedium`, `sessions`, `users`, `views`, `averageEngagementTime`, `engagementRate`, `eventCount`, `keyEvents`, `whatsappClicks`, `contactClicks`, `formSubmits`, `scrolls` — 3 example pages
+- **GA4 export instructions** added — covers GA4 Explore setup, dimensions/metrics to select, event tracking note, and export steps
+- TikTok export instructions expanded with per-video metric sourcing guidance
+- Instagram 2, TikTok, Google Ads, GA4 import blocks relabelled **"Schema Ready · Wiring Next"** (no longer greyed out)
+- Data Source mode status updated to include Website / GA4 chip
+- Instagram 1 manual import unchanged and fully working
+
+**Files NOT changed:** `proxy.py`, `config.json`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+---
+
 ## [2026-06-12] — Marketing Intelligence: Manual Instagram 1 JSON Import
 
 ### marketing-dashboard.html

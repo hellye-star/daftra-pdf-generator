@@ -10,7 +10,7 @@
 :root {
   --dark: #1C1C1A; --mid: #6B6B67; --light: #ADADAA;
   --rule: #D8D5CF; --cream: #FAF8F5; --white: #FFFFFF;
-  --ig1: #E1306C; --ig2: #833AB4; --tk: #010101; --ga: #4285F4; --li: #0A66C2;
+  --ig1: #E1306C; --ig2: #833AB4; --tk: #010101; --ga: #4285F4; --li: #0A66C2; --ga4: #0F9D58;
   --green: #3A7D52; --green-bg: #EAF4EE;
   --amber: #B06B1A; --amber-bg: #FEF3E7;
   --red: #9B3535; --red-bg: #FDF0F0;
@@ -232,6 +232,37 @@ details[open] summary::after { content: '−'; }
 .paid-mock-note { background: var(--amber-bg); border: 1px solid #F0D5B0; padding: 14px 18px; font-size: 13px; color: var(--amber); line-height: 1.6; }
 .paid-mock-note strong { font-weight: 600; }
 
+/* ── GA4 placeholder panel ── */
+.ga4-concept-note { background: var(--white); border: 1px solid var(--rule); border-left: 3px solid var(--ga4); padding: 18px 22px; margin-bottom: 24px; }
+.ga4-concept-title { font-size: 11px; font-weight: 500; letter-spacing: 0.10em; text-transform: uppercase; color: var(--ga4); margin-bottom: 8px; }
+.ga4-concept-text { font-size: 13px; font-weight: 300; color: var(--mid); line-height: 1.75; }
+.ga4-concept-text strong { font-weight: 500; color: var(--dark); }
+.ga4-questions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 24px; }
+.ga4-q-card { background: var(--white); border: 1px solid var(--rule); padding: 20px 22px; }
+.ga4-q-num { font-size: 9px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ga4); margin-bottom: 8px; }
+.ga4-q-title { font-size: 14px; font-weight: 500; color: var(--dark); margin-bottom: 8px; line-height: 1.4; }
+.ga4-q-desc { font-size: 13px; font-weight: 300; color: var(--mid); line-height: 1.7; }
+.ga4-q-fields { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+.ga4-q-field { font-size: 10px; font-weight: 400; font-family: 'Courier New', monospace; background: #F0EFEc; color: var(--mid); padding: 2px 7px; border: 1px solid var(--rule); }
+.ga4-import-cta { background: #F0F9F4; border: 1px solid #B8DEC6; padding: 16px 20px; margin-top: 24px; display: flex; align-items: center; gap: 14px; }
+.ga4-import-cta-text { font-size: 13px; font-weight: 300; color: var(--green); line-height: 1.6; flex: 1; }
+.ga4-import-cta-text strong { font-weight: 500; }
+.ga4-import-cta-btn { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 16px; background: var(--dark); color: var(--white); cursor: pointer; border: none; white-space: nowrap; flex-shrink: 0; }
+.ga4-import-cta-btn:hover { background: #333330; }
+
+/* ── Data source — schema ready badge ── */
+.badge-schema-ready { font-size: 9px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 9px; background: var(--blue-bg); color: var(--blue); border: 1px solid #C0D0EE; }
+
+/* ── Data source — channel distinction note ── */
+.ds-distinction { background: var(--white); border: 1px solid var(--rule); padding: 18px 22px; margin-bottom: 20px; }
+.ds-distinction-row { display: flex; gap: 16px; padding: 10px 0; border-bottom: 0.5px solid var(--rule); align-items: flex-start; }
+.ds-distinction-row:last-child { border-bottom: none; padding-bottom: 0; }
+.ds-distinction-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+.ds-distinction-name { font-size: 12px; font-weight: 500; color: var(--dark); margin-bottom: 4px; }
+.ds-distinction-desc { font-size: 13px; font-weight: 300; color: var(--mid); line-height: 1.65; }
+
+@media (max-width: 800px) { .ga4-questions { grid-template-columns: 1fr; } }
+
 /* ── Responsive ── */
 @media (max-width: 900px) { .type-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 800px) {
@@ -286,6 +317,7 @@ details[open] summary::after { content: '−'; }
     <div class="tab" onclick="switchTab('ig2')"><span class="tab-dot" style="background:var(--ig2)"></span>Instagram 2</div>
     <div class="tab" onclick="switchTab('tiktok')"><span class="tab-dot" style="background:#555"></span>TikTok</div>
     <div class="tab" onclick="switchTab('google')"><span class="tab-dot" style="background:var(--ga)"></span>Google Ads</div>
+    <div class="tab" onclick="switchTab('ga4')"><span class="tab-dot" style="background:var(--ga4)"></span>Website / GA4</div>
     <div class="tab" onclick="switchTab('linkedin')"><span class="tab-dot" style="background:var(--li)"></span>LinkedIn</div>
     <div class="tab" onclick="switchTab('aireport')">AI Report</div>
     <div class="tab" onclick="switchTab('datasource')">⊕ Data Source</div>
@@ -499,6 +531,109 @@ details[open] summary::after { content: '−'; }
     </table>
   </div>
 
+  <!-- ══ PANEL: Website Analytics / GA4 ══ -->
+  <div id="panel-ga4" class="panel">
+
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Schema ready · Import wiring coming next.</strong> This panel shows what Website Analytics will answer once GA4 data is imported. No live data connected yet. Use the <strong>Data Source</strong> tab to see the JSON schema and export instructions.</div>
+    </div>
+
+    <div class="ga4-concept-note">
+      <div class="ga4-concept-title">Google Analytics 4 (GA4) vs Google Ads — two different tools</div>
+      <div class="ga4-concept-text">
+        <strong>Google Ads</strong> tells you what happened before the click: which campaign ran, which keyword triggered the ad, how much was spent, how many clicks arrived, and what the cost per conversion was.<br><br>
+        <strong>GA4 / Website Analytics</strong> tells you what happened after the click: which landing page the visitor arrived on, how long they stayed, which pages they browsed, whether they clicked WhatsApp or a contact button, filled a form, or left without acting.<br><br>
+        Both are needed together. Google Ads shows where the traffic came from. GA4 shows what that traffic did on the website.
+      </div>
+    </div>
+
+    <div class="section-label">What Website Analytics Will Answer</div>
+    <div class="ga4-questions">
+
+      <div class="ga4-q-card">
+        <div class="ga4-q-num">Question 01</div>
+        <div class="ga4-q-title">Which landing pages bring the most visitors?</div>
+        <div class="ga4-q-desc">Ranked by sessions and users. Identifies which pages receive the most traffic — and from which source or medium (organic, paid, social, direct).</div>
+        <div class="ga4-q-fields">
+          <span class="ga4-q-field">landingPage</span>
+          <span class="ga4-q-field">sourceMedium</span>
+          <span class="ga4-q-field">sessions</span>
+          <span class="ga4-q-field">users</span>
+        </div>
+      </div>
+
+      <div class="ga4-q-card">
+        <div class="ga4-q-num">Question 02</div>
+        <div class="ga4-q-title">Which pages keep people the longest?</div>
+        <div class="ga4-q-desc">Pages with high average engagement time indicate strong content relevance. These pages are where visitors decide whether to contact or leave.</div>
+        <div class="ga4-q-fields">
+          <span class="ga4-q-field">pagePath</span>
+          <span class="ga4-q-field">pageTitle</span>
+          <span class="ga4-q-field">averageEngagementTime</span>
+          <span class="ga4-q-field">engagementRate</span>
+        </div>
+      </div>
+
+      <div class="ga4-q-card">
+        <div class="ga4-q-num">Question 03</div>
+        <div class="ga4-q-title">Which pages have weak engagement?</div>
+        <div class="ga4-q-desc">Pages with high views but low engagement time and low engagement rate are losing visitors. These pages likely have weak headlines, slow load, or unclear value proposition.</div>
+        <div class="ga4-q-fields">
+          <span class="ga4-q-field">views</span>
+          <span class="ga4-q-field">engagementRate</span>
+          <span class="ga4-q-field">averageEngagementTime</span>
+          <span class="ga4-q-field">notes</span>
+        </div>
+      </div>
+
+      <div class="ga4-q-card">
+        <div class="ga4-q-num">Question 04</div>
+        <div class="ga4-q-title">Which pages produce WhatsApp, contact, or form actions?</div>
+        <div class="ga4-q-desc">Tracks conversion events per page — WhatsApp button clicks, contact form submissions, and other key events set up in GA4. These are the pages that actually generate leads.</div>
+        <div class="ga4-q-fields">
+          <span class="ga4-q-field">whatsappClicks</span>
+          <span class="ga4-q-field">contactClicks</span>
+          <span class="ga4-q-field">formSubmits</span>
+          <span class="ga4-q-field">keyEvents</span>
+        </div>
+      </div>
+
+      <div class="ga4-q-card">
+        <div class="ga4-q-num">Question 05</div>
+        <div class="ga4-q-title">Which ad source sends traffic that does not convert?</div>
+        <div class="ga4-q-desc">By combining source/medium with event counts, you can see which paid or social traffic arrived but generated zero WhatsApp clicks or form fills. This identifies wasted spend at the landing page level — not at the ad level.</div>
+        <div class="ga4-q-fields">
+          <span class="ga4-q-field">sourceMedium</span>
+          <span class="ga4-q-field">sessions</span>
+          <span class="ga4-q-field">keyEvents</span>
+          <span class="ga4-q-field">whatsappClicks</span>
+        </div>
+      </div>
+
+      <div class="ga4-q-card">
+        <div class="ga4-q-num">Question 06</div>
+        <div class="ga4-q-title">Which pages need a better CTA or content?</div>
+        <div class="ga4-q-desc">Pages with adequate traffic and engagement time but near-zero conversion events have a CTA problem, not a traffic problem. These are the highest-priority pages for copy and design improvement.</div>
+        <div class="ga4-q-fields">
+          <span class="ga4-q-field">pagePath</span>
+          <span class="ga4-q-field">averageEngagementTime</span>
+          <span class="ga4-q-field">formSubmits</span>
+          <span class="ga4-q-field">scrolls</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="ga4-import-cta">
+      <div class="ga4-import-cta-text">
+        <strong>Schema ready.</strong> Export your GA4 data using the instructions in the Data Source tab, convert to JSON, and paste it here. Import wiring for GA4 will be added in the next pass once the schema is confirmed.
+      </div>
+      <button class="ga4-import-cta-btn" onclick="switchTab('datasource')">Go to Data Source</button>
+    </div>
+
+  </div>
+
   <!-- ══ PANEL: LinkedIn ══ -->
   <div id="panel-linkedin" class="panel">
     <div class="placeholder-panel">
@@ -571,32 +706,63 @@ details[open] summary::after { content: '−'; }
       <div id="ig1-import-msg" style="display:none" class="ds-msg"></div>
     </div>
 
-    <!-- Other channels — coming soon -->
-    <div class="ds-import-block" style="opacity:0.55;">
+    <!-- Instagram 2 — schema ready -->
+    <div class="ds-import-block">
       <div class="ds-import-header">
         <div class="ds-import-dot" style="background:var(--ig2)"></div>
         <div class="ds-import-title">Instagram 2 — @vista.branding</div>
-        <div class="ds-import-status-badge badge-mockdata">Mock Data</div>
+        <div class="ds-import-status-badge badge-schema-ready">Schema Ready · Wiring Next</div>
       </div>
-      <p class="ds-import-desc">Import for Instagram 2 will be wired in the next pass, once the Instagram 1 schema is confirmed with real data. The JSON format will be identical.</p>
+      <p class="ds-import-desc">Schema identical to Instagram 1. Import wiring will be added in the next pass once Instagram 1 has been tested with real data. Export from Meta Business Suite → Insights → Content for the @vista.branding account and convert to the same JSON format.</p>
     </div>
 
-    <div class="ds-import-block" style="opacity:0.55;">
+    <!-- TikTok — schema ready -->
+    <div class="ds-import-block">
       <div class="ds-import-header">
         <div class="ds-import-dot" style="background:#555"></div>
         <div class="ds-import-title">TikTok — @vistaunited</div>
-        <div class="ds-import-status-badge badge-mockdata">Mock Data</div>
+        <div class="ds-import-status-badge badge-schema-ready">Schema Ready · Wiring Next</div>
       </div>
-      <p class="ds-import-desc">TikTok import will be added after Instagram schemas are confirmed. See the schema reference below for the expected format.</p>
+      <p class="ds-import-desc">Full schema defined below — includes views, watch time, completion rate, likes, comments, shares, saves, profile visits, website clicks, and follows per video. Export from TikTok Studio → Analytics → Content, convert CSV to this JSON format. Import wiring comes after Instagram 1 is confirmed.</p>
     </div>
 
-    <div class="ds-import-block" style="opacity:0.55;">
+    <!-- Google Ads — schema ready -->
+    <div class="ds-import-block">
       <div class="ds-import-header">
         <div class="ds-import-dot" style="background:var(--ga)"></div>
-        <div class="ds-import-title">Google Ads</div>
-        <div class="ds-import-status-badge badge-mockdata">Mock Data</div>
+        <div class="ds-import-title">Google Ads — Campaign &amp; Keyword Data</div>
+        <div class="ds-import-status-badge badge-schema-ready">Schema Ready · Wiring Next</div>
       </div>
-      <p class="ds-import-desc">Google Ads import will be added after Instagram schemas are confirmed. See the schema reference below for the expected format.</p>
+      <p class="ds-import-desc">Covers campaign spend, keyword performance, clicks, CTR, CPC, conversions, cost per conversion, and final URL / landing page mapping. This is ad performance data — not website behaviour. For what visitors do after clicking, see Website Analytics / GA4 below.</p>
+    </div>
+
+    <!-- GA4 — schema ready -->
+    <div class="ds-import-block">
+      <div class="ds-import-header">
+        <div class="ds-import-dot" style="background:var(--ga4)"></div>
+        <div class="ds-import-title">Website Analytics / GA4 — Landing Page &amp; Behaviour Data</div>
+        <div class="ds-import-status-badge badge-schema-ready">Schema Ready · Wiring Next</div>
+      </div>
+      <p class="ds-import-desc">Covers landing pages, sessions, engagement time, engagement rate, WhatsApp clicks, contact clicks, form submits, scroll depth, key events / conversions, and source/medium. This is post-click website behaviour — not ad spend. For campaign spend data, see Google Ads above. Export from GA4 → Explore → Blank Exploration, then convert to JSON.</p>
+    </div>
+
+    <!-- Channel distinction explanation -->
+    <div class="section-label">Google Ads vs GA4 — what each one tells you</div>
+    <div class="ds-distinction">
+      <div class="ds-distinction-row">
+        <div class="ds-distinction-dot" style="background:var(--ga)"></div>
+        <div>
+          <div class="ds-distinction-name">Google Ads — before the click</div>
+          <div class="ds-distinction-desc">Shows what happened in the ad auction: which campaign ran, which keyword or search term triggered the ad, how much was spent, how many impressions were served, how many people clicked, what the CTR and CPC were, and how many conversions were recorded. The "final URL" field shows which page each campaign sent traffic to — useful for matching spend to landing pages.</div>
+        </div>
+      </div>
+      <div class="ds-distinction-row">
+        <div class="ds-distinction-dot" style="background:var(--ga4)"></div>
+        <div>
+          <div class="ds-distinction-name">GA4 / Website Analytics — after the click</div>
+          <div class="ds-distinction-desc">Shows what visitors did once they arrived on the website: which landing page they entered on, how long they stayed, how many pages they viewed, whether they scrolled, clicked a WhatsApp button, submitted a contact form, or left without acting. By filtering by source/medium you can see how different traffic sources behaved on the site — and which landing pages failed to convert visitors from paid ads.</div>
+        </div>
+      </div>
     </div>
 
     <!-- Export instructions -->
@@ -610,37 +776,51 @@ details[open] summary::after { content: '−'; }
           <div class="details-step"><div class="details-step-num">2</div><div class="details-step-text">Go to <strong>Insights → Content</strong>. Set the date range to the period you want to import.</div></div>
           <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">Click <strong>Export</strong> (top right). Choose <code>.csv</code> or <code>.xlsx</code>. Download the file.</div></div>
           <div class="details-step"><div class="details-step-num">4</div><div class="details-step-text">The export includes: Post ID, Post type, Date, Reach, Impressions, Likes, Comments, Shares, Saves, Profile visits, Link clicks. Map these columns to the JSON schema below.</div></div>
-          <div class="details-step"><div class="details-step-num">5</div><div class="details-step-text">Fields not in the export (WhatsApp clicks, Follows per post) may need to be added manually or estimated from account-level data. Leave them as <code>0</code> if not available.</div></div>
-          <div class="details-step"><div class="details-step-num">6</div><div class="details-step-text">Paste the completed JSON into the import area above and click <strong>Load Instagram 1 Data</strong>.</div></div>
+          <div class="details-step"><div class="details-step-num">5</div><div class="details-step-text">Fields not in the export (WhatsApp clicks, Follows per post) may need to be added manually from account-level data. Leave them as <code>0</code> if unavailable.</div></div>
+          <div class="details-step"><div class="details-step-num">6</div><div class="details-step-text">Paste the completed JSON into the Instagram 1 import area above and click <strong>Load Instagram 1 Data</strong>.</div></div>
         </div>
       </details>
 
       <details>
         <summary><span class="tab-dot" style="background:#555;margin-right:8px"></span>TikTok</summary>
         <div class="details-body">
-          <div class="details-step"><div class="details-step-num">1</div><div class="details-step-text">Open <strong>TikTok for Business</strong> (ads.tiktok.com) and go to your account. Or use <strong>TikTok Studio</strong> if you are using the creator account.</div></div>
-          <div class="details-step"><div class="details-step-num">2</div><div class="details-step-text">Go to <strong>Analytics → Content</strong>. Set the date range and click <strong>Export data</strong>.</div></div>
-          <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">The export includes: Video title, Date, Views, Likes, Comments, Shares, Average watch time. Map to the schema below.</div></div>
-          <div class="details-step"><div class="details-step-num">4</div><div class="details-step-text">Profile visits and Follows per video are not always in the TikTok export — add manually if you have them, or leave as <code>0</code>.</div></div>
+          <div class="details-step"><div class="details-step-num">1</div><div class="details-step-text">Open <strong>TikTok Studio</strong> (studio.tiktok.com) or <strong>TikTok for Business</strong> (ads.tiktok.com). Go to <strong>Analytics → Content</strong>.</div></div>
+          <div class="details-step"><div class="details-step-num">2</div><div class="details-step-text">Set the date range. Click <strong>Export data</strong> to download a CSV.</div></div>
+          <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">The export includes: Video name/ID, Publish date, Views, Likes, Comments, Shares, Average watch time. Map to the JSON schema below.</div></div>
+          <div class="details-step"><div class="details-step-num">4</div><div class="details-step-text">Completion rate, profile visits, website clicks, and follows per video may not appear in the standard export. Add them manually from the individual video analytics page if needed, or leave as <code>0</code>.</div></div>
+          <div class="details-step"><div class="details-step-num">5</div><div class="details-step-text"><code>avgWatchTimeSec</code> is in seconds. <code>completionRate</code> is a percentage (e.g. <code>42.5</code> for 42.5%).</div></div>
         </div>
       </details>
 
       <details>
         <summary><span class="tab-dot" style="background:var(--ga);margin-right:8px"></span>Google Ads</summary>
         <div class="details-body">
-          <div class="details-step"><div class="details-step-num">1</div><div class="details-step-text">Open <strong>Google Ads</strong> (ads.google.com) and go to <strong>Reports → Predefined reports → Basic → Keywords</strong>.</div></div>
-          <div class="details-step"><div class="details-step-num">2</div><div class="details-step-text">Set the date range. Add columns: Campaign, Ad group, Keyword, Match type, Impressions, Clicks, Cost, CTR, Avg. CPC, Conversions, Cost per conversion.</div></div>
-          <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">Click <strong>Download → .csv</strong>. Map each row to the JSON schema below.</div></div>
-          <div class="details-step"><div class="details-step-num">4</div><div class="details-step-text">Cost in Google Ads is always in the currency of your billing account. Confirm the currency before importing.</div></div>
+          <div class="details-step"><div class="details-step-num">1</div><div class="details-step-text">Open <strong>Google Ads</strong> (ads.google.com). Go to <strong>Reports → Predefined reports → Basic → Keywords</strong> for keyword-level data, or <strong>Campaigns</strong> for campaign-level data.</div></div>
+          <div class="details-step"><div class="details-step-num">2</div><div class="details-step-text">Set the date range. Add these columns: Campaign, Ad group, Keyword / Search term, Final URL, Impressions, Clicks, Cost, CTR, Avg. CPC, Conversions, Cost per conversion.</div></div>
+          <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">Click <strong>Download → CSV</strong>. Each row becomes one entry in the <code>campaigns</code> array in the JSON schema below.</div></div>
+          <div class="details-step"><div class="details-step-num">4</div><div class="details-step-text">Cost is always in your billing currency. Confirm it matches your SAR billing account before importing.</div></div>
+          <div class="details-step"><div class="details-step-num">5</div><div class="details-step-text">The <code>finalUrl</code> and <code>landingPage</code> fields let you cross-reference with GA4 data — ads sending traffic to the same URL can be compared against that page's GA4 engagement and conversion data.</div></div>
+        </div>
+      </details>
+
+      <details>
+        <summary><span class="tab-dot" style="background:var(--ga4);margin-right:8px"></span>Website Analytics / GA4</summary>
+        <div class="details-body">
+          <div class="details-step"><div class="details-step-num">1</div><div class="details-step-text">Open <strong>Google Analytics 4</strong> (analytics.google.com) for your property. Go to <strong>Explore → Blank</strong> to create a custom exploration.</div></div>
+          <div class="details-step"><div class="details-step-num">2</div><div class="details-step-text">Add these <strong>Dimensions</strong>: Landing page, Page path, Page title, Session source / medium. Add these <strong>Metrics</strong>: Sessions, Users, Views, Average engagement time, Engagement rate, Event count, Key events.</div></div>
+          <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">For WhatsApp and contact events: these only appear if GA4 event tracking is set up on the website. If <code>whatsapp_click</code>, <code>contact_click</code>, and <code>form_submit</code> events are configured, add them as event count breakdowns.</div></div>
+          <div class="details-step"><div class="details-step-num">4</div><div class="details-step-text">Click <strong>Export → Google Sheets</strong> or download as CSV. Each row (one page or one source/medium combination) becomes one entry in the <code>pages</code> array in the schema below.</div></div>
+          <div class="details-step"><div class="details-step-num">5</div><div class="details-step-text">Alternatively, use the standard <strong>Reports → Engagement → Pages and screens</strong> report and export that. It covers page path, views, users, and average engagement time.</div></div>
+          <div class="details-step"><div class="details-step-num">6</div><div class="details-step-text"><code>averageEngagementTime</code> is in seconds. <code>engagementRate</code> is a decimal (e.g. <code>0.54</code> = 54%). Adjust if your export uses percentages.</div></div>
         </div>
       </details>
 
       <details>
         <summary><span class="tab-dot" style="background:var(--li);margin-right:8px"></span>LinkedIn</summary>
         <div class="details-body">
-          <div class="details-step"><div class="details-step-num">1</div><div class="details-step-text">Open <strong>LinkedIn Campaign Manager</strong> (business.linkedin.com). Go to <strong>Analyze → Performance</strong>.</div></div>
+          <div class="details-step"><div class="details-step-num">1</div><div class="details-step-text">Open <strong>LinkedIn Campaign Manager</strong> (business.linkedin.com). Go to <strong>Analyze → Performance</strong> for paid data.</div></div>
           <div class="details-step"><div class="details-step-num">2</div><div class="details-step-text">For organic posts: go to your <strong>Company Page → Analytics → Posts</strong>. Click <strong>Export</strong> to download a spreadsheet.</div></div>
-          <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">The export includes: Post title, Impressions, Clicks, Reactions, Comments, Shares, Follows. Map to the schema below.</div></div>
+          <div class="details-step"><div class="details-step-num">3</div><div class="details-step-text">The export includes: Post title, Impressions, Clicks, Reactions, Comments, Shares, Follows gained. Map to the LinkedIn schema below.</div></div>
         </div>
       </details>
 
@@ -650,9 +830,9 @@ details[open] summary::after { content: '−'; }
     <div class="section-label">JSON Schema Reference</div>
 
     <details open>
-      <summary><span class="tab-dot" style="background:var(--ig1);margin-right:8px"></span>Instagram 1 &amp; 2 — Full Schema</summary>
+      <summary><span class="tab-dot" style="background:var(--ig1);margin-right:8px"></span>Instagram 1 &amp; 2 — Full Schema (import active for IG1)</summary>
       <div class="details-body">
-        <p style="font-size:13px;color:var(--mid);line-height:1.7;margin-bottom:10px">Copy this example, replace the sample values with your real data, and paste into the import area. Each object in the <code>posts</code> array represents one post, reel, carousel, or story.</p>
+        <p style="font-size:13px;color:var(--mid);line-height:1.7;margin-bottom:10px">Copy this example, replace values with your real data, and paste into the Instagram 1 import area above. Each object in <code>posts</code> is one post, reel, carousel, or story.</p>
         <pre class="schema-block">{
   "accountName": "Vista United Co.",
   "handle": "@vistaunited.co",
@@ -716,16 +896,16 @@ details[open] summary::after { content: '−'; }
 }</pre>
         <p class="schema-note">
           Valid <code>contentType</code> values: <code>reel</code>, <code>post</code>, <code>carousel</code>, <code>story</code>.<br>
-          <code>publishDate</code> must be in <code>YYYY-MM-DD</code> format.<br>
-          All numeric fields default to <code>0</code> if missing or null. <code>messageClicks</code> and <code>whatsappClicks</code> are treated as the same field — use whichever name your export uses.<br>
-          Missing fields will not cause an error — the dashboard will display 0 for any field not present in the post object.
+          <code>publishDate</code> must be <code>YYYY-MM-DD</code>. All numeric fields default to <code>0</code> if missing.
+          <code>messageClicks</code> and <code>whatsappClicks</code> are treated as the same field.
         </p>
       </div>
     </details>
 
     <details>
-      <summary><span class="tab-dot" style="background:#555;margin-right:8px"></span>TikTok — Schema (for future import)</summary>
+      <summary><span class="tab-dot" style="background:#555;margin-right:8px"></span>TikTok — Full Schema (schema ready · wiring next)</summary>
       <div class="details-body">
+        <p style="font-size:13px;color:var(--mid);line-height:1.7;margin-bottom:10px">Each object in <code>videos</code> represents one video. Fields match what TikTok Studio exports plus optional per-video fields from the individual video analytics page.</p>
         <pre class="schema-block">{
   "accountName": "Vista United",
   "handle": "@vistaunited",
@@ -733,26 +913,51 @@ details[open] summary::after { content: '−'; }
   "videos": [
     {
       "id": "vid_001",
-      "name": "Packaging Design Reveal",
+      "name": "Packaging Design Reveal — Full Process",
+      "contentType": "video",
       "publishDate": "2026-06-01",
       "views": 11200,
+      "avgWatchTimeSec": 18,
+      "completionRate": 42.5,
       "likes": 640,
       "comments": 48,
       "shares": 112,
       "saves": 84,
       "profileVisits": 380,
+      "websiteClicks": 56,
       "followsGained": 22,
-      "avgWatchTimeSec": 18,
-      "notes": ""
+      "notes": "Best performing video this period"
+    },
+    {
+      "id": "vid_002",
+      "name": "Brand Colour Psychology — 60 sec",
+      "contentType": "video",
+      "publishDate": "2026-06-05",
+      "views": 4800,
+      "avgWatchTimeSec": 11,
+      "completionRate": 18.2,
+      "likes": 184,
+      "comments": 12,
+      "shares": 28,
+      "saves": 22,
+      "profileVisits": 140,
+      "websiteClicks": 18,
+      "followsGained": 6,
+      "notes": "Low completion rate — video may be too long or hook too weak"
     }
   ]
 }</pre>
+        <p class="schema-note">
+          <code>avgWatchTimeSec</code> is in seconds. <code>completionRate</code> is a percentage (e.g. <code>42.5</code> = 42.5%).<br>
+          <code>profileVisits</code> and <code>websiteClicks</code> are per-video — available in TikTok Studio individual video analytics. Use <code>0</code> if not available from your export.
+        </p>
       </div>
     </details>
 
     <details>
-      <summary><span class="tab-dot" style="background:var(--ga);margin-right:8px"></span>Google Ads — Schema (for future import)</summary>
+      <summary><span class="tab-dot" style="background:var(--ga);margin-right:8px"></span>Google Ads — Full Schema (schema ready · wiring next)</summary>
       <div class="details-body">
+        <p style="font-size:13px;color:var(--mid);line-height:1.7;margin-bottom:10px">Each object in <code>campaigns</code> is one row from the Google Ads keyword or campaign report. Include <code>finalUrl</code> to cross-reference with GA4 landing page data.</p>
         <pre class="schema-block">{
   "accountName": "Vista United Co.",
   "period": "2026-06-01 to 2026-06-14",
@@ -760,9 +965,12 @@ details[open] summary::after { content: '−'; }
   "campaigns": [
     {
       "campaign": "Brand Awareness — KSA",
-      "adGroup": "Brand Identity",
+      "adGroup": "Brand Identity Design",
       "keyword": "brand identity design jeddah",
+      "searchTerm": "brand identity designer jeddah",
       "matchType": "phrase",
+      "finalUrl": "https://vistaunited.co/brand-identity",
+      "landingPage": "/brand-identity",
       "impressions": 12200,
       "clicks": 3800,
       "spend": 296,
@@ -770,10 +978,104 @@ details[open] summary::after { content: '−'; }
       "cpc": 0.078,
       "conversions": 6,
       "costPerConversion": 49.3,
-      "notes": "Best performing keyword"
+      "notes": "Best performing keyword — strong intent match"
+    },
+    {
+      "campaign": "Brand Awareness — KSA",
+      "adGroup": "Logo Design",
+      "keyword": "logo design company saudi arabia",
+      "searchTerm": "logo design saudi",
+      "matchType": "broad",
+      "finalUrl": "https://vistaunited.co/logo-design",
+      "landingPage": "/logo-design",
+      "impressions": 8400,
+      "clicks": 1200,
+      "spend": 188,
+      "ctr": 14.3,
+      "cpc": 0.157,
+      "conversions": 1,
+      "costPerConversion": 188,
+      "notes": "Broad match pulling irrelevant queries — review search terms"
     }
   ]
 }</pre>
+        <p class="schema-note">
+          <code>finalUrl</code> is the destination URL from the ad. <code>landingPage</code> is the path only (e.g. <code>/brand-identity</code>) — used to match against GA4 page data.<br>
+          <code>spend</code> must match your billing currency (set in <code>currency</code> field). <code>ctr</code> is a percentage value (e.g. <code>31.1</code> = 31.1%). <code>cpc</code> is in the billing currency.
+        </p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="tab-dot" style="background:var(--ga4);margin-right:8px"></span>Website Analytics / GA4 — Full Schema (schema ready · wiring next)</summary>
+      <div class="details-body">
+        <p style="font-size:13px;color:var(--mid);line-height:1.7;margin-bottom:10px">Each object in <code>pages</code> is one row from your GA4 export — typically one page path per source/medium combination. Use this to understand what visitors did after arriving on each page.</p>
+        <pre class="schema-block">{
+  "propertyName": "vistaunited.co",
+  "period": "2026-06-01 to 2026-06-14",
+  "pages": [
+    {
+      "landingPage": "/brand-identity",
+      "pagePath": "/brand-identity",
+      "pageTitle": "Brand Identity Design — Vista United",
+      "sourceMedium": "google / cpc",
+      "sessions": 1840,
+      "users": 1620,
+      "views": 2400,
+      "averageEngagementTime": 142,
+      "engagementRate": 0.54,
+      "eventCount": 3280,
+      "keyEvents": 14,
+      "whatsappClicks": 9,
+      "contactClicks": 5,
+      "formSubmits": 4,
+      "scrolls": 1100,
+      "notes": "Best converting landing page from paid search"
+    },
+    {
+      "landingPage": "/logo-design",
+      "pagePath": "/logo-design",
+      "pageTitle": "Logo Design Services — Vista United",
+      "sourceMedium": "google / cpc",
+      "sessions": 640,
+      "users": 580,
+      "views": 820,
+      "averageEngagementTime": 28,
+      "engagementRate": 0.21,
+      "eventCount": 480,
+      "keyEvents": 0,
+      "whatsappClicks": 0,
+      "contactClicks": 1,
+      "formSubmits": 0,
+      "scrolls": 210,
+      "notes": "High spend via Google Ads but zero conversions — CTA and copy need revision"
+    },
+    {
+      "landingPage": "/",
+      "pagePath": "/",
+      "pageTitle": "Vista United Co. — Brand Experience Studio",
+      "sourceMedium": "instagram / social",
+      "sessions": 2100,
+      "users": 1980,
+      "views": 2800,
+      "averageEngagementTime": 64,
+      "engagementRate": 0.38,
+      "eventCount": 1840,
+      "keyEvents": 6,
+      "whatsappClicks": 4,
+      "contactClicks": 2,
+      "formSubmits": 0,
+      "scrolls": 1400,
+      "notes": "High traffic from Instagram but low engagement time — homepage may need clearer CTA above the fold"
+    }
+  ]
+}</pre>
+        <p class="schema-note">
+          <code>averageEngagementTime</code> is in seconds. <code>engagementRate</code> is a decimal (e.g. <code>0.54</code> = 54%).<br>
+          <code>whatsappClicks</code>, <code>contactClicks</code>, <code>formSubmits</code>, and <code>scrolls</code> require GA4 event tracking to be configured on the website. Leave as <code>0</code> if events are not set up yet.<br>
+          <code>keyEvents</code> is the GA4 term for "conversions" (renamed in GA4 2024). Use whichever your export labels it.<br>
+          One row per page + source/medium combination gives the most useful cross-channel view.
+        </p>
       </div>
     </details>
 
@@ -804,9 +1106,10 @@ details[open] summary::after { content: '−'; }
 
     <!-- What's next -->
     <div class="ds-next-note">
-      <div class="ds-next-title">What's next — connecting live APIs</div>
+      <div class="ds-next-title">What's next — wiring imports and connecting live APIs</div>
       <div class="ds-next-text">
-        Once you have confirmed the JSON schema works correctly with your real exported data, the next step is to connect live APIs so data refreshes automatically without manual export. This requires OAuth tokens for each platform (Meta Graph API for Instagram, TikTok for Business API, Google Ads API). No credentials, tokens, or OAuth are stored or used in V1. API connection is a separate session and will be added after the schema is confirmed.
+        <strong>Next pass:</strong> Wire TikTok, Google Ads, and GA4 imports so their tabs render from real exported data — same approach as Instagram 1. Instagram 2 import will also be wired in the same pass.<br><br>
+        <strong>After schema confirmation:</strong> Connect live APIs so data refreshes automatically without manual export. This requires OAuth tokens for each platform (Meta Graph API, TikTok for Business API, Google Ads API, GA4 Data API). No credentials or OAuth tokens are stored or used in V1.
       </div>
     </div>
 
@@ -851,7 +1154,7 @@ const WEEKS = ['W1', 'W2', 'W3', 'W4'];
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  const order = ['overview','ig1','ig2','tiktok','google','linkedin','aireport','datasource'];
+  const order = ['overview','ig1','ig2','tiktok','google','ga4','linkedin','aireport','datasource'];
   const idx = order.indexOf(id);
   const tabs = document.querySelectorAll('.tab');
   if (idx >= 0 && tabs[idx]) tabs[idx].classList.add('active');
@@ -1268,6 +1571,10 @@ function updateDSModeIndicator() {
       <div class="ds-mode-chip is-mock">
         <div class="ds-mode-chip-dot" style="background:var(--ga)"></div>
         Google Ads · Mock Data
+      </div>
+      <div class="ds-mode-chip is-mock">
+        <div class="ds-mode-chip-dot" style="background:var(--ga4)"></div>
+        Website / GA4 · Mock Data
       </div>`;
   }
   if (badge) {
