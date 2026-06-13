@@ -2,6 +2,33 @@
 
 ---
 
+## [2026-06-13] — Marketing Intelligence: GA4 API Pilot
+
+### proxy.py + marketing-dashboard.html
+
+Added a read-only GA4 API pilot through the local proxy. Credentials stay server-side only — the browser never receives a token, file path, or service account value. No APIs, OAuth browser flows, credentials in frontend, or write actions.
+
+**What was added:**
+
+- **`GET /api/ga4/status`** — new proxy endpoint; returns `{configured, property_id_set, creds_file_exists, gauth_installed, message}`; reports whether `google-auth` is installed, whether the property ID and credentials file are set in `config.json`; never returns credential values, file paths, or tracebacks
+- **`GET /api/ga4/report?period=last_30_days`** — new proxy endpoint; authenticates via Service Account JSON (server-side only); calls GA4 Data API v1beta in three sub-requests (page-level sessions + engagement, custom events per page, audience by country/city/device); transforms and returns JSON shaped identically to the existing manual GA4 import schema — existing `renderGA4Imported()` and `aggregateGA4()` are reused with no changes
+- **`POST /api/ga4/` → 405** — explicit block; purchasing POST routes remain first in `do_POST` and are unaffected
+- **Lazy `google-auth` import** — `from google.oauth2 import service_account` and `import google.auth.transport.requests` are inside a `try/except ImportError` inside `_ga4_report()` only; if the package is missing, only the GA4 endpoints return `503` with a clear `pip install` message; proxy starts and all other routes work normally
+- **GA4 startup status line** — proxy now prints `GA4 API : OK - configured` or `NOT SET - edit config.json (marketing_apis.google.ga4)` at startup; no credential path or value is printed
+- **"Fetch GA4 from API" button** — added to the Data Source → GA4 import block in `marketing-dashboard.html`; calls `/api/ga4/status` first, then `/api/ga4/report`; on success sets `GA4_IMPORTED`, calls `updateDSModeIndicator()`, switches to the GA4 tab; shows **API Connected**, **API Error**, or **Needs Config** state clearly; manual paste import textarea and Load/Reset buttons are unchanged and remain fully functional alongside the button
+- **`clearGA4Data()` updated** — also clears the API status span when reset is clicked
+
+**Security:**
+- No credential value, file path, `access_token`, service account email, or traceback is ever returned in an HTTP response
+- `_ga4_property_id` is included in the `propertyName` field of the report response (public numeric ID, not a credential); all other config values remain server-side only
+- `config.json` was not touched, printed, staged, committed, or pushed
+
+**Not added (scope boundary):**
+- Google Ads API, Meta/Instagram API, TikTok API — zero lines for these platforms
+- Existing Daftra, Notion, and purchasing routes were not modified; all confirmed working after implementation
+
+---
+
 ## [2026-06-13] — Marketing Intelligence: AI Coach & Instagram 2 Placeholders
 
 ### marketing-dashboard.html

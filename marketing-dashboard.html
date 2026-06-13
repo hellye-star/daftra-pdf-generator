@@ -627,6 +627,11 @@ details[open] summary::after { content: '−'; }
         <button class="ds-btn ds-btn-primary" onclick="loadGA4Data()">Load GA4 Data</button>
         <button class="ds-btn ds-btn-danger" onclick="clearGA4Data()">Reset to Placeholder</button>
       </div>
+      <div class="ds-btn-row" style="margin-top:6px;align-items:center;gap:10px;">
+        <button class="ds-btn" id="ga4-api-fetch-btn" onclick="fetchGA4FromAPI()"
+          style="background:var(--ga4);color:#fff;border:none;opacity:1;">Fetch GA4 from API</button>
+        <span id="ga4-api-status" style="font-size:12px;color:var(--text-secondary);"></span>
+      </div>
       <div id="ga4-import-msg" style="display:none" class="ds-msg"></div>
     </div>
 
@@ -2498,11 +2503,84 @@ function loadGA4Data() {
   msgEl.style.display = 'block';
 }
 
+function fetchGA4FromAPI() {
+  const btn    = document.getElementById('ga4-api-fetch-btn');
+  const status = document.getElementById('ga4-api-status');
+  const msgEl  = document.getElementById('ga4-import-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  if (status) status.textContent = '';
+  if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; }
+
+  function setStatus(text, ok) {
+    if (status) {
+      status.textContent = text;
+      status.style.color = ok ? 'var(--green)' : 'var(--red, #e53)';
+    }
+  }
+  function resetBtn() {
+    if (btn) { btn.disabled = false; btn.textContent = 'Fetch GA4 from API'; }
+  }
+
+  fetch('/api/ga4/status')
+    .then(r => r.json())
+    .then(s => {
+      if (!s.configured) {
+        setStatus('API Needs Config — ' + (s.message || 'Check proxy.py and config.json.'), false);
+        resetBtn();
+        if (msgEl) {
+          msgEl.textContent = 'GA4 API is not ready: ' + (s.message || '');
+          msgEl.style.display = 'block';
+          msgEl.className = 'ds-msg ds-msg-error';
+        }
+        return;
+      }
+      if (btn) btn.textContent = 'Fetching…';
+      return fetch('/api/ga4/report?period=last_30_days')
+        .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (!ok || data.error) {
+            const msg = data.error || 'GA4 API returned an error.';
+            setStatus('API Error', false);
+            resetBtn();
+            if (msgEl) {
+              msgEl.textContent = 'GA4 API error: ' + msg;
+              msgEl.style.display = 'block';
+              msgEl.className = 'ds-msg ds-msg-error';
+            }
+            return;
+          }
+          GA4_IMPORTED = data;
+          updateDSModeIndicator();
+          setStatus('API Connected — ' + (data.pages || []).length + ' pages loaded', true);
+          resetBtn();
+          if (msgEl) {
+            msgEl.textContent = 'GA4 API data loaded — ' + (data.pages || []).length +
+              ' pages from ' + esc(data.period || 'last 30 days') +
+              '. Manual paste import is still available above.';
+            msgEl.style.display = 'block';
+            msgEl.className = 'ds-msg ds-msg-success';
+          }
+          switchTab('ga4');
+        });
+    })
+    .catch(() => {
+      setStatus('Could not reach proxy — is proxy.py running?', false);
+      resetBtn();
+      if (msgEl) {
+        msgEl.textContent = 'Could not reach proxy. Make sure proxy.py is running on port 8080.';
+        msgEl.style.display = 'block';
+        msgEl.className = 'ds-msg ds-msg-error';
+      }
+    });
+}
+
 function clearGA4Data() {
   GA4_IMPORTED = null;
   const input = document.getElementById('ga4-json-input');
   const msg   = document.getElementById('ga4-import-msg');
   if (input) input.value = '';
+  const apiStatus = document.getElementById('ga4-api-status');
+  if (apiStatus) apiStatus.textContent = '';
   if (msg)   { msg.style.display = 'none'; msg.textContent = ''; }
   updateDSModeIndicator();
 }

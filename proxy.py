@@ -58,6 +58,10 @@ _personal_token = CONFIG.get('notion', {}).get('personal', {}).get('token', '')
 _daftra_subdomain = CONFIG.get('daftra', {}).get('subdomain', '')
 _daftra_api_key   = CONFIG.get('daftra', {}).get('api_key', '')
 
+_ga4_cfg         = CONFIG.get('marketing_apis', {}).get('google', {}).get('ga4', {})
+_ga4_property_id = _ga4_cfg.get('property_id', '')
+_ga4_creds_path  = _ga4_cfg.get('credentials_json_path', '')
+
 def _token_ready(t):
     return bool(t) and not t.startswith('PASTE_') and not t.startswith('REPLACE_')
 
@@ -81,6 +85,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/purchasing-invoices/'):
             self._handle_purchasing_get()
+        elif self.path.startswith('/api/ga4/'):
+            self._handle_ga4_get()
         elif self.path.startswith('/daftra/'):
             self._proxy_daftra()
         else:
@@ -95,6 +101,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._combine_purchasing()
         elif self.path.startswith('/purchasing-invoices/upload'):
             self._upload_purchasing()
+        elif self.path.startswith('/api/ga4/'):
+            self._json_error(405, 'Method not allowed. GA4 API proxy is read-only (GET only).')
         elif self.path.startswith('/daftra/'):
             self._block_daftra_write()
         else:
@@ -483,6 +491,273 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body_out)
 
+    # ── GA4 API proxy (read-only) ────────────────────────────────────────────
+
+    def _handle_ga4_get(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/api/ga4/status':
+            self._ga4_status()
+        elif parsed.path == '/api/ga4/report':
+            params = parse_qs(parsed.query)
+            period = params.get('period', ['last_30_days'])[0]
+            self._ga4_report(period)
+        else:
+            self._json_error(404, 'GA4 API endpoint not found.')
+
+    def _ga4_status(self):
+        pid_ok   = _token_ready(_ga4_property_id)
+        creds_ok = bool(_ga4_creds_path) and not _ga4_creds_path.startswith('REPLACE_')
+        file_ok  = creds_ok and os.path.isfile(_ga4_creds_path)
+
+        # Lazy check — do not import google-auth at module level
+        try:
+            import google.oauth2.service_account  # noqa: F401
+            gauth_ok = True
+        except ImportError:
+            gauth_ok = False
+
+        configured = pid_ok and file_ok and gauth_ok
+        msgs = []
+        if not pid_ok:
+            msgs.append('GA4 property ID is not configured.')
+        if not creds_ok:
+            msgs.append('GA4 credentials path is not configured.')
+        elif not file_ok:
+            msgs.append('GA4 credentials file is missing or inaccessible.')
+        if not gauth_ok:
+            msgs.append('google-auth package is not installed. Run: pip install google-auth requests')
+
+        body = json.dumps({
+            'configured':        configured,
+            'property_id_set':   pid_ok,
+            'creds_file_exists': file_ok,
+            'gauth_installed':   gauth_ok,
+            'message':           ' '.join(msgs) if msgs else 'GA4 is ready.',
+        }).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _ga4_report(self, period='last_30_days'):
+        # ── Lazy import — missing package returns 503, does not crash proxy ─
+        try:
+            from google.oauth2 import service_account as _sa
+            import google.auth.transport.requests as _ga_transport
+        except ImportError:
+            self._json_error(503,
+                'google-auth package is not installed. '
+                'Run: pip install google-auth requests  then restart proxy.py.')
+            return
+
+        if not _token_ready(_ga4_property_id):
+            self._json_error(503, 'GA4 property ID is not configured in config.json.')
+            return
+        if not _ga4_creds_path or _ga4_creds_path.startswith('REPLACE_'):
+            self._json_error(503, 'GA4 credentials path is not configured in config.json.')
+            return
+        if not os.path.isfile(_ga4_creds_path):
+            self._json_error(503, 'GA4 credentials file is missing or inaccessible.')
+            return
+
+        # ── Authenticate via service account ────────────────────────────────
+        try:
+            SCOPES = ['https://www.googleapis.com/auth/analytics.readonly']
+            creds  = _sa.Credentials.from_service_account_file(_ga4_creds_path, scopes=SCOPES)
+            creds.refresh(_ga_transport.Request())
+            access_token = creds.token
+        except Exception:
+            self._json_error(503,
+                'Failed to authenticate with GA4. '
+                'Check that the service account JSON file is valid and not corrupted.')
+            return
+
+        # ── Date range ───────────────────────────────────────────────────────
+        if period == 'last_7_days':
+            date_range   = {'startDate': '7daysAgo',  'endDate': 'today'}
+            period_label = 'Last 7 Days'
+        else:
+            date_range   = {'startDate': '30daysAgo', 'endDate': 'today'}
+            period_label = 'Last 30 Days'
+
+        prop_url = (f'https://analyticsdata.googleapis.com/v1beta'
+                    f'/properties/{_ga4_property_id}:runReport')
+        auth_headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type':  'application/json',
+        }
+
+        def _post(body_dict):
+            """POST one runReport call; returns (data_dict, error_str)."""
+            raw = json.dumps(body_dict).encode('utf-8')
+            req = urllib.request.Request(
+                prop_url, data=raw, method='POST', headers=auth_headers)
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read()), None
+            except urllib.error.HTTPError as e:
+                try:
+                    err = json.loads(e.read().decode('utf-8', errors='replace'))
+                    code = err.get('error', {}).get('code', e.code)
+                    msg  = err.get('error', {}).get('message', '')
+                except Exception:
+                    code, msg = e.code, ''
+                if code in (401, 403):
+                    return None, ('Service account does not have access to this GA4 property. '
+                                  'Grant Viewer role in GA4 Admin > Property Access Management.')
+                if code == 400:
+                    return None, f'GA4 API rejected the request (400). Check metric/dimension names. Detail: {msg[:120]}'
+                return None, f'GA4 API returned error {code}.'
+            except urllib.error.URLError:
+                return None, 'Could not reach GA4 API. Check internet connection.'
+            except Exception:
+                return None, 'Unexpected error calling GA4 API.'
+
+        # ── Call 1: page-level sessions + engagement ─────────────────────────
+        page_data, err = _post({
+            'dateRanges': [date_range],
+            'dimensions': [
+                {'name': 'pagePath'},
+                {'name': 'pageTitle'},
+                {'name': 'sessionSourceMedium'},
+            ],
+            'metrics': [
+                {'name': 'sessions'},
+                {'name': 'totalUsers'},
+                {'name': 'screenPageViews'},
+                {'name': 'averageSessionDuration'},
+                {'name': 'engagementRate'},
+                {'name': 'eventCount'},
+                {'name': 'keyEvents'},
+            ],
+            'limit': 100,
+            'orderBys': [{'metric': {'metricName': 'sessions'}, 'desc': True}],
+        })
+        if err:
+            self._json_error(502, err)
+            return
+
+        # ── Call 2: custom events per page (non-fatal if property has none) ──
+        EVENT_MAP = {
+            'whatsapp_click': 'whatsappClicks',
+            'contact_click':  'contactClicks',
+            'form_submit':    'formSubmits',
+            'scroll':         'scrolls',
+        }
+        event_data, _ = _post({
+            'dateRanges': [date_range],
+            'dimensions': [{'name': 'pagePath'}, {'name': 'eventName'}],
+            'metrics':    [{'name': 'eventCount'}],
+            'dimensionFilter': {
+                'filter': {
+                    'fieldName':    'eventName',
+                    'inListFilter': {'values': list(EVENT_MAP.keys())},
+                }
+            },
+            'limit': 10000,
+        })
+
+        # ── Call 3: audience by country / city / device ──────────────────────
+        audience_data, _ = _post({
+            'dateRanges': [date_range],
+            'dimensions': [
+                {'name': 'country'},
+                {'name': 'city'},
+                {'name': 'deviceCategory'},
+            ],
+            'metrics': [
+                {'name': 'totalUsers'},
+                {'name': 'newUsers'},
+                {'name': 'sessions'},
+                {'name': 'averageSessionDuration'},
+                {'name': 'engagementRate'},
+                {'name': 'keyEvents'},
+            ],
+            'limit': 100,
+            'orderBys': [{'metric': {'metricName': 'sessions'}, 'desc': True}],
+        })
+
+        # ── Build event lookup: {pagePath: {fieldName: count}} ───────────────
+        evt_lookup = {}
+        for row in (event_data or {}).get('rows', []):
+            dims = [d['value'] for d in row.get('dimensionValues', [])]
+            if len(dims) < 2:
+                continue
+            path, evt = dims[0], dims[1]
+            field = EVENT_MAP.get(evt)
+            if field:
+                bucket = evt_lookup.setdefault(path, {})
+                bucket[field] = bucket.get(field, 0) + int(float(
+                    row['metricValues'][0]['value']))
+
+        # ── Transform pages ──────────────────────────────────────────────────
+        pages = []
+        for row in (page_data.get('rows') or []):
+            dims = [d['value'] for d in row.get('dimensionValues', [])]
+            mets = [m['value'] for m in row.get('metricValues', [])]
+            if len(dims) < 3 or len(mets) < 7:
+                continue
+            path = dims[0]
+            evt  = evt_lookup.get(path, {})
+            pages.append({
+                'landingPage':           path,
+                'pagePath':              path,
+                'pageTitle':             dims[1],
+                'sourceMedium':          dims[2],
+                'sessions':              int(float(mets[0])),
+                'users':                 int(float(mets[1])),
+                'views':                 int(float(mets[2])),
+                'averageEngagementTime': round(float(mets[3])),
+                'engagementRate':        round(float(mets[4]), 4),
+                'eventCount':            int(float(mets[5])),
+                'keyEvents':             int(float(mets[6])),
+                'whatsappClicks':        evt.get('whatsappClicks', 0),
+                'contactClicks':         evt.get('contactClicks', 0),
+                'formSubmits':           evt.get('formSubmits', 0),
+                'scrolls':               evt.get('scrolls', 0),
+            })
+
+        # ── Transform audience ───────────────────────────────────────────────
+        audience = []
+        for row in (audience_data or {}).get('rows', []):
+            dims = [d['value'] for d in row.get('dimensionValues', [])]
+            mets = [m['value'] for m in row.get('metricValues', [])]
+            if len(dims) < 3 or len(mets) < 6:
+                continue
+            total = int(float(mets[0]))
+            new_u = int(float(mets[1]))
+            audience.append({
+                'country':               dims[0],
+                'city':                  dims[1],
+                'deviceCategory':        dims[2],
+                'users':                 total,
+                'newUsers':              new_u,
+                'returningUsers':        max(0, total - new_u),
+                'sessions':              int(float(mets[2])),
+                'averageEngagementTime': round(float(mets[3])),
+                'engagementRate':        round(float(mets[4]), 4),
+                'keyEvents':             int(float(mets[5])),
+                'whatsappClicks':        0,
+                'contactClicks':         0,
+                'formSubmits':           0,
+            })
+
+        result = json.dumps({
+            'propertyName': f'GA4 Property {_ga4_property_id}',
+            'period':        period_label,
+            'pages':         pages,
+            'audience':      audience,
+            '_source':       'api',
+        }).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(result)
+
     # ── Notion proxy ─────────────────────────────────────────────────────────
 
     def _notion_route(self):
@@ -561,6 +836,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [daftra] {self.command} {self.path}  ->  {fmt % args}')
         elif '/purchasing-invoices/' in self.path:
             print(f'  [purch]  {self.command} {self.path}  ->  {fmt % args}')
+        elif '/api/ga4/' in self.path:
+            print(f'  [ga4]    {self.command} {self.path}  ->  {fmt % args}')
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
@@ -578,6 +855,10 @@ if __name__ == '__main__':
     print(f'  Daftra               : {"OK - configured" if (_token_ready(_daftra_subdomain) and _token_ready(_daftra_api_key)) else "NOT SET - edit config.json"}')
     _purch_ok = os.path.isdir(PURCHASE_INVOICE_DIR)
     print(f'  Purchasing invoices  : {"OK - folder found" if _purch_ok else "FOLDER NOT FOUND - " + PURCHASE_INVOICE_DIR}')
+    _ga4_pid_ok   = _token_ready(_ga4_property_id)
+    _ga4_creds_ok = (bool(_ga4_creds_path) and not _ga4_creds_path.startswith('REPLACE_')
+                     and os.path.isfile(_ga4_creds_path))
+    print(f'  GA4 API              : {"OK - configured" if (_ga4_pid_ok and _ga4_creds_ok) else "NOT SET - edit config.json (marketing_apis.google.ga4)"}')
     print()
     print('  Press Ctrl+C to stop.')
     print()
