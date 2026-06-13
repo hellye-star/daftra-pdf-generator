@@ -2,6 +2,29 @@
 
 ---
 
+## [2026-06-13] — Marketing Intelligence: GA4 Visitor Segment Analysis
+
+### marketing-dashboard.html
+
+Extended the GA4 manual import with visitor segment analysis. No new files. No APIs, OAuth, credentials, fetch calls, AI API calls, or ad write actions.
+
+**What was added:**
+- **Visitor Segment Analysis section** in the Website / GA4 imported render — appears below the six page analysis tables when audience data is present in the imported JSON
+- Summary strip: new visitors, returning visitors, sessions per user, number of locations tracked
+- **Top countries** by user volume with average engagement rate and total conversion actions per country
+- **Top cities** by user volume with session counts and conversion actions
+- **Device category breakdown** (mobile / desktop / tablet) with user count and percentage share
+- **Engagement insight cards**: strong engagement segments (≥ 45% engagement rate), weak engagement segments (< 30% engagement rate), cities producing WhatsApp / contact / form actions
+- **Optional `audience` array** added to GA4 JSON schema — each entry is an aggregate visitor segment row by country, city, and device (no personal identifiers). Supported fields: `country`, `city`, `deviceCategory`, `users`, `newUsers`, `returningUsers`, `sessions`, `averageEngagementTime`, `engagementRate`, `keyEvents`, `whatsappClicks`, `contactClicks`, `formSubmits`
+- **Page-level location fields** now also accepted on each `pages` row: `country`, `city`, `deviceCategory`, `newUsers`, `returningUsers` — used as fallback if no `audience` array is provided
+- Wording throughout uses "visitor segments" and "user location analysis" — no implication of personal visitor identity
+- Imported data remains memory-only (no localStorage, clears on page refresh)
+- Instagram 1 import unchanged and fully working
+
+**Files NOT changed:** `proxy.py`, `config.json`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+---
+
 ## [2026-06-13] — Marketing Intelligence: Website / GA4 Tab + Expanded Data Source Schemas
 
 ### marketing-dashboard.html
