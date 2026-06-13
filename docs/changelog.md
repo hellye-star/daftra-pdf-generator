@@ -2,6 +2,36 @@
 
 ---
 
+## [2026-06-13] — Marketing Intelligence: Instagram 1 Account Baseline & Validation
+
+### marketing-dashboard.html
+
+Extended the Instagram 1 manual import with account-level baseline fields and validation warnings. No new files. No APIs, OAuth, credentials, fetch calls, AI API calls, or ad write actions.
+
+**What was added:**
+- **Account baseline fields** now supported at the top level of the Instagram 1 JSON: `currentFollowers`, `followersAtStart`, `followersAtEnd`, `accountReach`, `accountImpressions`, `profileVisits`, `websiteClicks`, `whatsappClicks`, `totalContentPublished` — all optional but recommended
+- When any baseline field is present, an **Account Baseline** section renders above post-level totals: current followers card, follower growth (start → end), account reach, account impressions, profile visits, website clicks, WhatsApp clicks, and total content published
+- **Five validation warnings** appear at the top of the imported render when triggered:
+  - Error — sum of followsGained across posts exceeds currentFollowers (implausible for small accounts)
+  - Warning — follower count dropped start→end but no unfollows recorded on any post
+  - Info — total post reach is more than 5× accountReach (possible double-counting; prompts clarification)
+  - Info — imported handle does not match @vistaunited.co (wrong account check)
+  - Info — currentFollowers missing (soft prompt to add it for validation)
+- Warnings are colour-coded (red/amber/blue) with icons; no warnings = no block rendered
+- **Imported-notice banner updated** to read "Imported manual data active. Numbers are based on the JSON you pasted. This is not live API data — use actual Instagram Insights numbers for accuracy."
+- **DS schema example updated** to use realistic numbers for @vistaunited.co (9 followers, reach 70–210 per post, follows 0–2 per post) with explicit note: "Example format only — replace all values with your real Instagram Insights numbers"
+- Post-level summary strip relabelled "Post-Level Totals" to distinguish it from the new account baseline strip
+
+**Known working imports (previously verified, not retested this change):**
+- Instagram 1 manual import — working (baseline/warnings added; core aggregation/load/clear unchanged)
+- GA4 manual import + visitor segment analysis — working
+- Google Ads manual import — working
+- TikTok — schema-only, not wired
+
+**Files NOT changed:** `proxy.py`, `config.json`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+---
+
 ## [2026-06-13] — Marketing Intelligence: Google Ads Manual Import
 
 ### marketing-dashboard.html

@@ -722,46 +722,55 @@ details[open] summary::after { content: '−'; }
     <details open>
       <summary><span class="tab-dot" style="background:var(--ig1);margin-right:8px"></span>Instagram 1 &amp; 2 — Full Schema (import active for IG1)</summary>
       <div class="details-body">
-        <p style="font-size:13px;color:var(--mid);line-height:1.7;margin-bottom:10px">Copy this example, replace values with your real data, and paste into the Instagram 1 import area above. Each object in <code>posts</code> is one post, reel, carousel, or story.</p>
+        <p style="font-size:13px;color:var(--mid);line-height:1.7;margin-bottom:10px"><strong>Example format only.</strong> Replace all values with your real Instagram Insights numbers. Account-level fields (<code>currentFollowers</code>, <code>accountReach</code>, etc.) come from your profile overview in Meta Business Suite. Post-level fields come from each post's individual insights panel.</p>
         <pre class="schema-block">{
   "accountName": "Vista United Co.",
   "handle": "@vistaunited.co",
   "period": "2026-06-01 to 2026-06-14",
+  "currentFollowers": 9,
+  "followersAtStart": 6,
+  "followersAtEnd": 9,
+  "accountReach": 420,
+  "accountImpressions": 680,
+  "profileVisits": 38,
+  "websiteClicks": 4,
+  "whatsappClicks": 1,
+  "totalContentPublished": 3,
   "posts": [
     {
       "id": "post_001",
       "name": "Brand Identity Showcase — Before & After",
       "contentType": "reel",
       "publishDate": "2026-06-02",
-      "reach": 18400,
-      "impressions": 24200,
-      "likes": 842,
-      "comments": 64,
-      "shares": 94,
-      "saves": 198,
-      "profileVisits": 420,
-      "websiteClicks": 88,
-      "messageClicks": 12,
-      "followsGained": 34,
-      "unfollows": 5,
-      "notes": "Strongest reel this period"
+      "reach": 210,
+      "impressions": 320,
+      "likes": 14,
+      "comments": 2,
+      "shares": 3,
+      "saves": 8,
+      "profileVisits": 18,
+      "websiteClicks": 2,
+      "whatsappClicks": 1,
+      "followsGained": 2,
+      "unfollows": 0,
+      "notes": "Best reach this period"
     },
     {
       "id": "post_002",
       "name": "Logo Design: From Sketch to Final",
       "contentType": "carousel",
       "publishDate": "2026-06-04",
-      "reach": 9200,
-      "impressions": 12400,
-      "likes": 384,
-      "comments": 28,
-      "shares": 42,
-      "saves": 198,
-      "profileVisits": 210,
-      "websiteClicks": 44,
-      "messageClicks": 6,
-      "followsGained": 18,
-      "unfollows": 3,
+      "reach": 140,
+      "impressions": 220,
+      "likes": 9,
+      "comments": 1,
+      "shares": 1,
+      "saves": 4,
+      "profileVisits": 12,
+      "websiteClicks": 1,
+      "whatsappClicks": 0,
+      "followsGained": 1,
+      "unfollows": 0,
       "notes": ""
     },
     {
@@ -769,25 +778,27 @@ details[open] summary::after { content: '−'; }
       "name": "Company Culture — Team Lunch",
       "contentType": "post",
       "publishDate": "2026-06-05",
-      "reach": 2100,
-      "impressions": 2800,
-      "likes": 112,
-      "comments": 8,
-      "shares": 4,
-      "saves": 6,
-      "profileVisits": 48,
-      "websiteClicks": 12,
-      "messageClicks": 1,
-      "followsGained": 2,
-      "unfollows": 4,
-      "notes": "Low reach — consider reel format next time"
+      "reach": 70,
+      "impressions": 140,
+      "likes": 5,
+      "comments": 0,
+      "shares": 0,
+      "saves": 1,
+      "profileVisits": 8,
+      "websiteClicks": 1,
+      "whatsappClicks": 0,
+      "followsGained": 0,
+      "unfollows": 0,
+      "notes": "Lower reach than reels — consider reel format next time"
     }
   ]
 }</pre>
         <p class="schema-note">
+          <strong>Account-level fields</strong> (<code>currentFollowers</code>, <code>followersAtStart</code>, <code>followersAtEnd</code>, <code>accountReach</code>, <code>accountImpressions</code>, <code>profileVisits</code>, <code>websiteClicks</code>, <code>whatsappClicks</code>, <code>totalContentPublished</code>) are optional but strongly recommended — they enable follower growth display and validation checks.<br><br>
           Valid <code>contentType</code> values: <code>reel</code>, <code>post</code>, <code>carousel</code>, <code>story</code>.<br>
-          <code>publishDate</code> must be <code>YYYY-MM-DD</code>. All numeric fields default to <code>0</code> if missing.
-          <code>messageClicks</code> and <code>whatsappClicks</code> are treated as the same field.
+          <code>publishDate</code> must be <code>YYYY-MM-DD</code>. All numeric fields default to <code>0</code> if missing.<br>
+          <code>whatsappClicks</code> and <code>messageClicks</code> on post rows are treated as the same field.<br>
+          Numbers in the example above are illustrative for a small account — replace them with your real Insights figures.
         </p>
       </div>
     </details>
@@ -1338,6 +1349,71 @@ function renderIG1Imported(data) {
   const weeklyReach = getWeeklyFromPosts(posts, 'reach');
   const weeklyInter = getWeeklyInteractionsFromPosts(posts);
 
+  // ── Account baseline fields ─────────────────────────────────────────────
+  const currentFollowers    = data.currentFollowers    != null ? Number(data.currentFollowers)    : null;
+  const followersAtStart    = data.followersAtStart    != null ? Number(data.followersAtStart)    : null;
+  const followersAtEnd      = data.followersAtEnd      != null ? Number(data.followersAtEnd)      : null;
+  const accountReach        = data.accountReach        != null ? Number(data.accountReach)        : null;
+  const accountImpressions  = data.accountImpressions  != null ? Number(data.accountImpressions)  : null;
+  const acctProfileVisits   = data.profileVisits       != null ? Number(data.profileVisits)       : null;
+  const acctWebsiteClicks   = data.websiteClicks       != null ? Number(data.websiteClicks)       : null;
+  const acctWhatsappClicks  = data.whatsappClicks      != null ? Number(data.whatsappClicks)      : null;
+  const totalContentPublished = data.totalContentPublished != null ? Number(data.totalContentPublished) : null;
+
+  // ── Validation warnings ─────────────────────────────────────────────────
+  const warnings = []; // { level: 'error'|'warn'|'info', text }
+
+  if (currentFollowers !== null && agg.followsGained > currentFollowers) {
+    warnings.push({ level: 'error', text: `Total follows gained across posts (${fmt(agg.followsGained)}) exceeds current follower count (${fmt(currentFollowers)}). Check that follows gained per post are correct — this would be unusual for an account with ${fmt(currentFollowers)} follower${currentFollowers !== 1 ? 's' : ''}.` });
+  }
+  if (followersAtStart !== null && followersAtEnd !== null && followersAtEnd < followersAtStart && agg.followsGained > 0 && agg.unfollows === 0) {
+    warnings.push({ level: 'warn', text: `Follower count dropped from ${fmt(followersAtStart)} to ${fmt(followersAtEnd)}, but no unfollows are recorded on any post. Add unfollows to individual posts for accurate net growth calculation.` });
+  }
+  if (accountReach !== null && accountReach > 0 && agg.reach > accountReach * 5) {
+    warnings.push({ level: 'info', text: `Total post reach (${fmt(agg.reach)}) is much higher than account reach (${fmt(accountReach)}). Confirm whether accountReach is period reach or all-time unique reach — repeated viewers can make post reach totals exceed account-level reach.` });
+  }
+  if (data.handle && data.handle.replace(/^@/,'').toLowerCase() !== 'vistaunited.co') {
+    warnings.push({ level: 'info', text: `Imported handle (${esc(data.handle)}) differs from expected account (@vistaunited.co). Confirm this data is for the correct account.` });
+  }
+  if (currentFollowers === null) {
+    warnings.push({ level: 'info', text: 'Add currentFollowers to your JSON to enable follower count validation.' });
+  }
+
+  const warningIcons = { error: '✕', warn: '⚠', info: 'ℹ' };
+  const warningColors = { error: 'var(--red)', warn: 'var(--amber)', info: 'var(--blue)' };
+  const warningsHTML = warnings.length ? `
+    <div style="margin-bottom:16px">
+      ${warnings.map(w => `
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;margin-bottom:6px;border-left:3px solid ${warningColors[w.level]};background:var(--white);font-size:13px;line-height:1.6">
+          <div style="color:${warningColors[w.level]};font-weight:700;flex-shrink:0;margin-top:1px">${warningIcons[w.level]}</div>
+          <div style="color:var(--dark)">${w.text}</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  // ── Account baseline summary block ──────────────────────────────────────
+  const hasBaseline = currentFollowers !== null || followersAtStart !== null || accountReach !== null;
+  const followerGrowth = (followersAtStart !== null && followersAtEnd !== null)
+    ? followersAtEnd - followersAtStart
+    : (followersAtStart === null && followersAtEnd !== null && currentFollowers !== null)
+    ? null
+    : null;
+  const baselineHTML = hasBaseline ? `
+    <div class="section-label">Account Baseline — ${esc(data.handle || data.accountName || 'Instagram 1')}${data.period ? ' · ' + esc(data.period) : ''}</div>
+    <div class="summary-strip">
+      ${currentFollowers !== null ? `<div class="sum-card"><div class="sum-label">Current Followers</div><div class="sum-value">${fmt(currentFollowers)}</div><div class="sum-sub">As of end of period</div></div>` : ''}
+      ${(followersAtStart !== null && followersAtEnd !== null) ? `<div class="sum-card"><div class="sum-label">Follower Growth</div><div class="sum-value">${followerGrowth >= 0 ? '+' : ''}${fmt(followersAtEnd - followersAtStart)}</div><div class="sum-sub">${fmt(followersAtStart)} → ${fmt(followersAtEnd)}</div></div>` : ''}
+      ${accountReach !== null ? `<div class="sum-card"><div class="sum-label">Account Reach</div><div class="sum-value">${fmt(accountReach)}</div><div class="sum-sub">Period reach (profile level)</div></div>` : ''}
+      ${accountImpressions !== null ? `<div class="sum-card"><div class="sum-label">Account Impressions</div><div class="sum-value">${fmt(accountImpressions)}</div><div class="sum-sub">Period impressions (profile level)</div></div>` : ''}
+    </div>
+    ${(acctProfileVisits !== null || acctWebsiteClicks !== null || acctWhatsappClicks !== null || totalContentPublished !== null) ? `
+    <div class="summary-strip" style="margin-top:8px">
+      ${acctProfileVisits !== null ? `<div class="sum-card"><div class="sum-label">Profile Visits</div><div class="sum-value">${fmt(acctProfileVisits)}</div><div class="sum-sub">Account-level visits</div></div>` : ''}
+      ${acctWebsiteClicks !== null ? `<div class="sum-card"><div class="sum-label">Website Clicks</div><div class="sum-value">${fmt(acctWebsiteClicks)}</div><div class="sum-sub">Link-in-bio</div></div>` : ''}
+      ${acctWhatsappClicks !== null ? `<div class="sum-card"><div class="sum-label">WhatsApp Clicks</div><div class="sum-value">${fmt(acctWhatsappClicks)}</div><div class="sum-sub">Account-level</div></div>` : ''}
+      ${totalContentPublished !== null ? `<div class="sum-card"><div class="sum-label">Posts Published</div><div class="sum-value">${fmt(totalContentPublished)}</div><div class="sum-sub">This period</div></div>` : ''}
+    </div>` : ''}
+  ` : '';
+
   // Content type comparison rows
   const TYPE_ORDER = ['reel', 'carousel', 'post', 'story'];
   const typeCardsHTML = TYPE_ORDER.map(type => {
@@ -1405,16 +1481,21 @@ function renderIG1Imported(data) {
     <div class="imported-notice">
       <div class="imported-notice-icon">✓</div>
       <div class="imported-notice-text">
-        <strong>Imported data active.</strong> This tab is rendering from your imported JSON (${posts.length} post${posts.length!==1?'s':''}${periodLabel}).
-        All other tabs remain on mock data. No network request has been made — data is in memory only and clears on page refresh.
+        <strong>Imported manual data active.</strong> Numbers are based on the JSON you pasted (${posts.length} post${posts.length!==1?'s':''}${periodLabel}).
+        This is not live API data — use actual Instagram Insights numbers for accuracy.
+        Data is in memory only and clears on page refresh.
       </div>
       <button class="imported-notice-reset" onclick="clearIG1Data();switchTab('ig1')">Reset to Mock</button>
     </div>
 
-    <div class="section-label">${accountLabel}</div>
+    ${warningsHTML}
+
+    ${baselineHTML}
+
+    <div class="section-label">Post-Level Totals — ${posts.length} post${posts.length!==1?'s':''}</div>
 
     <div class="summary-strip">
-      <div class="sum-card"><div class="sum-label">Reach</div><div class="sum-value">${fmt(agg.reach)}</div><div class="sum-sub">Unique accounts reached · ${posts.length} posts</div></div>
+      <div class="sum-card"><div class="sum-label">Total Post Reach</div><div class="sum-value">${fmt(agg.reach)}</div><div class="sum-sub">Sum across all posts</div></div>
       <div class="sum-card"><div class="sum-label">Impressions</div><div class="sum-value">${fmt(agg.impressions)}</div><div class="sum-sub">Total impressions</div></div>
       <div class="sum-card"><div class="sum-label">Interactions</div><div class="sum-value">${fmt(agg.interactions)}</div><div class="sum-sub">Likes + Comments + Saves + Shares</div></div>
       <div class="sum-card"><div class="sum-label">Follows Gained</div><div class="sum-value">+${fmt(agg.followsGained)}</div><div class="sum-sub">Net: +${fmt(agg.followsGained - agg.unfollows)} after unfollows</div></div>
