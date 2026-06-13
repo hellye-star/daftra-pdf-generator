@@ -2,6 +2,31 @@
 
 ---
 
+## [2026-06-13] — Marketing Intelligence: AI Coach & Instagram 2 Placeholders
+
+### marketing-dashboard.html
+
+Upgraded the AI Report tab into an AI Coach / Recovery Plan tab with rule-based beginner guidance derived entirely from imported metrics. No new files. No APIs, OAuth, credentials, fetch calls, AI API calls, or ad write actions.
+
+**What was added / changed:**
+- **AI Report tab renamed to AI Coach** — dynamic panel rendered by `renderAICoachPanel()`, re-renders automatically when any import is loaded or cleared
+- **AI Coach sub-navigation** — six scroll buttons at the top of the panel: Overview, Instagram, TikTok, Google Ads, Action Plan, Campaign Setup Coach; each button scrolls to a stable anchor ID (`ai-section-*`) via `aiCoachScrollTo()`
+- **Sections 1–7** — Account Health Score (0–100 with colour-coded label), Dead Account Diagnosis (Dormant / Engagement Problem / CTA Problem / Growth Problem), Follower-to-Reach Reality Check (three-case wording: no import / imported but `currentFollowers` missing / full ratio with bar), Content Type Recovery Advice (table from `byType` aggregation), Boosting Readiness Check (reads GAds CTR/conversions + GA4 bounce rates + IG1 engagement), 7-Day Recovery Plan (personalised when IG1 loaded), What to Post Next (derived from best Reel, most-saved, most-commented post; cross-references TikTok top video)
+- **TikTok section in AI Coach** — always rendered with a stable `id="ai-section-tiktok"` anchor; shows real analysis when TikTok data is imported; shows a clear pending/schema-only placeholder with a link to Data Source when no data is loaded — TikTok sub-nav button always has a valid scroll target
+- **Campaign Setup Coach section** — rule-based platform-specific ad setup guidance: objective, audience, creative, landing page/CTA, test budget, when to stop / change / scale, for Instagram Ads, Google Ads, GA4/Website readiness, and TikTok Ads; reads imported data to surface alerts (e.g. zero conversions vs spend, high-bounce landing pages, low engagement before boosting); TikTok Ads shown as pending if no TikTok data loaded
+- **Follower-to-reach wording fixed** — three explicit cases: no IG1 import → clear prompt; IG1 loaded but `currentFollowers` missing → explicit message; full data → ratio bar + contextual advice
+- **Instagram 2 panel clarified as schema-only / future account** — updated mock notice makes explicit that IG2 (@vista.branding) is a separate account with its own future import pipeline, not connected to IG1 data; added three placeholder sections (Best Content — by Metric, Weakest Content, Audience & Engagement Insight) labelled "Available after Instagram 2 import is wired" so the panel is clearly intentional, not broken
+
+**Known working imports (not retested this change):**
+- Instagram 1 manual import — working (no changes to `IG1_IMPORTED`, `aggregateIG1`, `loadIG1Data`, `clearIG1Data`)
+- GA4 manual import + visitor segment analysis — working (no changes)
+- Google Ads manual import — working (no changes)
+- TikTok manual import — working (no changes to `TIKTOK_IMPORTED`, `aggregateTikTok`, `loadTikTokData`, `clearTikTokData`)
+
+**Files NOT changed:** `proxy.py`, `config.json`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+---
+
 ## [2026-06-13] — Marketing Intelligence: Instagram 1 Account Baseline & Validation
 
 ### marketing-dashboard.html
