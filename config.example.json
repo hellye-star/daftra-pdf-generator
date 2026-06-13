@@ -33,5 +33,69 @@
     "port": 8080,
     "bind": "127.0.0.1",
     "_readme": "bind must stay 127.0.0.1 — do not change to 0.0.0.0 or the proxy becomes reachable from other machines on your network."
+  },
+
+  "marketing_apis": {
+    "_readme": "Credentials for Marketing Intelligence live API connections. IMPORTANT: Real values belong only in your local config.json — this file (config.example.json) contains placeholder values only and is safe to commit. config.json is git-ignored and must never be printed, staged, committed, or pushed. All credentials are read server-side by proxy.py only — they are never forwarded to or visible in the browser. All API connections are read-only reporting. No ad write actions, no campaign creation, no budget changes, no post publishing.",
+
+    "google": {
+      "_readme": "Covers both GA4 (Google Analytics 4) and Google Ads. Credentials are kept separate because they use different auth mechanisms. GA4 uses a Service Account JSON file. Google Ads uses OAuth 2.0 with a long-lived refresh token plus a Developer Token.",
+
+      "ga4": {
+        "_label": "GA4 — Google Analytics 4",
+        "_description": "Read-only access to GA4 property data: sessions, users, page views, engagement time, bounce rate, audience segments. Used by the Website / GA4 tab in Marketing Intelligence.",
+        "_setup": "1. Create a Google Cloud project and enable the Google Analytics Data API v1. 2. Create a Service Account with no roles. 3. Grant the service account Viewer role on your GA4 property (GA4 Admin > Property Access Management). 4. Download the service account key as a JSON file and save it locally outside this project folder. 5. Set credentials_json_path to the absolute path of that JSON file on your machine.",
+        "_auth_method": "Service Account JSON — no OAuth browser flow required. The proxy loads the JSON file at startup.",
+        "property_id": "REPLACE_WITH_GA4_PROPERTY_ID",
+        "_property_id_note": "Found in GA4 Admin > Property Settings. Format: numeric only, e.g. 123456789. Do not include the 'properties/' prefix.",
+        "credentials_json_path": "REPLACE_WITH_ABSOLUTE_PATH_TO_SERVICE_ACCOUNT_JSON_FILE",
+        "_credentials_note": "Absolute path on this machine only — e.g. C:\\Users\\YousefMokaled\\keys\\vista-ga4-service-account.json. Never put the JSON file inside the project folder. Never commit it."
+      },
+
+      "ads": {
+        "_label": "Google Ads",
+        "_description": "Read-only access to Google Ads campaign performance: impressions, clicks, spend, conversions, CTR, CPC, keywords, landing page URLs. Used by the Google Ads tab in Marketing Intelligence.",
+        "_setup": "1. Apply for a Google Ads Developer Token in your Google Ads Manager Account (MCC) under API Centre. Standard access required for production; test access works immediately. 2. Create OAuth 2.0 credentials (Desktop App) in the same Google Cloud project used for GA4. 3. Run the OAuth flow once offline to obtain a refresh token — the proxy uses the refresh token to generate short-lived access tokens automatically. 4. Fill in all five fields below in config.json only.",
+        "_auth_method": "OAuth 2.0 with offline refresh token + Developer Token header. The proxy exchanges the refresh token for access tokens. No browser redirect at runtime.",
+        "_read_only_note": "Use read-only OAuth scopes only: https://www.googleapis.com/auth/adwords. Never request or store write scopes.",
+        "developer_token": "REPLACE_WITH_GOOGLE_ADS_DEVELOPER_TOKEN",
+        "client_id": "REPLACE_WITH_OAUTH_CLIENT_ID",
+        "client_secret": "REPLACE_WITH_OAUTH_CLIENT_SECRET",
+        "refresh_token": "REPLACE_WITH_OAUTH_REFRESH_TOKEN",
+        "customer_id": "REPLACE_WITH_GOOGLE_ADS_CUSTOMER_ID",
+        "_customer_id_note": "Your Google Ads account ID without hyphens, e.g. 1234567890. If using a Manager Account, this is the child account ID you want to report on."
+      }
+    },
+
+    "meta": {
+      "_label": "Meta — Instagram Business Insights",
+      "_description": "Read-only access to Instagram Business account insights: post reach, impressions, engagement, profile visits, website clicks, follower growth. Used by the Instagram 1 tab in Marketing Intelligence.",
+      "_setup": "1. Create a Facebook App at developers.facebook.com (Business type). 2. Add the Instagram Basic Display or Instagram Graph API product. 3. In development mode, add your Instagram Business account as a test user — this works immediately without Meta app review. 4. Generate a long-lived Page Access Token or System User Token with read-only permissions. 5. Find your Instagram Business Account ID via the Graph API Explorer (/me/accounts). 6. Fill in config.json only.",
+      "_auth_method": "Long-lived access token (60-day expiry for Page tokens; System User tokens do not expire). The proxy injects the token as a query parameter on all Graph API calls. Tokens must be renewed before expiry — the /api/meta/status endpoint will report the expiry date.",
+      "_read_only_scopes": "instagram_basic, instagram_manage_insights, pages_show_list, pages_read_engagement — read-only only. Never request ads_management, pages_manage_posts, or any write scope.",
+      "_app_review_note": "Meta app review is required to use these permissions for accounts you do not own. For your own Vista United accounts in development mode, no review is needed.",
+      "access_token": "REPLACE_WITH_LONG_LIVED_META_ACCESS_TOKEN",
+      "_access_token_note": "Long-lived Page Access Token or System User Token. Never a short-lived user token — it expires in 1 hour. Generate via Graph API Explorer or the Meta developer tools, then extend to 60 days.",
+      "instagram_business_account_id": "REPLACE_WITH_INSTAGRAM_BUSINESS_ACCOUNT_ID",
+      "_ig_account_id_note": "Numeric ID of the Instagram Business Account linked to your Facebook Page. Find it via GET /me/accounts then GET /{page-id}?fields=instagram_business_account.",
+      "page_id": "REPLACE_WITH_FACEBOOK_PAGE_ID",
+      "_page_id_note": "The Facebook Page ID linked to your Instagram Business account. Found in Facebook Page Settings > Page Info."
+    },
+
+    "tiktok": {
+      "_label": "TikTok for Business — Analytics",
+      "_description": "Read-only access to TikTok video analytics: views, watch time, completion rate, engagement (likes, comments, shares, saves), profile visits, website clicks, follows per video. Used by the TikTok tab in Marketing Intelligence.",
+      "_setup": "1. Create a TikTok for Business developer account at business.tiktok.com. 2. Register an app in the TikTok for Business Developer Portal and request read-only analytics permissions. 3. A sandbox environment is available immediately for testing with your own account. Production use for other accounts requires app review. 4. Complete the OAuth flow to obtain an access token for the TikTok Ads/Business account you want to report on. 5. Fill in config.json only.",
+      "_auth_method": "Access token issued via TikTok for Business OAuth. Token expiry varies by account type — check the TikTok API documentation for your token type. The /api/tiktok/status endpoint will report the expiry date.",
+      "_read_only_scopes": "Request only reporting/analytics read scopes. Never request ad creation, campaign management, or any write scope.",
+      "_app_review_note": "TikTok requires app review for production analytics access to accounts other than your own. For Vista United's own TikTok account, sandbox/development access is sufficient to start.",
+      "app_id": "REPLACE_WITH_TIKTOK_APP_ID",
+      "app_secret": "REPLACE_WITH_TIKTOK_APP_SECRET",
+      "_app_secret_note": "Never expose app_secret in any frontend file or API response. Server-side only.",
+      "access_token": "REPLACE_WITH_TIKTOK_ACCESS_TOKEN",
+      "_access_token_note": "Obtained after completing the TikTok for Business OAuth flow. Treat the same as a password — config.json only.",
+      "advertiser_id": "REPLACE_WITH_TIKTOK_ADVERTISER_ID",
+      "_advertiser_id_note": "Your TikTok Ads advertiser account ID. Found in TikTok Ads Manager > Account Info."
+    }
   }
 }
