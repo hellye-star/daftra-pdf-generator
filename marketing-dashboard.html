@@ -502,33 +502,9 @@ details[open] summary::after { content: '−'; }
     </table>
   </div>
 
-  <!-- ══ PANEL: Google Ads (static mock) ══ -->
+  <!-- ══ PANEL: Google Ads (dynamic — rendered by JS) ══ -->
   <div id="panel-google" class="panel">
-    <div class="mock-notice">
-      <div class="mock-notice-icon">⚠</div>
-      <div class="mock-notice-text"><strong>Mock data only.</strong> All figures are sample/static data. Spend values are sample advertising spend — not actual amounts.</div>
-    </div>
-    <div class="section-label">Campaign — vistaunited.co</div>
-    <div class="summary-strip">
-      <div class="sum-card"><div class="sum-label">Sample Ad Spend</div><div class="sum-value">SAR 1,000</div><div class="sum-sub">Sample · 2-week period</div></div>
-      <div class="sum-card"><div class="sum-label">Impressions</div><div class="sum-value">48,600</div><div class="sum-sub">Search impressions</div><div class="sum-delta delta-up">↑ 7%</div></div>
-      <div class="sum-card"><div class="sum-label">Clicks</div><div class="sum-value">12,800</div><div class="sum-sub">Website clicks</div><div class="sum-delta delta-up">↑ 11%</div></div>
-      <div class="sum-card"><div class="sum-label">Leads</div><div class="sum-value">15</div><div class="sum-sub">Form fills</div><div class="sum-delta delta-up">↑ 15%</div></div>
-    </div>
-    <div class="two-col">
-      <div class="chart-wrap"><div class="chart-title">Weekly Clicks</div><div class="bar-chart" id="ga-clicks-chart"></div><div class="chart-legend"><div class="legend-item"><div class="legend-swatch" style="background:#4285F4"></div>Clicks</div></div></div>
-      <div class="chart-wrap"><div class="chart-title">Weekly Sample Spend (SAR)</div><div class="bar-chart" id="ga-spend-chart"></div><div class="chart-legend"><div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Sample Spend</div></div></div>
-    </div>
-    <div class="section-label">Key Metrics</div>
-    <table class="metrics-table">
-      <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td class="metric-name">CTR</td><td><span class="val">26.3%</span></td><td style="font-size:13px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
-        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.078</span></td><td style="font-size:13px;color:var(--mid)">Sample cost per click</td></tr>
-        <tr><td class="metric-name">Sample Cost per Lead</td><td><span class="val">SAR 66.7</span></td><td style="font-size:13px;color:var(--mid)">Sample spend ÷ form fills</td></tr>
-        <tr><td class="metric-name">Avg. Position</td><td><span class="val">2.4</span></td><td style="font-size:13px;color:var(--mid)">Average ad position</td></tr>
-      </tbody>
-    </table>
+    <div id="google-content"></div>
   </div>
 
   <!-- ══ PANEL: Website Analytics / GA4 (dynamic — rendered by JS) ══ -->
@@ -628,14 +604,20 @@ details[open] summary::after { content: '−'; }
       <p class="ds-import-desc">Full schema defined below — includes views, watch time, completion rate, likes, comments, shares, saves, profile visits, website clicks, and follows per video. Export from TikTok Studio → Analytics → Content, convert CSV to this JSON format. Import wiring comes after Instagram 1 is confirmed.</p>
     </div>
 
-    <!-- Google Ads — schema ready -->
+    <!-- Google Ads — wired import -->
     <div class="ds-import-block">
       <div class="ds-import-header">
         <div class="ds-import-dot" style="background:var(--ga)"></div>
         <div class="ds-import-title">Google Ads — Campaign &amp; Keyword Data</div>
-        <div class="ds-import-status-badge badge-schema-ready">Schema Ready · Wiring Next</div>
+        <div id="gads-import-badge" class="ds-import-status-badge badge-mockdata">Mock Data</div>
       </div>
-      <p class="ds-import-desc">Covers campaign spend, keyword performance, clicks, CTR, CPC, conversions, cost per conversion, and final URL / landing page mapping. This is ad performance data — not website behaviour. For what visitors do after clicking, see Website Analytics / GA4 below.</p>
+      <p class="ds-import-desc">Covers campaign spend, keyword performance, clicks, CTR, CPC, conversions, cost per conversion, and final URL / landing page mapping. This is ad performance data — not website behaviour. For what visitors do after clicking, see Website Analytics / GA4 below. Export from Google Ads → Reports → Predefined reports → Keywords, then convert to JSON using the schema below.</p>
+      <textarea class="ds-textarea" id="gads-json-input" placeholder='Paste Google Ads JSON here — see schema below for the expected format...'></textarea>
+      <div class="ds-btn-row">
+        <button class="ds-btn ds-btn-primary" onclick="loadGAdsData()">Load Google Ads Data</button>
+        <button class="ds-btn ds-btn-danger" onclick="clearGAdsData()">Reset to Mock</button>
+      </div>
+      <div id="gads-import-msg" style="display:none" class="ds-msg"></div>
     </div>
 
     <!-- GA4 — wired import -->
@@ -1100,7 +1082,8 @@ function fmtPct(n) { return Number(n || 0).toFixed(1) + '%'; }
 
 // ── State ──────────────────────────────────────────────────────────────────
 let IG1_IMPORTED = null; // null = mock mode; object = imported data active
-let GA4_IMPORTED = null; // null = placeholder mode; object = imported data active
+let GA4_IMPORTED  = null; // null = placeholder mode; object = imported data active
+let GADS_IMPORTED = null; // null = mock mode; object = imported data active
 
 // ── Mock data ──────────────────────────────────────────────────────────────
 const MOCK = {
@@ -1134,6 +1117,7 @@ function switchTab(id) {
   const panel = document.getElementById('panel-' + id);
   if (panel) panel.classList.add('active');
   if (id === 'ig1')        renderIG1Panel();
+  if (id === 'google')     renderGAdsPanel();
   if (id === 'ga4')        renderGA4Panel();
   if (id === 'datasource') updateDSModeIndicator();
 }
@@ -1542,9 +1526,9 @@ function updateDSModeIndicator() {
         <div class="ds-mode-chip-dot" style="background:#555"></div>
         TikTok · Mock Data
       </div>
-      <div class="ds-mode-chip is-mock">
+      <div class="ds-mode-chip ${GADS_IMPORTED ? 'is-imported' : 'is-mock'}">
         <div class="ds-mode-chip-dot" style="background:var(--ga)"></div>
-        Google Ads · Mock Data
+        ${GADS_IMPORTED ? 'Google Ads · Imported Data' : 'Google Ads · Mock Data'}
       </div>
       <div class="ds-mode-chip ${GA4_IMPORTED ? 'is-imported' : 'is-mock'}">
         <div class="ds-mode-chip-dot" style="background:var(--ga4)"></div>
@@ -1559,6 +1543,11 @@ function updateDSModeIndicator() {
   if (ga4Badge) {
     ga4Badge.className = 'ds-import-status-badge ' + (GA4_IMPORTED ? 'badge-best' : 'badge-mockdata');
     ga4Badge.textContent = GA4_IMPORTED ? 'Imported Data Active' : 'Schema Mode';
+  }
+  const gadsBadge = document.getElementById('gads-import-badge');
+  if (gadsBadge) {
+    gadsBadge.className = 'ds-import-status-badge ' + (GADS_IMPORTED ? 'badge-best' : 'badge-mockdata');
+    gadsBadge.textContent = GADS_IMPORTED ? 'Imported Data Active' : 'Mock Data';
   }
 }
 
@@ -1628,14 +1617,350 @@ function clearIG1Data() {
   updateTopbarBadge();
 }
 
-// ── Init non-IG1 charts ────────────────────────────────────────────────────
+// ── Init static mock charts (IG2 and TikTok only — Google Ads handled by renderGAdsMock) ──
 function initCharts() {
   renderBarChart('ig2-reach-chart',  MOCK.ig2.reach,        '#833AB4');
   renderBarChart('ig2-inter-chart',  MOCK.ig2.interactions, '#833AB466');
   renderBarChart('tk-views-chart',   MOCK.tiktok.views,     '#555');
   renderBarChart('tk-spend-chart',   MOCK.tiktok.spend,     '#D8D5CF', v => 'SAR ' + v);
-  renderBarChart('ga-clicks-chart',  MOCK.google.clicks,    '#4285F4');
-  renderBarChart('ga-spend-chart',   MOCK.google.spend,     '#D8D5CF', v => 'SAR ' + v);
+}
+
+// ── Google Ads mock render ─────────────────────────────────────────────────
+function renderGAdsMock() {
+  const el = document.getElementById('google-content');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="mock-notice">
+      <div class="mock-notice-icon">⚠</div>
+      <div class="mock-notice-text"><strong>Mock data only.</strong> All figures are sample/static data. Spend values are sample advertising spend — not actual amounts. Import real Google Ads data via the <strong>Data Source</strong> tab.</div>
+      <button class="imported-notice-reset" onclick="switchTab('datasource')">Go to Data Source</button>
+    </div>
+    <div class="section-label">Campaign — vistaunited.co</div>
+    <div class="summary-strip">
+      <div class="sum-card"><div class="sum-label">Sample Ad Spend</div><div class="sum-value">SAR 1,000</div><div class="sum-sub">Sample · 2-week period</div></div>
+      <div class="sum-card"><div class="sum-label">Impressions</div><div class="sum-value">48,600</div><div class="sum-sub">Search impressions</div><div class="sum-delta delta-up">↑ 7%</div></div>
+      <div class="sum-card"><div class="sum-label">Clicks</div><div class="sum-value">12,800</div><div class="sum-sub">Website clicks</div><div class="sum-delta delta-up">↑ 11%</div></div>
+      <div class="sum-card"><div class="sum-label">Leads</div><div class="sum-value">15</div><div class="sum-sub">Form fills</div><div class="sum-delta delta-up">↑ 15%</div></div>
+    </div>
+    <div class="two-col">
+      <div class="chart-wrap"><div class="chart-title">Weekly Clicks</div><div class="bar-chart" id="ga-clicks-chart"></div><div class="chart-legend"><div class="legend-item"><div class="legend-swatch" style="background:#4285F4"></div>Clicks</div></div></div>
+      <div class="chart-wrap"><div class="chart-title">Weekly Sample Spend (SAR)</div><div class="bar-chart" id="ga-spend-chart"></div><div class="chart-legend"><div class="legend-item"><div class="legend-swatch" style="background:var(--rule)"></div>Sample Spend</div></div></div>
+    </div>
+    <div class="section-label">Key Metrics</div>
+    <table class="metrics-table">
+      <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="metric-name">CTR</td><td><span class="val">26.3%</span></td><td style="font-size:13px;color:var(--mid)">Clicks ÷ Impressions</td></tr>
+        <tr><td class="metric-name">CPC</td><td><span class="val">SAR 0.078</span></td><td style="font-size:13px;color:var(--mid)">Sample cost per click</td></tr>
+        <tr><td class="metric-name">Sample Cost per Lead</td><td><span class="val">SAR 66.7</span></td><td style="font-size:13px;color:var(--mid)">Sample spend ÷ form fills</td></tr>
+        <tr><td class="metric-name">Avg. Position</td><td><span class="val">2.4</span></td><td style="font-size:13px;color:var(--mid)">Average ad position</td></tr>
+      </tbody>
+    </table>
+  `;
+  renderBarChart('ga-clicks-chart', MOCK.google.clicks, '#4285F4');
+  renderBarChart('ga-spend-chart',  MOCK.google.spend,  '#D8D5CF', v => 'SAR ' + v);
+}
+
+// ── Google Ads aggregation ─────────────────────────────────────────────────
+function aggregateGAds(rows) {
+  let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalConversions = 0;
+  let totalCTR = 0, totalCPC = 0, totalCostPerConv = 0, ctrCount = 0, cpcCount = 0, cpConvCount = 0;
+  const byCampaign = {}, byKeyword = {}, bySearchTerm = {}, byLandingPage = {}, byFinalUrl = {};
+
+  rows.forEach(r => {
+    totalSpend       += (r.spend       || 0);
+    totalImpressions += (r.impressions || 0);
+    totalClicks      += (r.clicks      || 0);
+    totalConversions += (r.conversions || 0);
+    if (r.ctr != null)              { totalCTR      += r.ctr;              ctrCount++; }
+    if (r.cpc != null)              { totalCPC      += r.cpc;              cpcCount++; }
+    if (r.costPerConversion != null) { totalCostPerConv += r.costPerConversion; cpConvCount++; }
+
+    // by campaign
+    const camp = r.campaign || 'Unknown Campaign';
+    if (!byCampaign[camp]) byCampaign[camp] = { spend:0, clicks:0, impressions:0, conversions:0, rows:[] };
+    byCampaign[camp].spend       += (r.spend       || 0);
+    byCampaign[camp].clicks      += (r.clicks      || 0);
+    byCampaign[camp].impressions += (r.impressions || 0);
+    byCampaign[camp].conversions += (r.conversions || 0);
+    byCampaign[camp].rows.push(r);
+
+    // by keyword
+    if (r.keyword) {
+      const kw = r.keyword;
+      if (!byKeyword[kw]) byKeyword[kw] = { spend:0, clicks:0, conversions:0, ctr:0, ctrCount:0 };
+      byKeyword[kw].spend       += (r.spend       || 0);
+      byKeyword[kw].clicks      += (r.clicks      || 0);
+      byKeyword[kw].conversions += (r.conversions || 0);
+      if (r.ctr != null) { byKeyword[kw].ctr += r.ctr; byKeyword[kw].ctrCount++; }
+    }
+
+    // by search term
+    if (r.searchTerm) {
+      const st = r.searchTerm;
+      if (!bySearchTerm[st]) bySearchTerm[st] = { spend:0, clicks:0, conversions:0 };
+      bySearchTerm[st].spend       += (r.spend       || 0);
+      bySearchTerm[st].clicks      += (r.clicks      || 0);
+      bySearchTerm[st].conversions += (r.conversions || 0);
+    }
+
+    // by landing page path
+    if (r.landingPage) {
+      const lp = r.landingPage;
+      if (!byLandingPage[lp]) byLandingPage[lp] = { spend:0, clicks:0, conversions:0, finalUrls:new Set() };
+      byLandingPage[lp].spend       += (r.spend   || 0);
+      byLandingPage[lp].clicks      += (r.clicks  || 0);
+      byLandingPage[lp].conversions += (r.conversions || 0);
+      if (r.finalUrl) byLandingPage[lp].finalUrls.add(r.finalUrl);
+    }
+  });
+
+  const avgCTR        = ctrCount   ? totalCTR / ctrCount   : 0;
+  const avgCPC        = cpcCount   ? totalCPC / cpcCount   : 0;
+  const avgCostPerConv = cpConvCount ? totalCostPerConv / cpConvCount : 0;
+  const overallCTR    = totalImpressions ? (totalClicks / totalImpressions) : 0;
+  const overallCPC    = totalClicks ? (totalSpend / totalClicks) : 0;
+  const overallCostPerConv = totalConversions ? (totalSpend / totalConversions) : 0;
+
+  // Campaign rankings
+  const campList = Object.entries(byCampaign);
+  const bestByConversions = [...campList].sort((a,b) => b[1].conversions - a[1].conversions);
+  const highestSpend      = [...campList].sort((a,b) => b[1].spend - a[1].spend);
+  const weakCampaigns     = campList.filter(([,v]) => v.spend > 0 && v.conversions === 0)
+                                    .sort((a,b) => b[1].spend - a[1].spend);
+
+  // Keyword rankings
+  const kwList     = Object.entries(byKeyword);
+  const bestKW     = [...kwList].sort((a,b) => b[1].conversions - a[1].conversions).slice(0,5);
+  const weakKW     = kwList.filter(([,v]) => v.spend > 0 && v.conversions === 0)
+                           .sort((a,b) => b[1].spend - a[1].spend).slice(0,5);
+
+  // Search term rankings
+  const stList   = Object.entries(bySearchTerm);
+  const bestST   = [...stList].sort((a,b) => b[1].conversions - a[1].conversions).slice(0,5);
+  const weakST   = stList.filter(([,v]) => v.conversions === 0)
+                         .sort((a,b) => b[1].clicks - a[1].clicks).slice(0,5);
+
+  // Landing page rankings — convert finalUrls Set to Array for rendering
+  const lpEntries = Object.entries(byLandingPage).map(([lp,v]) => [lp, {...v, finalUrls: [...v.finalUrls]}]);
+  const topLandingPages  = [...lpEntries].sort((a,b) => b[1].clicks - a[1].clicks);
+  // Pages needing GA4 comparison: have clicks but conversions may be 0 — all are candidates
+  const needsGA4Compare  = [...topLandingPages].filter(([,v]) => v.clicks > 0);
+
+  // High clicks but zero conversions at row level
+  const highClickNoConv = rows.filter(r => (r.clicks||0) >= 50 && (r.conversions||0) === 0)
+                              .sort((a,b) => (b.clicks||0) - (a.clicks||0)).slice(0,4);
+
+  return {
+    totalSpend, totalImpressions, totalClicks, totalConversions,
+    avgCTR, avgCPC, avgCostPerConv,
+    overallCTR, overallCPC, overallCostPerConv,
+    bestByConversions, highestSpend, weakCampaigns,
+    bestKW, weakKW, bestST, weakST,
+    topLandingPages, needsGA4Compare, highClickNoConv,
+    rowCount: rows.length
+  };
+}
+
+// ── Google Ads imported render ─────────────────────────────────────────────
+function renderGAdsImported(data) {
+  const el = document.getElementById('google-content');
+  if (!el) return;
+  const rows = data.rows || [];
+  const agg  = aggregateGAds(rows);
+  const accountLabel = data.accountName ? esc(data.accountName) : 'Google Ads';
+  const periodLabel  = data.period ? ` · ${esc(data.period)}` : '';
+
+  const fmtSAR  = v => 'SAR ' + Number(v||0).toFixed(2);
+  const fmtCTR  = v => (Number(v||0) < 1 ? (Number(v||0)*100).toFixed(2) : Number(v||0).toFixed(2)) + '%';
+
+  // Q1 — best campaigns by conversions
+  const bestCampRows = agg.bestByConversions.slice(0,5).map(([name, v]) => {
+    const cpa = v.conversions > 0 ? fmtSAR(v.spend / v.conversions) : '<span style="color:var(--mid)">—</span>';
+    return `<tr>
+      <td>${esc(name)}</td>
+      <td style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--green)">${fmt(v.conversions)}</td>
+      <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmtSAR(v.spend)}</td>
+      <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${cpa}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="4" style="color:var(--mid);font-style:italic">No campaign data.</td></tr>`;
+
+  // Q2 — weak campaigns: high spend, zero conversions
+  const weakCampRows = agg.weakCampaigns.slice(0,5).map(([name, v]) => `<tr>
+    <td>${esc(name)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--red)">${fmtSAR(v.spend)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmt(v.clicks)}</td>
+    <td style="color:var(--red);font-size:12px">Zero conversions</td>
+  </tr>`).join('') || `<tr><td colspan="4" style="color:var(--green);font-size:13px">No zero-conversion campaigns — all campaigns with spend have recorded at least one conversion.</td></tr>`;
+
+  // Q3 — best keywords
+  const bestKWRows = agg.bestKW.map(([kw, v]) => `<tr>
+    <td>${esc(kw)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--green)">${fmt(v.conversions)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmt(v.clicks)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmtSAR(v.spend)}</td>
+  </tr>`).join('') || `<tr><td colspan="4" style="color:var(--mid);font-style:italic">No keyword data in rows.</td></tr>`;
+
+  // Q3 — weak keywords
+  const weakKWRows = agg.weakKW.map(([kw, v]) => `<tr>
+    <td>${esc(kw)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--red)">${fmtSAR(v.spend)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmt(v.clicks)}</td>
+    <td style="color:var(--red);font-size:12px">Zero conversions</td>
+  </tr>`).join('') || `<tr><td colspan="4" style="color:var(--green);font-size:13px">No zero-conversion keywords detected.</td></tr>`;
+
+  // Q4 — landing pages receiving ad traffic
+  const lpRows = agg.topLandingPages.slice(0,8).map(([lp, v]) => {
+    const cpa = v.conversions > 0 ? fmtSAR(v.spend / v.conversions) : '<span style="color:var(--mid)">—</span>';
+    return `<tr>
+      <td><div style="font-weight:500">${esc(lp)}</div>${v.finalUrls.length ? `<div style="font-size:11px;color:var(--mid)">${esc(v.finalUrls[0])}</div>` : ''}</td>
+      <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmt(v.clicks)}</td>
+      <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmtSAR(v.spend)}</td>
+      <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmt(v.conversions)}</td>
+      <td>${cpa}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" style="color:var(--mid);font-style:italic">No landing page data — add <code>landingPage</code> field to rows.</td></tr>`;
+
+  // Q5 — high clicks, zero conversions (needs GA4 comparison)
+  const ga4CompareRows = agg.highClickNoConv.map(r => `<tr>
+    <td><div>${esc(r.campaign||'')}</div><div style="font-size:11px;color:var(--mid)">${esc(r.keyword||r.searchTerm||'')}</div></td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmt(r.clicks||0)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px">${fmtSAR(r.spend||0)}</td>
+    <td style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--red)">0</td>
+    <td style="font-size:11px;color:var(--mid)">${esc(r.landingPage||'—')}</td>
+  </tr>`).join('') || `<tr><td colspan="5" style="color:var(--green);font-size:13px">No high-click / zero-conversion rows detected — all rows with 50+ clicks have at least one conversion.</td></tr>`;
+
+  el.innerHTML = `
+    <div class="imported-notice">
+      <div class="imported-notice-icon">✓</div>
+      <div class="imported-notice-text">
+        <strong>Imported data active.</strong> Rendering from ${accountLabel}${periodLabel} — ${agg.rowCount} row${agg.rowCount!==1?'s':''}.
+        Data is in memory only and clears on page refresh.
+      </div>
+      <button class="imported-notice-reset" onclick="clearGAdsData();switchTab('google')">Reset to Mock</button>
+    </div>
+
+    <div class="section-label">${accountLabel}${periodLabel}</div>
+
+    <div class="summary-strip">
+      <div class="sum-card"><div class="sum-label">Total Spend</div><div class="sum-value">${fmtSAR(agg.totalSpend)}</div><div class="sum-sub">${agg.rowCount} rows · ${Object.keys({}).length || agg.bestByConversions.length} campaigns</div></div>
+      <div class="sum-card"><div class="sum-label">Total Clicks</div><div class="sum-value">${fmt(agg.totalClicks)}</div><div class="sum-sub">Overall CTR ${(agg.overallCTR*100).toFixed(2)}%</div></div>
+      <div class="sum-card"><div class="sum-label">Conversions</div><div class="sum-value">${fmt(agg.totalConversions)}</div><div class="sum-sub">Cost/conv ${agg.totalConversions > 0 ? fmtSAR(agg.overallCostPerConv) : '—'}</div></div>
+      <div class="sum-card"><div class="sum-label">Avg CPC</div><div class="sum-value">${fmtSAR(agg.overallCPC)}</div><div class="sum-sub">${fmt(agg.totalImpressions)} impressions</div></div>
+    </div>
+
+    <div class="subsection-label">Q1 — Which Campaigns Are Working? (Best by Conversions)</div>
+    <table class="metrics-table">
+      <thead><tr><th>Campaign</th><th>Conversions</th><th>Spend</th><th>Cost / Conv.</th></tr></thead>
+      <tbody>${bestCampRows}</tbody>
+    </table>
+
+    <div class="subsection-label">Q2 — Which Campaigns Are Wasting Spend? (High Spend · Zero Conversions)</div>
+    <table class="metrics-table">
+      <thead><tr><th>Campaign</th><th>Spend</th><th>Clicks</th><th>Status</th></tr></thead>
+      <tbody>${weakCampRows}</tbody>
+    </table>
+
+    <div class="subsection-label">Q3 — Which Keywords Attract Serious Visitors?</div>
+    <div class="two-col" style="gap:16px">
+      <div>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:8px">Best — Converting Keywords</div>
+        <table class="metrics-table">
+          <thead><tr><th>Keyword</th><th>Conv.</th><th>Clicks</th><th>Spend</th></tr></thead>
+          <tbody>${bestKWRows}</tbody>
+        </table>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--red);margin-bottom:8px">Weak — Zero Conversions</div>
+        <table class="metrics-table">
+          <thead><tr><th>Keyword</th><th>Spend</th><th>Clicks</th><th>Status</th></tr></thead>
+          <tbody>${weakKWRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="subsection-label">Q4 — Which Landing Pages Receive Paid Ad Traffic?</div>
+    <table class="metrics-table">
+      <thead><tr><th>Landing Page · Final URL</th><th>Clicks</th><th>Spend</th><th>Conv.</th><th>Cost / Conv.</th></tr></thead>
+      <tbody>${lpRows}</tbody>
+    </table>
+
+    <div class="subsection-label">Q5 — Which Landing Pages Need GA4 Comparison? (High Clicks · Zero Conversions)</div>
+    <p style="font-size:13px;color:var(--mid);margin:0 0 10px">These rows have 50+ ad clicks but zero conversions recorded in Google Ads. Import GA4 data and match the landing page paths to see whether visitors engaged after clicking — or left immediately.</p>
+    <table class="metrics-table">
+      <thead><tr><th>Campaign · Keyword</th><th>Clicks</th><th>Spend</th><th>Conv.</th><th>Landing Page</th></tr></thead>
+      <tbody>${ga4CompareRows}</tbody>
+    </table>
+
+    <div class="subsection-label">Q6 — What Should Be Optimised Next?</div>
+    <div class="insight-card">
+      ${agg.bestByConversions.length && agg.bestByConversions[0][1].conversions > 0 ? `<div class="insight-row"><div class="insight-icon">↑</div><div class="insight-body"><div class="insight-title">Increase budget on efficient campaigns</div><div class="insight-desc"><strong>${esc(agg.bestByConversions[0][0])}</strong> leads on conversions${agg.bestByConversions[0][1].conversions > 0 ? ` with a cost per conversion of ${fmtSAR(agg.bestByConversions[0][1].spend / agg.bestByConversions[0][1].conversions)}` : ''}. Increasing budget here is the lowest-risk spend increase.</div></div></div>` : ''}
+      ${agg.weakCampaigns.length ? `<div class="insight-row"><div class="insight-icon">⚠</div><div class="insight-body"><div class="insight-title">Review high-spend zero-conversion campaigns</div><div class="insight-desc">${agg.weakCampaigns.slice(0,2).map(([n,v])=>`<strong>${esc(n)}</strong> spent ${fmtSAR(v.spend)} with zero conversions`).join('; ')}. Pause, tighten targeting, or improve the landing page before continuing spend.</div></div></div>` : ''}
+      ${agg.highClickNoConv.length ? `<div class="insight-row"><div class="insight-icon">🔍</div><div class="insight-body"><div class="insight-title">Improve landing pages where clicks are high but conversions are zero</div><div class="insight-desc">${agg.highClickNoConv.slice(0,2).map(r=>`<strong>${esc(r.landingPage||r.campaign||'')}</strong> (${fmt(r.clicks||0)} clicks, zero conversions)`).join('; ')}. Import GA4 data to check whether visitors engaged with these pages after clicking.</div></div></div>` : ''}
+      ${agg.weakKW.length ? `<div class="insight-row"><div class="insight-icon">✂</div><div class="insight-body"><div class="insight-title">Pause or add as negative keywords</div><div class="insight-desc">${agg.weakKW.slice(0,3).map(([kw,v])=>`<em>${esc(kw)}</em> (${fmtSAR(v.spend)} spent, zero conversions)`).join('; ')}. These keywords are consuming budget without results.</div></div></div>` : ''}
+    </div>
+  `;
+}
+
+// ── Google Ads panel dispatcher ────────────────────────────────────────────
+function renderGAdsPanel() {
+  if (GADS_IMPORTED) {
+    renderGAdsImported(GADS_IMPORTED);
+  } else {
+    renderGAdsMock();
+  }
+}
+
+// ── Google Ads load / clear ────────────────────────────────────────────────
+function loadGAdsData() {
+  const raw   = (document.getElementById('gads-json-input') || {}).value || '';
+  const msgEl = document.getElementById('gads-import-msg');
+  if (!msgEl) return;
+  msgEl.style.display = 'none';
+
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch(e) {
+    msgEl.className = 'ds-msg ds-msg-err';
+    msgEl.textContent = 'Invalid JSON: ' + e.message;
+    msgEl.style.display = 'block';
+    return;
+  }
+  if (!parsed || !Array.isArray(parsed.rows)) {
+    msgEl.className = 'ds-msg ds-msg-err';
+    msgEl.textContent = 'JSON must have a "rows" array at the top level.';
+    msgEl.style.display = 'block';
+    return;
+  }
+  if (parsed.rows.length === 0) {
+    msgEl.className = 'ds-msg ds-msg-err';
+    msgEl.textContent = 'The "rows" array is empty — nothing to import.';
+    msgEl.style.display = 'block';
+    return;
+  }
+  if (parsed.rows.length > 500) {
+    msgEl.className = 'ds-msg ds-msg-err';
+    msgEl.textContent = 'Too many rows (' + parsed.rows.length + '). Maximum is 500 per import.';
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  GADS_IMPORTED = parsed;
+  updateDSModeIndicator();
+
+  const n = parsed.rows.length;
+  msgEl.className = 'ds-msg ds-msg-ok';
+  msgEl.textContent = '✓ Loaded ' + n + ' row' + (n !== 1 ? 's' : '') + ' successfully. Switch to the Google Ads tab to see your real data.';
+  msgEl.style.display = 'block';
+}
+
+function clearGAdsData() {
+  GADS_IMPORTED = null;
+  const input = document.getElementById('gads-json-input');
+  const msg   = document.getElementById('gads-import-msg');
+  if (input) input.value = '';
+  if (msg)   { msg.style.display = 'none'; msg.textContent = ''; }
+  updateDSModeIndicator();
 }
 
 // ── GA4 aggregation ────────────────────────────────────────────────────────
@@ -2102,7 +2427,8 @@ function clearGA4Data() {
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
-renderIG1Panel();   // render IG1 mock on load (panel hidden but pre-warmed)
+renderIG1Panel();   // render IG1 mock on load
+renderGAdsPanel();  // render Google Ads mock on load
 renderGA4Panel();   // render GA4 placeholder on load
 initCharts();
 updateDSModeIndicator();

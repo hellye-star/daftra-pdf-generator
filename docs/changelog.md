@@ -2,6 +2,34 @@
 
 ---
 
+## [2026-06-13] — Marketing Intelligence: Google Ads Manual Import
+
+### marketing-dashboard.html
+
+Added real-data manual import for the Google Ads tab. No new files. No APIs, OAuth, credentials, fetch calls, AI API calls, or ad write actions.
+
+**What was added:**
+- **Google Ads JSON import** — textarea + Load / Reset to Mock buttons in the Data Source tab; badge updates to reflect active import state
+- **`GADS_IMPORTED` in-memory state** — same pattern as IG1 and GA4; data clears on page refresh, no localStorage
+- When Google Ads JSON is loaded, the **Google Ads tab re-renders entirely from imported data** instead of mock figures
+- **`aggregateGAds(rows)`** — calculates total spend, impressions, clicks, conversions; overall CTR, CPC, cost per conversion; campaign rankings by conversions and by spend; zero-conversion (waste) campaigns; best and weak keywords; best and weak search terms; landing page traffic grouping with final URL mapping; high-click / zero-conversion rows for GA4 cross-reference
+- **Six analysis questions answered in imported render:**
+  - Q1 — Which campaigns are working? (best by conversions)
+  - Q2 — Which campaigns are wasting spend? (high spend, zero conversions)
+  - Q3 — Which keywords attract serious visitors? (best / weak keyword comparison)
+  - Q4 — Which landing pages receive paid ad traffic?
+  - Q5 — Which landing pages need GA4 comparison? (50+ clicks, zero conversions)
+  - Q6 — What should be optimised next? (actionable recommendation cards)
+- **Mock mode preserved** — `renderGAdsMock()` reproduces the exact previous mock panel (summary strip, weekly bar charts, key metrics) when no data is imported
+- Data Source mode chips and import badge update dynamically on load and reset
+- Instagram 1 import unchanged and fully working
+- GA4 import and visitor segment analysis unchanged and fully working
+- TikTok remains schema-only (no import wiring)
+
+**Files NOT changed:** `proxy.py`, `config.json`, `index.html`, `social-dashboard.html`, `financial-dashboard.html`, `personal-dashboard.html`, `daftra-pdf-generator_1.html`
+
+---
+
 ## [2026-06-13] — Marketing Intelligence: GA4 Visitor Segment Analysis
 
 ### marketing-dashboard.html
