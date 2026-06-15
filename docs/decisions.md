@@ -4,6 +4,70 @@ A record of why key implementation choices were made. Consult this before changi
 
 ---
 
+## Marketing Intelligence Dashboard
+
+---
+
+### In-Memory-Only Data Store for Marketing Dashboard
+
+**Decision:** All imported marketing data (`GA4_IMPORTED`, `IG1_IMPORTED`, etc.) is held in JS memory only. No localStorage, sessionStorage, or cookies. A hard refresh (Ctrl+F5) clears all data.
+
+**Why:** Marketing data is large and changes frequently. Storing it in localStorage would create stale caches and potential privacy issues. The user should always fetch fresh data consciously. The fetch buttons make this explicit.
+
+**Rule:** Never add localStorage/sessionStorage persistence for imported marketing data. After hard refresh, user clicks "Fetch from API" again — this is expected behaviour, not a bug.
+
+---
+
+### Localhost-Only Enforcement on Setup POST Endpoints
+
+**Decision:** All `/api/setup/{service}/save` endpoints check `self.client_address[0] == '127.0.0.1'` at the top of the handler and return 403 if the request comes from any other IP.
+
+**Why:** The setup endpoints write credential files to disk. If the proxy were ever accidentally exposed beyond localhost (misconfigured firewall, tunneling), an external caller could overwrite credential files with attacker-controlled content. The localhost check is a safety backstop.
+
+**Rule:** Do not remove or weaken the localhost check on any setup POST endpoint.
+
+---
+
+### Credential Files Written Outside the Repo
+
+**Decision:** All marketing API credential files are written to `~/.vista-platform/keys/` — a directory outside the git repository. Paths to these files are stored in `config.json` (which is gitignored), not in the HTML source.
+
+**Why:** Writing to a directory outside the repo makes it structurally impossible to accidentally `git add` a credential file. Even if the user runs `git add .` from the project root, the key files are not picked up.
+
+**Rule:** Never write credential files inside the project directory or any subdirectory of it. The `_VISTA_KEYS_DIR` constant in `proxy.py` must always point outside the repo.
+
+---
+
+### Atomic config.json Updates (write + os.replace)
+
+**Decision:** Setup save handlers write to `config.json.tmp` first, then call `os.replace()` to atomically rename it to `config.json`.
+
+**Why:** A crash or error during a direct `config.json` write would leave the file partially written and corrupt. `os.replace()` is atomic on all supported OS platforms — the file either has the old content or the new content, never a partial state.
+
+**Rule:** All config.json writes from proxy.py must use the write-to-tmp + os.replace() pattern.
+
+---
+
+### Meta Graph API: No Python Package
+
+**Decision:** The Meta/Instagram API connection uses Python's built-in `urllib.request` — no `requests` library, no `facebook-sdk` package.
+
+**Why:** Meta's Graph API is a plain HTTPS REST API. The only call needed for setup test is `GET /v20.0/{ig_account_id}?fields=username,followers_count&access_token={token}`. `urllib.request.Request` handles this with zero new dependencies, consistent with the proxy's stdlib-only design goal.
+
+**Rule:** Do not add a Meta/Facebook Python package. Use `urllib.request` for all Meta API calls in `proxy.py`.
+
+---
+
+### Priority Switch: Invoice Generator before Marketing Intelligence API (2026-06-15)
+
+**Decision:** After completing all three setup centers (GA4, Google Ads, Meta), the user decided to pause Marketing Intelligence API work and switch priority to Invoice Generator module changes.
+
+**Why:** Google Ads connection was more complex than expected (developer token standard access). Meta connection was blocked by `@vistaunited.co` not being linked to a Facebook Page. The setup centers provide visible, testable value. Completing the full API connections can wait until the credentials/account setup is sorted out independently.
+
+**How to resume:** When the user says to resume Marketing Intelligence API work, start by checking whether: (1) Google Ads developer token has been upgraded to standard access, (2) `@vistaunited.co` has been linked to a Facebook Page in Instagram Settings → Account → Linked Accounts. If both are resolved, implement `GET /api/google-ads/report` and `GET /api/meta/report` in that order.
+
+---
+
 ## Document Generator — Purchasing Invoice Manager
 
 ---

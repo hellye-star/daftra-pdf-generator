@@ -15,7 +15,8 @@ A suite of local, single-file HTML tools for Vista United Co. No cloud hosting, 
 | Social Media Control Center | `social-dashboard.html` | Notion — Vista/Hussam workspace | ✅ Live — Phase 2A complete + detail unification |
 | Financial Dashboard | `financial-dashboard.html` | Daftra ERP (via `/daftra/...` proxy) | ✅ Live — merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | Notion — Youssef private workspace | ✅ Live |
-| Local Proxy | `proxy.py` | — relays Notion API + Daftra API | ✅ Live |
+| Marketing Intelligence Dashboard | `marketing-dashboard.html` | GA4 API + Google Ads API + Meta Graph API (all via proxy setup centers) | ✅ Live — GA4 working; Ads/Meta connections paused |
+| Local Proxy | `proxy.py` | — relays Notion API + Daftra API + Marketing APIs | ✅ Live |
 
 ---
 
@@ -63,7 +64,8 @@ daftra-pdf-generator_1.html    — Document Generator (invoices + quotations)
 social-dashboard.html          — Social Media Control Center  [live — Phase 2A + detail unification]
 financial-dashboard.html       — Financial Dashboard  [live — merged to stable-reviewed-history]
 personal-dashboard.html        — Personal Task Center  [live — Phase 3 complete]
-proxy.py                       — Local proxy: serves HTML files + relays Notion API + Daftra API  [live]
+marketing-dashboard.html       — Marketing Intelligence Dashboard  [live — GA4 working; Ads/Meta setup done]
+proxy.py                       — Local proxy: serves HTML files + relays Notion API + Daftra API + Marketing APIs  [live]
 config.json                    — Live config: tokens + IDs  (git-ignored — never commit)
 config.example.json            — Safe template with placeholder values (safe to commit)
 .gitignore                     — Excludes config.json and OS artifacts
@@ -76,7 +78,94 @@ docs/
 CLAUDE_CONTEXT.md              — Permanent implementation rules (all modules)
 .claude/
   launch.json                  — Preview server config (port 8080)
+~/.vista-platform/keys/        — Secret key files (OUTSIDE repo — never commit)
+  ga4-service-account.json     — GA4 service account credentials
+  google-ads-oauth.json        — Google Ads OAuth credentials
+  meta-access-token.json       — Meta/Instagram access token
 ```
+
+---
+
+## Marketing Intelligence Architecture
+
+### Local setup center pattern (GA4, Google Ads, Meta)
+
+All three marketing API connections follow the same three-tier pattern. The browser never calls the external API directly and never persists credentials.
+
+```
+Browser (marketing-dashboard.html)
+  → POST /api/setup/{service}/save  (localhost-only, 403 from non-127.0.0.1)
+      body: { credential fields }
+      proxy validates, writes secrets to ~/.vista-platform/keys/{filename}.json
+      proxy updates config.json (atomic: write to .tmp → os.replace()) with path + non-secret IDs only
+      proxy reloads in-memory module-level vars (global declaration)
+      → returns { ok: true }
+  → browser clears secret fields from DOM immediately after save
+
+Browser
+  → GET /api/setup/{service}/status
+      proxy returns masked status: last-4 of IDs, file-exists flag, never full values
+      → browser updates setup badge (Configured ✓ / Not configured)
+
+Browser
+  → POST /api/setup/{service}/test
+      proxy loads credentials from file, calls external API
+      → returns { ok, message } — never echoes credentials in response
+```
+
+### Marketing API data flow (when connected)
+
+```
+Browser clicks "Fetch GA4 from API"
+  → GET /api/ga4/report
+      proxy imports google.oauth2.service_account (lazy import, inside try/except)
+      → calls Google Analytics Data API v1
+      → returns JSON: { rows: [{ page_path, page_title, sessions, pageviews, avg_engagement_time_seconds }] }
+  → browser stores in JS-memory variable GA4_IMPORTED (in-memory only — cleared on Ctrl+F5)
+  → renderGA4Panel() displays data
+
+Google Ads report (PAUSED):
+  → GET /api/google-ads/report — not yet implemented
+  → requires google-ads Python package (python -m pip install google-ads)
+
+Meta/Instagram report (PAUSED):
+  → GET /api/meta/report — not yet implemented
+  → plain urllib.request calls to graph.facebook.com/v20.0/ (no package needed)
+  → blocked: @vistaunited.co not yet linked to Facebook Page
+```
+
+### In-memory-only data (critical rule)
+
+All imported marketing data (`GA4_IMPORTED`, `IG1_IMPORTED`, etc.) lives in JS memory only. Hard refresh (Ctrl+F5) clears it. This is intentional — no localStorage, no sessionStorage, no cookies for marketing data. After a hard refresh the user must re-fetch from API.
+
+### Security constraints (permanent)
+
+- Setup POST endpoints check `self.client_address[0] == '127.0.0.1'` — 403 from any other IP
+- Browser never calls Google/Meta directly
+- Browser never stores credentials in localStorage/sessionStorage/cookies
+- Proxy responses never return: developer token, client secret, refresh token, full customer IDs, oauth file path, tracebacks, access tokens, raw config values
+- Key files live in `~/.vista-platform/keys/` (outside repo) and must never be staged, committed, printed, or pushed
+- `config.json` must never be staged, committed, printed, or pushed
+
+### Proxy module-level vars (marketing APIs)
+
+```python
+_ga4_cfg         = CONFIG.get('marketing_apis', {}).get('google', {}).get('ga4', {})
+_ga4_property_id = _ga4_cfg.get('property_id', '')
+_ga4_creds_path  = _ga4_cfg.get('credentials_json_path', '')
+
+_gads_cfg           = CONFIG.get('marketing_apis', {}).get('google', {}).get('ads', {})
+_gads_oauth_path    = _gads_cfg.get('oauth_json_path', '')
+_gads_customer_id   = _gads_cfg.get('customer_id', '')
+_gads_login_cust_id = _gads_cfg.get('login_customer_id', '')
+
+_meta_cfg        = CONFIG.get('marketing_apis', {}).get('meta', {})
+_meta_token_path = _meta_cfg.get('token_path', '')
+_meta_ig_acct_id = _meta_cfg.get('instagram_business_account_id', '')
+_meta_page_id    = _meta_cfg.get('page_id', '')
+```
+
+All three save handlers must declare `global` for their vars as the first line of the function.
 
 ---
 

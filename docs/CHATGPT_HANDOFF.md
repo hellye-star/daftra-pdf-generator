@@ -14,7 +14,8 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 - `personal-dashboard.html` — Personal Task Center (Notion-connected, Youssef's workspace)
 - `financial-dashboard.html` — Financial Dashboard (Daftra ERP, via proxy)
 - `daftra-pdf-generator_1.html` — Document Generator (invoices, quotations, delivery notes, purchasing invoices)
-- `proxy.py` — Local proxy: serves all HTML files, relays Notion API, relays Daftra API (read-only)
+- `marketing-dashboard.html` — Marketing Intelligence Dashboard (GA4 + Google Ads + Meta/Instagram, via proxy)
+- `proxy.py` — Local proxy: serves all HTML files, relays Notion API, relays Daftra API (read-only), handles Marketing Intelligence API setup centers
 
 ---
 
@@ -27,6 +28,7 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
 | Financial Dashboard | `financial-dashboard.html` | ✅ Live — merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
+| Marketing Intelligence Dashboard | `marketing-dashboard.html` | ✅ Live — GA4 report working; Google Ads + Meta setup centers done; API connections paused |
 | Local Proxy | `proxy.py` | ✅ Live |
 
 ---
@@ -36,12 +38,11 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 | Item | Value |
 |---|---|
 | Active stable branch | `stable-reviewed-history` |
-| Latest pushed stable commit | `30380a7` — Sync platform documentation state |
-| Previous commit | `7c426ec` — Fix handoff stable state |
-| Previous feature commit | `22c115e` — Add personal task views |
-| Personal Task Center baseline | `c13cbb2` — Add personal task center |
-| Social Dashboard archive | `4bd67de` — Add task archive action to social dashboard |
-| Social Dashboard create | `d4ac3e9` — Add Vista task creation from social dashboard |
+| Latest pushed stable commit | `46be6ed` — Add local Meta setup center |
+| Previous commit | `a8661a1` — Add local Google Ads setup center |
+| Previous commit | `7b65ca5` — Add local GA4 setup center |
+| Previous commit | `8d81212` — Add GA4 API pilot |
+| Pre-marketing baseline | `30380a7` — Sync platform documentation state |
 
 **Tags (do not move or create):**
 - `stable-reviewed-history-v1` — points to `2d0faec` (original Social Dashboard stable snapshot — restore point)
@@ -309,7 +310,73 @@ Full local file manager for `C:\Users\YousefMokaled\Documents\Vista United Co\pu
 
 ---
 
-## 10. Blocked and Deferred Features
+## 10. Marketing Intelligence Dashboard (`marketing-dashboard.html`)
+
+**Status:** Live on `stable-reviewed-history` as of commit `46be6ed`. In-memory-only data store — all imported data is cleared on hard refresh (Ctrl+F5). This is intentional by design, not a bug.
+
+### What is live and working
+
+| Feature | Status |
+|---|---|
+| GA4 Setup Center | ✅ Done — save/status/test endpoints |
+| GA4 report fetch (`/api/ga4/report`) | ✅ Done — 87 pages fetched, shown in Website Analytics panel |
+| Google Ads Setup Center | ✅ Done — save/status/test endpoints |
+| Google Ads report | ⏳ Paused — developer token access complicated |
+| Meta/Instagram Setup Center | ✅ Done — save/status/test endpoints |
+| Meta/Instagram report | ⏳ Paused — @vistaunited.co not yet linked to Facebook Page |
+| Instagram 2, TikTok API | ❌ Not started |
+
+### Setup center pattern (all three: GA4, Google Ads, Meta)
+
+1. Browser POSTs credentials to `localhost:8080/api/setup/{service}/save`
+2. Proxy validates, writes secrets to `%USERPROFILE%\.vista-platform\keys\` (outside repo, gitignored)
+3. Proxy updates `config.json` with non-secret refs only (file paths, IDs)
+4. Browser clears secret fields from DOM immediately after save
+5. Status endpoints return last-4-digits of IDs only — never full values
+
+### Key files
+
+| File | Location |
+|---|---|
+| GA4 service account | `~/.vista-platform/keys/ga4-service-account.json` |
+| Google Ads OAuth | `~/.vista-platform/keys/google-ads-oauth.json` |
+| Meta access token | `~/.vista-platform/keys/meta-access-token.json` |
+
+All three key files are outside the repo and must never be committed or printed.
+
+### Important: in-memory-only data
+
+`IG1_IMPORTED`, `GA4_IMPORTED`, etc. live in JS memory only. A hard refresh (Ctrl+F5) clears all imported data. After a hard refresh, the user must click "Fetch GA4 from API" again to repopulate. This is expected behaviour.
+
+### Proxy routes added (all in `proxy.py`)
+
+| Route | Purpose |
+|---|---|
+| `GET /api/setup/ga4/status` | GA4 config status |
+| `POST /api/setup/ga4/save` | Save GA4 credentials |
+| `POST /api/setup/ga4/test` | Test GA4 connection |
+| `GET /api/setup/google-ads/status` | Google Ads config status |
+| `POST /api/setup/google-ads/save` | Save Google Ads credentials |
+| `POST /api/setup/google-ads/test` | Test Google Ads connection |
+| `GET /api/setup/meta/status` | Meta config status |
+| `POST /api/setup/meta/save` | Save Meta access token |
+| `POST /api/setup/meta/test` | Test Meta connection |
+| `GET /api/ga4/report` | Fetch GA4 page analytics |
+| `GET /api/google-ads/...` | (placeholder — report not yet implemented) |
+| `GET /api/meta/...` | (placeholder — report not yet implemented) |
+
+### What is paused and why
+
+- **Google Ads connection:** Needs a developer token with standard access; setup process was more complex than expected. Setup center is done — connection is blocked on credentials.
+- **Meta/Instagram report:** `@vistaunited.co` is not linked to a Facebook Page in Instagram Settings → Account → Linked Accounts. Without this link, `instagram_business_account_id` cannot be retrieved and the API connection cannot be tested end-to-end.
+
+### Next priority: Invoice Generator
+
+The user paused all Marketing Intelligence API work and is switching to Invoice Generator module changes. Do not continue Marketing Intelligence API work until the user explicitly resumes it.
+
+---
+
+## 11. Blocked and Deferred Features
 
 | Feature | Status | Blocker |
 |---|---|---|
@@ -417,7 +484,7 @@ Before recommending or making any change, ChatGPT must:
 2. **Read `docs/changelog.md`** — shows what changed and when. The most recent entries reflect the current approved state.
 3. **Read `docs/roadmap.md`** — shows phase status, what is complete, what is blocked, and what is next.
 4. **Read `docs/decisions.md`** — explains the reasoning behind structural choices. Consult before proposing any architectural change.
-5. **Check `git log --oneline -10`** — confirm which branch you are on. The only active branch is `stable-reviewed-history` (latest pushed commit `30380a7`). All modules — Social Dashboard, Personal Task Center, Financial Dashboard, Document Generator — are live on this branch. The `feature/financial-dashboard` branch is a historical artifact; the Financial Dashboard is already merged into `stable-reviewed-history`.
+5. **Check `git log --oneline -10`** — confirm which branch you are on. The only active branch is `stable-reviewed-history` (latest pushed commit `46be6ed`). All modules — Social Dashboard, Personal Task Center, Financial Dashboard, Document Generator, Marketing Intelligence Dashboard — are live on this branch. The `feature/financial-dashboard` branch is a historical artifact; the Financial Dashboard is already merged into `stable-reviewed-history`.
 6. **Check `git status`** — confirm working tree is clean before any work begins.
 7. **Read the relevant section of `social-dashboard.html`** before changing any JS function. Do not rely on summaries alone — the function signatures, guard conditions, and localStorage schemas matter exactly.
 8. **Do not suggest changes to locked items** (QR pipeline, html2pdf chain, `attentionFilter` + `isReviewedAndFresh` interaction, `openDetail` unification) without first confirming the lock is documented in `CLAUDE_CONTEXT.md` and has a clear reason to revisit.

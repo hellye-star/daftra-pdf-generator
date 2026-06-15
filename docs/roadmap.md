@@ -29,6 +29,7 @@ Every approved change must follow this order:
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A complete + detail unification |
 | Financial Dashboard | `financial-dashboard.html` | ✅ Live — merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
+| Marketing Intelligence Dashboard | `marketing-dashboard.html` | ✅ Live — GA4 report + all three setup centers done; Google Ads + Meta connections paused |
 | Local Proxy | `proxy.py` | ✅ Live |
 | Config template | `config.example.json` | ✅ Done |
 | Git safety | `.gitignore` | ✅ Done — config.json excluded |
@@ -61,6 +62,53 @@ Every approved change must follow this order:
 - Sales / purchases / expenses panels with ex-VAT and VAT breakdown
 - Personal Transfers section (7 records excluded from business totals, shown separately)
 - Homepage card updated to Live on `index.html`
+
+---
+
+## Marketing Intelligence Dashboard — `marketing-dashboard.html`
+
+**Status:** Live on `stable-reviewed-history` as of commit `46be6ed`. Next priority is Invoice Generator — Marketing Intelligence API work is paused.
+
+### ✅ Phase MI-1 — GA4 API Pilot (commit `8d81212`)
+- `GET /api/ga4/report` proxy endpoint fetches page analytics from Google Analytics Data API v1
+- Returns up to 87 pages: page path, title, sessions, pageviews, avg engagement time
+- Requires `google-auth` package (`python -m pip install google-auth`)
+- Credentials stored as service account JSON at `~/.vista-platform/keys/ga4-service-account.json`
+
+### ✅ Phase MI-2 — GA4 Setup Center (commit `7b65ca5`)
+- `/api/setup/ga4/save`, `/api/setup/ga4/status`, `/api/setup/ga4/test` endpoints
+- UI block "GA4 API Setup" in marketing-dashboard.html Data Source tab
+- Status badge auto-populated at boot via silent fetch
+
+### ✅ Phase MI-3 — Google Ads Setup Center (commit `a8661a1`)
+- `/api/setup/google-ads/save`, `/api/setup/google-ads/status`, `/api/setup/google-ads/test` endpoints
+- Stores OAuth JSON (developer_token, client_id, client_secret, refresh_token) at `~/.vista-platform/keys/google-ads-oauth.json`
+- Requires `google-ads` package (`python -m pip install google-ads`)
+- **Google Ads report not yet implemented** — paused (developer token standard access complicated)
+
+### ✅ Phase MI-4 — Meta/Instagram Setup Center (commit `46be6ed`)
+- `/api/setup/meta/save`, `/api/setup/meta/status`, `/api/setup/meta/test` endpoints
+- Stores access token only at `~/.vista-platform/keys/meta-access-token.json`; uses plain urllib (no package needed)
+- Tests against `graph.facebook.com/v20.0/{ig_account_id}?fields=username,followers_count`
+- **Meta report not yet implemented** — paused (`@vistaunited.co` not yet linked to a Facebook Page)
+
+### ⏳ Phase MI-5 — Google Ads report (PAUSED)
+- `GET /api/google-ads/report` — campaign/keyword/search-term fetch
+- Blocked on: developer token with standard access, customer ID confirmation
+- Setup center is done; unblock by supplying valid developer token and customer ID
+
+### ⏳ Phase MI-6 — Meta/Instagram report (PAUSED)
+- `GET /api/meta/report` — Instagram 1 post insights fetch
+- Blocked on: `@vistaunited.co` must be linked to a Facebook Page (Instagram Settings → Account → Linked Accounts)
+- Then `fetchIG1FromAPI()` JS function to be added to marketing-dashboard.html
+
+### ⏳ Phase MI-7 — Instagram 2 and TikTok (not started)
+
+### Key architecture notes
+- All data is in-memory only — Ctrl+F5 clears everything; user must re-fetch after hard reload (by design)
+- All setup POST endpoints are localhost-only (proxy checks `self.client_address[0] == '127.0.0.1'`)
+- Browser never calls Google/Meta directly; browser never stores credentials in localStorage/sessionStorage
+- Key files live outside the repo in `~/.vista-platform/keys/` and must never be committed
 
 ---
 
