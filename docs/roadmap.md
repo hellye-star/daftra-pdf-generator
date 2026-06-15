@@ -25,7 +25,7 @@ Every approved change must follow this order:
 | Module | File | Status |
 |---|---|---|
 | Vista Homepage | `index.html` | ✅ Live |
-| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
+| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager + Receipt Voucher tab live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A complete + detail unification |
 | Financial Dashboard | `financial-dashboard.html` | ✅ Live — merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |

@@ -2,6 +2,57 @@
 
 ---
 
+## [2026-06-16] — Document Generator: Receipt Voucher / سند قبض module
+
+### daftra-pdf-generator_1.html only — no other files changed
+
+Added a new **Receipt Voucher** tab to the Document Generator. The module generates a printable / PDF-exportable Receipt Voucher (سند قبض) and can auto-fill key fields from Daftra invoice payment records.
+
+**What was added:**
+
+- **Receipt Voucher tab** — new tab alongside Invoice, Quotation, Delivery Note, and Purchasing Invoice
+- **Manual entry form** — RV No., RV Date, Customer, Amount Paid, Amount in Words, Payment Method, Invoice No., Received By, Notes — all editable by the user at any time
+- **Invoice auto-fill** — when the user types a Daftra invoice number and clicks Fetch, the module populates:
+  - Customer name from `Invoice.client_name`
+  - Invoice No. from the Daftra record
+  - Invoice total and remaining balance (shown in the preview as supporting info)
+  - **Amount Paid** — 4-priority chain: P1 direct `paid` field → P2 sum of `InvoicePayment[].amount` → P3 `total − remaining` → P4 status === "paid" → manual entry if none available
+  - **Payment Method** — 3-priority chain from `InvoicePayment[].payment_option` with `normalizeMethod()` normalisation (handles Arabic/English variants); blank `''` placeholder if none found with a warning note shown in the form
+  - **Payment Date** — 3-priority chain: latest `InvoicePayment[].date` → `Invoice.date` → today; uses `parseDaftraDate()` which handles DD/MM/YYYY, YYYY-MM-DD, and Unix timestamps
+- **Auto-fill warnings** — `amountNote`, `methodNote`, `dateNote` fields display notes in the form when data is missing or estimated
+- **Receiver Signature — upload + localStorage** — user uploads a PNG/JPG/WEBP image once; converted to a data URL via `FileReader`, saved to `localStorage` key `vista_rv_receiver_signature_data_url`, and loaded automatically every time the Receipt Voucher tab is opened
+  - "Clear Saved Signature" removes it from localStorage and the preview
+  - "Clear Form" does not delete the saved signature
+  - Form signature controls are hidden in print (`.rv-form-panel` in the print hide list)
+- **`RECEIVER_SIGNATURE_DATA_URL` constant** — empty-string fallback in JS; if set as a base64 data URL it acts as a lower-priority default below the localStorage signature
+- **PDF / print output** — single right-aligned "Receiver Signature / توقيع المستلم" block; no Customer Signature block; no Company Stamp block
+
+**Key functions added:**
+- `showReceiptVoucherTab()` — tab entry point; inits `rvState` and syncs signature from localStorage
+- `fetchRV()` — invoice number lookup with partial/suffix matching
+- `fetchRVFromMatch(match)` — fetches `Invoice` + `InvoicePayment[]` from Daftra; runs P1–P4 amount chain, M1–M3 method chain, D1–D3 date chain; preserves uploaded signature and receivedBy value across auto-fills
+- `renderRVPreview()` — generates `#pdfPage` HTML for the RV
+- `clearRVForm()` — resets form fields but preserves localStorage signature
+- `rvSigUpload(input)` — FileReader → data URL → localStorage → thumbnail update → preview refresh
+- `rvSigClear()` — removes from localStorage, clears thumbnail and `rvState.receiverSignatureDataUrl`
+- `normalizeMethod(raw)` — maps Arabic/English payment option strings to canonical labels
+- `parseDaftraDate(val)` — parses DD/MM/YYYY, YYYY-MM-DD, and Unix timestamps
+
+**localStorage key added:**
+- `vista_rv_receiver_signature_data_url` — receiver signature data URL (PNG/JPG/WEBP); browser-local only; not a secret
+
+**Removed (design decision):**
+- Canvas drawing pad — was added then removed; drawing did not work reliably; replaced with upload + localStorage
+- Customer Signature block — removed from RV; single Receiver Signature block only
+- Company Stamp block — removed from RV
+
+**Protected files — confirmed untouched:**
+`config.json`, `proxy.py`, `marketing-dashboard.html`, `~/.vista-platform/keys/*`, `__pycache__/`
+
+**Marketing Intelligence:** remains paused — zero changes to `marketing-dashboard.html`, proxy Marketing routes, or any API connection logic.
+
+---
+
 ## [2026-06-14] — Marketing Intelligence: Meta / Instagram Setup Center
 
 ### proxy.py + marketing-dashboard.html

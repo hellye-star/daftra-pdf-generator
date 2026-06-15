@@ -68,6 +68,30 @@ A record of why key implementation choices were made. Consult this before changi
 
 ---
 
+## Document Generator — Receipt Voucher
+
+---
+
+### Receipt Voucher Signature: File Upload + localStorage, Not Canvas Drawing
+
+**Decision:** The Receipt Voucher receiver signature is saved via file upload (PNG/JPG/WEBP → `FileReader` → data URL) stored in `localStorage` key `vista_rv_receiver_signature_data_url`. A canvas drawing pad was the first approach and was removed.
+
+**Why:** A `<canvas>` drawing pad was implemented with `mousedown`/`mousemove`/`mouseup`/`touchstart` listeners. Because re-rendering the tab rebuilds the DOM, old event listeners are lost. The clone trick (`canvas.cloneNode(true)` → `replaceChild`) was used to swap in a fresh canvas — but the clone does not inherit the original node's event listeners, and the new listeners attached to the `fresh` element did not fire. Drawing was visually broken. File upload + localStorage is simpler, more reliable, and has the added benefit of persisting across page loads and tab switches with no re-upload required.
+
+**Rule:** Do not re-implement a canvas drawing pad for Receipt Voucher signatures. The approved approach is `rvSigUpload(input)` (FileReader) + `rvSigClear()` with `localStorage` key `vista_rv_receiver_signature_data_url`.
+
+---
+
+### Receipt Voucher: Single Receiver Signature Only
+
+**Decision:** The Receipt Voucher PDF has one signature block: "Receiver Signature / توقيع المستلم", right-aligned. Customer Signature and Company Stamp blocks are not present.
+
+**Why:** The user explicitly requested the simplification. A customer signature line and a company stamp placeholder were removed. The single block is sufficient for internal use.
+
+**Rule:** Do not re-add Customer Signature or Company Stamp blocks to the Receipt Voucher. If a stamp or second signature is needed in the future, treat it as a new explicit requirement, not a default.
+
+---
+
 ## Document Generator — Purchasing Invoice Manager
 
 ---

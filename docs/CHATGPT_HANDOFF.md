@@ -25,7 +25,7 @@ Vista United Co. internal tooling — a suite of single-file HTML tools served b
 |---|---|---|
 | Homepage | `index.html` | ✅ Live |
 | Social Media Control Center | `social-dashboard.html` | ✅ Live — Phase 2A + 2A.5 + 2A.6 complete |
-| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager live |
+| Document Generator | `daftra-pdf-generator_1.html` | ✅ Live — stable + Purchasing Invoice manager + Receipt Voucher tab live |
 | Financial Dashboard | `financial-dashboard.html` | ✅ Live — merged to `stable-reviewed-history` |
 | Personal Task Center | `personal-dashboard.html` | ✅ Live — Phase 3 complete |
 | Marketing Intelligence Dashboard | `marketing-dashboard.html` | ✅ Live — GA4 report working; Google Ads + Meta setup centers done; API connections paused |
@@ -165,12 +165,53 @@ Live substring across task name, description, status, assignee, category, due da
 | `vista_reviews_v1` | Mark Reviewed records — stores `reviewedAt`, `taskName`, `lastEditedTime` |
 | `vista_task_relations_v1` | Manual Related Supporting Task links — bidirectional |
 | `vista_favorites_v1` | Favorites records — stores `favoritedAt`, `taskName`. No staleness concept. |
+| `vista_rv_receiver_signature_data_url` | Receipt Voucher receiver signature — base64 data URL (PNG/JPG/WEBP). Saved once, auto-loaded on every RV tab open. Not a secret. |
 
 ---
 
 ## 7. Document Generator Status
 
-Stable. Three document types: Invoice, Quotation, Delivery Note. Also includes the Purchasing Invoice local file manager (introduced in commit `d0188c6`). The overall platform latest stable commit is `30380a7` on `stable-reviewed-history`.
+Stable. Five document types: Invoice, Quotation, Delivery Note, Receipt Voucher, and a Purchasing Invoice local file manager. The overall platform latest stable commit is `30380a7` on `stable-reviewed-history`.
+
+### Receipt Voucher / سند قبض (new — 2026-06-16)
+
+Added a **Receipt Voucher** tab to `daftra-pdf-generator_1.html`. Generates a printable / PDF Receipt Voucher and auto-fills from Daftra invoice payment data.
+
+**Auto-fill logic (triggered by invoice number lookup):**
+- Customer name — from `Invoice.client_name`
+- Invoice No., invoice total, remaining balance
+- **Amount Paid** — 4-priority chain: P1 direct `paid` field → P2 sum of `InvoicePayment[].amount` → P3 `total − remaining` → P4 status === "paid" → manual entry if none
+- **Payment Method** — `normalizeMethod()` maps `InvoicePayment[].payment_option` (Arabic/English) to a canonical label; blank with warning if not found
+- **Payment Date** — latest `InvoicePayment[].date` → `Invoice.date` → today; `parseDaftraDate()` handles DD/MM/YYYY, YYYY-MM-DD, and Unix timestamps
+- All fields remain manually editable at all times; warnings shown when data is missing or estimated
+
+**Signature:**
+- `rvSigUpload()` — FileReader converts image → data URL → saved to `localStorage` key `vista_rv_receiver_signature_data_url` — auto-loaded on every tab open
+- `rvSigClear()` — removes from localStorage; `clearRVForm()` preserves the saved signature
+- `RECEIVER_SIGNATURE_DATA_URL` — JS constant (empty string); if set as base64 it acts as a fallback below localStorage
+- Form controls (upload button, thumbnail) hidden in print via `.rv-form-panel`
+
+**Signature design decision:**
+A canvas drawing pad was implemented and then abandoned — drawing events did not fire reliably after the clone trick used to re-attach listeners. File upload + localStorage is the approved permanent approach.
+
+**PDF / print output:**
+- Single right-aligned "Receiver Signature / توقيع المستلم" block
+- No Customer Signature block — removed permanently
+- No Company Stamp block — removed permanently
+
+**localStorage key:**
+- `vista_rv_receiver_signature_data_url` — receiver signature data URL; PNG/JPG/WEBP; browser-local only; not a secret
+
+**Key functions:**
+- `showReceiptVoucherTab()`, `fetchRV()`, `fetchRVFromMatch()`, `renderRVPreview()`, `clearRVForm()`
+- `rvSigUpload(input)`, `rvSigClear()`
+- `normalizeMethod(raw)`, `parseDaftraDate(val)`
+- `rvState` — global object: `{ rvNo, rvDate, customer, amount, amountWords, amountNote, invoiceNo, invoiceTotal, paymentMethod, methodNote, dateNote, receivedBy, notes, receiverSignatureDataUrl }`
+
+**Locked — do not change:**
+- Auto-fill priority chains (P1–P4 amount, M1–M3 method, D1–D3 date)
+- Signature via localStorage only (no canvas drawing, no external URL, no config.json)
+- Customer Signature and Company Stamp blocks must not be re-added to Receipt Voucher
 
 ### Recent changes (commits `3cb3db9` and `b59995b`)
 
@@ -439,6 +480,8 @@ The Reviewed chip was corrected from a "freshness filter" to a "permanent histor
 - **Do not add auto-refresh, `setInterval`, `setTimeout`, or `DOMContentLoaded` data-fetching to `financial-dashboard.html`**. Manual fetch only.
 - **Do not include personal transfer records in business profit, VAT, or purchase totals**. Pre-filter at `renderContent()` before any calculation.
 - **Do not migrate the Document Generator to the proxy Daftra route**. It is stable and its pattern is intentional.
+- **Do not re-add a canvas drawing pad for the Receipt Voucher signature**. The drawing approach was tried and abandoned — pointer events did not fire reliably after the clone trick used to re-attach listeners. The approved approach is file upload + `localStorage` via `rvSigUpload()`.
+- **Do not re-add Customer Signature or Company Stamp blocks to the Receipt Voucher**. Both were removed by design — the only signature block in the RV PDF is "Receiver Signature / توقيع المستلم".
 
 ---
 
