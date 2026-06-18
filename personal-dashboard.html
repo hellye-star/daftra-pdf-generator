@@ -61,6 +61,7 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .field-input:focus { border-color: var(--dark); background: var(--white); }
 select.field-input { cursor: pointer; }
 textarea.field-input { resize: vertical; min-height: 64px; }
+.notes-textarea { min-height: 240px !important; height: 240px !important; resize: vertical; line-height: 1.45; }
 .tags-checkboxes { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
 .tag-check-label { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 400;
                    color: var(--mid); cursor: pointer; padding: 4px 10px; border: 1px solid var(--rule);
@@ -305,7 +306,7 @@ textarea.field-input { resize: vertical; min-height: 64px; }
       </div>
       <div class="ntf-full">
         <label class="field-label" for="ntf-notes">Notes</label>
-        <textarea class="field-input" id="ntf-notes" placeholder="Optional notes…"></textarea>
+        <textarea class="field-input notes-textarea" id="ntf-notes" rows="10" placeholder="Optional notes…"></textarea>
       </div>
     </div>
     <div class="ntf-actions">
@@ -584,7 +585,7 @@ function buildCard(t) {
       </div>
       <div class="edit-full">
         <label class="field-label">Notes</label>
-        <textarea class="field-input" id="en-${id}">${notes}</textarea>
+        <textarea class="field-input notes-textarea" id="en-${id}" rows="10">${notes}</textarea>
       </div>
     </div>
     <div class="edit-actions">
