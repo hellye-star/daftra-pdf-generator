@@ -1326,6 +1326,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._meta_token_diag()
         elif parsed.path == '/api/meta/ig1/profile':
             self._meta_ig1_profile()
+        elif parsed.path == '/api/meta/ig1/insights':
+            self._meta_ig1_insights()
         else:
             self._json_error(404, 'Meta API endpoint not found.')
 
@@ -1838,6 +1840,120 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             'website':             ig_data.get('website', ''),
         }
         body = json.dumps(profile).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _meta_ig1_insights(self):
+        """Localhost-only: fetch live IG1 account-level insights from Meta Graph API."""
+        if not self._require_localhost():
+            return
+
+        token, diag, read_err = self._meta_read_token_safe()
+        if read_err or not token:
+            body = json.dumps({
+                'ok': False,
+                'error': read_err or 'Token file exists but access_token is empty.',
+                'source': 'meta_api_live',
+            }).encode('utf-8')
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if not _meta_ig_acct_id or not _meta_ig_acct_id.isdigit():
+            body = json.dumps({
+                'ok': False,
+                'error': 'Instagram Business Account ID is not configured.',
+                'source': 'meta_api_live',
+            }).encode('utf-8')
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        data, err = self._meta_graph_call(
+            f'{_meta_ig_acct_id}/insights',
+            {'metric': 'reach,impressions,profile_views', 'period': 'day', 'limit': '30'},
+            token,
+        )
+
+        if err:
+            code = err.get('code', 0)
+            if code == 10:
+                resp = {
+                    'ok':                 False,
+                    'permission_missing': True,
+                    'required_permission': 'instagram_manage_insights',
+                    'error': (
+                        'Insights require instagram_manage_insights. '
+                        'Regenerate the Meta token with this scope, then save it again in Setup Center.'
+                    ),
+                    'error_code': code,
+                    'source': 'meta_api_live',
+                }
+            elif code in (190, 102, 463, 467):
+                resp = {
+                    'ok': False,
+                    'error': 'Token rejected or expired. Generate a new token in Meta Graph API Explorer.',
+                    'error_code': code,
+                    'source': 'meta_api_live',
+                }
+            elif code == 4:
+                resp = {
+                    'ok': False,
+                    'error': 'Meta API rate limit reached. Try again in a few minutes.',
+                    'error_code': code,
+                    'source': 'meta_api_live',
+                }
+            elif code == 0:
+                resp = {
+                    'ok': False,
+                    'error': 'Could not reach Meta API. Check internet connection.',
+                    'error_code': code,
+                    'source': 'meta_api_live',
+                }
+            else:
+                resp = {
+                    'ok': False,
+                    'error': f'Meta API returned error code {code}.',
+                    'error_code': code,
+                    'source': 'meta_api_live',
+                }
+            body = json.dumps(resp).encode('utf-8')
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # Parse each metric into a clean chart-ready list: [{date, value}, ...]
+        metrics = {}
+        for item in data.get('data', []):
+            name   = item.get('name', '')
+            period = item.get('period', '')
+            values = [
+                {'date': v.get('end_time', '')[:10], 'value': v.get('value', 0)}
+                for v in item.get('values', [])
+            ]
+            metrics[name] = {'period': period, 'values': values}
+
+        body = json.dumps({
+            'ok':      True,
+            'source':  'meta_api_live',
+            'metrics': metrics,
+        }).encode('utf-8')
         self.send_response(200)
         self._send_cors_headers()
         self.send_header('Content-Type', 'application/json')

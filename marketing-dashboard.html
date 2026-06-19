@@ -1276,25 +1276,105 @@ function renderIG1Live(data) {
       </div>
     </div>
 
-    <div style="padding:14px 16px;background:var(--amber-bg);border:1px solid #F0D5B0;border-left:3px solid var(--amber);border-radius:6px;font-size:13px;color:var(--amber);line-height:1.6;">
-      <strong>Reach &amp; interactions not available yet.</strong>
-      These metrics require the <code>instagram_manage_insights</code> permission and a live insights endpoint, which has not been wired yet.
-      The charts below are sample figures only and are <strong>not live data</strong>.
-    </div>
-
-    <div class="charts-row" style="margin-top:20px;">
-      <div class="chart-wrap">
-        <div class="chart-title">Weekly Reach <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
-        <div class="bar-chart" id="ig1-reach-chart"></div>
-      </div>
-      <div class="chart-wrap">
-        <div class="chart-title">Weekly Interactions <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
-        <div class="bar-chart" id="ig1-inter-chart"></div>
+    <div id="ig1-insights-section">
+      <div style="padding:14px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-secondary);line-height:1.6;">
+        Fetching insights…
       </div>
     </div>`;
+  // insights fetched separately by fetchIG1Insights() after profile renders
+}
 
-  renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,        '#E1306C');
-  renderBarChart('ig1-inter-chart',  MOCK.ig1.interactions, '#E1306C66');
+// ── Instagram 1 — render insights section ─────────────────────────────────
+function renderIG1InsightsSection(state, data) {
+  const sec = document.getElementById('ig1-insights-section');
+  if (!sec) return;
+
+  if (state === 'permission_missing') {
+    sec.innerHTML = `
+      <div style="padding:14px 16px;background:var(--amber-bg);border:1px solid #F0D5B0;border-left:3px solid var(--amber);border-radius:6px;font-size:13px;color:var(--amber);line-height:1.6;margin-bottom:16px;">
+        <strong>Insights not available.</strong>
+        Insights require <code>instagram_manage_insights</code>.
+        Regenerate the Meta token with this scope, then save it again in Setup Center.
+      </div>
+      <div class="charts-row">
+        <div class="chart-wrap">
+          <div class="chart-title">Weekly Reach <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
+          <div class="bar-chart" id="ig1-reach-chart"></div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Weekly Interactions <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
+          <div class="bar-chart" id="ig1-inter-chart"></div>
+        </div>
+      </div>`;
+    renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,        '#E1306C');
+    renderBarChart('ig1-inter-chart',  MOCK.ig1.interactions, '#E1306C66');
+
+  } else if (state === 'error') {
+    sec.innerHTML = `
+      <div style="padding:14px 16px;background:var(--amber-bg);border:1px solid #F0D5B0;border-left:3px solid var(--amber);border-radius:6px;font-size:13px;color:var(--amber);line-height:1.6;margin-bottom:16px;">
+        <strong>Insights fetch failed.</strong> ${data.error || 'Unknown error.'}
+      </div>
+      <div class="charts-row">
+        <div class="chart-wrap">
+          <div class="chart-title">Weekly Reach <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
+          <div class="bar-chart" id="ig1-reach-chart"></div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Weekly Interactions <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
+          <div class="bar-chart" id="ig1-inter-chart"></div>
+        </div>
+      </div>`;
+    renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,        '#E1306C');
+    renderBarChart('ig1-inter-chart',  MOCK.ig1.interactions, '#E1306C66');
+
+  } else if (state === 'live') {
+    const metrics  = data.metrics || {};
+    const reach    = (metrics.reach        || {}).values || [];
+    const impr     = (metrics.impressions  || {}).values || [];
+    const profView = (metrics.profile_views|| {}).values || [];
+
+    const reachVals = reach.map(v => v.value);
+    const reachLbls = reach.map(v => v.date.slice(5)); // MM-DD
+    const imprVals  = impr.map(v => v.value);
+    const pvVals    = profView.map(v => v.value);
+
+    const fmt = arr => arr.length ? arr.reduce((a,b)=>a+b,0).toLocaleString() : '—';
+
+    sec.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div>
+        <div style="font-size:11px;font-weight:600;color:#22c55e;letter-spacing:0.06em;text-transform:uppercase;">Live Insights — Last 30 Days</div>
+      </div>
+      <div class="kpi-row" style="margin-bottom:16px;">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Reach</div>
+          <div class="kpi-value">${fmt(reachVals)}</div>
+          <div class="kpi-sub" style="color:#22c55e;">Live</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Impressions</div>
+          <div class="kpi-value">${fmt(imprVals)}</div>
+          <div class="kpi-sub" style="color:#22c55e;">Live</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Profile Views</div>
+          <div class="kpi-value">${fmt(pvVals)}</div>
+          <div class="kpi-sub" style="color:#22c55e;">Live</div>
+        </div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-wrap">
+          <div class="chart-title">Daily Reach <span style="font-size:10px;color:#22c55e;font-weight:500;">(live)</span></div>
+          <div class="bar-chart" id="ig1-reach-chart"></div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Daily Impressions <span style="font-size:10px;color:#22c55e;font-weight:500;">(live)</span></div>
+          <div class="bar-chart" id="ig1-inter-chart"></div>
+        </div>
+      </div>`;
+    renderBarChart('ig1-reach-chart', reachVals, '#E1306C');
+    renderBarChart('ig1-inter-chart', imprVals,  '#E1306C66');
+  }
 }
 
 // ── Instagram 1 — fetch live profile ──────────────────────────────────────
@@ -1307,6 +1387,7 @@ function fetchIG1Live() {
         renderIG1Panel();
         updateTopbarBadge();
         updateDSModeIndicator();
+        fetchIG1Insights(); // fetch insights now that profile placeholder is rendered
       } else {
         // Live fetch failed — show error notice then fall through to mock
         IG1_LIVE = null;
@@ -1329,6 +1410,24 @@ function fetchIG1Live() {
         notice.innerHTML = '<strong>Could not reach proxy.</strong> Is proxy.py running? Showing sample data below.';
         el.prepend(notice);
       }
+    });
+}
+
+// ── Instagram 1 — fetch live insights ─────────────────────────────────────
+function fetchIG1Insights() {
+  fetch('/api/meta/ig1/insights')
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        renderIG1InsightsSection('live', d);
+      } else if (d.permission_missing) {
+        renderIG1InsightsSection('permission_missing', d);
+      } else {
+        renderIG1InsightsSection('error', d);
+      }
+    })
+    .catch(() => {
+      renderIG1InsightsSection('error', { error: 'Could not reach proxy.' });
     });
 }
 
