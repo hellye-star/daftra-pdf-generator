@@ -110,7 +110,20 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             if route:
                 self._proxy_notion(*route)
             else:
+                self._serving_static = True
                 super().do_GET()
+
+    def do_HEAD(self):
+        self._serving_static = True
+        super().do_HEAD()
+
+    def end_headers(self):
+        """Inject no-store for static file responses so browsers never cache stale HTML/JS."""
+        if getattr(self, '_serving_static', False):
+            self._serving_static = False
+            self.send_header('Cache-Control', 'no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+        super().end_headers()
 
     def do_POST(self):
         if self.path.startswith('/purchasing-invoices/combine'):
@@ -800,6 +813,10 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._gads_setup_status()
         elif parsed.path == '/api/setup/meta/status':
             self._meta_setup_status()
+        elif parsed.path == '/api/setup/meta/accounts':
+            self._meta_setup_accounts()
+        elif parsed.path == '/api/setup/meta/token-diag':
+            self._meta_token_diag()
         else:
             self._json_error(404, 'Setup endpoint not found.')
 
@@ -1303,6 +1320,12 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == '/api/meta/status':
             self._meta_setup_status()
+        elif parsed.path == '/api/setup/meta/accounts':
+            self._meta_setup_accounts()
+        elif parsed.path == '/api/setup/meta/token-diag':
+            self._meta_token_diag()
+        elif parsed.path == '/api/meta/ig1/profile':
+            self._meta_ig1_profile()
         else:
             self._json_error(404, 'Meta API endpoint not found.')
 
@@ -1324,21 +1347,27 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         if _meta_page_id and _meta_page_id.isdigit():
             page_masked = ('****' + _meta_page_id[-4:]) if len(_meta_page_id) >= 4 else '****'
 
+        token_only = file_ok and not acct_ok
+
         msgs = []
-        if not acct_ok:
-            msgs.append('Instagram Business Account ID is not configured.')
         if not token_ok:
             msgs.append('Meta access token path is not configured.')
         elif not file_ok:
             msgs.append('Meta access token file is missing or inaccessible.')
+        if not acct_ok:
+            if file_ok:
+                msgs.append('Token saved. Use Find Instagram Accounts to select an account.')
+            else:
+                msgs.append('Instagram Business Account ID is not configured.')
 
         body = json.dumps({
-            'configured':        configured,
-            'token_file_exists': file_ok,
-            'ig_account_id_set': acct_ok,
+            'configured':           configured,
+            'token_file_exists':    file_ok,
+            'token_only':           token_only,
+            'ig_account_id_set':    acct_ok,
             'ig_account_id_masked': acct_masked,
-            'page_id_masked':    page_masked,
-            'message':           'Ready.' if configured else (' '.join(msgs) if msgs else 'Not configured.'),
+            'page_id_masked':       page_masked,
+            'message':              'Ready.' if configured else (' '.join(msgs) if msgs else 'Not configured.'),
         }).encode('utf-8')
         self.send_response(200)
         self._send_cors_headers()
@@ -1363,18 +1392,26 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._json_error(400, 'Invalid JSON body.')
             return
 
-        access_token = (payload.get('access_token') or '').strip()
+        raw_token    = payload.get('access_token') or ''
         ig_acct_id   = (payload.get('instagram_business_account_id') or '').strip().replace(' ', '')
         page_id_raw  = (payload.get('page_id') or '').strip().replace(' ', '')
+
+        # ── Token normalization ──────────────────────────────────────────────
+        # 1. Strip outer whitespace / CR / LF
+        access_token = raw_token.strip().replace('\r', '').replace('\n', '')
+        # 2. Remove surrounding quote characters (user may have pasted "token" or 'token')
+        if len(access_token) >= 2 and access_token[0] == access_token[-1] and access_token[0] in ('"', "'"):
+            access_token = access_token[1:-1].strip()
+        # 3. Reject if internal whitespace remains after normalization
+        if any(c in access_token for c in (' ', '\t', '\r', '\n')):
+            self._json_error(400, 'access_token contains whitespace. Paste the token as a single unbroken string.')
+            return
 
         if not access_token:
             self._json_error(400, 'access_token is required.')
             return
-        if not ig_acct_id:
-            self._json_error(400, 'instagram_business_account_id is required.')
-            return
-        if not ig_acct_id.isdigit():
-            self._json_error(400, 'instagram_business_account_id must be digits only. Find it via the Meta Graph API Explorer: GET /me/accounts, then GET /{page-id}?fields=instagram_business_account.')
+        if ig_acct_id and not ig_acct_id.isdigit():
+            self._json_error(400, 'instagram_business_account_id must be digits only.')
             return
         if page_id_raw and not page_id_raw.isdigit():
             self._json_error(400, 'page_id must be digits only when provided. Leave blank if unsure.')
@@ -1407,9 +1444,11 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             return
 
         cfg.setdefault('marketing_apis', {}).setdefault('meta', {})
-        cfg['marketing_apis']['meta']['token_path']                    = token_path
-        cfg['marketing_apis']['meta']['instagram_business_account_id'] = ig_acct_id
-        cfg['marketing_apis']['meta']['page_id']                       = page_id_raw
+        cfg['marketing_apis']['meta']['token_path'] = token_path
+        if ig_acct_id:
+            cfg['marketing_apis']['meta']['instagram_business_account_id'] = ig_acct_id
+        if page_id_raw:
+            cfg['marketing_apis']['meta']['page_id'] = page_id_raw
 
         cfg_tmp = CONFIG_PATH + '.tmp'
         try:
@@ -1422,14 +1461,218 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
 
         # ── Reload in-memory vars ───────────────────────────────────────────
         _meta_token_path = token_path
-        _meta_ig_acct_id = ig_acct_id
-        _meta_page_id    = page_id_raw
+        if ig_acct_id:
+            _meta_ig_acct_id = ig_acct_id
+        if page_id_raw:
+            _meta_page_id = page_id_raw
 
-        acct_masked = ('****' + ig_acct_id[-4:]) if len(ig_acct_id) >= 4 else '****'
-        body = json.dumps({
-            'ok':      True,
-            'message': f'Meta credentials saved. Instagram Business Account ID ending {acct_masked}.',
-        }).encode('utf-8')
+        token_suffix_safe = access_token[-6:] if len(access_token) >= 6 else access_token
+        if ig_acct_id:
+            acct_masked = ('****' + ig_acct_id[-4:]) if len(ig_acct_id) >= 4 else '****'
+            msg = f'Saved. Token ending ···{token_suffix_safe}. Instagram Account ID ending {acct_masked}.'
+        else:
+            msg = f'Saved. Token ending ···{token_suffix_safe}. Use Find Instagram Accounts to select an account.'
+        body = json.dumps({'ok': True, 'message': msg, 'token_suffix': token_suffix_safe}).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _meta_read_token_safe(self):
+        """Read saved token from file. Returns (token_str, diag_dict, error_str|None).
+        token_str is None on error. Never exposes token value in diag."""
+        if not _meta_token_path or not os.path.isfile(_meta_token_path):
+            return None, {}, 'Token file not found. Save your access token first.'
+        try:
+            with open(_meta_token_path, 'r', encoding='utf-8') as f:
+                raw_json = f.read()
+            token_data = json.loads(raw_json)
+        except (OSError, json.JSONDecodeError) as e:
+            return None, {}, f'Could not read token file: {type(e).__name__}'
+
+        token = token_data.get('access_token', '') or ''
+
+        # Normalise (same rules as save — in case file was written externally)
+        token = token.strip().replace('\r', '').replace('\n', '')
+        if len(token) >= 2 and token[0] == token[-1] and token[0] in ('"', "'"):
+            token = token[1:-1].strip()
+
+        raw_for_check = token_data.get('access_token', '') or ''
+        diag = {
+            'token_present':      bool(token),
+            'token_length':       len(token),
+            'token_length_ok':    len(token) >= 50,
+            'token_prefix':       token[:6]  if len(token) >= 6  else f'({len(token)} chars — too short)',
+            'token_suffix':       token[-6:] if len(token) >= 6  else f'({len(token)} chars — too short)',
+            'token_has_whitespace': any(c in token for c in (' ', '\t')),
+            'token_has_quotes':   (raw_for_check[:1] in ('"', "'") or raw_for_check[-1:] in ('"', "'")),
+            'token_newline_count': raw_for_check.count('\n') + raw_for_check.count('\r'),
+            'token_source':       'saved_file',
+        }
+        return (token if token else None), diag, None
+
+    def _meta_token_diag(self):
+        """Localhost-only: read saved token and return safe diagnostic — no API calls."""
+        if not self._require_localhost():
+            return
+        token, diag, err = self._meta_read_token_safe()
+        resp = {'ok': not bool(err), 'diag': diag}
+        if err:
+            resp['error'] = err
+        body = json.dumps(resp).encode('utf-8')
+        self.send_response(200 if not err else 400)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _meta_graph_call(self, endpoint, params, token):
+        """Make a safe Meta Graph API GET call. Returns (data_dict, None) or (None, err_dict).
+        err_dict keys: code, type, message (safe human text, not raw Meta message)."""
+        from urllib.parse import urlencode
+        params['access_token'] = token
+        qs = urlencode(params)
+        url = f'https://graph.facebook.com/v20.0/{endpoint}?{qs}'
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'vista-platform/1.0'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode('utf-8')), None
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = json.loads(e.read().decode('utf-8'))
+                err = err_body.get('error', {})
+            except Exception:
+                err = {}
+            return None, {
+                'code':    err.get('code', e.code),
+                'type':    err.get('type', ''),
+                'message': err.get('message', f'HTTP {e.code}'),
+            }
+        except urllib.error.URLError as e:
+            return None, {'code': 0, 'type': 'URLError', 'message': str(e.reason)}
+        except Exception as e:
+            return None, {'code': 0, 'type': type(e).__name__, 'message': str(e)}
+
+    def _meta_setup_accounts(self):
+        """Discover IG Business accounts linked to saved token — returns safe, non-secret data only."""
+        if not self._require_localhost():
+            return
+
+        # ── Read token from file using shared helper ─────────────────────────
+        token, diag, read_err = self._meta_read_token_safe()
+
+        if read_err or not token:
+            err_msg = read_err or 'Token file exists but access_token is empty.'
+            body = json.dumps({'ok': False, 'error': err_msg, 'diag': diag}).encode('utf-8')
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # ── Step 1: /me check — simplest token validity test ─────────────────
+        me_data, me_err = self._meta_graph_call('me', {'fields': 'id,name'}, token)
+        diag['graph_endpoint_called'] = 'me'
+
+        if me_err:
+            diag['meta_error_code']         = me_err['code']
+            diag['meta_error_type']         = me_err['type']
+            diag['meta_error_message_safe'] = me_err['message']
+            code = me_err['code']
+            if code in (190, 102, 463, 467):
+                user_msg = 'Token rejected by Meta (/me check failed). Token may be expired, revoked, or saved incorrectly — check prefix/suffix in diag match your token.'
+            elif code in (10, 200):
+                user_msg = 'Token is valid but missing permissions. Ensure instagram_basic and pages_show_list scopes are granted.'
+            elif code == 4:
+                user_msg = 'Meta API rate limit reached. Try again in a few minutes.'
+            elif code == 0:
+                user_msg = 'Could not reach Meta API. Check internet connection.'
+            else:
+                user_msg = f'Meta API returned error code {code}. See diag.meta_error_message_safe for details.'
+            body = json.dumps({'ok': False, 'error': user_msg, 'diag': diag}).encode('utf-8')
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # /me succeeded — token is valid
+        diag['me_id_present'] = bool(me_data.get('id'))
+
+        # ── Step 2: /me/accounts with field expansion ─────────────────────────
+        diag['graph_endpoint_called'] = 'me/accounts'
+        accts_data, accts_err = self._meta_graph_call(
+            'me/accounts',
+            {'fields': 'id,name,instagram_business_account{id,username,name}'},
+            token,
+        )
+
+        if accts_err:
+            diag['meta_error_code']         = accts_err['code']
+            diag['meta_error_type']         = accts_err['type']
+            diag['meta_error_message_safe'] = accts_err['message']
+            code = accts_err['code']
+            if code in (10, 200):
+                user_msg = 'Token is valid (/me passed) but lacks page permissions. Grant pages_show_list and pages_read_engagement, then generate a new token.'
+            elif code == 4:
+                user_msg = 'Meta API rate limit reached. Try again in a few minutes.'
+            else:
+                user_msg = f'Token valid but /me/accounts failed (code {code}). See diag for details.'
+            body = json.dumps({'ok': False, 'error': user_msg, 'diag': diag}).encode('utf-8')
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        accounts = []
+        for page in accts_data.get('data', []):
+            ig = page.get('instagram_business_account')
+            if ig:
+                accounts.append({
+                    'page_id':   page.get('id', ''),
+                    'page_name': page.get('name', ''),
+                    'instagram_business_account_id': ig.get('id', ''),
+                    'username':  ig.get('username', ''),
+                    'name':      ig.get('name', ''),
+                })
+
+        # ── Fallback: /me/accounts returned 0 pages but a saved IG account ID exists ──
+        # This happens when the token lacks pages_show_list scope or the page association
+        # isn't visible to this token type, but the token CAN read the IG account directly.
+        # Use the same direct-lookup call that Test Connection uses.
+        diag['pages_found'] = len(accts_data.get('data', []))
+        if not accounts and _meta_ig_acct_id and _meta_ig_acct_id.isdigit():
+            diag['fallback_attempted'] = True
+            ig_data, ig_err = self._meta_graph_call(
+                _meta_ig_acct_id,
+                {'fields': 'id,username,name'},
+                token,
+            )
+            if ig_data and not ig_err:
+                accounts.append({
+                    'page_id':   '',
+                    'page_name': '(Page not visible to token — direct lookup)',
+                    'instagram_business_account_id': ig_data.get('id', _meta_ig_acct_id),
+                    'username':  ig_data.get('username', ''),
+                    'name':      ig_data.get('name', ''),
+                })
+                diag['fallback_success'] = True
+            else:
+                diag['fallback_success'] = False
+                if ig_err:
+                    diag['fallback_error_code'] = ig_err.get('code')
+
+        body = json.dumps({'ok': True, 'accounts': accounts, 'diag': diag}).encode('utf-8')
         self.send_response(200)
         self._send_cors_headers()
         self.send_header('Content-Type', 'application/json')
@@ -1466,11 +1709,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             return
 
         # Minimal read-only call — account username and follower count only
-        url = (
-            f'https://graph.facebook.com/v20.0/{_meta_ig_acct_id}'
-            f'?fields=username,followers_count'
-            f'&access_token={token}'
-        )
+        from urllib.parse import urlencode as _ue
+        _qs = _ue({'fields': 'username,followers_count', 'access_token': token})
+        url = f'https://graph.facebook.com/v20.0/{_meta_ig_acct_id}?{_qs}'
         req = urllib.request.Request(url, method='GET',
                                      headers={'User-Agent': 'VistaProxy/1.0'})
         try:
@@ -1513,6 +1754,96 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._json_error(502, 'Could not reach Meta API. Check internet connection.')
         except Exception:
             self._json_error(500, 'Unexpected error during connection test.')
+
+    def _meta_ig1_profile(self):
+        """Localhost-only: fetch live IG1 account profile fields from Meta Graph API."""
+        if not self._require_localhost():
+            return
+
+        token, diag, read_err = self._meta_read_token_safe()
+        if read_err or not token:
+            body = json.dumps({
+                'ok': False,
+                'error': read_err or 'Token file exists but access_token is empty.',
+                'source': 'meta_api_live',
+            }).encode('utf-8')
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if not _meta_ig_acct_id or not _meta_ig_acct_id.isdigit():
+            body = json.dumps({
+                'ok': False,
+                'error': 'Instagram Business Account ID is not configured. Use Find Instagram Accounts in Setup to select an account.',
+                'source': 'meta_api_live',
+            }).encode('utf-8')
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        fields = 'id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website'
+        ig_data, ig_err = self._meta_graph_call(
+            _meta_ig_acct_id,
+            {'fields': fields},
+            token,
+        )
+
+        if ig_err:
+            code = ig_err.get('code', 0)
+            if code in (190, 102, 463, 467):
+                msg = 'Token rejected or expired. Generate a new token in Meta Graph API Explorer.'
+            elif code in (10, 200):
+                msg = 'Token valid but missing permissions for profile fields. Ensure instagram_basic scope is granted.'
+            elif code == 100:
+                msg = 'Instagram Business Account ID not found or account is not Business/Creator type.'
+            elif code == 4:
+                msg = 'Meta API rate limit reached. Try again in a few minutes.'
+            elif code == 0:
+                msg = 'Could not reach Meta API. Check internet connection.'
+            else:
+                msg = f'Meta API returned error code {code}.'
+            body = json.dumps({
+                'ok': False,
+                'error': msg,
+                'error_code': code,
+                'source': 'meta_api_live',
+            }).encode('utf-8')
+            self.send_response(502)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        profile = {
+            'ok':                  True,
+            'source':              'meta_api_live',
+            'id':                  ig_data.get('id', ''),
+            'username':            ig_data.get('username', ''),
+            'name':                ig_data.get('name', ''),
+            'biography':           ig_data.get('biography', ''),
+            'followers_count':     ig_data.get('followers_count'),
+            'follows_count':       ig_data.get('follows_count'),
+            'media_count':         ig_data.get('media_count'),
+            'profile_picture_url': ig_data.get('profile_picture_url', ''),
+            'website':             ig_data.get('website', ''),
+        }
+        body = json.dumps(profile).encode('utf-8')
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(body)
 
     # ── Notion proxy ─────────────────────────────────────────────────────────
 
