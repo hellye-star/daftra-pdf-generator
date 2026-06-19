@@ -1881,79 +1881,108 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        data, err = self._meta_graph_call(
-            f'{_meta_ig_acct_id}/insights',
-            {'metric': 'reach,impressions,profile_views', 'period': 'day', 'limit': '30'},
-            token,
-        )
+        warnings = []
+        timeseries = {}
+        totals     = {}
 
-        if err:
+        def _classify_err(err):
+            """Return (is_fatal, user_msg) for a Meta API error dict."""
             code = err.get('code', 0)
             if code == 10:
-                resp = {
-                    'ok':                 False,
-                    'permission_missing': True,
-                    'required_permission': 'instagram_manage_insights',
+                return True, ('permission_missing', 'instagram_manage_insights')
+            if code in (190, 102, 463, 467):
+                return True, ('token', 'Token rejected or expired. Generate a new token in Meta Graph API Explorer.')
+            if code == 4:
+                return False, ('rate_limit', 'Meta API rate limit reached. Try again in a few minutes.')
+            if code == 0:
+                return True, ('network', 'Could not reach Meta API. Check internet connection.')
+            return False, ('api_error', f'Meta API returned error code {code}.')
+
+        # ── Call A: time-series — reach, follower_count ───────────────────────
+        ts_data, ts_err = self._meta_graph_call(
+            f'{_meta_ig_acct_id}/insights',
+            {'metric': 'reach,follower_count', 'period': 'day', 'limit': '30'},
+            token,
+        )
+        if ts_err:
+            fatal, detail = _classify_err(ts_err)
+            if fatal and detail[0] == 'permission_missing':
+                body = json.dumps({
+                    'ok':                  False,
+                    'permission_missing':  True,
+                    'required_permission': detail[1],
                     'error': (
-                        'Insights require instagram_manage_insights. '
+                        f'Insights require {detail[1]}. '
                         'Regenerate the Meta token with this scope, then save it again in Setup Center.'
                     ),
-                    'error_code': code,
+                    'error_code': ts_err.get('code'),
                     'source': 'meta_api_live',
+                }).encode('utf-8')
+                self.send_response(200)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if fatal:
+                body = json.dumps({
+                    'ok': False, 'error': detail[1],
+                    'error_code': ts_err.get('code'), 'source': 'meta_api_live',
+                }).encode('utf-8')
+                self.send_response(200)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            warnings.append(f'Time-series call failed (code {ts_err.get("code")}): {detail[1]}')
+        else:
+            for item in (ts_data or {}).get('data', []):
+                name = item.get('name', '')
+                timeseries[name] = {
+                    'period': item.get('period', ''),
+                    'values': [
+                        {'date': v.get('end_time', '')[:10], 'value': v.get('value', 0)}
+                        for v in item.get('values', [])
+                    ],
                 }
-            elif code in (190, 102, 463, 467):
-                resp = {
-                    'ok': False,
-                    'error': 'Token rejected or expired. Generate a new token in Meta Graph API Explorer.',
-                    'error_code': code,
-                    'source': 'meta_api_live',
-                }
-            elif code == 4:
-                resp = {
-                    'ok': False,
-                    'error': 'Meta API rate limit reached. Try again in a few minutes.',
-                    'error_code': code,
-                    'source': 'meta_api_live',
-                }
-            elif code == 0:
-                resp = {
-                    'ok': False,
-                    'error': 'Could not reach Meta API. Check internet connection.',
-                    'error_code': code,
-                    'source': 'meta_api_live',
-                }
-            else:
-                resp = {
-                    'ok': False,
-                    'error': f'Meta API returned error code {code}.',
-                    'error_code': code,
-                    'source': 'meta_api_live',
-                }
-            body = json.dumps(resp).encode('utf-8')
-            self.send_response(200)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Cache-Control', 'no-store')
-            self.end_headers()
-            self.wfile.write(body)
-            return
 
-        # Parse each metric into a clean chart-ready list: [{date, value}, ...]
-        metrics = {}
-        for item in data.get('data', []):
-            name   = item.get('name', '')
-            period = item.get('period', '')
-            values = [
-                {'date': v.get('end_time', '')[:10], 'value': v.get('value', 0)}
-                for v in item.get('values', [])
-            ]
-            metrics[name] = {'period': period, 'values': values}
+        # ── Call B: total-value — profile_views, interactions, clicks ─────────
+        tv_data, tv_err = self._meta_graph_call(
+            f'{_meta_ig_acct_id}/insights',
+            {
+                'metric':      'profile_views,accounts_engaged,total_interactions,website_clicks,views',
+                'period':      'day',
+                'metric_type': 'total_value',
+            },
+            token,
+        )
+        if tv_err:
+            _, detail = _classify_err(tv_err)
+            warnings.append(f'Total-value call failed (code {tv_err.get("code")}): {detail[1]}')
+        else:
+            for item in (tv_data or {}).get('data', []):
+                name  = item.get('name', '')
+                tv    = item.get('total_value') or {}
+                totals[name] = tv.get('value', 0)
 
-        body = json.dumps({
-            'ok':      True,
+        any_data = bool(timeseries or totals)
+        resp = {
+            'ok':      any_data,
+            'partial': bool(warnings) and any_data,
             'source':  'meta_api_live',
-            'metrics': metrics,
-        }).encode('utf-8')
+            'metrics': {
+                'timeseries': timeseries,
+                'totals':     totals,
+            },
+            'warnings': warnings,
+        }
+        if not any_data:
+            resp['error'] = 'No insights data could be retrieved. ' + '; '.join(warnings)
+
+        body = json.dumps(resp).encode('utf-8')
         self.send_response(200)
         self._send_cors_headers()
         self.send_header('Content-Type', 'application/json')

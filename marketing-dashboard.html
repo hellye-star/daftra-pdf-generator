@@ -1289,91 +1289,95 @@ function renderIG1InsightsSection(state, data) {
   const sec = document.getElementById('ig1-insights-section');
   if (!sec) return;
 
+  // Reusable sample chart fallback — always labeled, never presented as live
+  function sampleCharts() {
+    return `
+      <div class="charts-row">
+        <div class="chart-wrap">
+          <div class="chart-title">Weekly Reach <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
+          <div class="bar-chart" id="ig1-reach-chart"></div>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Weekly Follower Change <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
+          <div class="bar-chart" id="ig1-inter-chart"></div>
+        </div>
+      </div>`;
+  }
+  function renderSampleCharts() {
+    renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,        '#E1306C');
+    renderBarChart('ig1-inter-chart',  MOCK.ig1.interactions, '#E1306C66');
+  }
+
   if (state === 'permission_missing') {
     sec.innerHTML = `
       <div style="padding:14px 16px;background:var(--amber-bg);border:1px solid #F0D5B0;border-left:3px solid var(--amber);border-radius:6px;font-size:13px;color:var(--amber);line-height:1.6;margin-bottom:16px;">
         <strong>Insights not available.</strong>
         Insights require <code>instagram_manage_insights</code>.
         Regenerate the Meta token with this scope, then save it again in Setup Center.
-      </div>
-      <div class="charts-row">
-        <div class="chart-wrap">
-          <div class="chart-title">Weekly Reach <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
-          <div class="bar-chart" id="ig1-reach-chart"></div>
-        </div>
-        <div class="chart-wrap">
-          <div class="chart-title">Weekly Interactions <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
-          <div class="bar-chart" id="ig1-inter-chart"></div>
-        </div>
-      </div>`;
-    renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,        '#E1306C');
-    renderBarChart('ig1-inter-chart',  MOCK.ig1.interactions, '#E1306C66');
+      </div>` + sampleCharts();
+    renderSampleCharts();
 
   } else if (state === 'error') {
     sec.innerHTML = `
       <div style="padding:14px 16px;background:var(--amber-bg);border:1px solid #F0D5B0;border-left:3px solid var(--amber);border-radius:6px;font-size:13px;color:var(--amber);line-height:1.6;margin-bottom:16px;">
         <strong>Insights fetch failed.</strong> ${data.error || 'Unknown error.'}
-      </div>
-      <div class="charts-row">
-        <div class="chart-wrap">
-          <div class="chart-title">Weekly Reach <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
-          <div class="bar-chart" id="ig1-reach-chart"></div>
-        </div>
-        <div class="chart-wrap">
-          <div class="chart-title">Weekly Interactions <span style="font-size:10px;color:var(--amber);font-weight:500;">(sample — not live)</span></div>
-          <div class="bar-chart" id="ig1-inter-chart"></div>
-        </div>
-      </div>`;
-    renderBarChart('ig1-reach-chart',  MOCK.ig1.reach,        '#E1306C');
-    renderBarChart('ig1-inter-chart',  MOCK.ig1.interactions, '#E1306C66');
+      </div>` + sampleCharts();
+    renderSampleCharts();
 
   } else if (state === 'live') {
-    const metrics  = data.metrics || {};
-    const reach    = (metrics.reach        || {}).values || [];
-    const impr     = (metrics.impressions  || {}).values || [];
-    const profView = (metrics.profile_views|| {}).values || [];
+    const metrics = data.metrics || {};
+    const ts      = metrics.timeseries || {};
+    const tot     = metrics.totals     || {};
 
-    const reachVals = reach.map(v => v.value);
-    const reachLbls = reach.map(v => v.date.slice(5)); // MM-DD
-    const imprVals  = impr.map(v => v.value);
-    const pvVals    = profView.map(v => v.value);
+    const reachVals = (ts.reach          || {values:[]}).values.map(v => v.value);
+    const fcVals    = (ts.follower_count || {values:[]}).values.map(v => v.value);
 
-    const fmt = arr => arr.length ? arr.reduce((a,b)=>a+b,0).toLocaleString() : '—';
+    const fmtArr = arr => arr.length ? arr.reduce((a,b)=>a+b,0).toLocaleString() : '—';
+    const fmtNum = n   => (n == null || n === undefined) ? '—' : Number(n).toLocaleString();
+
+    // KPI cards — only show metrics that have data
+    const kpiCards = [
+      { label: 'Total Reach (30d)',       val: fmtArr(reachVals),          show: reachVals.length > 0 },
+      { label: 'Profile Views (today)',   val: fmtNum(tot.profile_views),   show: 'profile_views'   in tot },
+      { label: 'Accounts Engaged',        val: fmtNum(tot.accounts_engaged),show: 'accounts_engaged' in tot },
+      { label: 'Total Interactions',      val: fmtNum(tot.total_interactions), show: 'total_interactions' in tot },
+      { label: 'Website Clicks',          val: fmtNum(tot.website_clicks),  show: 'website_clicks'  in tot },
+      { label: 'Views',                   val: fmtNum(tot.views),           show: 'views'           in tot },
+    ].filter(c => c.show);
+
+    const partialNotice = data.partial && data.warnings && data.warnings.length
+      ? `<div style="padding:10px 14px;background:var(--amber-bg);border:1px solid #F0D5B0;border-radius:6px;font-size:12px;color:var(--amber);margin-bottom:12px;">
+           <strong>Partial data.</strong> Some metrics unavailable: ${data.warnings.join(' / ')}
+         </div>`
+      : '';
 
     sec.innerHTML = `
+      ${partialNotice}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
         <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div>
-        <div style="font-size:11px;font-weight:600;color:#22c55e;letter-spacing:0.06em;text-transform:uppercase;">Live Insights — Last 30 Days</div>
+        <div style="font-size:11px;font-weight:600;color:#22c55e;letter-spacing:0.06em;text-transform:uppercase;">Live Insights — Meta API</div>
       </div>
       <div class="kpi-row" style="margin-bottom:16px;">
-        <div class="kpi-card">
-          <div class="kpi-label">Total Reach</div>
-          <div class="kpi-value">${fmt(reachVals)}</div>
-          <div class="kpi-sub" style="color:#22c55e;">Live</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Total Impressions</div>
-          <div class="kpi-value">${fmt(imprVals)}</div>
-          <div class="kpi-sub" style="color:#22c55e;">Live</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">Profile Views</div>
-          <div class="kpi-value">${fmt(pvVals)}</div>
-          <div class="kpi-sub" style="color:#22c55e;">Live</div>
-        </div>
+        ${kpiCards.map(c => `
+          <div class="kpi-card">
+            <div class="kpi-label">${c.label}</div>
+            <div class="kpi-value">${c.val}</div>
+            <div class="kpi-sub" style="color:#22c55e;">Live</div>
+          </div>`).join('')}
       </div>
       <div class="charts-row">
         <div class="chart-wrap">
-          <div class="chart-title">Daily Reach <span style="font-size:10px;color:#22c55e;font-weight:500;">(live)</span></div>
+          <div class="chart-title">Daily Reach <span style="font-size:10px;color:${reachVals.length ? '#22c55e' : 'var(--amber)'};font-weight:500;">${reachVals.length ? '(live)' : '(sample — not live)'}</span></div>
           <div class="bar-chart" id="ig1-reach-chart"></div>
         </div>
         <div class="chart-wrap">
-          <div class="chart-title">Daily Impressions <span style="font-size:10px;color:#22c55e;font-weight:500;">(live)</span></div>
+          <div class="chart-title">Daily Follower Change <span style="font-size:10px;color:${fcVals.length ? '#22c55e' : 'var(--amber)'};font-weight:500;">${fcVals.length ? '(live)' : '(sample — not live)'}</span></div>
           <div class="bar-chart" id="ig1-inter-chart"></div>
         </div>
       </div>`;
-    renderBarChart('ig1-reach-chart', reachVals, '#E1306C');
-    renderBarChart('ig1-inter-chart', imprVals,  '#E1306C66');
+
+    renderBarChart('ig1-reach-chart', reachVals.length ? reachVals : MOCK.ig1.reach,        '#E1306C');
+    renderBarChart('ig1-inter-chart', fcVals.length    ? fcVals    : MOCK.ig1.interactions, '#E1306C66');
   }
 }
 
@@ -1418,7 +1422,7 @@ function fetchIG1Insights() {
   fetch('/api/meta/ig1/insights')
     .then(r => r.json())
     .then(d => {
-      if (d.ok) {
+      if (d.ok || d.partial) {
         renderIG1InsightsSection('live', d);
       } else if (d.permission_missing) {
         renderIG1InsightsSection('permission_missing', d);
