@@ -383,6 +383,40 @@
     .vat-status.payable     { color: var(--warn); }
     .vat-status.reclaimable { color: var(--accent); }
 
+    /* ── VAT export ─────────────────────────────────────────────────────────── */
+    .vat-export-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--rule);
+      flex-wrap: wrap;
+    }
+    .btn-export {
+      flex: 1 1 auto;
+      min-width: 180px;
+      padding: 9px 12px;
+      background: #fff;
+      color: var(--dark);
+      border: 1px solid var(--dark);
+      border-radius: 4px;
+      font-family: 'Jost', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-export:hover { background: var(--dark); color: #fff; }
+    .btn-export:disabled { opacity: 0.4; cursor: not-allowed; background: #fff; color: var(--dark); }
+    .vat-export-note {
+      width: 100%;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
     /* ── Disclaimer ─────────────────────────────────────────────────────────── */
     .disclaimer {
       font-size: 10px;
@@ -707,6 +741,14 @@ let rawInvMeta    = null;
 let rawPurMeta    = null;
 let rawExpMeta    = null;
 
+// Timestamp of the last completed fetch — shown in export audit sections.
+let lastFetchTimestamp = null;
+
+// Snapshot of everything renderContent() computed for the currently selected period.
+// The VAT export reads exclusively from this object so exported figures are
+// guaranteed to equal what is on screen — no independent recalculation.
+let lastVAT = null;
+
 // ── Period helpers ─────────────────────────────────────────────────────────
 
 function onPeriodChange() {
@@ -766,24 +808,6 @@ function getPeriodBounds(key) {
     return { start: new Date(yr, sm, 1), end: new Date(yr, em + 1, 0, 23, 59, 59, 999) };
   }
   return null;
-}
-
-// Returns bounds for the current Gregorian quarter (Q1=Jan-Mar, Q2=Apr-Jun, etc.)
-function getCurrentQuarterBounds() {
-  var mo = new Date().getMonth(); // 0-indexed
-  var qKey = mo <= 2 ? 'q1' : mo <= 5 ? 'q2' : mo <= 8 ? 'q3' : 'q4';
-  return getPeriodBounds(qKey);
-}
-
-// Returns a short label for the current quarter, e.g. "Q2 2026 (Apr-Jun)"
-function getCurrentQuarterLabel() {
-  var now = new Date();
-  var yr  = now.getFullYear();
-  var mo  = now.getMonth();
-  if (mo <= 2) return 'Q1 ' + yr + ' (Jan–Mar)';
-  if (mo <= 5) return 'Q2 ' + yr + ' (Apr–Jun)';
-  if (mo <= 8) return 'Q3 ' + yr + ' (Jul–Sep)';
-  return 'Q4 ' + yr + ' (Oct–Dec)';
 }
 
 // ── Low-level helpers ──────────────────────────────────────────────────────
@@ -1134,6 +1158,7 @@ async function fetchAll() {
     status.textContent = 'Data loaded.';
   }
 
+  lastFetchTimestamp = new Date();
   renderContent({ invRecords, invError, purRecords, purError, expRecords, expError });
 }
 
@@ -1169,17 +1194,6 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
   const profitYTD   = canCalcYTD ? (salesYTD.salesExVAT - purchYTD.purchExVAT - expYTD.expExVAT) : null;
   const taxResYTD   = profitYTD !== null ? Math.max(profitYTD, 0) * 0.20 : null;
 
-  // ── Top Card 2: Current quarter VAT reconciliation ───────────────────────
-  const qtrBounds   = getCurrentQuarterBounds();
-  const qtrLabel    = getCurrentQuarterLabel();
-  const salesQtr    = invError ? null : calcSales(invRecords, qtrBounds);
-  const purchQtr    = purError ? null : calcPurchases(bizPurRecords, qtrBounds);
-  const expQtr      = expError ? null : calcExpenses(expRecords, qtrBounds);
-  const vatQtrAvail = salesQtr !== null && purchQtr !== null && expQtr !== null;
-  const vatQtr      = vatQtrAvail
-    ? (salesQtr.outputVAT - purchQtr.inputVAT - expQtr.inputVAT)
-    : null;
-
   // ── VAT position for selected period (business-only) ─────────────────────
   const outputVAT   = sales ? sales.outputVAT : null;
   const inputVATpur = purch ? purch.inputVAT  : null;
@@ -1202,10 +1216,10 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
     }).join('\n'));
   }
 
-  // 1. Top alert cards — always show (YTD tax reserve + current quarter VAT)
+  // 1. Top alert cards — always show (YTD tax reserve + selected-period VAT)
   parts.push(renderTopAlertCards(
     taxResYTD, canCalcYTD,
-    vatQtr, vatQtrAvail, qtrLabel,
+    vatPosition, allVATAvail, label,
     invError, purError, expError
   ));
 
@@ -1227,7 +1241,7 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
   parts.push(renderMonthlyTablePanel(monthlyRows, invError, purError, expError, chartYear));
 
   // 6. VAT position panel (selected period, business-only)
-  parts.push(renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allVATAvail, label));
+  parts.push(renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allVATAvail, label, currentPeriod));
 
   // 7. Receivables panel
   if (!invError && sales) {
@@ -1246,11 +1260,36 @@ function renderContent({ invRecords, invError, purRecords, purError, expRecords,
   ));
 
   area.innerHTML = parts.join('\n');
+
+  // ── Snapshot for VAT export — same values already rendered above, nothing recomputed ──
+  lastVAT = {
+    periodKey:    currentPeriod,
+    periodLabel:  label,
+    bounds:       bounds,
+    invError:     invError,
+    purError:     purError,
+    expError:     expError,
+    sales:        sales,
+    purch:        purch,
+    exp:          exp,
+    outputVAT:    outputVAT,
+    inputVATpur:  inputVATpur,
+    inputVATexp:  inputVATexp,
+    vatPosition:  vatPosition,
+    allVATAvail:  allVATAvail,
+    personalRecords: personalRecords,
+    bizPurRecords:   bizPurRecords,
+    invRecords:   invRecords,
+    purRecords:   purRecords,
+    expRecords:   expRecords,
+    warnings:     warnings,
+    fetchTimestamp: lastFetchTimestamp,
+  };
 }
 
 // ── Top alert cards ────────────────────────────────────────────────────────
 
-function renderTopAlertCards(taxResYTD, canCalcYTD, vatQtr, vatQtrAvail, qtrLabel, invError, purError, expError) {
+function renderTopAlertCards(taxResYTD, canCalcYTD, vatPeriod, vatPeriodAvail, periodLabel, invError, purError, expError) {
   // Yellow card: Estimated Profit Tax Payable End of Year — 20% of YTD business profit
   var yellowValueHtml, yellowNote;
   if (!canCalcYTD) {
@@ -1277,9 +1316,10 @@ function renderTopAlertCards(taxResYTD, canCalcYTD, vatQtr, vatQtrAvail, qtrLabe
     + '<div class="alert-card-note">' + esc(yellowNote) + '</div>'
     + '</div>';
 
-  // Red card: VAT Reconciliation — Current Quarter So Far
+  // Red card: VAT Reconciliation — follows the selected period filter
+  // (same bounds/exclusions as the VAT Position panel below).
   var redValueHtml, redSub, redNote;
-  if (!vatQtrAvail) {
+  if (!vatPeriodAvail) {
     var miss2 = [];
     if (invError) miss2.push('invoices');
     if (purError) miss2.push('purchases');
@@ -1288,23 +1328,23 @@ function renderTopAlertCards(taxResYTD, canCalcYTD, vatQtr, vatQtrAvail, qtrLabe
     redSub  = miss2.length
       ? 'Cannot calculate — ' + miss2.join(', ') + ' endpoint' + (miss2.length > 1 ? 's' : '') + ' failed.'
       : 'Press Fetch Data to calculate.';
-    redNote = esc(qtrLabel) + ' · Output VAT − Purchase input VAT − Expense input VAT';
-  } else if (vatQtr > 0.005) {
-    redValueHtml = '<div class="alert-card-value">' + esc(fmtCurrency(vatQtr)) + '</div>';
-    redSub  = 'Estimated VAT payable to ZATCA this quarter.';
-    redNote = esc(qtrLabel) + ' · Excl. personal transfers · Management estimate only';
-  } else if (vatQtr < -0.005) {
-    redValueHtml = '<div class="alert-card-value reclaimable-green">' + esc(fmtCurrency(Math.abs(vatQtr))) + '</div>';
-    redSub  = 'Estimated VAT reclaimable from ZATCA this quarter.';
-    redNote = esc(qtrLabel) + ' · Excl. personal transfers · Management estimate only';
+    redNote = esc(periodLabel) + ' · Output VAT − Purchase input VAT − Expense input VAT';
+  } else if (vatPeriod > 0.005) {
+    redValueHtml = '<div class="alert-card-value">' + esc(fmtCurrency(vatPeriod)) + '</div>';
+    redSub  = 'Estimated VAT payable to ZATCA for this period.';
+    redNote = esc(periodLabel) + ' · Excl. personal transfers · Management estimate only';
+  } else if (vatPeriod < -0.005) {
+    redValueHtml = '<div class="alert-card-value reclaimable-green">' + esc(fmtCurrency(Math.abs(vatPeriod))) + '</div>';
+    redSub  = 'Estimated VAT reclaimable from ZATCA for this period.';
+    redNote = esc(periodLabel) + ' · Excl. personal transfers · Management estimate only';
   } else {
     redValueHtml = '<div class="alert-card-value">SAR 0.00</div>';
-    redSub  = 'Estimated break-even VAT position this quarter.';
-    redNote = esc(qtrLabel) + ' · Excl. personal transfers · Management estimate only';
+    redSub  = 'Estimated break-even VAT position for this period.';
+    redNote = esc(periodLabel) + ' · Excl. personal transfers · Management estimate only';
   }
 
   var redCard = '<div class="alert-card red">'
-    + '<div class="alert-card-label">VAT Reconciliation — ' + esc(qtrLabel) + ' So Far</div>'
+    + '<div class="alert-card-label">VAT Reconciliation — ' + esc(periodLabel) + '</div>'
     + redValueHtml
     + '<div class="alert-card-sub">' + esc(redSub) + '</div>'
     + '<div class="alert-card-note">' + redNote + '</div>'
@@ -1381,7 +1421,7 @@ function renderMetricRow2(profit, taxReserve, label) {
     + '</div>';
 }
 
-function renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allAvail, label) {
+function renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allAvail, label, periodKey) {
   function vatRow(lbl, val) {
     var valHtml = (val === null)
       ? '<td style="color:var(--muted);font-family:\'Jost\',sans-serif;font-size:11px">Endpoint failed</td>'
@@ -1416,7 +1456,669 @@ function renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allAva
     + 'Personal transfer purchase invoices are excluded from all VAT calculations. '
     + 'Figures cover all records loaded — see Data Health for loading details. '
     + 'Consult your accountant for filing purposes.</div>'
+    + renderVatExportButtons(periodKey, label)
     + '</div>';
+}
+
+// ── VAT reconciliation export (PDF only — no CSV) ──────────────────────────
+// Reuses lastVAT exclusively — no independent VAT calculation. See buildVatExportModel().
+
+function renderVatExportButtons(periodKey, label) {
+  var shortLabel = String(label).replace(/\s*\([^)]*\)\s*$/, '');   // "Q1 2026 (Jan–Mar)" -> "Q1 2026"
+  var zatcaLabel    = periodKey === 'all' ? 'Export Historical ZATCA VAT PDF'          : 'Export ' + shortLabel + ' ZATCA VAT PDF';
+  var personalLabel = periodKey === 'all' ? 'Export Historical Personal Transfers PDF' : 'Export ' + shortLabel + ' Personal Transfers PDF';
+  return '<div class="vat-export-actions">'
+    + '<button class="btn-export" onclick="exportVatPdf()">' + esc(zatcaLabel) + '</button>'
+    + '<button class="btn-export" onclick="exportPersonalTransfersPdf()">' + esc(personalLabel) + '</button>'
+    + '<div class="vat-export-note">ZATCA VAT PDF: internal reconciliation working paper for accounting review — not an automatic ZATCA submission. '
+    + 'Personal Transfers PDF: internal management report only, not for ZATCA submission.</div>'
+    + '</div>';
+}
+
+// ── Per-record VAT classification ──────────────────────────────────────────
+// Used only to annotate export detail rows (zero-VAT / unclear flags).
+// Never used to recompute the headline output/input VAT — those come from
+// lastVAT (the exact figures already shown in the top card and VAT Position panel).
+
+function isMalformedNumeric(raw) {
+  return raw !== null && raw !== undefined && raw !== '' && isNaN(parseFloat(raw));
+}
+
+// Purchase invoices carry no explicit per-line tax field in this Daftra feed —
+// the dashboard's own calcPurchases() derives VAT as summary_total - summary_subtotal.
+// This mirrors that exact derivation at the per-record level for classification only.
+function purchaseRecordVAT(r) {
+  var malformed = isMalformedNumeric(r.summary_subtotal) || isMalformedNumeric(r.summary_total);
+  var subtotal  = toNum(r.summary_subtotal);
+  var total     = toNum(r.summary_total);
+  var vat       = malformed ? 0 : (total - subtotal);
+  var treatment = malformed ? 'Unknown / Manual review needed' : (vat > 0.005 ? 'VAT included' : 'No VAT');
+  var recoverable = (!malformed && vat > 0.005) ? vat : 0;
+  return { vatAmt: vat, treatment: treatment, recoverable: recoverable, malformed: malformed, netAmt: subtotal, grossAmt: total };
+}
+
+// Expenses carry explicit tax1_amount / tax1_included fields — same fields calcExpenses() uses.
+// tax1_included only decides inclusive/exclusive treatment; it is never treated as proof VAT exists.
+function expenseRecordVAT(r) {
+  var malformedAmt = isMalformedNumeric(r.tax1_amount);
+  var amt  = toNum(r.amount);
+  var vat  = malformedAmt ? 0 : toNum(r.tax1_amount);
+  var incl = r.tax1_included;
+  var inclUnclear = incl !== '0' && incl !== '1';
+  var treatment;
+  if (malformedAmt) {
+    treatment = 'Unknown / Manual review needed';
+  } else if (vat <= 0.005) {
+    treatment = 'No VAT';
+  } else if (incl === '0') {
+    treatment = 'VAT excluded';
+  } else if (incl === '1') {
+    treatment = 'VAT included';
+  } else {
+    treatment = 'Unknown / Manual review needed';   // VAT amount present but inclusive/exclusive flag is ambiguous
+  }
+  var recoverable = (!malformedAmt && vat > 0.005) ? vat : 0;   // per spec: 0/blank/null/invalid VAT -> SAR 0.00 recoverable, regardless of tax1_included
+  var netAmt   = expExVATForRecord(r);
+  var grossAmt = (incl === '0') ? amt + vat : amt;
+  var inclLabel = incl === '0' ? 'VAT excluded from amount' : incl === '1' ? 'VAT included in amount' : 'Not specified';
+  return {
+    vatAmt: vat, treatment: treatment, recoverable: recoverable,
+    malformed: malformedAmt || (vat > 0.005 && inclUnclear),
+    netAmt: netAmt, grossAmt: grossAmt, inclLabel: inclLabel,
+  };
+}
+
+// Same active+dated+in-period filter calcSales/calcPurchases/calcExpenses apply internally —
+// duplicated here only to recover the record LIST (the calc functions return aggregates only).
+function periodFilterRecords(records, bounds) {
+  return filterActive(records).filter(function(r) { return r.date && inPeriod(r.date, bounds); });
+}
+
+// Same date/period scoping as periodFilterRecords, but WITHOUT the draft exclusion —
+// used only to display draft rows with a "Draft — excluded" status in the Personal
+// Transfers PDF. Never used for totals/counts (those still come from periodFilterRecords).
+function periodFilterRecordsIncludingDrafts(records, bounds) {
+  return records.filter(function(r) { return r.date && inPeriod(r.date, bounds); });
+}
+
+function fmtDateShort(d) {
+  if (!d) return '—';
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Arabic rendering of the period name for the bilingual PDF header only — on-screen
+// labels are untouched (they still come from getPeriodLabel()).
+function arabicPeriodLabel(periodKey, bounds) {
+  var yr = bounds ? bounds.start.getFullYear() : new Date().getFullYear();
+  var map = {
+    'ytd':        'من بداية السنة ' + yr,
+    'this-month': 'الشهر الحالي',
+    'last-month': 'الشهر الماضي',
+    'q1':         'الربع الأول ' + yr,
+    'q2':         'الربع الثاني ' + yr,
+    'q3':         'الربع الثالث ' + yr,
+    'q4':         'الربع الرابع ' + yr,
+    'all':        'كل الفترات',
+  };
+  return map[periodKey] || periodKey;
+}
+
+// current = bounds not yet closed (covers YTD/this-month/current-or-future quarter);
+// 'all' is never provisional/ready — it is explicitly labeled as a historical report, not a filing return.
+// labelAr is additive, read only by the bilingual PDFs — .label (English) is unchanged.
+function periodStatusInfo(periodKey, bounds) {
+  if (periodKey === 'all') {
+    return { cls: 'historical', label: 'Internal Historical VAT Report — Not a Filing Return', labelAr: 'تقرير تاريخي داخلي لضريبة القيمة المضافة — ليس إقراراً ضريبياً' };
+  }
+  if (bounds && bounds.end < new Date()) {
+    return { cls: 'ready', label: 'Ready for accounting review', labelAr: 'جاهز للمراجعة المحاسبية' };
+  }
+  return { cls: 'provisional', label: 'Provisional — period still in progress', labelAr: 'مبدئي — الفترة لا تزال جارية' };
+}
+
+// ── Export data model ───────────────────────────────────────────────────────
+// Builds everything both PDF exports need from lastVAT (the rendered snapshot)
+// plus the raw fetch-metadata globals. Sales/purchase/expense totals are read
+// directly from lastVAT — never recalculated — so neither export can drift
+// from the top VAT card or the VAT Position panel.
+
+function buildVatExportModel() {
+  if (!lastVAT) return null;
+  var v = lastVAT;
+  var bounds = v.bounds;
+
+  var salesRows = v.invError ? [] : periodFilterRecords(v.invRecords, bounds);
+  var purRows   = (v.purError ? [] : periodFilterRecords(v.bizPurRecords, bounds))
+    .map(function(r) { return { r: r, vat: purchaseRecordVAT(r) }; });
+  var expRows   = (v.expError ? [] : periodFilterRecords(v.expRecords, bounds))
+    .map(function(r) { return { r: r, vat: expenseRecordVAT(r) }; });
+
+  var zeroVatPur   = purRows.filter(function(x) { return x.vat.treatment === 'No VAT'; });
+  var zeroVatExp   = expRows.filter(function(x) { return x.vat.treatment === 'No VAT'; });
+  var malformedPur = purRows.filter(function(x) { return x.vat.malformed; });
+  var malformedExp = expRows.filter(function(x) { return x.vat.malformed; });
+
+  // Scoped to the selected reporting period (bounds is null for 'all', so All Time
+  // naturally still shows every Personal Transfer — no separate branch needed).
+  var personalActive      = periodFilterRecords(v.personalRecords, bounds);
+  var personalTotalExVAT  = personalActive.reduce(function(s, r) { return s + toNum(r.summary_subtotal); }, 0);
+  var personalTotalIncVAT = personalActive.reduce(function(s, r) { return s + toNum(r.summary_total); }, 0);
+
+  // Additive, display-only: same period scope but INCLUDES drafts (marked, not counted) —
+  // used solely by the Personal Transfers PDF table. Totals above are unaffected.
+  var personalRowsAllInPeriod = periodFilterRecordsIncludingDrafts(v.personalRecords, bounds)
+    .map(function(r) { return { r: r, vat: purchaseRecordVAT(r), isDraft: r.draft === '1' }; });
+
+  return {
+    periodKey: v.periodKey, periodLabel: v.periodLabel, bounds: bounds,
+    status: periodStatusInfo(v.periodKey, bounds),
+    generatedAt: new Date(), fetchTimestamp: v.fetchTimestamp,
+    invError: v.invError, purError: v.purError, expError: v.expError,
+    sales: v.sales, purch: v.purch, exp: v.exp,
+    outputVAT: v.outputVAT, inputVATpur: v.inputVATpur, inputVATexp: v.inputVATexp,
+    vatPosition: v.vatPosition, allVATAvail: v.allVATAvail,
+    salesRows: salesRows, purRows: purRows, expRows: expRows,
+    zeroVatPurCount: zeroVatPur.length,
+    zeroVatPurTotal: zeroVatPur.reduce(function(s, x) { return s + x.vat.netAmt; }, 0),
+    zeroVatExpCount: zeroVatExp.length,
+    zeroVatExpTotal: zeroVatExp.reduce(function(s, x) { return s + x.vat.netAmt; }, 0),
+    malformedCount: malformedPur.length + malformedExp.length,
+    personalCount: personalActive.length,
+    personalTotalExVAT: personalTotalExVAT,
+    personalTotalIncVAT: personalTotalIncVAT,
+    personalRecords: personalActive,
+    personalRowsAllInPeriod: personalRowsAllInPeriod,
+    draftsInv: v.sales ? (v.invRecords.length   - v.sales.activeCount) : null,
+    draftsPur: v.purch ? (v.bizPurRecords.length - v.purch.activeCount) : null,
+    draftsExp: v.exp   ? (v.expRecords.length   - v.exp.activeCount)   : null,
+    missingDateTotal: (v.sales ? v.sales.missingDate : 0) + (v.purch ? v.purch.missingDate : 0) + (v.exp ? v.exp.missingDate : 0),
+    rawInvMeta: rawInvMeta, rawPurMeta: rawPurMeta, rawExpMeta: rawExpMeta,
+    pagesLoaded: (rawInvMeta ? rawInvMeta.pagesLoaded : 0) + (rawPurMeta ? rawPurMeta.pagesLoaded : 0) + (rawExpMeta ? rawExpMeta.pagesLoaded : 0),
+    warnings: v.warnings,
+  };
+}
+
+function getVatExportBlockers(model) {
+  var b = [];
+  if (!model) { b.push('No data loaded. Press Fetch Data first.'); return b; }
+  if (model.invError) b.push('Invoices endpoint failed: ' + model.invError);
+  if (model.purError) b.push('Purchase invoices endpoint failed: ' + model.purError);
+  if (model.expError) b.push('Expenses endpoint failed: ' + model.expError);
+  if (!model.allVATAvail) b.push('VAT position could not be calculated for the selected period.');
+  return b;
+}
+
+function getVatExportWarnings(model) {
+  var w = [];
+  if (model.rawInvMeta && (model.rawInvMeta.capHit || model.rawInvMeta.incomplete)) w.push('Invoices: pagination incomplete — totals may be understated.');
+  if (model.rawPurMeta && (model.rawPurMeta.capHit || model.rawPurMeta.incomplete)) w.push('Purchase invoices: pagination incomplete — totals may be understated.');
+  if (model.rawExpMeta && (model.rawExpMeta.capHit || model.rawExpMeta.incomplete)) w.push('Expenses: pagination incomplete — totals may be understated.');
+  if (model.missingDateTotal > 0) w.push(model.missingDateTotal + ' record(s) excluded — missing or unparseable date.');
+  if (model.malformedCount > 0) w.push(model.malformedCount + ' record(s) have unclear or malformed VAT data — flagged for manual review.');
+  return w;
+}
+
+function exportVatPreflight() {
+  var model = buildVatExportModel();
+  var blockers = getVatExportBlockers(model);
+  if (blockers.length) {
+    alert('Cannot export VAT reconciliation report:\n\n- ' + blockers.join('\n- ') + '\n\nResolve the data issue (see Data Health panel) and press Fetch Data again.');
+    return null;
+  }
+  var warnings = getVatExportWarnings(model);
+  if (warnings.length) {
+    var proceed = confirm('Data-quality warnings for this export:\n\n- ' + warnings.join('\n- ') + '\n\nThese warnings will be printed in the exported report. Continue?');
+    if (!proceed) return null;
+  }
+  model.warningsForExport = warnings;
+  return model;
+}
+
+// filename kind: 'zatca' (default) or 'personal' — the only two PDF exports now offered.
+function vatExportFilename(model, ext, kind) {
+  var safe = model.periodKey === 'all'
+    ? 'AllTime'
+    : model.periodLabel.replace(/\s*\([^)]*\)\s*$/, '').replace(/[^\w-]+/g, '_');
+  var base = kind === 'personal' ? 'Personal_Transfers' : 'ZATCA_VAT_Reconciliation';
+  return base + '_' + safe + '.' + ext;
+}
+
+// ── PDF export ──────────────────────────────────────────────────────────────
+
+// PDF is generated as a standalone document printed via the browser's native
+// print dialog (window.open + document.write + print()) rather than a
+// canvas-snapshot library. This avoids relying on any element hidden or
+// positioned offscreen in the main dashboard document — see exportVatPdf().
+
+function buildVatPdfStyles() {
+  return ''
+    + '@page { size: A4 portrait; margin: 14mm; }'
+    + '* { box-sizing: border-box; }'
+    + 'body { font-family: Arial, "Segoe UI", Tahoma, sans-serif; font-size: 12px; color: #1C1C1A; margin: 0; padding: 0 4mm; }'
+    + '.ar { font-family: Tahoma, Arial, "Segoe UI", sans-serif; direction: rtl; unicode-bidi: isolate; }'
+    + '.pdf-title-en { font-size: 18px; font-weight: 700; }'
+    + '.pdf-title-ar { font-size: 16px; font-weight: 700; margin-top: 2px; }'
+    + '.pdf-meta-line { font-size: 11px; color: #55534C; margin-top: 3px; }'
+    /* Header: English column left, Arabic column right — "where practical" per spec. */
+    + '.bi-header { display: flex; justify-content: space-between; gap: 24px; }'
+    + '.bi-col { flex: 1 1 50%; min-width: 0; }'
+    + '.bi-col-ar { text-align: right; }'
+    + '.pdf-notice { font-size: 10.5px; font-style: italic; color: #55534C; margin: 10px 0 4px; border-top: 1px solid #ddd; padding-top: 8px; }'
+    + '.pdf-notice .ar { display: block; margin-top: 3px; text-align: right; }'
+    + '.pdf-status-badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 3px 8px; border-radius: 3px; margin-top: 6px; }'
+    + '.pdf-status-badge.provisional { background: #F5EBD8; color: #8A5A12; }'
+    + '.pdf-status-badge.ready       { background: #E4EEE5; color: #2F5A38; }'
+    + '.pdf-status-badge.historical  { background: #EFEFEA; color: #555; }'
+    + '.pdf-warn-banner { background: #FCEBEA; border: 1px solid #C97A73; color: #7A241B; font-size: 10.5px; padding: 8px 10px; margin: 10px 0; border-radius: 3px; }'
+    + '.pdf-warn-banner .ar { display: block; margin-top: 4px; }'
+    + '.pdf-confidential-banner { background: #EAF1F7; border: 1px solid #6C93B0; color: #274A61; font-size: 10.5px; font-weight: 600; padding: 8px 10px; margin: 10px 0; border-radius: 3px; }'
+    + '.pdf-confidential-banner .ar { display: block; margin-top: 4px; }'
+    + '.pdf-section-title { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; margin: 18px 0 6px; border-bottom: 1px solid #ccc; padding-bottom: 4px; page-break-after: avoid; display: flex; justify-content: space-between; text-transform: none; }'
+    /* VAT summary / result rows: English label | Arabic label | value — three columns. */
+    + 'table.pdf-table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-top: 4px; }'
+    + 'table.pdf-table thead { display: table-header-group; }'
+    + 'table.pdf-table tr { page-break-inside: avoid; }'
+    + 'table.pdf-table td, table.pdf-table th { padding: 4px 6px; border-bottom: 1px solid #eee; text-align: left; }'
+    + 'table.pdf-table td.lbl-ar, table.pdf-table th.lbl-ar { text-align: right; color: #55534C; }'
+    + 'table.pdf-table td.val, table.pdf-table th.val, table.pdf-table td:last-child, table.pdf-table th:last-child { text-align: right; }'
+    + 'table.pdf-table th small { display: block; font-weight: 400; color: #777; margin-top: 1px; }'
+    + 'table.pdf-table .pdf-result-row td { border-top: 2px solid #1C1C1A; font-weight: 700; font-size: 13px; padding-top: 8px; }'
+    + '.pdf-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 20px; font-size: 11px; }'
+    + '.pdf-grid .ar { display: block; color: #77756D; margin-top: 1px; }'
+    + '.pdf-exclusion-line { font-size: 11px; margin-top: 10px; padding: 8px 10px; background: #F5F3EE; border-radius: 3px; }'
+    + '.pdf-exclusion-line .ar { display: block; margin-top: 3px; }'
+    + '.pdf-foot { font-size: 9.5px; color: #888; margin-top: 18px; border-top: 1px solid #ddd; padding-top: 8px; line-height: 1.5; }'
+    + '.pdf-foot .ar { display: block; margin-top: 4px; }'
+    + '.pdf-appendix { page-break-before: always; }'
+    + '.pdf-empty { font-size: 11px; color: #888; font-style: italic; margin-top: 4px; }';
+}
+
+// Bilingual VAT-summary row: English label | Arabic label (rtl) | value.
+function biRow(enLbl, arLbl, val, cls) {
+  return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>'
+    + '<td>' + esc(enLbl) + '</td>'
+    + '<td class="lbl-ar ar" dir="rtl">' + esc(arLbl) + '</td>'
+    + '<td class="val">' + esc(fmtCurrency(val)) + '</td></tr>';
+}
+
+// Bilingual audit-grid item: English label/value, Arabic label stacked below.
+function biGridItem(enLbl, arLbl, valueHtml) {
+  return '<div>' + esc(enLbl) + ' <strong>' + valueHtml + '</strong>'
+    + '<span class="ar" dir="rtl">' + esc(arLbl) + ' <strong>' + valueHtml + '</strong></span></div>';
+}
+
+function buildVatPdfPage1Html(model) {
+  var dateRangeStr = model.bounds
+    ? (fmtDateShort(model.bounds.start) + '  to  ' + fmtDateShort(model.bounds.end))
+    : 'All available data';
+  var periodAr = periodArLabel(model);
+  var warnBanner = (model.warningsForExport && model.warningsForExport.length)
+    ? '<div class="pdf-warn-banner"><strong>Data-quality warnings — review before filing:</strong><br>' + model.warningsForExport.map(esc).join('<br>')
+      + '<span class="ar" dir="rtl"><strong>تحذيرات جودة البيانات — يجب المراجعة قبل التقديم</strong></span></div>'
+    : '';
+  var resultLabelEn = model.vatPosition > 0.005 ? 'VAT Payable to ZATCA'
+    : model.vatPosition < -0.005 ? 'Excess Input VAT / Potential Credit' : 'Break-even';
+  var resultLabelAr = model.vatPosition > 0.005 ? 'ضريبة القيمة المضافة المستحقة للهيئة'
+    : model.vatPosition < -0.005 ? 'ضريبة مدخلات زائدة / رصيد محتمل' : 'التعادل';
+  var resultAmt = model.vatPosition > 0.005 ? model.vatPosition : Math.abs(model.vatPosition);
+
+  var draftsTotal = (model.draftsInv || 0) + (model.draftsPur || 0) + (model.draftsExp || 0);
+  var fetchStatusLine = (model.invError || model.purError || model.expError)
+    ? 'One or more endpoints failed — see warnings above.'
+    : 'All three endpoints (invoices, purchases, expenses) responded successfully.';
+  var fetchStatusAr = (model.invError || model.purError || model.expError)
+    ? 'فشل مصدر بيانات واحد أو أكثر — راجع التحذيرات أعلاه.'
+    : 'تم استرجاع جميع المصادر الثلاثة (المبيعات، المشتريات، المصروفات) بنجاح.';
+  var pagnWarnings = getPaginationWarnings();
+  var pagnStatusLine = pagnWarnings.length ? pagnWarnings.join(' ') : 'No pagination issues detected.';
+  var pagnStatusAr   = pagnWarnings.length ? 'توجد مشاكل في تحميل الصفحات — راجع التفاصيل أعلاه.' : 'لا توجد مشاكل في تحميل الصفحات.';
+  var fetchedAtStr = model.fetchTimestamp ? model.fetchTimestamp.toLocaleString('en-GB') : '—';
+
+  return '<div class="bi-header">'
+    + '<div class="bi-col bi-col-en">'
+    + '<div class="pdf-title-en">VAT Reconciliation Working Paper</div>'
+    + '<div class="pdf-meta-line">Vista United Co.</div>'
+    + '<div class="pdf-meta-line">Period: ' + esc(model.periodLabel) + '</div>'
+    + '<div class="pdf-meta-line">Date range: ' + esc(dateRangeStr) + '</div>'
+    + '<div class="pdf-meta-line">Generated: ' + esc(model.generatedAt.toLocaleString('en-GB')) + '</div>'
+    + '<span class="pdf-status-badge ' + model.status.cls + '">' + esc(model.status.label) + '</span>'
+    + '</div>'
+    + '<div class="bi-col bi-col-ar ar" dir="rtl">'
+    + '<div class="pdf-title-ar" dir="rtl">ورقة عمل تسوية ضريبة القيمة المضافة</div>'
+    + '<div class="pdf-meta-line">Vista United Co.</div>'
+    + '<div class="pdf-meta-line">الفترة: ' + esc(periodAr) + '</div>'
+    + '<div class="pdf-meta-line">الفترة الزمنية: ' + esc(dateRangeStr) + '</div>'
+    + '<div class="pdf-meta-line">تاريخ الإصدار: ' + esc(model.generatedAt.toLocaleString('en-GB')) + '</div>'
+    + '<span class="pdf-status-badge ' + model.status.cls + '">' + esc(model.status.labelAr) + '</span>'
+    + '</div>'
+    + '</div>'
+
+    + '<div class="pdf-notice">'
+    + '<div>Supporting reconciliation document for accounting review before submission of the VAT return to ZATCA. This document is not an official ZATCA VAT return.</div>'
+    + '<div class="ar" dir="rtl">مستند تسوية داعم للمراجعة المحاسبية قبل تقديم إقرار ضريبة القيمة المضافة إلى هيئة الزكاة والضريبة والجمارك. هذا المستند ليس إقرار ضريبة قيمة مضافة رسمياً صادراً من الهيئة.</div>'
+    + '</div>'
+    + warnBanner
+
+    + '<div class="pdf-section-title"><span>VAT Summary</span><span class="ar" dir="rtl">ملخص ضريبة القيمة المضافة</span></div>'
+    + '<table class="pdf-table">'
+    + biRow('Sales excluding VAT', 'المبيعات باستثناء الضريبة', model.sales.salesExVAT)
+    + biRow('Output VAT from sales', 'ضريبة المخرجات على المبيعات', model.outputVAT)
+    + biRow('Business purchases excluding VAT', 'المشتريات التجارية باستثناء الضريبة', model.purch.purchExVAT)
+    + biRow('Recoverable input VAT — purchases', 'ضريبة المدخلات القابلة للاسترداد — المشتريات', model.inputVATpur)
+    + biRow('Expenses excluding VAT', 'المصروفات باستثناء الضريبة', model.exp.expExVAT)
+    + biRow('Recoverable input VAT — expenses', 'ضريبة المدخلات القابلة للاسترداد — المصروفات', model.inputVATexp)
+    + biRow('Total recoverable input VAT', 'إجمالي ضريبة المدخلات القابلة للاسترداد', model.inputVATpur + model.inputVATexp)
+    + biRow('Net VAT', 'صافي ضريبة القيمة المضافة', model.vatPosition)
+    + '<tr class="pdf-result-row"><td>' + esc(resultLabelEn) + '</td><td class="lbl-ar ar" dir="rtl">' + esc(resultLabelAr) + '</td><td class="val">' + esc(fmtCurrency(resultAmt)) + '</td></tr>'
+    + '</table>'
+
+    + '<div class="pdf-section-title"><span>Audit / Data Health</span><span class="ar" dir="rtl">التدقيق وسلامة البيانات</span></div>'
+    + '<div class="pdf-grid">'
+    + biGridItem('Sales invoices included:', 'فواتير المبيعات المدرجة:', model.sales.count)
+    + biGridItem('Purchase invoices included:', 'فواتير المشتريات المدرجة:', model.purch.count)
+    + biGridItem('Expenses included:', 'المصروفات المدرجة:', model.exp.count)
+    + biGridItem('Draft records excluded (all-time):', 'السجلات غير النهائية المستبعدة (كل الفترات):', draftsTotal)
+    + biGridItem('Missing/unparseable dates:', 'تواريخ مفقودة أو غير صالحة:', model.missingDateTotal)
+    + biGridItem('Pages loaded (all endpoints):', 'عدد الصفحات المحمّلة (جميع المصادر):', model.pagesLoaded)
+    + biGridItem('Fetch status:', 'حالة جلب البيانات:', esc(fetchStatusLine) + '<span class="ar" dir="rtl" style="display:inline;font-weight:400"> — ' + esc(fetchStatusAr) + '</span>')
+    + biGridItem('Pagination status:', 'حالة تحميل الصفحات:', esc(pagnStatusLine) + '<span class="ar" dir="rtl" style="display:inline;font-weight:400"> — ' + esc(pagnStatusAr) + '</span>')
+    + biGridItem('Dashboard data fetch timestamp:', 'توقيت جلب بيانات لوحة التحكم:', esc(fetchedAtStr))
+    + biGridItem('Zero-VAT purchase invoices:', 'فواتير مشتريات بدون ضريبة:', model.zeroVatPurCount + ' / ' + esc(fmtCurrency(model.zeroVatPurTotal)))
+    + biGridItem('Zero-VAT expenses:', 'مصروفات بدون ضريبة:', model.zeroVatExpCount + ' / ' + esc(fmtCurrency(model.zeroVatExpTotal)))
+    + biGridItem('Unclear/malformed VAT records:', 'سجلات ضريبية غير واضحة أو غير صحيحة:', model.malformedCount)
+    + '</div>'
+
+    // Personal Transfers: aggregate line only — no supplier names, no transaction rows, no appendix.
+    + '<div class="pdf-exclusion-line">'
+    + '<div>Non-business/personal transactions excluded from VAT reconciliation: ' + model.personalCount
+      + ' records / ' + esc(fmtCurrency(model.personalTotalExVAT)) + '</div>'
+    + '<div class="ar" dir="rtl">المعاملات غير التجارية/الشخصية المستبعدة من تسوية ضريبة القيمة المضافة: ' + model.personalCount
+      + ' عملية / ' + esc(fmtCurrency(model.personalTotalExVAT).replace('SAR', '').trim()) + ' ريال</div>'
+    + '</div>';
+}
+
+// Appendix — reuses the same salesRows/purRows/expRows arrays computed once in
+// buildVatExportModel(), so the printed detail always matches the VAT Summary totals.
+function buildVatPdfAppendixHtml(model) {
+  var salesRows = model.salesRows.map(function(r) {
+    var net = toNum(r.summary_subtotal), gross = toNum(r.summary_total);
+    return '<tr><td>' + esc(r.date || '') + '</td>'
+      + '<td>' + esc(r.no || r.number || r.id || '') + '</td>'
+      + '<td>' + esc(r.client_business_name || r.client_first_name || '—') + '</td>'
+      + '<td>' + esc(fmtCurrency(net)) + '</td>'
+      + '<td>' + esc(fmtCurrency(gross - net)) + '</td>'
+      + '<td>' + esc(fmtCurrency(gross)) + '</td></tr>';
+  }).join('');
+
+  var purRows = model.purRows.map(function(x) {
+    var r = x.r, vat = x.vat;
+    return '<tr><td>' + esc(r.date || '') + '</td>'
+      + '<td>' + esc(r.no || r.number || r.id || '') + '</td>'
+      + '<td>' + esc(r.supplier_business_name || '—') + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.netAmt)) + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.vatAmt)) + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.grossAmt)) + '</td>'
+      + '<td>' + esc(vat.treatment) + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.recoverable)) + '</td></tr>';
+  }).join('');
+
+  var expRows = model.expRows.map(function(x) {
+    var r = x.r, vat = x.vat;
+    return '<tr><td>' + esc(r.date || '') + '</td>'
+      + '<td>' + esc(r.expense_number || r.id || '') + '</td>'
+      + '<td>' + esc(r.vendor || '—') + '</td>'
+      + '<td>' + esc(r.category || '—') + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.netAmt)) + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.vatAmt)) + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.grossAmt)) + '</td>'
+      + '<td>' + esc(vat.treatment) + '</td>'
+      + '<td>' + esc(fmtCurrency(vat.recoverable)) + '</td></tr>';
+  }).join('');
+
+  return ''
+    + '<div class="pdf-appendix">'
+    + '<div class="pdf-section-title"><span>Appendix 1 — Sales VAT Detail — ' + esc(model.periodLabel) + '</span>'
+      + '<span class="ar" dir="rtl">الملحق 1 — تفاصيل ضريبة المبيعات — ' + esc(periodArLabel(model)) + '</span></div>'
+    + (salesRows
+      ? '<table class="pdf-table"><thead><tr>'
+        + '<th>Date<small class="ar" dir="rtl">التاريخ</small></th>'
+        + '<th>Invoice No.<small class="ar" dir="rtl">رقم الفاتورة</small></th>'
+        + '<th>Customer<small class="ar" dir="rtl">العميل</small></th>'
+        + '<th class="val">Net<small class="ar" dir="rtl">الصافي</small></th>'
+        + '<th class="val">VAT<small class="ar" dir="rtl">الضريبة</small></th>'
+        + '<th class="val">Gross<small class="ar" dir="rtl">الإجمالي</small></th>'
+        + '</tr></thead><tbody>' + salesRows + '</tbody></table>'
+      : '<div class="pdf-empty">No sales invoices in the selected period. <span class="ar" dir="rtl">لا توجد فواتير مبيعات في الفترة المحددة.</span></div>')
+    + '</div>'
+
+    + '<div class="pdf-appendix">'
+    + '<div class="pdf-section-title"><span>Appendix 2 — Purchase VAT Detail — ' + esc(model.periodLabel) + '</span>'
+      + '<span class="ar" dir="rtl">الملحق 2 — تفاصيل ضريبة المشتريات — ' + esc(periodArLabel(model)) + '</span></div>'
+    + (purRows
+      ? '<table class="pdf-table"><thead><tr>'
+        + '<th>Date<small class="ar" dir="rtl">التاريخ</small></th>'
+        + '<th>Ref<small class="ar" dir="rtl">المرجع</small></th>'
+        + '<th>Supplier<small class="ar" dir="rtl">المورد</small></th>'
+        + '<th class="val">Net<small class="ar" dir="rtl">الصافي</small></th>'
+        + '<th class="val">Raw VAT<small class="ar" dir="rtl">الضريبة الفعلية</small></th>'
+        + '<th class="val">Gross<small class="ar" dir="rtl">الإجمالي</small></th>'
+        + '<th>Treatment<small class="ar" dir="rtl">المعاملة الضريبية</small></th>'
+        + '<th class="val">Recoverable<small class="ar" dir="rtl">القابل للاسترداد</small></th>'
+        + '</tr></thead><tbody>' + purRows + '</tbody></table>'
+      : '<div class="pdf-empty">No business purchase invoices in the selected period. <span class="ar" dir="rtl">لا توجد فواتير مشتريات تجارية في الفترة المحددة.</span></div>')
+    + '</div>'
+
+    + '<div class="pdf-appendix">'
+    + '<div class="pdf-section-title"><span>Appendix 3 — Expense VAT Detail — ' + esc(model.periodLabel) + '</span>'
+      + '<span class="ar" dir="rtl">الملحق 3 — تفاصيل ضريبة المصروفات — ' + esc(periodArLabel(model)) + '</span></div>'
+    + (expRows
+      ? '<table class="pdf-table"><thead><tr>'
+        + '<th>Date<small class="ar" dir="rtl">التاريخ</small></th>'
+        + '<th>Reference<small class="ar" dir="rtl">المرجع</small></th>'
+        + '<th>Payee<small class="ar" dir="rtl">المستفيد</small></th>'
+        + '<th>Category<small class="ar" dir="rtl">الفئة</small></th>'
+        + '<th class="val">Net<small class="ar" dir="rtl">الصافي</small></th>'
+        + '<th class="val">Raw VAT<small class="ar" dir="rtl">الضريبة الفعلية</small></th>'
+        + '<th class="val">Gross<small class="ar" dir="rtl">الإجمالي</small></th>'
+        + '<th>Treatment<small class="ar" dir="rtl">المعاملة الضريبية</small></th>'
+        + '<th class="val">Recoverable<small class="ar" dir="rtl">القابل للاسترداد</small></th>'
+        + '</tr></thead><tbody>' + expRows + '</tbody></table>'
+      : '<div class="pdf-empty">No expenses in the selected period. <span class="ar" dir="rtl">لا توجد مصروفات في الفترة المحددة.</span></div>')
+
+    + '<div class="pdf-foot">'
+    + '<div>Supporting reconciliation working paper only — not an official ZATCA VAT return. Non-business/personal transactions are excluded from every figure above (see aggregate exclusion note on page 1). '
+    + 'Displayed totals are rounded to 2 decimal places for presentation; all calculations use full source precision before final rounding. '
+    + 'Verify all figures against source Daftra records and consult your accountant before filing with ZATCA.</div>'
+    + '<div class="ar" dir="rtl">مستند تسوية داعم فقط — وليس إقرار ضريبة قيمة مضافة رسمياً صادراً من الهيئة. تُستبعد المعاملات غير التجارية/الشخصية من جميع الأرقام أعلاه (راجع ملاحظة الاستبعاد الإجمالية في الصفحة الأولى). '
+    + 'المبالغ المعروضة مقربة إلى منزلتين عشريتين لأغراض العرض؛ تُجرى جميع الحسابات باستخدام الدقة الكاملة للمصدر قبل التقريب النهائي. '
+    + 'يرجى التحقق من جميع الأرقام مقابل سجلات دفترة المصدر واستشارة محاسبك قبل التقديم إلى هيئة الزكاة والضريبة والجمارك.</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function periodArLabel(model) {
+  return model.periodKey === 'all' ? 'كل الفترات' : arabicPeriodLabel(model.periodKey, model.bounds);
+}
+
+function buildVatPdfDocument(model) {
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8" />'
+    + '<title>' + esc(vatExportFilename(model, 'pdf', 'zatca')) + '</title>'
+    + '<style>' + buildVatPdfStyles() + '</style>'
+    + '</head><body>'
+    + buildVatPdfPage1Html(model)
+    + buildVatPdfAppendixHtml(model)
+    + '</body></html>';
+}
+
+// Opens a real browser print window instead of rendering an offscreen element
+// to a canvas — the previous html2canvas-based approach produced a blank page
+// because the source container was positioned at left:-10000px, outside the
+// area html2canvas actually captures. The print window is opened synchronously
+// (same click) to avoid popup blockers, and print() is deferred until the
+// window's own load event plus a short render delay.
+function exportVatPdf() {
+  var model = exportVatPreflight();
+  if (!model) return;
+
+  var printWin = window.open('', '_blank', 'width=900,height=1000');
+  if (!printWin) {
+    alert('The print window was blocked by your browser.\n\nPlease allow popups for this page and click the export button again.');
+    return;
+  }
+
+  printWin.document.open();
+  printWin.document.write(buildVatPdfDocument(model));
+  printWin.document.close();
+
+  printWin.onload = function() {
+    setTimeout(function() {
+      printWin.focus();
+      printWin.print();
+    }, 300);
+  };
+}
+
+// ── Personal Transfers PDF (internal-only, separate from the ZATCA VAT PDF) ─
+// Same period filter (getPeriodBounds via lastVAT.bounds) and draft exclusion as the
+// rest of the dashboard. Totals reuse model.personalCount/personalTotalExVAT — the
+// exact figures already excluded from every VAT/profit calculation — never recomputed.
+
+function buildPersonalTransfersPdfHtml(model) {
+  var dateRangeStr = model.bounds
+    ? (fmtDateShort(model.bounds.start) + '  to  ' + fmtDateShort(model.bounds.end))
+    : 'All available data';
+  var periodAr = periodArLabel(model);
+
+  var rows = model.personalRowsAllInPeriod.map(function(x) {
+    var r = x.r, vat = x.vat;
+    var statusEn = x.isDraft ? 'Draft — excluded' : '—';
+    var statusAr = x.isDraft ? 'مسودة — مستبعدة' : '—';
+    return '<tr' + (x.isDraft ? ' style="color:#999;font-style:italic"' : '') + '>'
+      + '<td>' + esc(r.date || '') + '</td>'
+      + '<td>' + esc(r.no || r.number || r.id || '—') + '</td>'
+      + '<td>' + esc(r.supplier_business_name || '—') + '</td>'
+      + '<td class="val">' + esc(fmtCurrency(vat.netAmt)) + '</td>'
+      + '<td class="val">' + esc(fmtCurrency(vat.vatAmt)) + '</td>'
+      + '<td class="val">' + esc(fmtCurrency(vat.grossAmt)) + '</td>'
+      + '<td>' + esc(statusEn) + '<br><span class="ar" dir="rtl">' + esc(statusAr) + '</span></td>'
+      + '</tr>';
+  }).join('');
+
+  var zeroVatCount = model.personalRowsAllInPeriod.filter(function(x) { return !x.isDraft && x.vat.treatment === 'No VAT'; }).length;
+
+  return '<div class="bi-header">'
+    + '<div class="bi-col bi-col-en">'
+    + '<div class="pdf-title-en">Personal Transfers Reconciliation</div>'
+    + '<div class="pdf-meta-line">Vista United Co.</div>'
+    + '<div class="pdf-meta-line">Period: ' + esc(model.periodLabel) + '</div>'
+    + '<div class="pdf-meta-line">Date range: ' + esc(dateRangeStr) + '</div>'
+    + '<div class="pdf-meta-line">Generated: ' + esc(model.generatedAt.toLocaleString('en-GB')) + '</div>'
+    + '</div>'
+    + '<div class="bi-col bi-col-ar ar" dir="rtl">'
+    + '<div class="pdf-title-ar" dir="rtl">تسوية التحويلات الشخصية</div>'
+    + '<div class="pdf-meta-line">Vista United Co.</div>'
+    + '<div class="pdf-meta-line">الفترة: ' + esc(periodAr) + '</div>'
+    + '<div class="pdf-meta-line">الفترة الزمنية: ' + esc(dateRangeStr) + '</div>'
+    + '<div class="pdf-meta-line">تاريخ الإصدار: ' + esc(model.generatedAt.toLocaleString('en-GB')) + '</div>'
+    + '</div>'
+    + '</div>'
+
+    + '<div class="pdf-confidential-banner">'
+    + '<div>Internal management report only. Not for ZATCA VAT-return submission.</div>'
+    + '<div class="ar" dir="rtl">تقرير إداري داخلي فقط. غير مخصص للتقديم ضمن إقرار ضريبة القيمة المضافة لدى هيئة الزكاة والضريبة والجمارك.</div>'
+    + '</div>'
+
+    + '<div class="pdf-section-title"><span>Summary</span><span class="ar" dir="rtl">الملخص</span></div>'
+    + '<div class="pdf-grid">'
+    + biGridItem('Total Personal Transfer records:', 'إجمالي عدد التحويلات الشخصية:', model.personalCount)
+    + biGridItem('Total Personal Transfer amount:', 'إجمالي مبلغ التحويلات الشخصية:', esc(fmtCurrency(model.personalTotalExVAT)))
+    + '</div>'
+
+    + '<div class="pdf-exclusion-line">'
+    + '<div>These transactions are excluded from business VAT and profit calculations on the Financial Dashboard.</div>'
+    + '<div class="ar" dir="rtl">تُستبعد هذه المعاملات من حسابات ضريبة القيمة المضافة والأرباح التجارية في لوحة التحكم المالية.</div>'
+    + '</div>'
+
+    + '<div class="pdf-section-title"><span>Personal Transfer Detail — ' + esc(model.periodLabel) + '</span>'
+      + '<span class="ar" dir="rtl">تفاصيل التحويلات الشخصية — ' + esc(periodAr) + '</span></div>'
+    + (rows
+      ? '<table class="pdf-table"><thead><tr>'
+        + '<th>Date<small class="ar" dir="rtl">التاريخ</small></th>'
+        + '<th>Ref / Invoice No.<small class="ar" dir="rtl">رقم المرجع أو الفاتورة</small></th>'
+        + '<th>Supplier<small class="ar" dir="rtl">المورد</small></th>'
+        + '<th class="val">Net<small class="ar" dir="rtl">المبلغ قبل الضريبة</small></th>'
+        + '<th class="val">VAT<small class="ar" dir="rtl">مبلغ الضريبة إن وجد</small></th>'
+        + '<th class="val">Gross<small class="ar" dir="rtl">الإجمالي</small></th>'
+        + '<th>Status<small class="ar" dir="rtl">الحالة</small></th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>'
+      : '<div class="pdf-empty">No Personal Transfer records in the selected period. <span class="ar" dir="rtl">لا توجد تحويلات شخصية في الفترة المحددة.</span></div>')
+
+    + (zeroVatCount > 0
+      ? '<div class="pdf-meta-line">Zero-VAT Personal Transfer records (informational only): ' + zeroVatCount
+        + '<span class="ar" dir="rtl"> — عدد التحويلات الشخصية بدون ضريبة (للعلم فقط): ' + zeroVatCount + '</span></div>'
+      : '')
+
+    + '<div class="pdf-foot">'
+    + '<div>Internal management report only — not for ZATCA VAT-return submission. Draft records are shown for reference and excluded from all totals above. '
+    + 'Displayed totals are rounded to 2 decimal places for presentation; all calculations use full source precision before final rounding.</div>'
+    + '<div class="ar" dir="rtl">تقرير إداري داخلي فقط — غير مخصص للتقديم ضمن إقرار ضريبة القيمة المضافة. تُعرض السجلات غير النهائية (المسودات) للمرجعية فقط وتُستبعد من جميع الإجماليات أعلاه. '
+    + 'المبالغ المعروضة مقربة إلى منزلتين عشريتين لأغراض العرض؛ تُجرى جميع الحسابات باستخدام الدقة الكاملة للمصدر قبل التقريب النهائي.</div>'
+    + '</div>';
+}
+
+function buildPersonalTransfersPdfDocument(model) {
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8" />'
+    + '<title>' + esc(vatExportFilename(model, 'pdf', 'personal')) + '</title>'
+    + '<style>' + buildVatPdfStyles() + '</style>'
+    + '</head><body>'
+    + buildPersonalTransfersPdfHtml(model)
+    + '</body></html>';
+}
+
+// Lighter validation than exportVatPreflight — this report only depends on purchase
+// invoices (the source of Personal Transfer records), not sales/expenses/net VAT.
+function personalTransfersPreflight() {
+  var model = buildVatExportModel();
+  if (!model) {
+    alert('No data loaded. Press Fetch Data first.');
+    return null;
+  }
+  if (model.purError) {
+    alert('Cannot export Personal Transfers report:\n\n- Purchase invoices endpoint failed: ' + model.purError + '\n\nResolve the data issue and press Fetch Data again.');
+    return null;
+  }
+  var warnings = [];
+  if (model.rawPurMeta && (model.rawPurMeta.capHit || model.rawPurMeta.incomplete)) {
+    warnings.push('Purchase invoices: pagination incomplete — Personal Transfer totals may be understated.');
+  }
+  if (warnings.length) {
+    var proceed = confirm('Data-quality warnings for this export:\n\n- ' + warnings.join('\n- ') + '\n\nContinue?');
+    if (!proceed) return null;
+  }
+  model.warningsForExport = warnings;
+  return model;
+}
+
+function exportPersonalTransfersPdf() {
+  var model = personalTransfersPreflight();
+  if (!model) return;
+
+  var printWin = window.open('', '_blank', 'width=900,height=1000');
+  if (!printWin) {
+    alert('The print window was blocked by your browser.\n\nPlease allow popups for this page and click the export button again.');
+    return;
+  }
+
+  printWin.document.open();
+  printWin.document.write(buildPersonalTransfersPdfDocument(model));
+  printWin.document.close();
+
+  printWin.onload = function() {
+    setTimeout(function() {
+      printWin.focus();
+      printWin.print();
+    }, 300);
+  };
 }
 
 function renderReceivablesPanel(sales, label) {
