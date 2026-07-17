@@ -353,6 +353,7 @@
 <script>
 let allInvoices = [], allEstimates = [];
 let currentTab = 'invoices';
+let daftraFetched = false;   // true once a Daftra fetch has completed at least once (see fetchDocuments())
 let currentDoc = null;
 let dnState = null;
 let rvState = null;
@@ -386,6 +387,14 @@ const co = () => ({
   cr:      $('coCr').value      || '7053413683',
 });
 
+// ── Initial render ───────────────────────────────────────────────────────────
+// Show the tab bar immediately on page load, before any Daftra fetch, so
+// standalone/no-fetch tools (Sarawat Quote Import, Purchasing Invoices, Receipt
+// Voucher manual entry) are reachable right away. Daftra-backed tabs (Invoices,
+// Quotations) show a "Fetch Daftra documents first" empty state until fetched —
+// see the daftraFetched check in renderList(). Fetching behavior itself is unchanged.
+renderList();
+
 function status(msg, type='loading') {
   $('statusArea').innerHTML = type === 'loading'
     ? `<div class="status-bar"><div class="spinner"></div><span>${msg}</span></div>`
@@ -418,6 +427,7 @@ async function fetchDocuments() {
     const ed = er.ok ? await er.json() : { data: [] };
     allEstimates = (ed.data || []).map(x => x.Estimate || x);
 
+    daftraFetched = true;
     status('', 'clear');
     renderList();
   } catch(e) {
@@ -445,10 +455,14 @@ function renderList() {
   const tabs = buildTabsHTML();
 
   if (!docs.length) {
+    const emptyTitle = daftraFetched ? 'None found' : 'Not fetched yet';
+    const emptySub   = daftraFetched
+      ? `No ${currentTab} were returned from Daftra.`
+      : 'Fetch Daftra documents first to use this feature.';
     $('mainArea').innerHTML = tabs + `<div class="empty-state">
       <div class="empty-icon"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-      <div class="empty-title">None found</div>
-      <div class="empty-sub">No ${currentTab} were returned from Daftra.</div>
+      <div class="empty-title">${emptyTitle}</div>
+      <div class="empty-sub">${emptySub}</div>
     </div>`;
     return;
   }
@@ -2668,80 +2682,345 @@ function showSarawatQuoteTab() {
     </div>`;
 }
 
-// Reconstructs approximate text lines from pdf.js's flat list of positioned text
-// items by clustering items into rows via their y-coordinate (rounded to a 2px
-// bucket to tolerate small baseline jitter) and ordering each row left-to-right by x.
-async function extractSarawatPdfText(file) {
+// Extracts BOTH a reconstructed plain-text version of the PDF (for header-field
+// detection: quotation/estimate no., date, customer — see parseSarawatHeaderFields())
+// AND the raw POSITIONED text runs per page, grouped into rows with x/y preserved (for
+// column-based item-table parsing — see parseSarawatItemsFromRows()). Rows are built by
+// clustering items via their y-coordinate (rounded to a 2px bucket to tolerate small
+// baseline jitter) and ordering each row left-to-right by x.
+async function extractSarawatPdfData(file) {
   if (typeof pdfjsLib === 'undefined') throw new Error('pdf.js library failed to load — check your connection and retry.');
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
 
   let fullText = '';
+  const pages = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const content = await page.getTextContent();
-    const rows = {};
+    const rowMap = {};
     content.items.forEach(item => {
       if (!item.str || !item.str.trim()) return;
       const yBucket = Math.round(item.transform[5] / 2) * 2; // PDF y grows upward
-      (rows[yBucket] = rows[yBucket] || []).push({ x: item.transform[4], str: item.str });
+      (rowMap[yBucket] = rowMap[yBucket] || []).push({ x: item.transform[4], str: item.str });
     });
-    Object.keys(rows).map(Number).sort((a, b) => b - a).forEach(y => {
-      const line = rows[y].sort((a, b) => a.x - b.x).map(t => t.str).join(' ').replace(/\s+/g, ' ').trim();
+    const rows = Object.keys(rowMap).map(Number).sort((a, b) => b - a).map(y => ({
+      y, tokens: rowMap[y].sort((a, b) => a.x - b.x),
+    }));
+    rows.forEach(row => {
+      const line = row.tokens.map(t => t.str).join(' ').replace(/\s+/g, ' ').trim();
       if (line) fullText += line + '\n';
     });
     fullText += '\n';
+    pages.push({ rows });
   }
-  return fullText.trim();
+  return { fullText: fullText.trim(), pages };
 }
 
-// Best-effort heuristic parser over the reconstructed text. PDF extraction cannot
-// guarantee correct table structure, so every field found here is shown as an
-// EDITABLE input — nothing is trusted blindly, and item rows can be added/removed
-// manually if none were detected.
-function parseSarawatQuoteText(text) {
+// Extracts quotation/estimate no., date, and customer from the reconstructed plain
+// text. These header fields sit above the item table and, unlike the table itself,
+// aren't affected by column-ordering — a plain left-to-right text scan is sufficient.
+function parseSarawatHeaderFields(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const dateRe = /\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{1,2}-\d{1,2})\b/;
+  // "est"/"est." covers Sarawat's own "EST.No 43761" field (an abbreviated "Estimate
+  // No."); the leading \b keeps it from matching inside unrelated words like "Guestroom".
+  const noRe = /\b(?:quotation|quote|estimate|est\b|ref(?:erence)?)\.?\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i;
+  // A standalone code-like line, e.g. "43761" or "SPQ-2026-0900" — used as a lookahead
+  // fallback below (see comment at its use site).
+  const bareCodeRe = /^[A-Za-z0-9][A-Za-z0-9\-\/]{1,20}$/;
+  const clientRe = /(?:customer|client|bill\s*to|attn\.?|prepared\s*for)\s*[:#]?\s*(.+)/i;
+  // Sarawat's own template labels the customer field just "To" (not "Bill To"/"Attn"),
+  // sharing a row with an unrelated right-column "Date" field — the trailing clause
+  // stops the capture before that field bleeds into the client name.
+  const toLabelRe = /^to\s+(.+?)(?:\s+(?:date|mobile|fax\.?|pages|email)\b.*)?$/i;
 
-  const dateRe    = /\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{1,2}-\d{1,2})\b/;
-  const noRe      = /(?:quotation|quote|estimate|ref(?:erence)?)\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i;
-  const clientRe  = /(?:customer|client|bill\s*to|attn\.?|prepared\s*for)\s*[:#]?\s*(.+)/i;
-  const skipWordsRe = /(sub-?total|total|vat|tax|grand|amount\s*due|balance|discount|page\s*\d)/i;
-  const row4Re    = /^(.+?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s*$/;   // desc qty price total
-  const row3Re    = /^(.+?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s*$/;                          // desc qty price
+  let quoteNo = '', quoteDate = '', client = '';
+  lines.forEach((line, i) => {
+    if (!quoteNo) {
+      const m = line.match(noRe);
+      if (m && /\d/.test(m[1])) {
+        quoteNo = m[1];
+      } else if (noRe.test(line)) {
+        // The label matched but nothing digit-bearing followed it on the SAME line —
+        // this happens when pdf.js's row reconstruction merges an unrelated word right
+        // after the label (e.g. Sarawat's own "ESTIMATE EST.No" heading, with the actual
+        // "43761" landing on its own separate reconstructed line right after). Use the
+        // next line if it reads as a standalone code.
+        const next = lines[i + 1];
+        if (next && bareCodeRe.test(next) && /\d/.test(next)) quoteNo = next;
+      }
+    }
+    if (!quoteDate) { const m = line.match(dateRe); if (m) quoteDate = m[0]; }
+    if (!client) {
+      const m = line.match(clientRe);
+      if (m && m[1].trim().length > 1 && !dateRe.test(m[1])) {
+        client = m[1].trim().replace(/[:#]+$/, '').trim();
+      } else {
+        const m2 = line.match(toLabelRe);
+        if (m2 && m2[1].trim().length > 1) client = m2[1].trim();
+      }
+    }
+  });
+  return { quoteNo, quoteDate, client };
+}
+
+// PRIMARY item-table parser — uses POSITIONED text (x/y from pdf.js), not reconstructed
+// plain-text lines. This is required because Sarawat's PDF export emits each row's text
+// runs in the order description, then quantity, then unit cost, then total cost — which
+// does NOT match their visual left-to-right column order. A plain-text-line reader ends
+// up reading those trailing amounts as if they were part of the description. Instead,
+// every token on every row is bucketed into a column (S.No / Description / Total
+// Quantity / Unit Cost / Total Cost) purely by its x-position, so a money amount can
+// never land in the description no matter what order the underlying text runs arrive in.
+//
+// One item = one "S.No" value (always digits_digits, e.g. "01_01", "20_01"). Every row
+// between one S.No and the next belongs entirely to that item; the specific row that
+// happens to carry the quantity/unit cost/total cost varies per item (sometimes the
+// first content row, sometimes the third), so rather than assuming a fixed sub-row,
+// every row within the item's vertical span is scanned and its tokens routed to
+// whichever column bucket its x-position falls into.
+function parseSarawatItemsFromRows(pages) {
+  const SNO_RE = /^\d{2}_\d{2}$/;
+  const SNO_MAX = 55;   // right edge of the S.No column — real S.No values sit well left of this
+  const COL_PAD = 12;   // safety margin so column data never grazes the boundary derived from the header
+  // Once hit, no more S.No values follow — VAT/subtotal/grand total/terms/signature block.
+  const STOP_RE = /\bvat\b|sub-?total|grand\s*total|terms\s+and\s+conditions|amount\s*due/i;
+
+  function isHeaderRow(tokens) {
+    const txt = tokens.map(t => t.str.toLowerCase()).join(' ');
+    let hits = 0;
+    if (/\bdescription\b/.test(txt)) hits++;
+    if (/\bquantity\b/.test(txt)) hits++;
+    if (/\bcost\b/.test(txt)) hits++;
+    return hits >= 2;
+  }
+
+  // Column boundaries are derived from THIS page's own header row — the first "Total"
+  // token precedes "Quantity" (Total Quantity column), "Unit" starts the Unit Cost
+  // column, and the second "Total" token precedes "Cost" (Total Cost column). Falls
+  // back to fixed defaults (matching Sarawat's standard template) only if a page has
+  // no detectable header row of its own (e.g. a continuation page without a repeat).
+  function columnBoundsFromHeader(tokens) {
+    const totals = tokens.filter(t => t.str.trim().toLowerCase() === 'total').sort((a, b) => a.x - b.x);
+    const unitTok = tokens.find(t => t.str.trim().toLowerCase() === 'unit');
+    if (totals.length >= 2 && unitTok) {
+      return { descEnd: totals[0].x - COL_PAD, qtyEnd: unitTok.x - COL_PAD, unitEnd: totals[1].x - COL_PAD };
+    }
+    return null;
+  }
+
+  let bounds = { descEnd: 360, qtyEnd: 458, unitEnd: 522 };
+  const items = [];
+  let current = null;
+  let stopped = false;
+  const pushCurrent = () => { if (current) items.push(current); current = null; };
+
+  pages.forEach(page => {
+    if (stopped) return;
+    page.rows.forEach(row => {
+      if (stopped) return;
+      const tokens = row.tokens;
+
+      if (isHeaderRow(tokens)) { const b = columnBoundsFromHeader(tokens); if (b) bounds = b; return; }
+      if (STOP_RE.test(tokens.map(t => t.str).join(' '))) { stopped = true; return; }
+
+      const snoTok = tokens.find(t => t.x < SNO_MAX && SNO_RE.test(t.str.trim()));
+      if (snoTok) { pushCurrent(); current = { sno: snoTok.str.trim(), descParts: [], qtyParts: [], totalParts: [] }; }
+      if (!current) return; // stray content before the first S.No (letterhead/customer block) — not item data
+
+      tokens.forEach(t => {
+        if (t === snoTok) return;
+        if (t.x < bounds.descEnd) current.descParts.push(t.str);
+        else if (t.x < bounds.qtyEnd) current.qtyParts.push(t.str);
+        else if (t.x < bounds.unitEnd) { /* Unit Cost column — discarded on purpose: unit price is always re-derived as total/qty, never taken from extraction, see recomputeSarawatTotals() */ }
+        else current.totalParts.push(t.str);
+      });
+    });
+  });
+  pushCurrent();
 
   const toNum = s => parseFloat(String(s).replace(/,/g, '')) || 0;
 
-  let quoteNo = '', quoteDate = '', client = '';
+  // Resolves the numeric quantity from the printed Total Quantity column text.
+  // Supports: "5,000 Copies" / "5000 pcs" / "2 Copies" (plain leading number),
+  // "500X22 Kinds" (multiply — no explicit total given on the line), and
+  // "500 x 2 = 1000" / "2000X5 = 10,000" (an explicit "=" result always wins).
+  function parseQuantityValue(display) {
+    if (!display) return { qty: 0, review: true };
+    const eq = display.match(/=\s*([\d,]+(?:\.\d+)?)\s*$/);
+    if (eq) return { qty: toNum(eq[1]), review: false };
+    const mul = display.match(/^([\d,]+(?:\.\d+)?)\s*[xX]\s*([\d,]+(?:\.\d+)?)\b/);
+    if (mul) return { qty: toNum(mul[1]) * toNum(mul[2]), review: false };
+    const plain = display.match(/^([\d,]+(?:\.\d+)?)/);
+    if (plain) return { qty: toNum(plain[1]), review: false };
+    return { qty: 0, review: true }; // couldn't resolve a number — flagged so the user knows to fill it in manually
+  }
+
+  return items.map(it => {
+    const desc = it.descParts.join(' ').replace(/\s+/g, ' ').trim();
+    const qtyDisplay = it.qtyParts.join(' ').replace(/\s+/g, ' ').trim();
+    const { qty, review } = parseQuantityValue(qtyDisplay);
+    return { sno: it.sno, desc, qty, qtyDisplay, qtyReview: review, total: toNum(it.totalParts.join(' ').replace(/\s+/g, ' ').trim()) };
+  });
+}
+
+// FALLBACK item-table parser — used only when the primary S.No-column parser above
+// finds no items at all (e.g. a quotation that doesn't use Sarawat's own "S.No" table
+// template). Operates on reconstructed plain-text lines rather than positioned data.
+//
+// Sarawat quotations frequently write the quantity INSIDE the description text
+// rather than as its own table column, e.g. "Business Cards - 5,000 copies  450.00".
+// A naive "last N numbers on the line are qty/price/total" reader misreads that as
+// a 2-column row and swaps unit price and quantity. To avoid this, quantity is
+// resolved in two passes: (1) look for an explicit "<number> copies/copy/pcs/pieces"
+// phrase anywhere in the line and trust that number as quantity, stripping the
+// phrase out before reading any trailing price/total numbers so it can never be
+// re-read as a price or total; (2) only if no such phrase exists, fall back to the
+// column-based heuristics below. Unit price itself is still never taken from
+// extraction — recomputeSarawatTotals() always derives it as total / quantity.
+//
+// Item descriptions frequently span several lines (product name, then size/material/
+// finishing/color/delivery notes on their own lines, with the quantity+total only
+// appearing on the LAST line of the block). Lines are accumulated into `pendingDesc`
+// as they're read; a line only "closes" the pending item (and is combined with every
+// accumulated line into one full description) once it clearly reads as a quantity/
+// total row. Non-item lines that would otherwise pollute that accumulated text —
+// quotation-no/customer header lines and table column headers — explicitly flush
+// pendingDesc first. When in doubt, a line is kept as part of the description rather
+// than silently dropped, per the "prefer extra detail over lost detail" rule.
+function parseSarawatItemsFallback(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const dateRe    = /\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{1,2}-\d{1,2})\b/;
+  const noRe      = /\b(?:quotation|quote|estimate|est\b|ref(?:erence)?)\.?\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i;
+  const clientRe  = /(?:customer|client|bill\s*to|attn\.?|prepared\s*for)\s*[:#]?\s*(.+)/i;
+  const dateLabelRe  = /^\s*(date|quotation\s*date|invoice\s*date|issued?\s*(?:on|date))\s*[:#]/i;
+  const skipWordsRe = /(sub-?total|total|vat|tax|grand|amount\s*due|balance|discount|page\s*\d)/i;
+
+  // Explicit quantity phrase embedded in the description, e.g. "5,000 copies",
+  // "5000 copy", "5,000 pcs", "5000 pieces" — matched anywhere in the line, since
+  // it's part of the description text, not a separate table column.
+  const qtyPhraseRe = /([\d][\d,]*)\s*(?:copies|copy|pcs\.?|pieces?)\b/i;
+
+  const row4Re = /^(.+?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s*$/;   // desc qty price total (3 separate trailing columns)
+  const row3Re = /^(.+?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s*$/;                          // desc num1 num2 (2 trailing numbers)
+  const row2Re = /^(.+?)\s+([\d,]+(?:\.\d+)?)\s*$/;                                               // desc num1 (single trailing number = total)
+  const numOnlyRe = /^[\d,]+(?:\.\d+)?$/;                                                         // the whole (remaining) string is just a number
+  const bareQtyTotalRe = /^([\d,]+)\s+([\d,]+(?:\.\d+)?)\s*$/;                                    // a closing row that is ONLY "qty total", no desc text
+
+  const toNum = s => parseFloat(String(s).replace(/,/g, '')) || 0;
+  const isWholeNumber = n => Number.isFinite(n) && Math.abs(n - Math.round(n)) < 1e-9;
+
+  // A table column-header row, e.g. "Description   Qty   Unit Price   Total" — needs
+  // at least 2 of the 3 keyword groups to avoid mistaking a real description for one.
+  function isTableHeaderLine(line) {
+    const l = line.toLowerCase();
+    let hits = 0;
+    if (/\bdescription\b|\bitem\b|\bparticulars\b/.test(l)) hits++;
+    if (/\bqty\b|\bquantity\b/.test(l)) hits++;
+    if (/\bunit\s*price\b|\bprice\b|\bamount\b/.test(l)) hits++;
+    return hits >= 2;
+  }
+
+  // Letterhead contact-info lines (phone/fax numbers, VAT/CR registration numbers,
+  // addresses) often contain several separate digit groups, e.g. "Tel: +966 11 234
+  // 5678" — which otherwise misreads as a perfectly-shaped qty/price/total item row.
+  // No real print-shop item description starts with these labels, so they're safe to
+  // filter out entirely rather than risk them being read as a phantom item.
+  const contactInfoRe = /^(tel\.?|fax\.?|phone|mobile|email|e-?mail|website|www\.|address|p\.?o\.?\s*box|vat\s*(no\.?|number|#)|c\.?r\.?\s*(no\.?|number|#))\s*[:#]?\s*\S/i;
+
   const items = [];
+  let pendingDesc = []; // description lines accumulated for the item currently being read
+
+  // Combines every accumulated description line plus optional trailing text found on
+  // the line that closed the item (e.g. text left over after stripping a qty phrase).
+  const joinDesc = (extra) => {
+    const parts = pendingDesc.slice();
+    if (extra) parts.push(extra);
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  };
 
   lines.forEach(line => {
-    if (!quoteNo) {
-      const m = line.match(noRe);
-      if (m) quoteNo = m[1];
-    }
-    if (!quoteDate) {
-      const m = line.match(dateRe);
-      if (m) quoteDate = m[0];
-    }
-    if (!client) {
-      const m = line.match(clientRe);
-      if (m && m[1].trim().length > 1 && !dateRe.test(m[1])) client = m[1].trim().replace(/[:#]+$/, '').trim();
-    }
-    if (skipWordsRe.test(line)) return; // header/summary lines are never item rows
+    // Labeled header fields (quotation no./customer — both regexes require an explicit
+    // keyword, so they can't accidentally fire on real item text) mark the end of any
+    // preamble/letterhead text collected so far — flush it, don't keep it as description.
+    const isHeaderLine = noRe.test(line) || clientRe.test(line);
+    if (isHeaderLine || dateLabelRe.test(line)) { pendingDesc = []; return; }
+    if (isTableHeaderLine(line)) { pendingDesc = []; return; }
+    if (contactInfoRe.test(line)) { pendingDesc = []; return; }
+    if (skipWordsRe.test(line)) { pendingDesc = []; return; } // totals/VAT section — no more items follow
 
+    // Pass 1 — explicit quantity phrase in the description takes priority over any
+    // column-based reading, so the same number is never also treated as a price.
+    // This line closes the pending item, combining every accumulated description
+    // line into one full multi-line description.
+    const qtyMatch = line.match(qtyPhraseRe);
+    if (qtyMatch) {
+      const qty = toNum(qtyMatch[1]);
+      if (qty > 0) {
+        const remainder = (line.slice(0, qtyMatch.index) + line.slice(qtyMatch.index + qtyMatch[0].length))
+          .replace(/\s+/g, ' ').trim();
+        let total = 0, extraDesc = '';
+        const mTotal2 = remainder.match(row3Re);        // leftover desc + [unit price, total]
+        if (mTotal2) { extraDesc = mTotal2[1].trim(); total = toNum(mTotal2[3]); }
+        else {
+          const mTotal1 = remainder.match(row2Re);       // leftover desc + [total] only
+          if (mTotal1) { extraDesc = mTotal1[1].trim(); total = toNum(mTotal1[2]); }
+          else if (numOnlyRe.test(remainder)) { total = toNum(remainder); }   // nothing left but the total itself
+          else if (remainder) { extraDesc = remainder; }  // leftover text with no clean numeric split — keep it, don't lose it
+        }
+        items.push({ desc: joinDesc(extraDesc) || line, qty, total });
+        pendingDesc = [];
+        return;
+      }
+    }
+
+    // Pass 2 — no explicit quantity phrase. Try a clean 3-column layout first
+    // (separate qty / price / total columns).
     const m4 = line.match(row4Re);
     if (m4) {
       const qty = toNum(m4[2]);
-      if (qty > 0) { items.push({ desc: m4[1].trim(), qty, total: toNum(m4[4]) }); return; }
+      if (qty > 0) { items.push({ desc: joinDesc(m4[1].trim()), qty, total: toNum(m4[4]) }); pendingDesc = []; return; }
     }
+
+    // Only 2 trailing numbers and no "copies/pcs" word: do not blindly assume the
+    // first one is quantity and the second is a unit price to multiply. Only trust
+    // it as [quantity, total] when the first number looks like a genuine count
+    // (a whole number, e.g. 500 / 1000 / 5000 / 10000) — the final number is always
+    // treated as the line total, never as a price to be multiplied.
     const m3 = line.match(row3Re);
     if (m3) {
-      const qty = toNum(m3[2]), price = toNum(m3[3]);
-      if (qty > 0 && price > 0) items.push({ desc: m3[1].trim(), qty, total: qty * price });
+      const num1 = toNum(m3[2]), num2 = toNum(m3[3]);
+      if (num1 > 0 && isWholeNumber(num1) && num2 > 0) {
+        items.push({ desc: joinDesc(m3[1].trim()), qty: num1, total: num2 });
+        pendingDesc = [];
+        return;
+      }
+      // else: ambiguous (e.g. a decimal like 0.09) — fall through and keep the line
+      // as part of the description rather than silently dropping it.
     }
+
+    // Multi-line item whose closing row is JUST "qty total" with no description text
+    // of its own on that line (the description was already fully accumulated above),
+    // e.g. "3   396.00". row3Re/row4Re require a leading desc portion on the same
+    // line, so they can't match this — a dedicated bare two-number check is needed.
+    const mBare = line.match(bareQtyTotalRe);
+    if (mBare) {
+      const qty = toNum(mBare[1]);
+      if (qty > 0 && isWholeNumber(qty)) {
+        items.push({ desc: joinDesc(), qty, total: toNum(mBare[2]) });
+        pendingDesc = [];
+        return;
+      }
+    }
+
+    // Not a recognizable item-closing row — treat as a continuation of the current
+    // item's (possibly multi-line) description, per "keep more text rather than less".
+    pendingDesc.push(line);
   });
 
-  return { quoteNo, quoteDate, client, items };
+  return items;
 }
 
 async function handleSarawatPdfUpload(input) {
@@ -2751,17 +3030,28 @@ async function handleSarawatPdfUpload(input) {
   if (statusEl) statusEl.textContent = 'Reading PDF…';
 
   try {
-    const rawText = await extractSarawatPdfText(file);
-    const parsed  = parseSarawatQuoteText(rawText);
+    const { fullText, pages } = await extractSarawatPdfData(file);
+    const header = parseSarawatHeaderFields(fullText);
+    // Try the positional S.No-column table parser first — it's what Sarawat's own
+    // export template actually is. Only fall back to the plain-text heuristic parser
+    // if no S.No-based items were found at all (e.g. a differently-formatted quote).
+    let items = parseSarawatItemsFromRows(pages);
+    let usedFallback = false;
+    if (!items.length) {
+      items = parseSarawatItemsFallback(fullText).map(it => ({ sno: '', qtyDisplay: '', qtyReview: false, ...it }));
+      usedFallback = true;
+    }
     sarawatState = {
       fileName: file.name,
-      quoteNo: parsed.quoteNo, quoteDate: parsed.quoteDate, client: parsed.client,
+      quoteNo: header.quoteNo, quoteDate: header.quoteDate, client: header.client,
       vatRate: 15,
-      items: parsed.items,
-      rawText,
+      items,
+      rawText: fullText,
     };
-    if (statusEl) statusEl.textContent = parsed.items.length
-      ? `Extracted ${parsed.items.length} item row(s) — review and correct below before exporting.`
+    const reviewCount = items.filter(it => it.qtyReview).length;
+    if (statusEl) statusEl.textContent = items.length
+      ? `Extracted ${items.length} item row(s)${usedFallback ? ' (fallback text parser — no S.No table detected)' : ' from the S.No table'}` +
+        (reviewCount ? `, ${reviewCount} need quantity review` : '') + ' — review and correct below before exporting.'
       : 'No item rows detected automatically — add them manually below (raw text is available for reference).';
   } catch (err) {
     console.error('[Sarawat] PDF extraction failed:', err);
@@ -2773,6 +3063,18 @@ async function handleSarawatPdfUpload(input) {
       rawText: '(extraction failed: ' + (err.message || 'unknown error') + ')',
     };
   }
+  // Snapshot the just-extracted data (deep copy) so "Reset to Original Uploaded Data"
+  // can restore it later regardless of any manual edits or % adjustments made after this.
+  sarawatState.original = {
+    quoteNo: sarawatState.quoteNo,
+    quoteDate: sarawatState.quoteDate,
+    client: sarawatState.client,
+    vatRate: sarawatState.vatRate,
+    items: sarawatState.items.map(it => ({
+      sno: it.sno || '', desc: it.desc, qty: it.qty,
+      qtyDisplay: it.qtyDisplay || '', qtyReview: !!it.qtyReview, total: it.total,
+    })),
+  };
   recomputeSarawatTotals();
   renderSarawatForm();
 }
@@ -2804,15 +3106,82 @@ function updateSarawatItem(idx, field, val) {
   if (!sarawatState || !sarawatState.items[idx]) return;
   const it = sarawatState.items[idx];
   if (field === 'desc') it.desc = val;
-  else if (field === 'qty')   it.qty   = parseFloat(val) || 0;
+  else if (field === 'qty')   { it.qty = parseFloat(val) || 0; it.qtyReview = false; } // manual entry supersedes the "needs review" flag
   else if (field === 'total') it.total = parseFloat(val) || 0;
+  else if (field === 'applyAdjust') it.applyAdjust = !!val;
   recomputeSarawatTotals();
   renderSarawatForm();
 }
 
 function addSarawatItem() {
   if (!sarawatState) return;
-  sarawatState.items.push({ desc: '', qty: 1, total: 0, unitPrice: 0 });
+  sarawatState.items.push({ sno: '', desc: '', qty: 1, qtyDisplay: '', qtyReview: false, total: 0, unitPrice: 0, applyAdjust: true, itemAdjustPct: '' });
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+// Bulk % price adjustment — applies to the pre-VAT item total only (never to VAT or
+// the VAT-inclusive total). VAT and grand total are always re-derived afterwards by
+// recomputeSarawatTotals(), so this can never desynchronize unit price / VAT / totals.
+// sign: +1 = increase, -1 = decrease. Only items with applyAdjust !== false are affected
+// (checkbox per row, defaults to checked — i.e. "apply to all items" out of the box).
+function adjustSarawatPrices(sign) {
+  if (!sarawatState) return;
+  const pct = parseFloat(sarawatState.adjustPct) || 0;
+  if (pct <= 0) { alert('Enter a percentage greater than 0 to adjust prices.'); return; }
+  const factor = Math.max(0, 1 + sign * (pct / 100));   // clamped so a >100% decrease can't go negative
+  let affected = 0;
+  sarawatState.items.forEach(it => {
+    if (it.applyAdjust !== false) { it.total = it.total * factor; affected++; }
+  });
+  if (affected === 0) { alert('No items are checked to adjust — check at least one item first.'); return; }
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+function setSarawatApplyAll(val) {
+  if (!sarawatState) return;
+  sarawatState.items.forEach(it => { it.applyAdjust = val; });
+  renderSarawatForm();
+}
+
+// Per-item % price adjustment — same formula/rules as the global adjuster, but
+// applied only to this one row's pre-VAT total, regardless of its "apply to global
+// adjustment" checkbox (that checkbox is only consulted by adjustSarawatPrices()).
+// Quantity is never touched; unit price is re-derived afterwards as total / quantity.
+function adjustSarawatItemPrice(idx, sign) {
+  if (!sarawatState || !sarawatState.items[idx]) return;
+  const it = sarawatState.items[idx];
+  const pct = parseFloat(it.itemAdjustPct) || 0;
+  if (pct <= 0) { alert('Enter a percentage greater than 0 to adjust this item.'); return; }
+  const factor = Math.max(0, 1 + sign * (pct / 100));   // clamped so a >=100% decrease can't go negative
+  it.total = it.total * factor;
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+// Restores quote number/date/client/VAT rate and every item's description/qty/total
+// to exactly what was extracted right after upload — discarding all manual edits and
+// every global/per-item % adjustment made since. Filename and raw extracted text are
+// left untouched (per spec: this resets the DATA, not the whole form/upload).
+function resetSarawatToOriginal() {
+  if (!sarawatState || !sarawatState.original) return;
+  const ok = confirm('Reset quotation number, date, client, VAT rate, and all item rows back to the ' +
+    'originally extracted data from the uploaded PDF?\n\nAll manual edits and % price adjustments made ' +
+    'since upload will be discarded. This cannot be undone.');
+  if (!ok) return;
+
+  const orig = sarawatState.original;
+  sarawatState.quoteNo   = orig.quoteNo;
+  sarawatState.quoteDate = orig.quoteDate;
+  sarawatState.client    = orig.client;
+  sarawatState.vatRate   = orig.vatRate;
+  sarawatState.items     = orig.items.map(it => ({
+    sno: it.sno || '', desc: it.desc, qty: it.qty, qtyDisplay: it.qtyDisplay || '', qtyReview: !!it.qtyReview,
+    total: it.total, unitPrice: 0, applyAdjust: true, itemAdjustPct: '',
+  }));
+  sarawatState.adjustPct = '';   // clear the global % field too — no adjustment carries over
+
   recomputeSarawatTotals();
   renderSarawatForm();
 }
@@ -2835,15 +3204,34 @@ function renderSarawatForm() {
 
   const itemRows = s.items.map((it, i) => `
     <tr>
+      <td style="text-align:center;font-size:7.5px;color:var(--light);white-space:nowrap;" title="S.No from the source PDF">${escapeHtml(it.sno || '—')}</td>
+      <td style="text-align:center;"><input type="checkbox" ${it.applyAdjust !== false ? 'checked' : ''}
+        onchange="updateSarawatItem(${i},'applyAdjust',this.checked)" title="Include in global % price adjustment"></td>
       <td><input class="form-input" style="font-size:9px;padding:5px 7px;" value="${escapeHtml(it.desc)}"
         placeholder="Item description" oninput="updateSarawatItem(${i},'desc',this.value)"></td>
-      <td><input class="dn-qty" type="number" min="0" step="any" value="${it.qty}"
-        oninput="updateSarawatItem(${i},'qty',this.value)"></td>
+      <td>
+        <input class="dn-qty" type="number" min="0" step="any" value="${it.qty}"
+          oninput="updateSarawatItem(${i},'qty',this.value)">
+        ${it.qtyReview
+          ? `<div style="font-size:6.5px;color:#B8860B;margin-top:2px;white-space:nowrap;">⚠ verify${it.qtyDisplay ? ' — as printed: ' + escapeHtml(it.qtyDisplay) : ''}</div>`
+          : (it.qtyDisplay ? `<div style="font-size:6.5px;color:var(--light);margin-top:2px;white-space:nowrap;">as printed: ${escapeHtml(it.qtyDisplay)}</div>` : '')}
+      </td>
       <td style="text-align:right;font-size:9px;color:var(--mid);padding:0 8px;">${it.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
       <td><input class="dn-qty" type="number" min="0" step="any" value="${it.total.toFixed(2)}"
         oninput="updateSarawatItem(${i},'total',this.value)"></td>
+      <td>
+        <div style="display:flex;gap:3px;align-items:center;white-space:nowrap;">
+          <input type="number" class="dn-qty" style="width:42px;padding:4px 5px;" min="0" step="0.01" placeholder="%"
+            value="${escapeHtml(it.itemAdjustPct || '')}" title="Per-item adjustment %"
+            oninput="sarawatState.items[${i}].itemAdjustPct=this.value">
+          <button class="btn-sm btn-sm-outline" style="padding:3px 6px;font-size:6.5px;" title="Increase this item's price"
+            onclick="adjustSarawatItemPrice(${i},1)">+%</button>
+          <button class="btn-sm btn-sm-outline" style="padding:3px 6px;font-size:6.5px;" title="Decrease this item's price"
+            onclick="adjustSarawatItemPrice(${i},-1)">-%</button>
+        </div>
+      </td>
       <td><button class="btn-sm btn-sm-outline" style="padding:4px 9px;" onclick="removeSarawatItem(${i})">✕</button></td>
-    </tr>`).join('') || `<tr><td colspan="5" style="padding:14px 0;font-size:8.5px;color:var(--light);">No items extracted — add rows manually.</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="8" style="padding:14px 0;font-size:8.5px;color:var(--light);">No items extracted — add rows manually.</td></tr>`;
 
   $('mainArea').innerHTML = buildTabsHTML() + `
     <div class="purch-upload-panel">
@@ -2859,7 +3247,10 @@ function renderSarawatForm() {
     </div>
 
     <div class="sarawat-form-panel">
-      <div class="sec-title" style="margin-bottom:12px;">Extracted Quotation Details — Review &amp; Correct Before Export</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+        <div class="sec-title" style="margin-bottom:0;">Extracted Quotation Details — Review &amp; Correct Before Export</div>
+        <button class="btn-sm btn-sm-outline" onclick="resetSarawatToOriginal()">Reset to Original Uploaded Data</button>
+      </div>
       <div class="dn-form-row">
         <div class="form-group">
           <div class="form-label">Quotation No.</div>
@@ -2885,8 +3276,24 @@ function renderSarawatForm() {
 
       <div style="margin-top:14px;">
         <div class="sec-title" style="margin-bottom:6px;">Items — Edit Total to Recalculate Unit Price, VAT &amp; Grand Total</div>
+
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:var(--cream);border:1px solid var(--rule);">
+          <div class="form-group" style="max-width:100px;">
+            <div class="form-label">Adjust By %</div>
+            <input class="form-input" type="number" id="sarawatAdjustPct" min="0" step="0.01" placeholder="e.g. 10"
+              value="${escapeHtml(s.adjustPct || '')}" oninput="sarawatState.adjustPct=this.value">
+          </div>
+          <button class="btn-sm btn-sm-dark" onclick="adjustSarawatPrices(1)">Increase Prices by %</button>
+          <button class="btn-sm btn-sm-outline" onclick="adjustSarawatPrices(-1)">Decrease Prices by %</button>
+          <span style="font-size:7.5px;color:var(--light);margin-left:auto;align-self:center;">
+            Applies to checked items' pre-VAT total only &nbsp;·&nbsp;
+            <span style="cursor:pointer;text-decoration:underline;" onclick="setSarawatApplyAll(true)">Select All</span> /
+            <span style="cursor:pointer;text-decoration:underline;" onclick="setSarawatApplyAll(false)">None</span>
+          </span>
+        </div>
+
         <table class="dn-items-table">
-          <thead><tr><th>Description</th><th>Qty</th><th>Unit Price (auto)</th><th>Total (ex-VAT)</th><th></th></tr></thead>
+          <thead><tr><th style="width:34px;">S.No</th><th style="width:24px;"></th><th>Description</th><th>Qty</th><th>Unit Price (auto)</th><th>Total (ex-VAT)</th><th>Per-Item %</th><th></th></tr></thead>
           <tbody>${itemRows}</tbody>
         </table>
         <button class="btn-sm btn-sm-outline" style="margin-top:8px;" onclick="addSarawatItem()">+ Add Item</button>
