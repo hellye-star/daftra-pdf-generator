@@ -256,7 +256,7 @@
     .main { display: block !important; min-height: 0 !important; }
     .content { padding: 0 !important; overflow: visible !important; }
     .tab-row, #statusArea, .empty-state, .doc-list,
-    .dn-form-panel, .rv-form-panel, .purch-upload-panel, .purch-search-row { display: none !important; }
+    .dn-form-panel, .rv-form-panel, .purch-upload-panel, .purch-search-row, .sarawat-form-panel { display: none !important; }
     .preview-wrap { border: none !important; box-shadow: none !important; }
     .pdf-bg { background: white !important; padding: 0 !important; display: block !important; }
     #pdfPage { box-shadow: none !important; margin: 0 !important; }
@@ -347,6 +347,9 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- pdf.js — client-side PDF text extraction for Sarawat Quote Import (no backend/proxy involved) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (typeof pdfjsLib !== 'undefined') { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }</script>
 <script>
 let allInvoices = [], allEstimates = [];
 let currentTab = 'invoices';
@@ -356,6 +359,11 @@ let rvState = null;
 let purchasingFiles = [];    // cache from /purchasing-invoices/list
 let purchasingSearch = '';   // active search string in purchasing tab
 let purchasingSelected = new Set(); // selected file relativePaths
+
+// ── Sarawat Quote Import — state ─────────────────────────────────────────────
+// { fileName, quoteNo, quoteDate, client, vatRate, items:[{desc,qty,total,unitPrice}],
+//   rawText, subtotal, vatAmount, grandTotal }
+let sarawatState = null;
 
 // Logo embedded as base64 so html2canvas renders it without CORS/local-path issues.
 // Regenerate with: base64 -w 0 logo.png  (then prefix with data:image/png;base64,)
@@ -426,6 +434,7 @@ function buildTabsHTML() {
     <button class="tab ${currentTab==='delivery_note'?'active':''}" onclick="switchTab('delivery_note')">Delivery Note</button>
     <button class="tab ${currentTab==='receipt_voucher'?'active':''}" onclick="switchTab('receipt_voucher')">Receipt Voucher</button>
     <button class="tab ${currentTab==='purchasing_invoices'?'active':''}" onclick="switchTab('purchasing_invoices')">Purchasing Invoices</button>
+    <button class="tab ${currentTab==='sarawat_quote'?'active':''}" onclick="switchTab('sarawat_quote')">Sarawat Quote Import</button>
   </div>`;
 }
 
@@ -488,6 +497,7 @@ function switchTab(tab) {
   if (tab === 'delivery_note')       { showDNTab();               return; }
   if (tab === 'receipt_voucher')     { showReceiptVoucherTab();   return; }
   if (tab === 'purchasing_invoices') { showPurchasingTab();       return; }
+  if (tab === 'sarawat_quote')       { showSarawatQuoteTab();     return; }
   renderList();
 }
 
@@ -2624,6 +2634,424 @@ async function uploadPurchasingFiles() {
     if (si) si.value = '';
     await fetchPurchasingList();  // refresh list (cache-busted)
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Sarawat Quote Import
+// Upload a Sarawat Professional Printing EST quotation PDF, extract its data
+// client-side (pdf.js — no proxy/backend involved), let the user correct the
+// extraction in an editable table, then export either a cleaner Sarawat-branded
+// PDF or a Vista United quotation reusing the existing buildInvoicePDFPageHTML /
+// renderPreview / downloadPDF pipeline unmodified.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function showSarawatQuoteTab() {
+  currentTab = 'sarawat_quote';
+  if (sarawatState) { renderSarawatForm(); return; }
+
+  $('mainArea').innerHTML = buildTabsHTML() + `
+    <div class="purch-upload-panel">
+      <div class="sec-title" style="margin-bottom:10px;">Upload Sarawat Quotation PDF</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="flex:1;min-width:220px;">
+          <div class="form-label">Sarawat Quotation PDF</div>
+          <input class="purch-upload-input" type="file" id="sarawatPdfInput" accept="application/pdf,.pdf"
+            onchange="handleSarawatPdfUpload(this)">
+        </div>
+      </div>
+      <div id="sarawatUploadStatus" style="margin-top:8px;font-size:8px;color:var(--mid);"></div>
+    </div>
+    <div class="empty-state">
+      <div class="empty-icon"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <div class="empty-title">No quotation loaded yet</div>
+      <div class="empty-sub">Upload a Sarawat Professional Printing EST quotation PDF above to extract its data.<br>Extraction is best-effort — you will be able to review and correct every field before exporting.</div>
+    </div>`;
+}
+
+// Reconstructs approximate text lines from pdf.js's flat list of positioned text
+// items by clustering items into rows via their y-coordinate (rounded to a 2px
+// bucket to tolerate small baseline jitter) and ordering each row left-to-right by x.
+async function extractSarawatPdfText(file) {
+  if (typeof pdfjsLib === 'undefined') throw new Error('pdf.js library failed to load — check your connection and retry.');
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+
+  let fullText = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const rows = {};
+    content.items.forEach(item => {
+      if (!item.str || !item.str.trim()) return;
+      const yBucket = Math.round(item.transform[5] / 2) * 2; // PDF y grows upward
+      (rows[yBucket] = rows[yBucket] || []).push({ x: item.transform[4], str: item.str });
+    });
+    Object.keys(rows).map(Number).sort((a, b) => b - a).forEach(y => {
+      const line = rows[y].sort((a, b) => a.x - b.x).map(t => t.str).join(' ').replace(/\s+/g, ' ').trim();
+      if (line) fullText += line + '\n';
+    });
+    fullText += '\n';
+  }
+  return fullText.trim();
+}
+
+// Best-effort heuristic parser over the reconstructed text. PDF extraction cannot
+// guarantee correct table structure, so every field found here is shown as an
+// EDITABLE input — nothing is trusted blindly, and item rows can be added/removed
+// manually if none were detected.
+function parseSarawatQuoteText(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const dateRe    = /\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}-\d{1,2}-\d{1,2})\b/;
+  const noRe      = /(?:quotation|quote|estimate|ref(?:erence)?)\s*(?:no\.?|number|#)?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{1,20})/i;
+  const clientRe  = /(?:customer|client|bill\s*to|attn\.?|prepared\s*for)\s*[:#]?\s*(.+)/i;
+  const skipWordsRe = /(sub-?total|total|vat|tax|grand|amount\s*due|balance|discount|page\s*\d)/i;
+  const row4Re    = /^(.+?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s*$/;   // desc qty price total
+  const row3Re    = /^(.+?)\s+([\d,]+(?:\.\d+)?)\s+([\d,]+(?:\.\d+)?)\s*$/;                          // desc qty price
+
+  const toNum = s => parseFloat(String(s).replace(/,/g, '')) || 0;
+
+  let quoteNo = '', quoteDate = '', client = '';
+  const items = [];
+
+  lines.forEach(line => {
+    if (!quoteNo) {
+      const m = line.match(noRe);
+      if (m) quoteNo = m[1];
+    }
+    if (!quoteDate) {
+      const m = line.match(dateRe);
+      if (m) quoteDate = m[0];
+    }
+    if (!client) {
+      const m = line.match(clientRe);
+      if (m && m[1].trim().length > 1 && !dateRe.test(m[1])) client = m[1].trim().replace(/[:#]+$/, '').trim();
+    }
+    if (skipWordsRe.test(line)) return; // header/summary lines are never item rows
+
+    const m4 = line.match(row4Re);
+    if (m4) {
+      const qty = toNum(m4[2]);
+      if (qty > 0) { items.push({ desc: m4[1].trim(), qty, total: toNum(m4[4]) }); return; }
+    }
+    const m3 = line.match(row3Re);
+    if (m3) {
+      const qty = toNum(m3[2]), price = toNum(m3[3]);
+      if (qty > 0 && price > 0) items.push({ desc: m3[1].trim(), qty, total: qty * price });
+    }
+  });
+
+  return { quoteNo, quoteDate, client, items };
+}
+
+async function handleSarawatPdfUpload(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const statusEl = $('sarawatUploadStatus');
+  if (statusEl) statusEl.textContent = 'Reading PDF…';
+
+  try {
+    const rawText = await extractSarawatPdfText(file);
+    const parsed  = parseSarawatQuoteText(rawText);
+    sarawatState = {
+      fileName: file.name,
+      quoteNo: parsed.quoteNo, quoteDate: parsed.quoteDate, client: parsed.client,
+      vatRate: 15,
+      items: parsed.items,
+      rawText,
+    };
+    if (statusEl) statusEl.textContent = parsed.items.length
+      ? `Extracted ${parsed.items.length} item row(s) — review and correct below before exporting.`
+      : 'No item rows detected automatically — add them manually below (raw text is available for reference).';
+  } catch (err) {
+    console.error('[Sarawat] PDF extraction failed:', err);
+    sarawatState = {
+      fileName: file.name,
+      quoteNo: '', quoteDate: '', client: '',
+      vatRate: 15,
+      items: [],
+      rawText: '(extraction failed: ' + (err.message || 'unknown error') + ')',
+    };
+  }
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+// unit price is always DERIVED from total/qty — never edited directly — so the
+// three figures (unit price, subtotal, VAT, grand total) can never drift apart.
+function recomputeSarawatTotals() {
+  if (!sarawatState) return;
+  const rate = (parseFloat(sarawatState.vatRate) || 0) / 100;
+  sarawatState.items.forEach(it => {
+    it.qty   = parseFloat(it.qty)   || 0;
+    it.total = parseFloat(it.total) || 0;
+    it.unitPrice = it.qty > 0 ? it.total / it.qty : 0;
+  });
+  const subtotal = sarawatState.items.reduce((s, it) => s + it.total, 0);
+  sarawatState.subtotal   = subtotal;
+  sarawatState.vatAmount  = subtotal * rate;
+  sarawatState.grandTotal = subtotal + sarawatState.vatAmount;
+}
+
+function updateSarawatField(field, val) {
+  if (!sarawatState) return;
+  sarawatState[field] = val;
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+function updateSarawatItem(idx, field, val) {
+  if (!sarawatState || !sarawatState.items[idx]) return;
+  const it = sarawatState.items[idx];
+  if (field === 'desc') it.desc = val;
+  else if (field === 'qty')   it.qty   = parseFloat(val) || 0;
+  else if (field === 'total') it.total = parseFloat(val) || 0;
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+function addSarawatItem() {
+  if (!sarawatState) return;
+  sarawatState.items.push({ desc: '', qty: 1, total: 0, unitPrice: 0 });
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+function removeSarawatItem(idx) {
+  if (!sarawatState) return;
+  sarawatState.items.splice(idx, 1);
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+function toggleSarawatRawText() {
+  const box = $('sarawatRawTextBox');
+  if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function renderSarawatForm() {
+  if (!sarawatState) { showSarawatQuoteTab(); return; }
+  const s = sarawatState;
+
+  const itemRows = s.items.map((it, i) => `
+    <tr>
+      <td><input class="form-input" style="font-size:9px;padding:5px 7px;" value="${escapeHtml(it.desc)}"
+        placeholder="Item description" oninput="updateSarawatItem(${i},'desc',this.value)"></td>
+      <td><input class="dn-qty" type="number" min="0" step="any" value="${it.qty}"
+        oninput="updateSarawatItem(${i},'qty',this.value)"></td>
+      <td style="text-align:right;font-size:9px;color:var(--mid);padding:0 8px;">${it.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
+      <td><input class="dn-qty" type="number" min="0" step="any" value="${it.total.toFixed(2)}"
+        oninput="updateSarawatItem(${i},'total',this.value)"></td>
+      <td><button class="btn-sm btn-sm-outline" style="padding:4px 9px;" onclick="removeSarawatItem(${i})">✕</button></td>
+    </tr>`).join('') || `<tr><td colspan="5" style="padding:14px 0;font-size:8.5px;color:var(--light);">No items extracted — add rows manually.</td></tr>`;
+
+  $('mainArea').innerHTML = buildTabsHTML() + `
+    <div class="purch-upload-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="sec-title" style="margin-bottom:0;">Sarawat Quotation PDF — ${escapeHtml(s.fileName)}</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span style="font-size:7.5px;color:var(--light);">Replace file:</span>
+          <input class="purch-upload-input" style="width:auto;" type="file" id="sarawatPdfInput" accept="application/pdf,.pdf"
+            onchange="handleSarawatPdfUpload(this)">
+        </div>
+      </div>
+      <div id="sarawatUploadStatus" style="margin-top:8px;font-size:8px;color:var(--mid);"></div>
+    </div>
+
+    <div class="sarawat-form-panel">
+      <div class="sec-title" style="margin-bottom:12px;">Extracted Quotation Details — Review &amp; Correct Before Export</div>
+      <div class="dn-form-row">
+        <div class="form-group">
+          <div class="form-label">Quotation No.</div>
+          <input class="form-input" value="${escapeHtml(s.quoteNo)}" placeholder="Not detected — enter manually"
+            oninput="updateSarawatField('quoteNo',this.value)">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Quotation Date</div>
+          <input class="form-input" value="${escapeHtml(s.quoteDate)}" placeholder="Not detected — enter manually"
+            oninput="updateSarawatField('quoteDate',this.value)">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Customer / Client</div>
+          <input class="form-input" value="${escapeHtml(s.client)}" placeholder="Not detected — enter manually"
+            oninput="updateSarawatField('client',this.value)">
+        </div>
+        <div class="form-group" style="max-width:110px;">
+          <div class="form-label">VAT Rate %</div>
+          <input class="form-input" type="number" min="0" step="0.01" value="${escapeHtml(s.vatRate)}"
+            oninput="updateSarawatField('vatRate',this.value)">
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="sec-title" style="margin-bottom:6px;">Items — Edit Total to Recalculate Unit Price, VAT &amp; Grand Total</div>
+        <table class="dn-items-table">
+          <thead><tr><th>Description</th><th>Qty</th><th>Unit Price (auto)</th><th>Total (ex-VAT)</th><th></th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <button class="btn-sm btn-sm-outline" style="margin-top:8px;" onclick="addSarawatItem()">+ Add Item</button>
+      </div>
+
+      <div style="margin-top:14px;max-width:280px;margin-left:auto;">
+        <div class="pp-t-row">
+          <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal (ex-VAT)</span></div>
+          <span class="pp-t-row-amt">SAR ${s.subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+        </div>
+        <div class="pp-t-row">
+          <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT ${escapeHtml(String(s.vatRate))}%</span></div>
+          <span class="pp-t-row-amt">SAR ${s.vatAmount.toLocaleString('en',{minimumFractionDigits:2})}</span>
+        </div>
+        <div class="pp-t-final">
+          <div><span class="lbl">Grand Total</span></div>
+          <span class="val">SAR ${s.grandTotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <button class="btn-sm btn-sm-outline" onclick="toggleSarawatRawText()">Show / Hide Raw Extracted Text</button>
+        <div id="sarawatRawTextBox" style="display:none;margin-top:8px;max-height:220px;overflow:auto;background:var(--cream);border:1px solid var(--rule);padding:10px;font-size:8px;white-space:pre-wrap;font-family:monospace;color:var(--mid);">${escapeHtml(s.rawText)}</div>
+      </div>
+
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-sm btn-sm-dark" onclick="exportSarawatQuotePDF()">Export Improved Sarawat Quotation PDF</button>
+        <button class="btn-sm btn-sm-outline" onclick="exportVistaQuotationFromSarawat()">Export Vista Quotation PDF</button>
+      </div>
+    </div>
+
+    <div class="preview-wrap" style="margin-top:16px;">
+      <div class="pdf-bg">
+        <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
+          <div class="pdf-page" id="sarawatPdfPage">${buildSarawatQuotePDFHTML(s)}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// Clean Sarawat-branded quotation layout — reuses the app's existing pp-* print
+// classes (already defined in <style>) for a consistent professional look, but
+// keeps Sarawat Professional Printing EST identity instead of the Vista logo.
+function buildSarawatQuotePDFHTML(s) {
+  const rows = s.items.map(it => `
+    <tr>
+      <td><div class="pp-item-name">${escapeHtml(it.desc) || '—'}</div></td>
+      <td class="pp-td-r">${it.qty % 1 === 0 ? it.qty : it.qty.toFixed(2)}</td>
+      <td class="pp-td-r">${it.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
+      <td class="pp-td-r">${it.total.toLocaleString('en',{minimumFractionDigits:2})}</td>
+    </tr>`).join('') || `<tr><td colspan="4" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items</td></tr>`;
+
+  return `
+    <div class="pp-header pp-header-quo">
+      <div class="pp-logo-wrap">
+        <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px;color:#1C1C1A;line-height:1.15;">Sarawat</div>
+        <div style="font-size:7px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#6B6B67;margin-top:2px;">Professional Printing EST</div>
+      </div>
+      <div class="pp-title-block">
+        <div class="pp-doc-heading">Quotation</div>
+        <div class="pp-doc-heading-ar">عرض سعر</div>
+        <div class="pp-doc-meta">No. ${escapeHtml(s.quoteNo) || '—'} &nbsp;&middot;&nbsp; ${escapeHtml(s.quoteDate) || '—'}</div>
+      </div>
+    </div>
+
+    <hr class="pp-rule">
+
+    <div class="pp-body">
+      <div class="pp-info-grid">
+        <div class="pp-info-block">
+          <div class="pp-section-heading"><div class="pp-heading-en">Prepared For</div></div>
+          <div class="pp-info-name">${escapeHtml(s.client) || 'Client Name'}</div>
+        </div>
+        <div class="pp-info-block">
+          <div class="pp-section-heading"><div class="pp-heading-en">Prepared By</div></div>
+          <div class="pp-info-name">Sarawat Professional Printing EST</div>
+        </div>
+      </div>
+
+      <table class="pp-table">
+        <thead><tr>
+          <th style="width:52%;">Description</th>
+          <th class="r" style="width:9%;">Qty</th>
+          <th class="r" style="width:20%;">Unit Price</th>
+          <th class="r" style="width:19%;">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <div class="pp-summary-block">
+        <div class="pp-totals">
+          <div class="pp-t-row">
+            <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span></div>
+            <span class="pp-t-row-amt">SAR ${s.subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+          </div>
+          <div class="pp-t-row">
+            <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT ${escapeHtml(String(s.vatRate))}%</span></div>
+            <span class="pp-t-row-amt">SAR ${s.vatAmount.toLocaleString('en',{minimumFractionDigits:2})}</span>
+          </div>
+          <div class="pp-t-final">
+            <div><span class="lbl">Grand Total</span></div>
+            <span class="val">SAR ${s.grandTotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Exports the Sarawat-branded template directly — its own small html2pdf call
+// (same library/config pattern as the shared downloadPDF()) rather than reusing
+// downloadPDF() itself, since that function is hard-wired to currentDoc/#pdfPage
+// filename logic for Daftra document types. Nothing in downloadPDF() is touched.
+async function exportSarawatQuotePDF() {
+  try {
+    const el = $('sarawatPdfPage');
+    if (!el) throw new Error('Sarawat preview element not found');
+    if (typeof html2pdf === 'undefined') throw new Error('html2pdf is not loaded');
+    await waitForImages(el);
+
+    const wrapper = el.parentElement;
+    const prevTransform = wrapper.style.transform;
+    wrapper.style.transform = 'none';
+    const no = (sarawatState.quoteNo || 'draft').replace(/[^\w-]+/g, '_');
+    await html2pdf().set({
+      margin: 0,
+      filename: `sarawat-quotation-${no}.pdf`,
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['.pp-footer', '.pp-summary-block', '.pp-info-grid', '.pp-totals'] },
+      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).from(el).save();
+    wrapper.style.transform = prevTransform;
+  } catch (err) {
+    console.error('[Sarawat] PDF export failed:', err);
+    alert('Sarawat PDF export failed: ' + err.message);
+  }
+}
+
+// Builds a Daftra-estimate-shaped doc from the extracted/edited Sarawat data and
+// hands it to the EXISTING Vista pipeline (buildInvoicePDFPageHTML → renderPreview
+// → Print/Download buttons → downloadPDF) completely unmodified — no duplicated
+// PDF-building logic. Field names match exactly what renderQuoRow() already reads.
+function exportVistaQuotationFromSarawat() {
+  if (!sarawatState) return;
+  const rate = (parseFloat(sarawatState.vatRate) || 0) / 100;
+  const items = sarawatState.items.map(it => ({
+    item: it.desc,
+    unit_price: it.unitPrice,
+    quantity: it.qty,
+    item_subtotal: it.total,
+    tax1_percent: sarawatState.vatRate + '%',
+    tax1_value: it.total * rate,
+    subtotal: it.total * (1 + rate),
+  }));
+  const doc = {
+    no: sarawatState.quoteNo || 'SARAWAT-IMPORT',
+    date: sarawatState.quoteDate || '',
+    client_business_name: sarawatState.client || '',
+    summary_subtotal: sarawatState.subtotal,
+    total_amount: sarawatState.grandTotal,
+    summary_tax: sarawatState.vatAmount,
+    _items: items,
+  };
+  currentDoc = { doc, type: 'estimates' };
+  renderPreview();
 }
 </script>
 </body>
