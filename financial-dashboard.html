@@ -1703,8 +1703,6 @@ function buildVatPdfStyles() {
     + '.bi-header { display: flex; justify-content: space-between; gap: 24px; }'
     + '.bi-col { flex: 1 1 50%; min-width: 0; }'
     + '.bi-col-ar { text-align: right; }'
-    + '.pdf-notice { font-size: 10.5px; font-style: italic; color: #55534C; margin: 10px 0 4px; border-top: 1px solid #ddd; padding-top: 8px; }'
-    + '.pdf-notice .ar { display: block; margin-top: 3px; text-align: right; }'
     + '.pdf-status-badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 3px 8px; border-radius: 3px; margin-top: 6px; }'
     + '.pdf-status-badge.provisional { background: #F5EBD8; color: #8A5A12; }'
     + '.pdf-status-badge.ready       { background: #E4EEE5; color: #2F5A38; }'
@@ -1742,6 +1740,7 @@ function biRow(enLbl, arLbl, val, cls) {
 }
 
 // Bilingual audit-grid item: English label/value, Arabic label stacked below.
+// Used by the Personal Transfers PDF summary — left as-is (out of scope for this redesign).
 function biGridItem(enLbl, arLbl, valueHtml) {
   return '<div>' + esc(enLbl) + ' <strong>' + valueHtml + '</strong>'
     + '<span class="ar" dir="rtl">' + esc(arLbl) + ' <strong>' + valueHtml + '</strong></span></div>';
@@ -1762,18 +1761,6 @@ function buildVatPdfPage1Html(model) {
     : model.vatPosition < -0.005 ? 'ضريبة مدخلات زائدة / رصيد محتمل' : 'التعادل';
   var resultAmt = model.vatPosition > 0.005 ? model.vatPosition : Math.abs(model.vatPosition);
 
-  var draftsTotal = (model.draftsInv || 0) + (model.draftsPur || 0) + (model.draftsExp || 0);
-  var fetchStatusLine = (model.invError || model.purError || model.expError)
-    ? 'One or more endpoints failed — see warnings above.'
-    : 'All three endpoints (invoices, purchases, expenses) responded successfully.';
-  var fetchStatusAr = (model.invError || model.purError || model.expError)
-    ? 'فشل مصدر بيانات واحد أو أكثر — راجع التحذيرات أعلاه.'
-    : 'تم استرجاع جميع المصادر الثلاثة (المبيعات، المشتريات، المصروفات) بنجاح.';
-  var pagnWarnings = getPaginationWarnings();
-  var pagnStatusLine = pagnWarnings.length ? pagnWarnings.join(' ') : 'No pagination issues detected.';
-  var pagnStatusAr   = pagnWarnings.length ? 'توجد مشاكل في تحميل الصفحات — راجع التفاصيل أعلاه.' : 'لا توجد مشاكل في تحميل الصفحات.';
-  var fetchedAtStr = model.fetchTimestamp ? model.fetchTimestamp.toLocaleString('en-GB') : '—';
-
   return '<div class="bi-header">'
     + '<div class="bi-col bi-col-en">'
     + '<div class="pdf-title-en">VAT Reconciliation Working Paper</div>'
@@ -1793,48 +1780,21 @@ function buildVatPdfPage1Html(model) {
     + '</div>'
     + '</div>'
 
-    + '<div class="pdf-notice">'
-    + '<div>Supporting reconciliation document for accounting review before submission of the VAT return to ZATCA. This document is not an official ZATCA VAT return.</div>'
-    + '<div class="ar" dir="rtl">مستند تسوية داعم للمراجعة المحاسبية قبل تقديم إقرار ضريبة القيمة المضافة إلى هيئة الزكاة والضريبة والجمارك. هذا المستند ليس إقرار ضريبة قيمة مضافة رسمياً صادراً من الهيئة.</div>'
-    + '</div>'
     + warnBanner
 
     + '<div class="pdf-section-title"><span>VAT Summary</span><span class="ar" dir="rtl">ملخص ضريبة القيمة المضافة</span></div>'
     + '<table class="pdf-table">'
-    + biRow('Sales excluding VAT', 'المبيعات باستثناء الضريبة', model.sales.salesExVAT)
-    + biRow('Output VAT from sales', 'ضريبة المخرجات على المبيعات', model.outputVAT)
-    + biRow('Business purchases excluding VAT', 'المشتريات التجارية باستثناء الضريبة', model.purch.purchExVAT)
-    + biRow('Recoverable input VAT — purchases', 'ضريبة المدخلات القابلة للاسترداد — المشتريات', model.inputVATpur)
-    + biRow('Expenses excluding VAT', 'المصروفات باستثناء الضريبة', model.exp.expExVAT)
-    + biRow('Recoverable input VAT — expenses', 'ضريبة المدخلات القابلة للاسترداد — المصروفات', model.inputVATexp)
+    + biRow('Sales excluding VAT', 'المبيعات قبل الضريبة', model.sales.salesExVAT)
+    + biRow('Output VAT', 'ضريبة المخرجات', model.outputVAT)
+    + biRow('Gross sales including VAT', 'إجمالي المبيعات شامل الضريبة', model.sales.salesIncVAT)
+    + biRow('Purchases excluding VAT', 'المشتريات قبل الضريبة', model.purch.purchExVAT)
+    + biRow('Recoverable input VAT from purchases', 'ضريبة المدخلات القابلة للاسترداد من المشتريات', model.inputVATpur)
+    + biRow('Expenses excluding VAT', 'المصروفات قبل الضريبة', model.exp.expExVAT)
+    + biRow('Recoverable input VAT from expenses', 'ضريبة المدخلات القابلة للاسترداد من المصروفات', model.inputVATexp)
     + biRow('Total recoverable input VAT', 'إجمالي ضريبة المدخلات القابلة للاسترداد', model.inputVATpur + model.inputVATexp)
     + biRow('Net VAT', 'صافي ضريبة القيمة المضافة', model.vatPosition)
     + '<tr class="pdf-result-row"><td>' + esc(resultLabelEn) + '</td><td class="lbl-ar ar" dir="rtl">' + esc(resultLabelAr) + '</td><td class="val">' + esc(fmtCurrency(resultAmt)) + '</td></tr>'
-    + '</table>'
-
-    + '<div class="pdf-section-title"><span>Audit / Data Health</span><span class="ar" dir="rtl">التدقيق وسلامة البيانات</span></div>'
-    + '<div class="pdf-grid">'
-    + biGridItem('Sales invoices included:', 'فواتير المبيعات المدرجة:', model.sales.count)
-    + biGridItem('Purchase invoices included:', 'فواتير المشتريات المدرجة:', model.purch.count)
-    + biGridItem('Expenses included:', 'المصروفات المدرجة:', model.exp.count)
-    + biGridItem('Draft records excluded (all-time):', 'السجلات غير النهائية المستبعدة (كل الفترات):', draftsTotal)
-    + biGridItem('Missing/unparseable dates:', 'تواريخ مفقودة أو غير صالحة:', model.missingDateTotal)
-    + biGridItem('Pages loaded (all endpoints):', 'عدد الصفحات المحمّلة (جميع المصادر):', model.pagesLoaded)
-    + biGridItem('Fetch status:', 'حالة جلب البيانات:', esc(fetchStatusLine) + '<span class="ar" dir="rtl" style="display:inline;font-weight:400"> — ' + esc(fetchStatusAr) + '</span>')
-    + biGridItem('Pagination status:', 'حالة تحميل الصفحات:', esc(pagnStatusLine) + '<span class="ar" dir="rtl" style="display:inline;font-weight:400"> — ' + esc(pagnStatusAr) + '</span>')
-    + biGridItem('Dashboard data fetch timestamp:', 'توقيت جلب بيانات لوحة التحكم:', esc(fetchedAtStr))
-    + biGridItem('Zero-VAT purchase invoices:', 'فواتير مشتريات بدون ضريبة:', model.zeroVatPurCount + ' / ' + esc(fmtCurrency(model.zeroVatPurTotal)))
-    + biGridItem('Zero-VAT expenses:', 'مصروفات بدون ضريبة:', model.zeroVatExpCount + ' / ' + esc(fmtCurrency(model.zeroVatExpTotal)))
-    + biGridItem('Unclear/malformed VAT records:', 'سجلات ضريبية غير واضحة أو غير صحيحة:', model.malformedCount)
-    + '</div>'
-
-    // Personal Transfers: aggregate line only — no supplier names, no transaction rows, no appendix.
-    + '<div class="pdf-exclusion-line">'
-    + '<div>Non-business/personal transactions excluded from VAT reconciliation: ' + model.personalCount
-      + ' records / ' + esc(fmtCurrency(model.personalTotalExVAT)) + '</div>'
-    + '<div class="ar" dir="rtl">المعاملات غير التجارية/الشخصية المستبعدة من تسوية ضريبة القيمة المضافة: ' + model.personalCount
-      + ' عملية / ' + esc(fmtCurrency(model.personalTotalExVAT).replace('SAR', '').trim()) + ' ريال</div>'
-    + '</div>';
+    + '</table>';
 }
 
 // Appendix — reuses the same salesRows/purRows/expRows arrays computed once in
@@ -1926,10 +1886,10 @@ function buildVatPdfAppendixHtml(model) {
       : '<div class="pdf-empty">No expenses in the selected period. <span class="ar" dir="rtl">لا توجد مصروفات في الفترة المحددة.</span></div>')
 
     + '<div class="pdf-foot">'
-    + '<div>Supporting reconciliation working paper only — not an official ZATCA VAT return. Non-business/personal transactions are excluded from every figure above (see aggregate exclusion note on page 1). '
+    + '<div>Supporting reconciliation working paper only — not an official ZATCA VAT return. '
     + 'Displayed totals are rounded to 2 decimal places for presentation; all calculations use full source precision before final rounding. '
     + 'Verify all figures against source Daftra records and consult your accountant before filing with ZATCA.</div>'
-    + '<div class="ar" dir="rtl">مستند تسوية داعم فقط — وليس إقرار ضريبة قيمة مضافة رسمياً صادراً من الهيئة. تُستبعد المعاملات غير التجارية/الشخصية من جميع الأرقام أعلاه (راجع ملاحظة الاستبعاد الإجمالية في الصفحة الأولى). '
+    + '<div class="ar" dir="rtl">مستند تسوية داعم فقط — وليس إقرار ضريبة قيمة مضافة رسمياً صادراً من الهيئة. '
     + 'المبالغ المعروضة مقربة إلى منزلتين عشريتين لأغراض العرض؛ تُجرى جميع الحسابات باستخدام الدقة الكاملة للمصدر قبل التقريب النهائي. '
     + 'يرجى التحقق من جميع الأرقام مقابل سجلات دفترة المصدر واستشارة محاسبك قبل التقديم إلى هيئة الزكاة والضريبة والجمارك.</div>'
     + '</div>'
