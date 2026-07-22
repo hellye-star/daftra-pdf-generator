@@ -215,6 +215,17 @@
   .dn-qty { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 400; color: var(--dark); background: var(--cream); border: 1px solid var(--rule); padding: 4px 7px; text-align: right; width: 72px; outline: none; }
   .dn-qty:focus { border-color: var(--dark); }
 
+  /* Sarawat import — one grouped card per product; every quantity tier is a
+     visible, independently editable row in the compact table underneath,
+     sharing the S.No/name/description shown once at the top of the card. */
+  .sarawat-item-card { background: var(--white); border: 1px solid var(--rule); padding: 14px 16px; margin-bottom: 12px; }
+  .sarawat-item-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .sarawat-item-sno { width: 64px; flex-shrink: 0; font-size: 8px; text-align: center; }
+  .sarawat-item-name { flex: 1; font-size: 10.5px; font-weight: 500; }
+  .sarawat-item-desc { width: 100%; font-family: 'Jost', sans-serif; font-size: 8.5px; font-weight: 300; color: var(--mid); background: var(--cream); border: 1px solid var(--rule); padding: 7px 9px; resize: vertical; min-height: 40px; outline: none; margin-bottom: 10px; }
+  .sarawat-item-desc:focus { border-color: var(--dark); }
+  .sarawat-tier-table th:first-child, .sarawat-tier-table td:first-child { width: 26px; text-align: center; padding-right: 4px; }
+
   /* ── RECEIPT VOUCHER TAB ── */
   .rv-form-panel { background: var(--white); border: 1px solid var(--rule); padding: 18px 20px; margin-bottom: 14px; }
   .rv-form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
@@ -2780,12 +2791,36 @@ function parseSarawatHeaderFields(text) {
 // first content row, sometimes the third), so rather than assuming a fixed sub-row,
 // every row within the item's vertical span is scanned and its tokens routed to
 // whichever column bucket its x-position falls into.
+// Sarawat items can carry MULTIPLE quantity options (tiered/volume pricing —
+// e.g. 50/100/500/1,000/.../75,000 copies, each with its own unit price and
+// total), printed as one row per tier. A long item's tiers can also overflow
+// onto a continuation block — sometimes on the same page, sometimes on the
+// next — which repeats the same S.No + title as a mini-header rather than
+// using a "continued" marker. Every quantity option is now preserved (see
+// `options` on the returned item), and a repeated S.No is merged into the
+// SAME item instead of becoming a second, incomplete duplicate row.
 function parseSarawatItemsFromRows(pages) {
   const SNO_RE = /^\d{2}_\d{2}$/;
   const SNO_MAX = 55;   // right edge of the S.No column — real S.No values sit well left of this
   const COL_PAD = 12;   // safety margin so column data never grazes the boundary derived from the header
   // Once hit, no more S.No values follow — VAT/subtotal/grand total/terms/signature block.
-  const STOP_RE = /\bvat\b|sub-?total|grand\s*total|terms\s+and\s+conditions|amount\s*due/i;
+  // Also covers the spelled-out "amount in words" line and the signature/footer block
+  // that precede "Terms and Conditions"/"VAT" in the PDF's own row order for the LAST
+  // item (pdf.js emits them top-to-bottom on the page, and this footer content sits
+  // ABOVE those keyword lines here) — without this, that text would otherwise leak into
+  // the final item's description before any of the other STOP_RE alternatives fire.
+  // The two-number-word check (e.g. "...FIVE THOUSAND THREE HUNDRED...") is a general
+  // signature of spelled-out currency amounts, not tied to any specific item or value.
+  const STOP_RE = /\bvat\b|sub-?total|grand\s*total|terms\s+and\s+conditions|amount\s*due|thanks\s*&?\s*regards|electronically\s+generated|no\s+need\s+of\s+signature|\b(?:hundred|thousand|million)\b[\s\S]{0,40}\b(?:hundred|thousand|million|only)\b/i;
+  // Marks the end of one quantity option's text within the Total Quantity
+  // column, e.g. "50 Copies" / "500X22 Kinds" — everything from the previous
+  // unit word (or the start of the column) up to and including this one is
+  // one option's quantity text. Deliberately NOT anchored (^...$): pdf.js
+  // sometimes reports "50" and "Copies" as one combined text run ("50
+  // Copies") and sometimes as separate runs, so this has to match the word
+  // ANYWHERE inside a token, not require the whole token to be just that word.
+  const UNIT_WORD_RE = /\b(copies|copy|pcs\.?|pieces?|kinds?|units?|nos?\.?)\b/i;
+  const toNum = s => parseFloat(String(s).replace(/,/g, '')) || 0;
 
   function isHeaderRow(tokens) {
     const txt = tokens.map(t => t.str.toLowerCase()).join(' ');
@@ -2810,6 +2845,54 @@ function parseSarawatItemsFromRows(pages) {
     return null;
   }
 
+  // Resolves the numeric quantity from ONE option's Total Quantity text.
+  // Supports: "5,000 Copies" / "5000 pcs" / "2 Copies" (plain leading number),
+  // "500X22 Kinds" (multiply — no explicit total given on the line), and
+  // "500 x 2 = 1000" / "2000X5 = 10,000" (an explicit "=" result always wins).
+  function parseQuantityValue(display) {
+    if (!display) return { qty: 0, review: true };
+    const eq = display.match(/=\s*([\d,]+(?:\.\d+)?)\s*$/);
+    if (eq) return { qty: toNum(eq[1]), review: false };
+    const mul = display.match(/^([\d,]+(?:\.\d+)?)\s*[xX]\s*([\d,]+(?:\.\d+)?)\b/);
+    if (mul) return { qty: toNum(mul[1]) * toNum(mul[2]), review: false };
+    const plain = display.match(/^([\d,]+(?:\.\d+)?)/);
+    if (plain) return { qty: toNum(plain[1]), review: false };
+    return { qty: 0, review: true }; // couldn't resolve a number — flagged so the user knows to fill it in manually
+  }
+
+  // Splits the raw Total Quantity column tokens for one item into one segment
+  // per quantity option, breaking after each unit-word token. An item with a
+  // single plain/formula quantity and no unit word at all (rare, but the old
+  // single-option format allows it) comes back as one segment covering
+  // everything, matching the previous behaviour exactly.
+  function splitQtySegments(qtyParts) {
+    const segments = [];
+    let cur = [];
+    qtyParts.forEach(tok => {
+      cur.push(tok);
+      if (UNIT_WORD_RE.test(tok.trim())) { segments.push(cur.join(' ')); cur = []; }
+    });
+    if (cur.length) segments.push(cur.join(' '));
+    return segments.length ? segments : [''];
+  }
+
+  // The item's bold title line sits immediately above "Cover Section
+  // Details" (or, for a couple of items, "Inside Section details" / "Other
+  // Sec N" when there's no separate cover section) in the source PDF —
+  // everything from that label onward is technical specification text, not
+  // part of the name. The label itself marks the split point; it's never
+  // part of either the name or treated as if it were.
+  const SECTION_LABEL_RE = /\b(cover section details|inside section details?|other sec(?:tion)?\s*\d*)\b/i;
+  function splitTitleAndDescription(descParts) {
+    const full = descParts.join(' ').replace(/\s+/g, ' ').trim();
+    const m = full.match(SECTION_LABEL_RE);
+    if (m && m.index > 0) return { itemName: full.slice(0, m.index).trim(), description: full.slice(m.index).trim() };
+    // No recognizable section label found — nothing to safely split on, so
+    // the whole text becomes the name rather than guessing where a
+    // description might start.
+    return { itemName: full, description: '' };
+  }
+
   let bounds = { descEnd: 360, qtyEnd: 458, unitEnd: 522 };
   const items = [];
   let current = null;
@@ -2826,7 +2909,13 @@ function parseSarawatItemsFromRows(pages) {
       if (STOP_RE.test(tokens.map(t => t.str).join(' '))) { stopped = true; return; }
 
       const snoTok = tokens.find(t => t.x < SNO_MAX && SNO_RE.test(t.str.trim()));
-      if (snoTok) { pushCurrent(); current = { sno: snoTok.str.trim(), descParts: [], qtyParts: [], totalParts: [] }; }
+      if (snoTok) {
+        const snoVal = snoTok.str.trim();
+        if (!current || current.sno !== snoVal) { pushCurrent(); current = { sno: snoVal, descParts: [], qtyParts: [], totalParts: [] }; }
+        // else: same S.No repeating as a mini-header for an overflow block of
+        // quantity options (same page or after a page break) — keep
+        // accumulating into the existing item instead of starting a new one.
+      }
       if (!current) return; // stray content before the first S.No (letterhead/customer block) — not item data
 
       tokens.forEach(t => {
@@ -2840,28 +2929,33 @@ function parseSarawatItemsFromRows(pages) {
   });
   pushCurrent();
 
-  const toNum = s => parseFloat(String(s).replace(/,/g, '')) || 0;
-
-  // Resolves the numeric quantity from the printed Total Quantity column text.
-  // Supports: "5,000 Copies" / "5000 pcs" / "2 Copies" (plain leading number),
-  // "500X22 Kinds" (multiply — no explicit total given on the line), and
-  // "500 x 2 = 1000" / "2000X5 = 10,000" (an explicit "=" result always wins).
-  function parseQuantityValue(display) {
-    if (!display) return { qty: 0, review: true };
-    const eq = display.match(/=\s*([\d,]+(?:\.\d+)?)\s*$/);
-    if (eq) return { qty: toNum(eq[1]), review: false };
-    const mul = display.match(/^([\d,]+(?:\.\d+)?)\s*[xX]\s*([\d,]+(?:\.\d+)?)\b/);
-    if (mul) return { qty: toNum(mul[1]) * toNum(mul[2]), review: false };
-    const plain = display.match(/^([\d,]+(?:\.\d+)?)/);
-    if (plain) return { qty: toNum(plain[1]), review: false };
-    return { qty: 0, review: true }; // couldn't resolve a number — flagged so the user knows to fill it in manually
-  }
-
   return items.map(it => {
-    const desc = it.descParts.join(' ').replace(/\s+/g, ' ').trim();
+    const { itemName, description } = splitTitleAndDescription(it.descParts);
     const qtyDisplay = it.qtyParts.join(' ').replace(/\s+/g, ' ').trim();
-    const { qty, review } = parseQuantityValue(qtyDisplay);
-    return { sno: it.sno, desc, qty, qtyDisplay, qtyReview: review, total: toNum(it.totalParts.join(' ').replace(/\s+/g, ' ').trim()) };
+    const segments = splitQtySegments(it.qtyParts);
+    const totals = it.totalParts.map(toNum);
+    const n = Math.min(segments.length, totals.length);
+
+    let tiers, qtyReview;
+    if (n === 0) {
+      // Nothing usable in either column — one placeholder tier flagged for review.
+      const { qty, review } = parseQuantityValue(qtyDisplay);
+      tiers = [{ qty, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' }];
+      qtyReview = review || true;
+    } else {
+      tiers = [];
+      qtyReview = false;
+      for (let i = 0; i < n; i++) {
+        const { qty, review } = parseQuantityValue(segments[i]);
+        const total = totals[i];
+        if (review) qtyReview = true;
+        tiers.push({ qty, unitPrice: qty > 0 ? Math.round((total / qty) * 10000) / 10000 : 0, total, applyAdjust: true, itemAdjustPct: '' });
+      }
+    }
+    // One grouped item per product — every quantity tier stays visible and
+    // independently editable underneath it (see renderSarawatForm()), sharing
+    // this one S.No/name/description instead of repeating it per tier.
+    return { sno: it.sno, itemName, description, tiers, qtyDisplay, qtyReview };
   });
 }
 
@@ -3038,7 +3132,12 @@ async function handleSarawatPdfUpload(input) {
     let items = parseSarawatItemsFromRows(pages);
     let usedFallback = false;
     if (!items.length) {
-      items = parseSarawatItemsFallback(fullText).map(it => ({ sno: '', qtyDisplay: '', qtyReview: false, ...it }));
+      // The fallback text parser has no table columns to read a name/spec
+      // split or separate tiers from — one item, one tier, name = full text.
+      items = parseSarawatItemsFallback(fullText).map(it => ({
+        sno: '', itemName: it.desc || '', description: '', qtyDisplay: '', qtyReview: false,
+        tiers: [{ qty: it.qty, unitPrice: it.qty > 0 ? Math.round((it.total / it.qty) * 10000) / 10000 : 0, total: it.total, applyAdjust: true, itemAdjustPct: '' }],
+      }));
       usedFallback = true;
     }
     sarawatState = {
@@ -3048,9 +3147,10 @@ async function handleSarawatPdfUpload(input) {
       items,
       rawText: fullText,
     };
+    const tierCount = items.reduce((s, it) => s + it.tiers.length, 0);
     const reviewCount = items.filter(it => it.qtyReview).length;
     if (statusEl) statusEl.textContent = items.length
-      ? `Extracted ${items.length} item row(s)${usedFallback ? ' (fallback text parser — no S.No table detected)' : ' from the S.No table'}` +
+      ? `Extracted ${items.length} item(s), ${tierCount} quantity line(s) total${usedFallback ? ' (fallback text parser — no S.No table detected)' : ' from the S.No table'}` +
         (reviewCount ? `, ${reviewCount} need quantity review` : '') + ' — review and correct below before exporting.'
       : 'No item rows detected automatically — add them manually below (raw text is available for reference).';
   } catch (err) {
@@ -3071,8 +3171,9 @@ async function handleSarawatPdfUpload(input) {
     client: sarawatState.client,
     vatRate: sarawatState.vatRate,
     items: sarawatState.items.map(it => ({
-      sno: it.sno || '', desc: it.desc, qty: it.qty,
-      qtyDisplay: it.qtyDisplay || '', qtyReview: !!it.qtyReview, total: it.total,
+      sno: it.sno || '', itemName: it.itemName || '', description: it.description || '',
+      qtyDisplay: it.qtyDisplay || '', qtyReview: !!it.qtyReview,
+      tiers: it.tiers.map(t => ({ qty: t.qty, unitPrice: t.unitPrice, total: t.total })),
     })),
   };
   recomputeSarawatTotals();
@@ -3081,15 +3182,20 @@ async function handleSarawatPdfUpload(input) {
 
 // unit price is always DERIVED from total/qty — never edited directly — so the
 // three figures (unit price, subtotal, VAT, grand total) can never drift apart.
+// Runs over every tier of every item — the subtotal is the sum of ALL visible
+// quantity lines, not one figure per item.
 function recomputeSarawatTotals() {
   if (!sarawatState) return;
   const rate = (parseFloat(sarawatState.vatRate) || 0) / 100;
+  let subtotal = 0;
   sarawatState.items.forEach(it => {
-    it.qty   = parseFloat(it.qty)   || 0;
-    it.total = parseFloat(it.total) || 0;
-    it.unitPrice = it.qty > 0 ? it.total / it.qty : 0;
+    it.tiers.forEach(t => {
+      t.qty   = parseFloat(t.qty)   || 0;
+      t.total = parseFloat(t.total) || 0;
+      t.unitPrice = t.qty > 0 ? t.total / t.qty : 0;
+      subtotal += t.total;
+    });
   });
-  const subtotal = sarawatState.items.reduce((s, it) => s + it.total, 0);
   sarawatState.subtotal   = subtotal;
   sarawatState.vatAmount  = subtotal * rate;
   sarawatState.grandTotal = subtotal + sarawatState.vatAmount;
@@ -3102,29 +3208,64 @@ function updateSarawatField(field, val) {
   renderSarawatForm();
 }
 
-function updateSarawatItem(idx, field, val) {
-  if (!sarawatState || !sarawatState.items[idx]) return;
-  const it = sarawatState.items[idx];
-  if (field === 'desc') it.desc = val;
-  else if (field === 'qty')   { it.qty = parseFloat(val) || 0; it.qtyReview = false; } // manual entry supersedes the "needs review" flag
-  else if (field === 'total') it.total = parseFloat(val) || 0;
-  else if (field === 'applyAdjust') it.applyAdjust = !!val;
+// Item-level fields — S.No, name, and the shared technical description —
+// edited once per product regardless of how many quantity tiers it has.
+function updateSarawatItemField(itemIdx, field, val) {
+  if (!sarawatState || !sarawatState.items[itemIdx]) return;
+  const it = sarawatState.items[itemIdx];
+  if (field === 'sno') it.sno = val;
+  else if (field === 'itemName') it.itemName = val;
+  else if (field === 'description') it.description = val;
+  renderSarawatForm();
+}
+
+// Per-tier fields — quantity and total are independently editable for every
+// visible quantity line; unit price is always re-derived, never typed directly.
+function updateSarawatTier(itemIdx, tierIdx, field, val) {
+  if (!sarawatState || !sarawatState.items[itemIdx] || !sarawatState.items[itemIdx].tiers[tierIdx]) return;
+  const t = sarawatState.items[itemIdx].tiers[tierIdx];
+  if (field === 'qty')   { t.qty = parseFloat(val) || 0; }
+  else if (field === 'total') t.total = parseFloat(val) || 0;
+  else if (field === 'applyAdjust') t.applyAdjust = !!val;
+  if (field === 'qty' || field === 'total') sarawatState.items[itemIdx].qtyReview = false; // manual entry supersedes the "needs review" flag
   recomputeSarawatTotals();
   renderSarawatForm();
 }
 
 function addSarawatItem() {
   if (!sarawatState) return;
-  sarawatState.items.push({ sno: '', desc: '', qty: 1, qtyDisplay: '', qtyReview: false, total: 0, unitPrice: 0, applyAdjust: true, itemAdjustPct: '' });
+  sarawatState.items.push({ sno: '', itemName: '', description: '', qtyDisplay: '', qtyReview: false, tiers: [{ qty: 1, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' }] });
   recomputeSarawatTotals();
   renderSarawatForm();
 }
 
-// Bulk % price adjustment — applies to the pre-VAT item total only (never to VAT or
-// the VAT-inclusive total). VAT and grand total are always re-derived afterwards by
-// recomputeSarawatTotals(), so this can never desynchronize unit price / VAT / totals.
-// sign: +1 = increase, -1 = decrease. Only items with applyAdjust !== false are affected
-// (checkbox per row, defaults to checked — i.e. "apply to all items" out of the box).
+function removeSarawatItemGroup(itemIdx) {
+  if (!sarawatState) return;
+  sarawatState.items.splice(itemIdx, 1);
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+function addSarawatTier(itemIdx) {
+  if (!sarawatState || !sarawatState.items[itemIdx]) return;
+  sarawatState.items[itemIdx].tiers.push({ qty: 1, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' });
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+function removeSarawatTier(itemIdx, tierIdx) {
+  if (!sarawatState || !sarawatState.items[itemIdx]) return;
+  sarawatState.items[itemIdx].tiers.splice(tierIdx, 1);
+  recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+// Bulk % price adjustment — applies to the pre-VAT total of every VISIBLE
+// quantity line across every item (never to VAT or the VAT-inclusive total).
+// VAT and grand total are always re-derived afterwards by
+// recomputeSarawatTotals(), so this can never desynchronize unit price / VAT
+// / totals. sign: +1 = increase, -1 = decrease. Only tiers with
+// applyAdjust !== false are affected (checkbox per tier, defaults to checked).
 function adjustSarawatPrices(sign) {
   if (!sarawatState) return;
   const pct = parseFloat(sarawatState.adjustPct) || 0;
@@ -3132,43 +3273,45 @@ function adjustSarawatPrices(sign) {
   const factor = Math.max(0, 1 + sign * (pct / 100));   // clamped so a >100% decrease can't go negative
   let affected = 0;
   sarawatState.items.forEach(it => {
-    if (it.applyAdjust !== false) { it.total = it.total * factor; affected++; }
+    it.tiers.forEach(t => { if (t.applyAdjust !== false) { t.total = t.total * factor; affected++; } });
   });
-  if (affected === 0) { alert('No items are checked to adjust — check at least one item first.'); return; }
+  if (affected === 0) { alert('No quantity lines are checked to adjust — check at least one first.'); return; }
   recomputeSarawatTotals();
   renderSarawatForm();
 }
 
 function setSarawatApplyAll(val) {
   if (!sarawatState) return;
-  sarawatState.items.forEach(it => { it.applyAdjust = val; });
+  sarawatState.items.forEach(it => it.tiers.forEach(t => { t.applyAdjust = val; }));
   renderSarawatForm();
 }
 
-// Per-item % price adjustment — same formula/rules as the global adjuster, but
-// applied only to this one row's pre-VAT total, regardless of its "apply to global
-// adjustment" checkbox (that checkbox is only consulted by adjustSarawatPrices()).
-// Quantity is never touched; unit price is re-derived afterwards as total / quantity.
-function adjustSarawatItemPrice(idx, sign) {
-  if (!sarawatState || !sarawatState.items[idx]) return;
-  const it = sarawatState.items[idx];
-  const pct = parseFloat(it.itemAdjustPct) || 0;
-  if (pct <= 0) { alert('Enter a percentage greater than 0 to adjust this item.'); return; }
+// Per-tier % price adjustment — same formula/rules as the global adjuster, but
+// applied only to this one quantity line's pre-VAT total, regardless of its
+// "apply to global adjustment" checkbox (that checkbox is only consulted by
+// adjustSarawatPrices()). Quantity is never touched; unit price is re-derived
+// afterwards as total / quantity.
+function adjustSarawatTierPrice(itemIdx, tierIdx, sign) {
+  if (!sarawatState || !sarawatState.items[itemIdx] || !sarawatState.items[itemIdx].tiers[tierIdx]) return;
+  const t = sarawatState.items[itemIdx].tiers[tierIdx];
+  const pct = parseFloat(t.itemAdjustPct) || 0;
+  if (pct <= 0) { alert('Enter a percentage greater than 0 to adjust this line.'); return; }
   const factor = Math.max(0, 1 + sign * (pct / 100));   // clamped so a >=100% decrease can't go negative
-  it.total = it.total * factor;
+  t.total = t.total * factor;
   recomputeSarawatTotals();
   renderSarawatForm();
 }
 
-// Restores quote number/date/client/VAT rate and every item's description/qty/total
-// to exactly what was extracted right after upload — discarding all manual edits and
-// every global/per-item % adjustment made since. Filename and raw extracted text are
-// left untouched (per spec: this resets the DATA, not the whole form/upload).
+// Restores quote number/date/client/VAT rate and every item (name/description/
+// every quantity tier) to exactly what was extracted right after upload —
+// discarding all manual edits and every global/per-tier % adjustment made
+// since. Filename and raw extracted text are left untouched (per spec: this
+// resets the DATA, not the whole form/upload).
 function resetSarawatToOriginal() {
   if (!sarawatState || !sarawatState.original) return;
-  const ok = confirm('Reset quotation number, date, client, VAT rate, and all item rows back to the ' +
-    'originally extracted data from the uploaded PDF?\n\nAll manual edits and % price adjustments made ' +
-    'since upload will be discarded. This cannot be undone.');
+  const ok = confirm('Reset quotation number, date, client, VAT rate, and all items (with every quantity ' +
+    'tier) back to the originally extracted data from the uploaded PDF?\n\nAll manual edits and % price ' +
+    'adjustments made since upload will be discarded. This cannot be undone.');
   if (!ok) return;
 
   const orig = sarawatState.original;
@@ -3177,18 +3320,12 @@ function resetSarawatToOriginal() {
   sarawatState.client    = orig.client;
   sarawatState.vatRate   = orig.vatRate;
   sarawatState.items     = orig.items.map(it => ({
-    sno: it.sno || '', desc: it.desc, qty: it.qty, qtyDisplay: it.qtyDisplay || '', qtyReview: !!it.qtyReview,
-    total: it.total, unitPrice: 0, applyAdjust: true, itemAdjustPct: '',
+    sno: it.sno || '', itemName: it.itemName || '', description: it.description || '',
+    qtyDisplay: it.qtyDisplay || '', qtyReview: !!it.qtyReview,
+    tiers: it.tiers.map(t => ({ qty: t.qty, unitPrice: 0, total: t.total, applyAdjust: true, itemAdjustPct: '' })),
   }));
   sarawatState.adjustPct = '';   // clear the global % field too — no adjustment carries over
 
-  recomputeSarawatTotals();
-  renderSarawatForm();
-}
-
-function removeSarawatItem(idx) {
-  if (!sarawatState) return;
-  sarawatState.items.splice(idx, 1);
   recomputeSarawatTotals();
   renderSarawatForm();
 }
@@ -3202,36 +3339,55 @@ function renderSarawatForm() {
   if (!sarawatState) { showSarawatQuoteTab(); return; }
   const s = sarawatState;
 
-  const itemRows = s.items.map((it, i) => `
-    <tr>
-      <td style="text-align:center;font-size:7.5px;color:var(--light);white-space:nowrap;" title="S.No from the source PDF">${escapeHtml(it.sno || '—')}</td>
-      <td style="text-align:center;"><input type="checkbox" ${it.applyAdjust !== false ? 'checked' : ''}
-        onchange="updateSarawatItem(${i},'applyAdjust',this.checked)" title="Include in global % price adjustment"></td>
-      <td><input class="form-input" style="font-size:9px;padding:5px 7px;" value="${escapeHtml(it.desc)}"
-        placeholder="Item description" oninput="updateSarawatItem(${i},'desc',this.value)"></td>
-      <td>
-        <input class="dn-qty" type="number" min="0" step="any" value="${it.qty}"
-          oninput="updateSarawatItem(${i},'qty',this.value)">
-        ${it.qtyReview
-          ? `<div style="font-size:6.5px;color:#B8860B;margin-top:2px;white-space:nowrap;">⚠ verify${it.qtyDisplay ? ' — as printed: ' + escapeHtml(it.qtyDisplay) : ''}</div>`
-          : (it.qtyDisplay ? `<div style="font-size:6.5px;color:var(--light);margin-top:2px;white-space:nowrap;">as printed: ${escapeHtml(it.qtyDisplay)}</div>` : '')}
-      </td>
-      <td style="text-align:right;font-size:9px;color:var(--mid);padding:0 8px;">${it.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
-      <td><input class="dn-qty" type="number" min="0" step="any" value="${it.total.toFixed(2)}"
-        oninput="updateSarawatItem(${i},'total',this.value)"></td>
-      <td>
-        <div style="display:flex;gap:3px;align-items:center;white-space:nowrap;">
-          <input type="number" class="dn-qty" style="width:42px;padding:4px 5px;" min="0" step="0.01" placeholder="%"
-            value="${escapeHtml(it.itemAdjustPct || '')}" title="Per-item adjustment %"
-            oninput="sarawatState.items[${i}].itemAdjustPct=this.value">
-          <button class="btn-sm btn-sm-outline" style="padding:3px 6px;font-size:6.5px;" title="Increase this item's price"
-            onclick="adjustSarawatItemPrice(${i},1)">+%</button>
-          <button class="btn-sm btn-sm-outline" style="padding:3px 6px;font-size:6.5px;" title="Decrease this item's price"
-            onclick="adjustSarawatItemPrice(${i},-1)">-%</button>
-        </div>
-      </td>
-      <td><button class="btn-sm btn-sm-outline" style="padding:4px 9px;" onclick="removeSarawatItem(${i})">✕</button></td>
-    </tr>`).join('') || `<tr><td colspan="8" style="padding:14px 0;font-size:8.5px;color:var(--light);">No items extracted — add rows manually.</td></tr>`;
+  // One grouped card per product: S.No/name/description shown once, then a
+  // compact table with every quantity tier as its own visible, editable row.
+  const itemCards = s.items.map((it, i) => {
+    const tierRows = it.tiers.map((t, j) => `
+      <tr>
+        <td><input type="checkbox" ${t.applyAdjust !== false ? 'checked' : ''}
+          onchange="updateSarawatTier(${i},${j},'applyAdjust',this.checked)" title="Include in global % price adjustment"></td>
+        <td>
+          <input class="dn-qty" type="number" min="0" step="any" value="${t.qty}"
+            oninput="updateSarawatTier(${i},${j},'qty',this.value)">
+          ${it.qtyReview
+            ? `<div style="font-size:6.5px;color:#B8860B;margin-top:2px;white-space:nowrap;">⚠ verify${it.qtyDisplay ? ' — as printed: ' + escapeHtml(it.qtyDisplay) : ''}</div>`
+            : ''}
+        </td>
+        <td style="text-align:right;font-size:9px;color:var(--mid);">${t.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
+        <td><input class="dn-qty" type="number" min="0" step="any" value="${t.total.toFixed(2)}"
+          oninput="updateSarawatTier(${i},${j},'total',this.value)"></td>
+        <td>
+          <div style="display:flex;gap:3px;align-items:center;white-space:nowrap;">
+            <input type="number" class="dn-qty" style="width:42px;padding:4px 5px;" min="0" step="0.01" placeholder="%"
+              value="${escapeHtml(t.itemAdjustPct || '')}" title="Adjustment % for this quantity line"
+              oninput="sarawatState.items[${i}].tiers[${j}].itemAdjustPct=this.value">
+            <button class="btn-sm btn-sm-outline" style="padding:3px 6px;font-size:6.5px;" title="Increase this line's price"
+              onclick="adjustSarawatTierPrice(${i},${j},1)">+%</button>
+            <button class="btn-sm btn-sm-outline" style="padding:3px 6px;font-size:6.5px;" title="Decrease this line's price"
+              onclick="adjustSarawatTierPrice(${i},${j},-1)">-%</button>
+          </div>
+        </td>
+        <td><button class="btn-sm btn-sm-outline" style="padding:4px 9px;" onclick="removeSarawatTier(${i},${j})">✕</button></td>
+      </tr>`).join('') || `<tr><td colspan="6" style="padding:10px 0;font-size:8.5px;color:var(--light);">No quantity lines — add one below.</td></tr>`;
+
+    return `
+    <div class="sarawat-item-card">
+      <div class="sarawat-item-card-head">
+        <input class="form-input sarawat-item-sno" value="${escapeHtml(it.sno || '')}" placeholder="S.No" title="Item code / source reference"
+          oninput="updateSarawatItemField(${i},'sno',this.value)">
+        <input class="form-input sarawat-item-name" value="${escapeHtml(it.itemName || '')}" placeholder="Item name"
+          oninput="updateSarawatItemField(${i},'itemName',this.value)">
+        <button class="btn-sm btn-sm-outline" onclick="removeSarawatItemGroup(${i})">✕ Remove Item</button>
+      </div>
+      <textarea class="sarawat-item-desc" placeholder="Full description / specifications"
+        oninput="updateSarawatItemField(${i},'description',this.value)">${escapeHtml(it.description || '')}</textarea>
+      <table class="dn-items-table sarawat-tier-table">
+        <thead><tr><th></th><th>Qty</th><th>Unit Price (auto)</th><th>Total (ex-VAT)</th><th>Adjustment</th><th></th></tr></thead>
+        <tbody>${tierRows}</tbody>
+      </table>
+      <button class="btn-sm btn-sm-outline" style="margin-top:8px;" onclick="addSarawatTier(${i})">+ Add Quantity Line</button>
+    </div>`;
+  }).join('') || `<div style="padding:14px 0;font-size:8.5px;color:var(--light);">No items extracted — add one manually below.</div>`;
 
   $('mainArea').innerHTML = buildTabsHTML() + `
     <div class="purch-upload-panel">
@@ -3286,17 +3442,14 @@ function renderSarawatForm() {
           <button class="btn-sm btn-sm-dark" onclick="adjustSarawatPrices(1)">Increase Prices by %</button>
           <button class="btn-sm btn-sm-outline" onclick="adjustSarawatPrices(-1)">Decrease Prices by %</button>
           <span style="font-size:7.5px;color:var(--light);margin-left:auto;align-self:center;">
-            Applies to checked items' pre-VAT total only &nbsp;·&nbsp;
+            Applies to checked quantity lines' pre-VAT total only &nbsp;·&nbsp;
             <span style="cursor:pointer;text-decoration:underline;" onclick="setSarawatApplyAll(true)">Select All</span> /
             <span style="cursor:pointer;text-decoration:underline;" onclick="setSarawatApplyAll(false)">None</span>
           </span>
         </div>
 
-        <table class="dn-items-table">
-          <thead><tr><th style="width:34px;">S.No</th><th style="width:24px;"></th><th>Description</th><th>Qty</th><th>Unit Price (auto)</th><th>Total (ex-VAT)</th><th>Per-Item %</th><th></th></tr></thead>
-          <tbody>${itemRows}</tbody>
-        </table>
-        <button class="btn-sm btn-sm-outline" style="margin-top:8px;" onclick="addSarawatItem()">+ Add Item</button>
+        ${itemCards}
+        <button class="btn-sm btn-sm-outline" style="margin-top:4px;" onclick="addSarawatItem()">+ Add Item</button>
       </div>
 
       <div style="margin-top:14px;max-width:280px;margin-left:auto;">
@@ -3338,13 +3491,26 @@ function renderSarawatForm() {
 // classes (already defined in <style>) for a consistent professional look, but
 // keeps Sarawat Professional Printing EST identity instead of the Vista logo.
 function buildSarawatQuotePDFHTML(s) {
-  const rows = s.items.map(it => `
+  // Grouped by item: the S.No/name/description print ONCE per product, then
+  // every quantity tier follows as its own row with the description column
+  // left blank — never repeated per tier.
+  const rows = s.items.map(it => {
+    const header = `
     <tr>
-      <td><div class="pp-item-name">${escapeHtml(it.desc) || '—'}</div></td>
-      <td class="pp-td-r">${it.qty % 1 === 0 ? it.qty : it.qty.toFixed(2)}</td>
-      <td class="pp-td-r">${it.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
-      <td class="pp-td-r">${it.total.toLocaleString('en',{minimumFractionDigits:2})}</td>
-    </tr>`).join('') || `<tr><td colspan="4" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items</td></tr>`;
+      <td colspan="4" style="padding-top:14px;">
+        <div class="pp-item-name">${escapeHtml((it.sno ? it.sno + ' — ' : '') + (it.itemName || '—'))}</div>
+        ${it.description ? `<div class="pp-item-desc">${escapeHtml(it.description)}</div>` : ''}
+      </td>
+    </tr>`;
+    const tierRows = (it.tiers || []).map(t => `
+    <tr>
+      <td></td>
+      <td class="pp-td-r">${t.qty % 1 === 0 ? t.qty : t.qty.toFixed(2)}</td>
+      <td class="pp-td-r">${t.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
+      <td class="pp-td-r">${t.total.toLocaleString('en',{minimumFractionDigits:2})}</td>
+    </tr>`).join('');
+    return header + tierRows;
+  }).join('') || `<tr><td colspan="4" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items</td></tr>`;
 
   return `
     <div class="pp-header pp-header-quo">
@@ -3439,15 +3605,27 @@ async function exportSarawatQuotePDF() {
 function exportVistaQuotationFromSarawat() {
   if (!sarawatState) return;
   const rate = (parseFloat(sarawatState.vatRate) || 0) / 100;
-  const items = sarawatState.items.map(it => ({
-    item: it.desc,
-    unit_price: it.unitPrice,
-    quantity: it.qty,
-    item_subtotal: it.total,
-    tax1_percent: sarawatState.vatRate + '%',
-    tax1_value: it.total * rate,
-    subtotal: it.total * (1 + rate),
-  }));
+  // renderQuoRow() (the existing, unmodified Vista quotation row renderer)
+  // already reads `item` as the bold name and `description` as a separate
+  // sub-line — so the name/description only need to be set on each group's
+  // FIRST tier row; leaving them blank on the rest groups the tiers under it
+  // without repeating the text. A non-breaking space (not '') keeps
+  // renderQuoRow's "name || '—'" fallback from showing a stray em dash.
+  const items = [];
+  sarawatState.items.forEach(it => {
+    (it.tiers || []).forEach((t, j) => {
+      items.push({
+        item: j === 0 ? ((it.sno ? it.sno + ' — ' : '') + (it.itemName || '—')) : ' ',
+        description: j === 0 ? (it.description || '') : '',
+        unit_price: t.unitPrice,
+        quantity: t.qty,
+        item_subtotal: t.total,
+        tax1_percent: sarawatState.vatRate + '%',
+        tax1_value: t.total * rate,
+        subtotal: t.total * (1 + rate),
+      });
+    });
+  });
   const doc = {
     no: sarawatState.quoteNo || 'SARAWAT-IMPORT',
     date: sarawatState.quoteDate || '',
