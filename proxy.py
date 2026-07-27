@@ -21,7 +21,9 @@ import base64 as _b64
 import datetime
 import json
 import os
+import subprocess
 import sys
+import time
 import urllib.request
 import urllib.error
 from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -103,6 +105,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._handle_gads_get()
         elif self.path.startswith('/api/meta/'):
             self._handle_meta_get()
+        elif self.path.startswith('/api/sqi/'):
+            import sqi_storage_api
+            sqi_storage_api.handle_get(self)
         elif self.path.startswith('/daftra/'):
             self._proxy_daftra()
         else:
@@ -138,6 +143,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             self._json_error(405, 'Method not allowed. Google Ads API proxy is read-only (GET only).')
         elif self.path.startswith('/api/meta/'):
             self._json_error(405, 'Method not allowed. Meta API proxy is read-only (GET only).')
+        elif self.path.startswith('/api/sqi/'):
+            import sqi_storage_api
+            sqi_storage_api.handle_post(self)
         elif self.path.startswith('/daftra/'):
             self._block_daftra_write()
         else:
@@ -149,8 +157,18 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
 
     # ── Daftra proxy (read-only GET only) ────────────────────────────────────
 
-    def do_DELETE(self): self._block_daftra_write()
-    def do_PUT(self):    self._block_daftra_write()
+    def do_DELETE(self):
+        if self.path.startswith('/api/sqi/'):
+            import sqi_storage_api
+            sqi_storage_api.handle_delete(self)
+        else:
+            self._block_daftra_write()
+    def do_PUT(self):
+        if self.path.startswith('/api/sqi/'):
+            import sqi_storage_api
+            sqi_storage_api.handle_put(self)
+        else:
+            self._block_daftra_write()
     def do_PATCH(self):
         if self.path.startswith('/daftra/'):
             self._block_daftra_write()
@@ -2078,6 +2096,184 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [setup]  {self.command} {self.path}  ->  {fmt % args}')
 
 
+# ── SQI AI proxy auto-start ──────────────────────────────────────────────────
+# Isolated on purpose (see sqi_ai_proxy.py's own docstring): this proxy.py
+# process never reads, holds, forwards, or logs ANTHROPIC_API_KEY. It only
+# launches sqi_ai_proxy.py as a separate child process, which inherits the
+# Windows environment on its own and checks the key itself. Nothing here
+# touches any other route or handler above — it is only ever called from
+# the __main__ block below.
+_SQI_AI_PROXY_PORT = int(os.environ.get('SQI_AI_PROXY_PORT', '8092'))
+_SQI_AI_PROXY_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sqi_ai_proxy.py')
+_sqi_ai_proxy_process = None  # only set if THIS process started it — see _stop_sqi_ai_proxy
+
+
+def _sqi_ai_proxy_probe():
+    """GET the SQI AI proxy's own /api/status. Returns ('up', data) if
+    something answering with the expected shape is already on the port,
+    ('down', None) if nothing answers, or ('conflict', None) if the port is
+    taken by something that isn't it (never assume — never risk a duplicate
+    or a clobbered unrelated service)."""
+    try:
+        req = urllib.request.Request(f'http://127.0.0.1:{_SQI_AI_PROXY_PORT}/api/status')
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        if isinstance(data, dict) and 'available' in data and 'provider' in data:
+            return 'up', data
+        return 'conflict', None
+    except (urllib.error.URLError, OSError, ValueError):
+        return 'down', None
+    except Exception:
+        return 'conflict', None
+
+
+def _sqi_ai_proxy_expected_build():
+    """Reads BUILD_VERSION straight out of the current sqi_ai_proxy.py on
+    disk — never a separately hardcoded copy in this file that could drift
+    out of sync. Loaded as a plain module (never enters its own
+    `if __name__ == '__main__'` block), so this never binds port 8092
+    itself; it only reads a constant off the already-imported module."""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('_sqi_ai_proxy_version_probe', _SQI_AI_PROXY_SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return getattr(mod, 'BUILD_VERSION', None)
+    except Exception:
+        return None
+
+
+def _sqi_ai_proxy_line(label, data):
+    key_note = 'AI ready' if (data and data.get('available')) else 'API key not configured'
+    build_note = (', build ' + data.get('build')) if (data and data.get('build')) else ''
+    print(f'  SQI AI proxy         : {label} ({key_note}{build_note})')
+
+
+def _find_pid_listening_on_port(port):
+    """Falls back to `netstat -ano` to find the PID bound to a port when
+    the running process can't tell us its own PID — which is exactly the
+    case for an old-build instance that predates the /api/status `pid`
+    field being added at all. Without this, a stale process from before
+    that field existed could never be found and stopped."""
+    try:
+        out = subprocess.check_output(['netstat', '-ano'], text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        return None
+    needle = ':' + str(port)
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[0] == 'TCP' and parts[-1].isdigit() and parts[-2] == 'LISTENING' and parts[1].endswith(needle):
+            return int(parts[-1])
+    return None
+
+
+def _stop_pid_tree(pid):
+    """Kills a process (and any children — see _stop_sqi_ai_proxy's own
+    docstring for why /T matters) by PID directly, for a process this
+    proxy.py instance did not itself start (e.g. a stale-build instance
+    discovered already running on the port)."""
+    if not pid:
+        return False
+    try:
+        subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
+        return False
+
+
+def _start_sqi_ai_proxy():
+    """Best-effort auto-start of the isolated Supplier Quotation
+    Intelligence AI proxy, so Youssef never has to run it in a separate
+    terminal. Any failure here is caught and reported as a warning — it
+    must never stop the main Vista proxy from starting."""
+    global _sqi_ai_proxy_process
+    expected_build = _sqi_ai_proxy_expected_build()
+    state, data = _sqi_ai_proxy_probe()
+    if state == 'up':
+        running_build = data.get('build')
+        if expected_build and running_build != expected_build:
+            # An already-running instance is serving OLD code (or code from
+            # before build tracking existed, running_build is None) — never
+            # silently reuse it just because a port answered. Stop it and
+            # fall through to start the current build fresh.
+            print(f'  SQI AI proxy         : AI proxy running old build ({running_build or "unknown"} ≠ {expected_build}) - restarting with current build')
+            # A pre-upgrade instance may not even report its own PID (that
+            # field itself could be part of what's new in this build) — the
+            # netstat fallback finds it by port instead so it can still be
+            # stopped rather than left running forever.
+            pid = data.get('pid') or _find_pid_listening_on_port(_SQI_AI_PROXY_PORT)
+            _stop_pid_tree(pid)
+            for _ in range(15):
+                time.sleep(0.2)
+                state2, _ = _sqi_ai_proxy_probe()
+                if state2 == 'down':
+                    break
+        else:
+            _sqi_ai_proxy_line('AI proxy already running', data)
+            return
+    state, data = _sqi_ai_proxy_probe()
+    if state == 'up':
+        # Stale instance would not go down (e.g. taskkill failed) — do not
+        # spawn a duplicate on top of it.
+        print(f'  SQI AI proxy         : AI proxy unavailable - old build would not stop on port {_SQI_AI_PROXY_PORT}')
+        return
+    if state == 'conflict':
+        print(f'  SQI AI proxy         : AI proxy unavailable - port {_SQI_AI_PROXY_PORT} is already in use by another process')
+        return
+    if not os.path.isfile(_SQI_AI_PROXY_SCRIPT):
+        print('  SQI AI proxy         : AI proxy unavailable - sqi_ai_proxy.py not found')
+        return
+    try:
+        creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        log_path = os.path.join(os.path.dirname(_SQI_AI_PROXY_SCRIPT), 'sqi_ai_proxy.log')
+        # Redirected to a real log file rather than DEVNULL — some Python
+        # launchers (the Microsoft Store "App Execution Alias" stub) fail to
+        # relaunch themselves as a child process when stdio is DEVNULL, which
+        # would silently make the AI proxy never actually start. A log file
+        # also means a startup crash is visible instead of swallowed.
+        _sqi_ai_proxy_log = open(log_path, 'a', encoding='utf-8')
+        _sqi_ai_proxy_process = subprocess.Popen(
+            [sys.executable, _SQI_AI_PROXY_SCRIPT],
+            cwd=os.path.dirname(_SQI_AI_PROXY_SCRIPT),
+            stdout=_sqi_ai_proxy_log, stderr=subprocess.STDOUT,
+            creationflags=creationflags,
+        )
+    except Exception as e:
+        print(f'  SQI AI proxy         : AI proxy unavailable - failed to start ({e})')
+        return
+    # Give it a moment to bind the port, then confirm rather than assume.
+    # A generous window (up to ~8s) because some Python launchers (e.g. the
+    # Microsoft Store "App Execution Alias" stub) relaunch themselves as a
+    # child process before the real interpreter starts, which is slower
+    # than a normal venv/python.exe cold start.
+    for _ in range(40):
+        time.sleep(0.2)
+        state2, data2 = _sqi_ai_proxy_probe()
+        if state2 == 'up':
+            _sqi_ai_proxy_line('AI proxy started successfully', data2)
+            return
+        if _sqi_ai_proxy_process.poll() is not None:
+            break  # the child exited already — stop waiting on it
+    print(f'  SQI AI proxy         : AI proxy unavailable - did not respond on port {_SQI_AI_PROXY_PORT} after starting')
+
+
+def _stop_sqi_ai_proxy():
+    """Only stops the AI proxy if THIS proxy.py process started it — an
+    instance Youssef already had running elsewhere is left alone, matching
+    the "don't create duplicate processes" rule in the other direction.
+    Uses taskkill /T to kill the whole process tree rather than just
+    Popen.terminate() on the immediate child: some Python launchers (the
+    Microsoft Store "App Execution Alias" stub in particular) relaunch
+    themselves as a grandchild process, and terminate() alone would leave
+    that real interpreter running as an orphan."""
+    if _sqi_ai_proxy_process and _sqi_ai_proxy_process.poll() is None:
+        if not _stop_pid_tree(_sqi_ai_proxy_process.pid):
+            try:
+                _sqi_ai_proxy_process.terminate()
+            except Exception:
+                pass
+
+
 # ── Startup ────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     # Change working directory to the folder containing this script
@@ -2105,6 +2301,7 @@ if __name__ == '__main__':
     _meta_file_ok  = (bool(_meta_token_path) and not _meta_token_path.startswith('REPLACE_')
                       and os.path.isfile(_meta_token_path))
     print(f'  Meta / Instagram API : {"OK - configured" if (_meta_acct_ok and _meta_file_ok) else "NOT SET - use Meta Setup Center"}')
+    _start_sqi_ai_proxy()
     print()
     print('  Press Ctrl+C to stop.')
     print()
@@ -2113,8 +2310,10 @@ if __name__ == '__main__':
         server = ThreadingHTTPServer((BIND, PORT), VistaProxyHandler)
         server.serve_forever()
     except KeyboardInterrupt:
+        _stop_sqi_ai_proxy()
         print('\n  Proxy stopped.')
     except OSError as e:
+        _stop_sqi_ai_proxy()
         print(f'\n  ERROR: Could not start server on port {PORT}: {e}')
         print(f'  Try changing "port" in config.json to a free port (e.g. 8081).')
         sys.exit(1)
