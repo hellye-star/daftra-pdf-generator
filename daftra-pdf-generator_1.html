@@ -371,6 +371,9 @@ let rvState = null;
 let purchasingFiles = [];    // cache from /purchasing-invoices/list
 let purchasingSearch = '';   // active search string in purchasing tab
 let purchasingSelected = new Set(); // selected file relativePaths
+let purchasingDateFrom = '';   // 'YYYY-MM-DD' or '' — inclusive lower bound (folder date)
+let purchasingDateTo   = '';   // 'YYYY-MM-DD' or '' — inclusive upper bound (folder date)
+let purchasingDocType  = 'all'; // 'all' | 'invoice' | 'payment' — document-type filter
 
 // ── Sarawat Quote Import — state ─────────────────────────────────────────────
 // { fileName, quoteNo, quoteDate, client, vatRate, items:[{desc,qty,total,unitPrice}],
@@ -2008,6 +2011,9 @@ async function printAllInvoices() {
 function showPurchasingTab() {
   currentTab = 'purchasing_invoices';
   purchasingSearch = '';
+  purchasingDateFrom = '';
+  purchasingDateTo = '';
+  purchasingDocType = 'all';
 
   const today = new Date();
   const defaultFolder = `${today.getDate()}-${today.getMonth()+1}-${today.getFullYear()}`;
@@ -2030,6 +2036,25 @@ function showPurchasingTab() {
           onclick="uploadPurchasingFiles()">Upload</button>
       </div>
       <div id="purchUploadStatus" style="margin-top:8px;font-size:8px;color:var(--mid);"></div>
+    </div>
+
+    <div class="purch-filter-row no-print" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="form-group" style="width:150px;">
+        <div class="form-label">From Date</div>
+        <input class="form-input" type="date" id="purchDateFromInput" onchange="setPurchDateFilter()">
+      </div>
+      <div class="form-group" style="width:150px;">
+        <div class="form-label">To Date</div>
+        <input class="form-input" type="date" id="purchDateToInput" onchange="setPurchDateFilter()">
+      </div>
+      <button class="btn-sm btn-sm-outline" style="height:fit-content;margin-bottom:1px;"
+        onclick="clearPurchDateFilter()">Clear Date Filter</button>
+      <div style="flex:1;min-width:8px;"></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-sm btn-sm-dark" id="purchDocTypeAllBtn" onclick="setPurchDocType('all')">All</button>
+        <button class="btn-sm btn-sm-outline" id="purchDocTypePaymentBtn" onclick="setPurchDocType('payment')">Payment Receipts</button>
+        <button class="btn-sm btn-sm-outline" id="purchDocTypeInvoiceBtn" onclick="setPurchDocType('invoice')">Purchasing Invoices</button>
+      </div>
     </div>
 
     <div class="purch-search-row no-print">
@@ -2153,21 +2178,106 @@ function _sortPurchFilesForPrint(files) {
   });
 }
 
+// ── Date range + document-type filters ────────────────────────────────────
+// Parse an <input type="date"> value ("YYYY-MM-DD") as a local-midnight Date,
+// matching parsePurchFolderDate's local construction (avoids UTC/local
+// off-by-one-day mismatches that new Date("YYYY-MM-DD") would introduce).
+function _parseDateInputLocal(str) {
+  if (!str) return null;
+  const p = str.split('-');
+  if (p.length !== 3) return null;
+  const [y, m, d] = p.map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function purchFileInDateRange(f) {
+  if (!purchasingDateFrom && !purchasingDateTo) return true;
+  const d = parsePurchFolderDate(f.folder);
+  if (!d) return false; // files with no parseable date folder can't be "inside" a range
+  if (purchasingDateFrom) {
+    const from = _parseDateInputLocal(purchasingDateFrom);
+    if (from && d < from) return false;
+  }
+  if (purchasingDateTo) {
+    const to = _parseDateInputLocal(purchasingDateTo);
+    if (to && d > to) return false;
+  }
+  return true;
+}
+
+function purchFileMatchesDocType(f) {
+  if (purchasingDocType === 'all') return true;
+  return classifyPurchFile(f.name, f.relativePath) === purchasingDocType;
+}
+
+// Single source of truth for "currently visible" files — combines search,
+// date range, and document-type filters. Used by rendering, select-all, and
+// print-all so the list, counts, selection, and print output never diverge.
+function getVisiblePurchasingFiles() {
+  const q = purchasingSearch.toLowerCase().trim();
+  return purchasingFiles.filter(f => {
+    if (q && !(f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))) return false;
+    if (!purchFileInDateRange(f)) return false;
+    if (!purchFileMatchesDocType(f)) return false;
+    return true;
+  });
+}
+
+// Drop any selected file that's no longer visible under the active filters,
+// so hidden records never remain in the print selection or selected count.
+function prunePurchasingSelection() {
+  const visible = new Set(getVisiblePurchasingFiles().map(f => f.relativePath));
+  for (const rel of Array.from(purchasingSelected)) {
+    if (!visible.has(rel)) purchasingSelected.delete(rel);
+  }
+}
+
+function setPurchDateFilter() {
+  const fromEl = $('purchDateFromInput');
+  const toEl   = $('purchDateToInput');
+  purchasingDateFrom = fromEl ? fromEl.value : '';
+  purchasingDateTo   = toEl ? toEl.value : '';
+  renderPurchasingList();
+}
+
+function clearPurchDateFilter() {
+  purchasingDateFrom = '';
+  purchasingDateTo = '';
+  const fromEl = $('purchDateFromInput');
+  const toEl   = $('purchDateToInput');
+  if (fromEl) fromEl.value = '';
+  if (toEl)   toEl.value = '';
+  renderPurchasingList();
+}
+
+function setPurchDocType(type) {
+  purchasingDocType = type;
+  const btns = { all: 'purchDocTypeAllBtn', payment: 'purchDocTypePaymentBtn', invoice: 'purchDocTypeInvoiceBtn' };
+  Object.keys(btns).forEach(t => {
+    const btn = $(btns[t]);
+    if (btn) btn.className = 'btn-sm ' + (t === type ? 'btn-sm-dark' : 'btn-sm-outline');
+  });
+  renderPurchasingList();
+}
+
 function renderPurchasingList() {
   const listEl = $('purchListArea');
   if (!listEl) return;
 
+  prunePurchasingSelection();
+
   const q = purchasingSearch.toLowerCase().trim();
-  const filtered = q
-    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
-    : purchasingFiles;
+  const filtered = getVisiblePurchasingFiles();
+  const filtersActive = !!q || !!purchasingDateFrom || !!purchasingDateTo || purchasingDocType !== 'all';
 
   if (filtered.length === 0) {
     listEl.innerHTML = `<div class="empty-state">
       <div class="empty-sub">${purchasingFiles.length === 0
         ? 'No purchasing invoices found. Check that the folder exists and contains PDF or image files.'
-        : `No files match "${escapeHtml(purchasingSearch)}".`}</div>
+        : filtersActive ? 'No files match the current filters.' : `No files match "${escapeHtml(purchasingSearch)}".`}</div>
     </div>`;
+    updatePurchSelectionControls();
     return;
   }
 
@@ -2515,12 +2625,8 @@ function updatePurchSelectionControls() {
 }
 
 function selectAllPurchasing() {
-  // Select all currently visible (filtered) files
-  const q = purchasingSearch.toLowerCase().trim();
-  const visible = q
-    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
-    : purchasingFiles;
-  visible.forEach(f => purchasingSelected.add(f.relativePath));
+  // Select all currently visible (search + date + doc-type filtered) files
+  getVisiblePurchasingFiles().forEach(f => purchasingSelected.add(f.relativePath));
   renderPurchasingList();
 }
 
@@ -2532,11 +2638,7 @@ function clearPurchSelection() {
 // Select or deselect all currently visible files in the Invoices section only.
 // Called by the checkbox in the Invoices section header.
 function toggleSelectAllInvoices(checked) {
-  const q = purchasingSearch.toLowerCase().trim();
-  const visible = q
-    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
-    : purchasingFiles;
-  const invoices = visible.filter(f => classifyPurchFile(f.name, f.relativePath) === 'invoice');
+  const invoices = getVisiblePurchasingFiles().filter(f => classifyPurchFile(f.name, f.relativePath) === 'invoice');
   if (checked) {
     invoices.forEach(f => purchasingSelected.add(f.relativePath));
   } else {
@@ -2567,39 +2669,23 @@ function printSelectedPurchasingFiles() {
   _purchCombinePrint(sorted, `Print Selected — ${sorted.length} file${sorted.length !== 1 ? 's' : ''}`, null);
 }
 
-// Print All: combines only the Invoices section into one PDF via proxy.
-// Payment Slips/Receipts and Others are skipped by default.
+// Print All: combines every currently visible (search + date + doc-type
+// filtered) file into one PDF via proxy. The print set always exactly
+// matches the active combined filters — under 'all' that means both
+// Purchasing Invoices and Payment Receipts (and any Others) that pass the
+// search/date filters; under a specific doc-type filter it's just that type.
 function printAllPurchasingFiles() {
-  const q = purchasingSearch.toLowerCase().trim();
-  const allVisible = q
-    ? purchasingFiles.filter(f => f.name.toLowerCase().includes(q) || f.folder.toLowerCase().includes(q))
-    : purchasingFiles;
+  const allVisible = getVisiblePurchasingFiles();
 
   if (!allVisible.length) { alert('No files to print.'); return; }
 
-  const invoices = allVisible.filter(f => classifyPurchFile(f.name, f.relativePath) === 'invoice');
-  const skipped  = allVisible.length - invoices.length;
-
-  if (invoices.length === 0) {
-    const detail = allVisible.filter(f => classifyPurchFile(f.name, f.relativePath) !== 'invoice');
-    const byType = { payment: 0, other: 0 };
-    detail.forEach(f => { byType[classifyPurchFile(f.name, f.relativePath)]++; });
-    alert(
-      `No invoice files to print.\n` +
-      `${byType.payment} payment slip/receipt file${byType.payment !== 1 ? 's' : ''} and ` +
-      `${byType.other} other file${byType.other !== 1 ? 's' : ''} were skipped.\n\n` +
-      `Use Print Selected to include them.`
-    );
-    return;
-  }
-
-  const skipNote = skipped > 0
-    ? `Skipped ${skipped} non-invoice file${skipped !== 1 ? 's' : ''} (payment slips / others)`
-    : null;
+  const titleLabel = purchasingDocType === 'payment' ? 'Print All Payment Receipts'
+    : purchasingDocType === 'invoice' ? 'Print All Purchasing Invoices'
+    : 'Print All';
 
   // Sort to match visible UI order: newest date first, alpha within date
-  const sorted = _sortPurchFilesForPrint(invoices);
-  _purchCombinePrint(sorted, `Print All Invoices — ${sorted.length} file${sorted.length !== 1 ? 's' : ''}`, skipNote);
+  const sorted = _sortPurchFilesForPrint(allVisible);
+  _purchCombinePrint(sorted, `${titleLabel} — ${sorted.length} file${sorted.length !== 1 ? 's' : ''}`, null);
 }
 
 async function uploadPurchasingFiles() {
