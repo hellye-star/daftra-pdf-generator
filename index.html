@@ -207,41 +207,49 @@
       </div>
     </a>
 
-
-    <!-- Card 5 — Marketing Intelligence (V1 · Static) -->
-    <a href="marketing-dashboard.html" class="card">
-      <div class="card-body">
-        <div class="card-icon">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="3.5" cy="12.5" r="1.5" stroke="currentColor" stroke-width="0.8"/>
-            <circle cx="8" cy="6.5" r="1.5" stroke="currentColor" stroke-width="0.8"/>
-            <circle cx="12.5" cy="3.5" r="1.5" stroke="currentColor" stroke-width="0.8"/>
-            <line x1="4.5" y1="11.5" x2="7" y2="7.5" stroke="currentColor" stroke-width="0.7"/>
-            <line x1="9" y1="5.5" x2="11.5" y2="4.5" stroke="currentColor" stroke-width="0.7"/>
-          </svg>
-        </div>
-        <div class="card-title">Marketing Intelligence<span class="card-title-ar">ذكاء التسويق</span></div>
-        <div class="card-desc">Cross-channel ad performance — Instagram, TikTok, Google Ads. Spend, reach, CPL, engagement, best and weakest posts. Weekly recommendation summary.</div>
-      </div>
-      <div class="card-footer">
-        <div class="card-cta">
-          Open tool
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6h8M7 3l3 3-3 3" stroke="currentColor" stroke-width="1"/>
-          </svg>
-        </div>
-        <div class="card-status status-soon">V1 · Static</div>
-      </div>
-    </a>
-
   </div><!-- /cards -->
 
   <!-- Footer -->
   <div class="site-footer">
     <div class="site-footer-name">Vista United Co. &nbsp;·&nbsp; Internal Platform</div>
-    <div class="site-footer-version">v1.0 &nbsp;·&nbsp; 2026</div>
+    <div style="display:flex;align-items:baseline;gap:20px;">
+      <button onclick="document.getElementById('paused-modal').style.display='flex'" style="background:none;border:none;cursor:pointer;font-family:inherit;font-size:7px;letter-spacing:0.06em;text-transform:uppercase;color:#C8C5BF;padding:0;">Paused Modules</button>
+      <div class="site-footer-version">v1.0 &nbsp;·&nbsp; 2026</div>
+    </div>
   </div>
 
 </div><!-- /page -->
+
+<!-- Paused Modules Modal -->
+<div id="paused-modal" style="display:none;position:fixed;inset:0;background:rgba(28,28,26,0.35);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#FFFFFF;border:1px solid #D8D5CF;padding:36px 40px 32px;max-width:400px;width:90%;position:relative;">
+    <button onclick="document.getElementById('paused-modal').style.display='none'" style="position:absolute;top:16px;right:20px;background:none;border:none;cursor:pointer;font-size:16px;color:#ADADAA;line-height:1;">&#215;</button>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600;color:#1C1C1A;margin-bottom:6px;">Paused Modules</div>
+    <div style="font-family:'Jost',sans-serif;font-size:11px;color:#6B6B67;line-height:1.6;margin-bottom:28px;">These modules are currently paused and can be resumed later if needed.</div>
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1px solid #D8D5CF;">
+        <div>
+          <div style="font-family:'Jost',sans-serif;font-size:12px;font-weight:500;color:#1C1C1A;">WhatsApp Business Center</div>
+          <div style="font-family:'Jost',sans-serif;font-size:10px;color:#ADADAA;margin-top:2px;">مركز واتساب للأعمال</div>
+        </div>
+        <a href="whatsapp-business-center.html" style="font-family:'Jost',sans-serif;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B67;text-decoration:none;border:1px solid #D8D5CF;padding:5px 12px;white-space:nowrap;">Open</a>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1px solid #D8D5CF;">
+        <div>
+          <div style="font-family:'Jost',sans-serif;font-size:12px;font-weight:500;color:#1C1C1A;">Catalogue Manager</div>
+          <div style="font-family:'Jost',sans-serif;font-size:10px;color:#ADADAA;margin-top:2px;">إدارة الكتالوج</div>
+        </div>
+        <a href="catalogue.html" style="font-family:'Jost',sans-serif;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B67;text-decoration:none;border:1px solid #D8D5CF;padding:5px 12px;white-space:nowrap;">Open</a>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1px solid #D8D5CF;">
+        <div>
+          <div style="font-family:'Jost',sans-serif;font-size:12px;font-weight:500;color:#1C1C1A;">Marketing Intelligence</div>
+          <div style="font-family:'Jost',sans-serif;font-size:10px;color:#ADADAA;margin-top:2px;">ذكاء التسويق</div>
+        </div>
+        <a href="marketing-dashboard.html" style="font-family:'Jost',sans-serif;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#6B6B67;text-decoration:none;border:1px solid #D8D5CF;padding:5px 12px;white-space:nowrap;">Open</a>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
