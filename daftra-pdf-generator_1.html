@@ -3110,8 +3110,40 @@ function parseSarawatItemsFallback(text) {
   // filter out entirely rather than risk them being read as a phantom item.
   const contactInfoRe = /^(tel\.?|fax\.?|phone|mobile|email|e-?mail|website|www\.|address|p\.?o\.?\s*box|vat\s*(no\.?|number|#)|c\.?r\.?\s*(no\.?|number|#))\s*[:#]?\s*\S/i;
 
+  // Some supplier templates (e.g. Jazaaco Ventures) print an explicit row sequence
+  // number at the START of every item line — "3 flags 2.50 0.80 22 1,400.00
+  // 30,800.00" — including parent/group-label rows that carry no price yet, using
+  // "-" placeholders instead: "1 Entrance Arch 1 - -". This is structurally
+  // different from Sarawat's own multi-line-then-closing-row template (which never
+  // has a per-row leading number), so it needs its own item-boundary and
+  // description-attachment rules — see numberedRowMode below. A leading digit alone
+  // is never trusted as a new-item boundary by itself; the remainder must also
+  // resolve as either a priced row or a placeholder row, so ordinary description
+  // text that happens to start with a number can't false-trigger it.
+  const LEADING_ROW_NO_RE = /^(\d{1,4})\s+(.+)$/;
+  // One or two trailing "-"/"—" placeholder tokens with nothing numeric after them —
+  // the supplier has not filled in pricing yet for this row.
+  const PLACEHOLDER_TAIL_RE = /(?:^|\s)(?:-|—)(?:\s+(?:-|—))?\s*$/;
+  // A line that pdf.js's row-reconstruction sometimes produces containing nothing
+  // but the row's own S.No — its row's actual content already appeared on the
+  // PREVIOUS line with no leading number of its own (observed: the S.No text's
+  // y-bucket lands one row later than the rest of that row's content). Only
+  // trusted as a confirming S.No — never as new content of its own — and only
+  // when the line immediately before it already independently resolves as a
+  // full placeholder or priced row; see the lookahead check below.
+  const BARE_NUMBER_RE = /^\d{1,4}$/;
+
   const items = [];
   let pendingDesc = []; // description lines accumulated for the item currently being read
+  // Flips permanently true on the first confirmed Jazaaco/BOQ-style leading-numbered
+  // row. Before that, behaviour is identical to the original Sarawat-template logic.
+  let numberedRowMode = false;
+  // Most recently pushed item — in numberedRowMode, plain continuation lines (no
+  // leading number) attach here instead of accumulating forward into pendingDesc,
+  // since this supplier prints short explanatory text AFTER an item's priced row
+  // rather than before it (e.g. "fabric flags with the logo and company name
+  // printed," follows and describes "flags", not whatever item comes next).
+  let lastItem = null;
 
   // Combines every accumulated description line plus optional trailing text found on
   // the line that closed the item (e.g. text left over after stripping a qty phrase).
@@ -3121,84 +3153,180 @@ function parseSarawatItemsFallback(text) {
     return parts.join(' ').replace(/\s+/g, ' ').trim();
   };
 
-  lines.forEach(line => {
+  // numberedRowMode only: appends a continuation line to the item that most recently
+  // closed. Returns false if there is no item yet to attach to (caller falls back to
+  // pendingDesc in that case — e.g. stray letterhead text before the first item).
+  function appendTrailingDesc(line) {
+    if (!lastItem) return false;
+    lastItem.desc = (lastItem.desc ? lastItem.desc + ' ' : '') + line;
+    return true;
+  }
+
+  // Indexed loop (not forEach) — the bare-S.No lookahead below needs to peek at
+  // lines[i+1] and, when it confirms a detached S.No, consume it by advancing i.
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     // Labeled header fields (quotation no./customer — both regexes require an explicit
     // keyword, so they can't accidentally fire on real item text) mark the end of any
     // preamble/letterhead text collected so far — flush it, don't keep it as description.
     const isHeaderLine = noRe.test(line) || clientRe.test(line);
-    if (isHeaderLine || dateLabelRe.test(line)) { pendingDesc = []; return; }
-    if (isTableHeaderLine(line)) { pendingDesc = []; return; }
-    if (contactInfoRe.test(line)) { pendingDesc = []; return; }
-    if (skipWordsRe.test(line)) { pendingDesc = []; return; } // totals/VAT section — no more items follow
+    if (isHeaderLine || dateLabelRe.test(line)) { pendingDesc = []; continue; }
+    if (isTableHeaderLine(line)) { pendingDesc = []; continue; }
+    if (contactInfoRe.test(line)) { pendingDesc = []; continue; }
+    if (skipWordsRe.test(line)) { pendingDesc = []; continue; } // totals/VAT section — no more items follow
 
-    // Pass 1 — explicit quantity phrase in the description takes priority over any
-    // column-based reading, so the same number is never also treated as a price.
-    // This line closes the pending item, combining every accumulated description
-    // line into one full multi-line description.
-    const qtyMatch = line.match(qtyPhraseRe);
-    if (qtyMatch) {
-      const qty = toNum(qtyMatch[1]);
-      if (qty > 0) {
-        const remainder = (line.slice(0, qtyMatch.index) + line.slice(qtyMatch.index + qtyMatch[0].length))
-          .replace(/\s+/g, ' ').trim();
-        let total = 0, extraDesc = '';
-        const mTotal2 = remainder.match(row3Re);        // leftover desc + [unit price, total]
-        if (mTotal2) { extraDesc = mTotal2[1].trim(); total = toNum(mTotal2[3]); }
-        else {
-          const mTotal1 = remainder.match(row2Re);       // leftover desc + [total] only
-          if (mTotal1) { extraDesc = mTotal1[1].trim(); total = toNum(mTotal1[2]); }
-          else if (numOnlyRe.test(remainder)) { total = toNum(remainder); }   // nothing left but the total itself
-          else if (remainder) { extraDesc = remainder; }  // leftover text with no clean numeric split — keep it, don't lose it
+    // Jazaaco/BOQ leading-numbered-row check — new item boundary, independent of
+    // the Sarawat-template passes below.
+    const leadM = line.match(LEADING_ROW_NO_RE);
+    if (leadM) {
+      const rest = leadM[2];
+      const isPlaceholder = PLACEHOLDER_TAIL_RE.test(rest);
+      const m4lead = !isPlaceholder ? rest.match(row4Re) : null;
+      const m3lead = (!isPlaceholder && !m4lead) ? rest.match(row3Re) : null;
+      const m3leadValid = m3lead && toNum(m3lead[2]) > 0 && isWholeNumber(toNum(m3lead[2])) && toNum(m3lead[3]) > 0;
+
+      if (isPlaceholder || m4lead || m3leadValid) {
+        numberedRowMode = true;
+        const leadDesc = pendingDesc.slice();
+        pendingDesc = [];
+        let item;
+        if (isPlaceholder) {
+          // Parent/group-label row with no price yet — becomes its own item. Qty is
+          // read from the row's own trailing number (if any) just before the dash
+          // placeholder(s); total is always 0 since there is nothing to derive it
+          // from. Always flagged for review so the user notices it needs a manual
+          // price before export.
+          const stripped = rest.replace(PLACEHOLDER_TAIL_RE, '').trim();
+          const qtyLead = stripped.match(/(\d+(?:\.\d+)?)\s*$/);
+          const qty = qtyLead ? toNum(qtyLead[1]) : 0;
+          const descText = qtyLead ? stripped.slice(0, qtyLead.index).trim() : stripped;
+          item = { desc: [...leadDesc, descText].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(), qty, total: 0, review: true };
+        } else if (m4lead) {
+          item = { desc: [...leadDesc, m4lead[1].trim()].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(), qty: toNum(m4lead[2]), total: toNum(m4lead[4]) };
+        } else {
+          item = { desc: [...leadDesc, m3lead[1].trim()].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(), qty: toNum(m3lead[2]), total: toNum(m3lead[3]) };
         }
-        items.push({ desc: joinDesc(extraDesc) || line, qty, total });
+        items.push(item);
+        lastItem = item;
+        continue;
+      }
+      // Leading number present but the remainder didn't resolve as a new item —
+      // fall through and treat the whole line as ordinary continuation text below
+      // (rare: description text that happens to start with a digit).
+    }
+
+    if (!numberedRowMode) {
+      // ── Sarawat's own multi-line-then-closing-row template — unchanged ────────
+
+      // Pass 1 — explicit quantity phrase in the description takes priority over any
+      // column-based reading, so the same number is never also treated as a price.
+      // This line closes the pending item, combining every accumulated description
+      // line into one full multi-line description.
+      const qtyMatch = line.match(qtyPhraseRe);
+      if (qtyMatch) {
+        const qty = toNum(qtyMatch[1]);
+        if (qty > 0) {
+          const remainder = (line.slice(0, qtyMatch.index) + line.slice(qtyMatch.index + qtyMatch[0].length))
+            .replace(/\s+/g, ' ').trim();
+          let total = 0, extraDesc = '';
+          const mTotal2 = remainder.match(row3Re);        // leftover desc + [unit price, total]
+          if (mTotal2) { extraDesc = mTotal2[1].trim(); total = toNum(mTotal2[3]); }
+          else {
+            const mTotal1 = remainder.match(row2Re);       // leftover desc + [total] only
+            if (mTotal1) { extraDesc = mTotal1[1].trim(); total = toNum(mTotal1[2]); }
+            else if (numOnlyRe.test(remainder)) { total = toNum(remainder); }   // nothing left but the total itself
+            else if (remainder) { extraDesc = remainder; }  // leftover text with no clean numeric split — keep it, don't lose it
+          }
+          items.push({ desc: joinDesc(extraDesc) || line, qty, total });
+          pendingDesc = [];
+          continue;
+        }
+      }
+
+      // Pass 2 — no explicit quantity phrase. Try a clean 3-column layout first
+      // (separate qty / price / total columns).
+      const m4 = line.match(row4Re);
+      if (m4) {
+        const qty = toNum(m4[2]);
+        if (qty > 0) { items.push({ desc: joinDesc(m4[1].trim()), qty, total: toNum(m4[4]) }); pendingDesc = []; continue; }
+      }
+
+      // Only 2 trailing numbers and no "copies/pcs" word: do not blindly assume the
+      // first one is quantity and the second is a unit price to multiply. Only trust
+      // it as [quantity, total] when the first number looks like a genuine count
+      // (a whole number, e.g. 500 / 1000 / 5000 / 10000) — the final number is always
+      // treated as the line total, never as a price to be multiplied.
+      const m3 = line.match(row3Re);
+      if (m3) {
+        const num1 = toNum(m3[2]), num2 = toNum(m3[3]);
+        if (num1 > 0 && isWholeNumber(num1) && num2 > 0) {
+          items.push({ desc: joinDesc(m3[1].trim()), qty: num1, total: num2 });
+          pendingDesc = [];
+          continue;
+        }
+        // else: ambiguous (e.g. a decimal like 0.09) — fall through and keep the line
+        // as part of the description rather than silently dropping it.
+      }
+
+      // Multi-line item whose closing row is JUST "qty total" with no description text
+      // of its own on that line (the description was already fully accumulated above),
+      // e.g. "3   396.00". row3Re/row4Re require a leading desc portion on the same
+      // line, so they can't match this — a dedicated bare two-number check is needed.
+      const mBare = line.match(bareQtyTotalRe);
+      if (mBare) {
+        const qty = toNum(mBare[1]);
+        if (qty > 0 && isWholeNumber(qty)) {
+          items.push({ desc: joinDesc(), qty, total: toNum(mBare[2]) });
+          pendingDesc = [];
+          continue;
+        }
+      }
+
+      // Not a recognizable item-closing row — treat as a continuation of the current
+      // item's (possibly multi-line) description, per "keep more text rather than less".
+      pendingDesc.push(line);
+      continue;
+    }
+
+    // A detached S.No: this content line has no leading number of its own, but the
+    // very next line is nothing but a bare number — check whether THIS line alone
+    // already has a full placeholder/priced shape before trusting that combination
+    // as a new item boundary (guards against ever mistaking an ordinary quantity or
+    // total elsewhere in the text for a stray S.No confirmation).
+    const bareFollows = i + 1 < lines.length && BARE_NUMBER_RE.test(lines[i + 1]);
+    if (bareFollows) {
+      const isPlaceholderNoLead = PLACEHOLDER_TAIL_RE.test(line);
+      const m4NoLead = !isPlaceholderNoLead ? line.match(row4Re) : null;
+      const m3NoLead = (!isPlaceholderNoLead && !m4NoLead) ? line.match(row3Re) : null;
+      const m3NoLeadValid = m3NoLead && toNum(m3NoLead[2]) > 0 && isWholeNumber(toNum(m3NoLead[2])) && toNum(m3NoLead[3]) > 0;
+
+      if (isPlaceholderNoLead || m4NoLead || m3NoLeadValid) {
+        const leadDesc = pendingDesc.slice();
         pendingDesc = [];
-        return;
+        let item;
+        if (isPlaceholderNoLead) {
+          const stripped = line.replace(PLACEHOLDER_TAIL_RE, '').trim();
+          const qtyLead = stripped.match(/(\d+(?:\.\d+)?)\s*$/);
+          const qty = qtyLead ? toNum(qtyLead[1]) : 0;
+          const descText = qtyLead ? stripped.slice(0, qtyLead.index).trim() : stripped;
+          item = { desc: [...leadDesc, descText].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(), qty, total: 0, review: true };
+        } else if (m4NoLead) {
+          item = { desc: [...leadDesc, m4NoLead[1].trim()].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(), qty: toNum(m4NoLead[2]), total: toNum(m4NoLead[4]) };
+        } else {
+          item = { desc: [...leadDesc, m3NoLead[1].trim()].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim(), qty: toNum(m3NoLead[2]), total: toNum(m3NoLead[3]) };
+        }
+        items.push(item);
+        lastItem = item;
+        i++; // consume the confirming bare-number line
+        continue;
       }
     }
 
-    // Pass 2 — no explicit quantity phrase. Try a clean 3-column layout first
-    // (separate qty / price / total columns).
-    const m4 = line.match(row4Re);
-    if (m4) {
-      const qty = toNum(m4[2]);
-      if (qty > 0) { items.push({ desc: joinDesc(m4[1].trim()), qty, total: toNum(m4[4]) }); pendingDesc = []; return; }
-    }
-
-    // Only 2 trailing numbers and no "copies/pcs" word: do not blindly assume the
-    // first one is quantity and the second is a unit price to multiply. Only trust
-    // it as [quantity, total] when the first number looks like a genuine count
-    // (a whole number, e.g. 500 / 1000 / 5000 / 10000) — the final number is always
-    // treated as the line total, never as a price to be multiplied.
-    const m3 = line.match(row3Re);
-    if (m3) {
-      const num1 = toNum(m3[2]), num2 = toNum(m3[3]);
-      if (num1 > 0 && isWholeNumber(num1) && num2 > 0) {
-        items.push({ desc: joinDesc(m3[1].trim()), qty: num1, total: num2 });
-        pendingDesc = [];
-        return;
-      }
-      // else: ambiguous (e.g. a decimal like 0.09) — fall through and keep the line
-      // as part of the description rather than silently dropping it.
-    }
-
-    // Multi-line item whose closing row is JUST "qty total" with no description text
-    // of its own on that line (the description was already fully accumulated above),
-    // e.g. "3   396.00". row3Re/row4Re require a leading desc portion on the same
-    // line, so they can't match this — a dedicated bare two-number check is needed.
-    const mBare = line.match(bareQtyTotalRe);
-    if (mBare) {
-      const qty = toNum(mBare[1]);
-      if (qty > 0 && isWholeNumber(qty)) {
-        items.push({ desc: joinDesc(), qty, total: toNum(mBare[2]) });
-        pendingDesc = [];
-        return;
-      }
-    }
-
-    // Not a recognizable item-closing row — treat as a continuation of the current
-    // item's (possibly multi-line) description, per "keep more text rather than less".
-    pendingDesc.push(line);
-  });
+    // numberedRowMode: plain continuation line — attach backward to the item that
+    // most recently closed (this supplier prints trailing description AFTER the
+    // priced row), not forward into pendingDesc for whatever item starts next.
+    if (!appendTrailingDesc(line)) pendingDesc.push(line);
+  }
 
   return items;
 }
@@ -3221,7 +3349,7 @@ async function handleSarawatPdfUpload(input) {
       // The fallback text parser has no table columns to read a name/spec
       // split or separate tiers from — one item, one tier, name = full text.
       items = parseSarawatItemsFallback(fullText).map(it => ({
-        sno: '', itemName: it.desc || '', description: '', qtyDisplay: '', qtyReview: false,
+        sno: '', itemName: it.desc || '', description: '', qtyDisplay: '', qtyReview: !!it.review,
         tiers: [{ qty: it.qty, unitPrice: it.qty > 0 ? Math.round((it.total / it.qty) * 10000) / 10000 : 0, total: it.total, applyAdjust: true, itemAdjustPct: '' }],
       }));
       usedFallback = true;
