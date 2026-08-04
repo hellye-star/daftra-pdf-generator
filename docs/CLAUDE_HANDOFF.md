@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-04
 **Branch:** `stable-reviewed-history`
-**HEAD:** `a90e3d3` — "Add paused modules section" (matches `origin/stable-reviewed-history`, 0 ahead/0 behind)
+**HEAD:** `09d7cd8` — "Add Claude handoff for current stable state" (matches `origin/stable-reviewed-history`, 0 ahead/0 behind)
 
 Read this file first, every session, before touching anything.
 
