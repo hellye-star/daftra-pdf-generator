@@ -421,6 +421,20 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             abs_paths.append((abs_path, ext))
 
         # ── Combine with fitz ────────────────────────────────────────────────
+        # Filenames can contain any Unicode (Arabic/CJK/emoji, etc.), but this
+        # console's codepage (e.g. Windows cp1252) often can't encode them —
+        # print()'ing a raw filename then raises UnicodeEncodeError, which
+        # previously crashed the whole request thread (the except-block's own
+        # error-logging print below was not itself guarded, so it raised the
+        # same error uncaught), aborting the connection before any HTTP
+        # response was sent — the browser then reports a bare "Failed to
+        # fetch" with no indication this was a logging-only failure. Routing
+        # every filename (and the exception text) through _log_safe() before
+        # printing fixes this — it only affects these diagnostic log lines,
+        # never the actual PDF bytes/merge logic above.
+        def _log_safe(s):
+            return s.encode('ascii', errors='replace').decode('ascii')
+
         total_files = len(abs_paths)
         print(f'  [purch]  combine: merging {total_files} file(s)…')
         combined = fitz.open()
@@ -432,16 +446,16 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
                     with fitz.open(abs_path) as src:
                         npages = src.page_count
                         combined.insert_pdf(src)
-                    print(f'  [purch]  combine:  {idx:3d}/{total_files}: {fname!r} — {npages} page(s)')
+                    print(f'  [purch]  combine:  {idx:3d}/{total_files}: {_log_safe(fname)!r} — {npages} page(s)')
                 else:
                     # Image: insert into a new page that matches image dimensions
                     img_doc = fitz.open(abs_path)          # treat image as single-page doc
                     combined.insert_pdf(img_doc)
                     img_doc.close()
-                    print(f'  [purch]  combine:  {idx:3d}/{total_files}: {fname!r} — 1 page (image)')
+                    print(f'  [purch]  combine:  {idx:3d}/{total_files}: {_log_safe(fname)!r} — 1 page (image)')
             except Exception as e:
                 errors.append(f'{fname}: {e}')
-                print(f'  [purch]  combine:  {idx:3d}/{total_files}: {fname!r} — SKIPPED: {e}')
+                print(f'  [purch]  combine:  {idx:3d}/{total_files}: {_log_safe(fname)!r} — SKIPPED: {_log_safe(str(e))}')
 
         if combined.page_count == 0:
             combined.close()
