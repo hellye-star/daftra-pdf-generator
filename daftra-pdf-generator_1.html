@@ -3553,26 +3553,40 @@ function renderSarawatForm() {
   if (!sarawatState) { showSarawatQuoteTab(); return; }
   const s = sarawatState;
 
+  // Preserve focus/cursor/scroll across the full #mainArea rebuild below — every
+  // keystroke in a Sarawat field calls this function, and replacing the entire
+  // innerHTML destroys the currently focused input/textarea, dropping focus to
+  // <body> and causing the browser to scroll the page back to the top. Re-identify
+  // the same field by its stable id (added throughout the templates below) after
+  // rebuilding and restore focus/selection/scroll — see the restore block at the
+  // end of this function.
+  const mainAreaEl = $('mainArea');
+  const activeEl = document.activeElement;
+  const activeId = (activeEl && activeEl.id && mainAreaEl && mainAreaEl.contains(activeEl)) ? activeEl.id : null;
+  const activeSelStart = (activeId && typeof activeEl.selectionStart === 'number') ? activeEl.selectionStart : null;
+  const activeSelEnd   = (activeId && typeof activeEl.selectionEnd === 'number') ? activeEl.selectionEnd : null;
+  const savedScrollY = window.scrollY;
+
   // One grouped card per product: S.No/name/description shown once, then a
   // compact table with every quantity tier as its own visible, editable row.
   const itemCards = s.items.map((it, i) => {
     const tierRows = it.tiers.map((t, j) => `
       <tr>
-        <td><input type="checkbox" ${t.applyAdjust !== false ? 'checked' : ''}
+        <td><input type="checkbox" id="sarawat-tier-${i}-${j}-applyadjust" ${t.applyAdjust !== false ? 'checked' : ''}
           onchange="updateSarawatTier(${i},${j},'applyAdjust',this.checked)" title="Include in global % price adjustment"></td>
         <td>
-          <input class="dn-qty" type="number" min="0" step="any" value="${t.qty}"
+          <input class="dn-qty" type="number" id="sarawat-tier-${i}-${j}-qty" min="0" step="any" value="${t.qty}"
             oninput="updateSarawatTier(${i},${j},'qty',this.value)">
           ${it.qtyReview
             ? `<div style="font-size:6.5px;color:#B8860B;margin-top:2px;white-space:nowrap;">⚠ verify${it.qtyDisplay ? ' — as printed: ' + escapeHtml(it.qtyDisplay) : ''}</div>`
             : ''}
         </td>
         <td style="text-align:right;font-size:9px;color:var(--mid);">${t.unitPrice.toLocaleString('en',{minimumFractionDigits:2})}</td>
-        <td><input class="dn-qty" type="number" min="0" step="any" value="${t.total.toFixed(2)}"
+        <td><input class="dn-qty" type="number" id="sarawat-tier-${i}-${j}-total" min="0" step="any" value="${t.total.toFixed(2)}"
           oninput="updateSarawatTier(${i},${j},'total',this.value)"></td>
         <td>
           <div style="display:flex;gap:3px;align-items:center;white-space:nowrap;">
-            <input type="number" class="dn-qty" style="width:42px;padding:4px 5px;" min="0" step="0.01" placeholder="%"
+            <input type="number" class="dn-qty" id="sarawat-tier-${i}-${j}-adjpct" style="width:42px;padding:4px 5px;" min="0" step="0.01" placeholder="%"
               value="${escapeHtml(t.itemAdjustPct || '')}" title="Adjustment % for this quantity line"
               oninput="sarawatState.items[${i}].tiers[${j}].itemAdjustPct=this.value">
             <button class="btn-sm btn-sm-outline" style="padding:3px 6px;font-size:6.5px;" title="Increase this line's price"
@@ -3587,13 +3601,13 @@ function renderSarawatForm() {
     return `
     <div class="sarawat-item-card">
       <div class="sarawat-item-card-head">
-        <input class="form-input sarawat-item-sno" value="${escapeHtml(it.sno || '')}" placeholder="S.No" title="Item code / source reference"
+        <input class="form-input sarawat-item-sno" id="sarawat-item-${i}-sno" value="${escapeHtml(it.sno || '')}" placeholder="S.No" title="Item code / source reference"
           oninput="updateSarawatItemField(${i},'sno',this.value)">
-        <input class="form-input sarawat-item-name" value="${escapeHtml(it.itemName || '')}" placeholder="Item name"
+        <input class="form-input sarawat-item-name" id="sarawat-item-${i}-name" value="${escapeHtml(it.itemName || '')}" placeholder="Item name"
           oninput="updateSarawatItemField(${i},'itemName',this.value)">
         <button class="btn-sm btn-sm-outline" onclick="removeSarawatItemGroup(${i})">✕ Remove Item</button>
       </div>
-      <textarea class="sarawat-item-desc" placeholder="Full description / specifications"
+      <textarea class="sarawat-item-desc" id="sarawat-item-${i}-desc" placeholder="Full description / specifications"
         oninput="updateSarawatItemField(${i},'description',this.value)">${escapeHtml(it.description || '')}</textarea>
       <table class="dn-items-table sarawat-tier-table">
         <thead><tr><th></th><th>Qty</th><th>Unit Price (auto)</th><th>Total (ex-VAT)</th><th>Adjustment</th><th></th></tr></thead>
@@ -3624,22 +3638,22 @@ function renderSarawatForm() {
       <div class="dn-form-row">
         <div class="form-group">
           <div class="form-label">Quotation No.</div>
-          <input class="form-input" value="${escapeHtml(s.quoteNo)}" placeholder="Not detected — enter manually"
+          <input class="form-input" id="sarawat-quoteNo" value="${escapeHtml(s.quoteNo)}" placeholder="Not detected — enter manually"
             oninput="updateSarawatField('quoteNo',this.value)">
         </div>
         <div class="form-group">
           <div class="form-label">Quotation Date</div>
-          <input class="form-input" value="${escapeHtml(s.quoteDate)}" placeholder="Not detected — enter manually"
+          <input class="form-input" id="sarawat-quoteDate" value="${escapeHtml(s.quoteDate)}" placeholder="Not detected — enter manually"
             oninput="updateSarawatField('quoteDate',this.value)">
         </div>
         <div class="form-group">
           <div class="form-label">Customer / Client</div>
-          <input class="form-input" value="${escapeHtml(s.client)}" placeholder="Not detected — enter manually"
+          <input class="form-input" id="sarawat-client" value="${escapeHtml(s.client)}" placeholder="Not detected — enter manually"
             oninput="updateSarawatField('client',this.value)">
         </div>
         <div class="form-group" style="max-width:110px;">
           <div class="form-label">VAT Rate %</div>
-          <input class="form-input" type="number" min="0" step="0.01" value="${escapeHtml(s.vatRate)}"
+          <input class="form-input" id="sarawat-vatRate" type="number" min="0" step="0.01" value="${escapeHtml(s.vatRate)}"
             oninput="updateSarawatField('vatRate',this.value)">
         </div>
       </div>
@@ -3699,6 +3713,21 @@ function renderSarawatForm() {
         </div>
       </div>
     </div>`;
+
+  // Restore focus/selection/scroll captured at the top of this function — the
+  // field just rebuilt above (same id, brand-new DOM node) is re-focused in place
+  // instead of leaving focus on the destroyed node's fallback (<body>), which is
+  // what was causing the page to jump to the top on every keystroke.
+  if (activeId) {
+    const restoredEl = document.getElementById(activeId);
+    if (restoredEl) {
+      restoredEl.focus({ preventScroll: true });
+      if (activeSelStart !== null && typeof restoredEl.setSelectionRange === 'function') {
+        try { restoredEl.setSelectionRange(activeSelStart, activeSelEnd); } catch (e) {}
+      }
+    }
+  }
+  window.scrollTo(0, savedScrollY);
 }
 
 // Clean Sarawat-branded quotation layout — reuses the app's existing pp-* print
