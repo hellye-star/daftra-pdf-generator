@@ -376,9 +376,14 @@ let purchasingDateTo   = '';   // 'YYYY-MM-DD' or '' — inclusive upper bound (
 let purchasingDocType  = 'all'; // 'all' | 'invoice' | 'payment' — document-type filter
 
 // ── Sarawat Quote Import — state ─────────────────────────────────────────────
-// { fileName, quoteNo, quoteDate, client, vatRate, items:[{desc,qty,total,unitPrice}],
-//   rawText, subtotal, vatAmount, grandTotal }
+// { fileName, quoteNo, quoteDate, client, clientVat, clientCr, vatRate,
+//   items:[{desc,qty,total,unitPrice}], rawText, subtotal, vatAmount, grandTotal }
 let sarawatState = null;
+
+// Daftra client lookup — separate from sarawatState since it's a fetch-on-demand
+// cache, not part of the quotation being edited. Never populated automatically;
+// only by an explicit "Fetch Daftra Clients" click (see fetchDaftraClientsForSarawat()).
+let sarawatClientPicker = { open: false, loading: false, clients: null, query: '', error: '' };
 
 // Logo embedded as base64 so html2canvas renders it without CORS/local-path issues.
 // Regenerate with: base64 -w 0 logo.png  (then prefix with data:image/png;base64,)
@@ -3357,6 +3362,10 @@ async function handleSarawatPdfUpload(input) {
     sarawatState = {
       fileName: file.name,
       quoteNo: header.quoteNo, quoteDate: header.quoteDate, client: header.client,
+      // Not detected from the PDF — Sarawat/Jazaaco-style quotations don't print
+      // the client's own VAT/CR numbers. Optional manual entry or filled via the
+      // "Fetch Daftra Clients" lookup (see fetchDaftraClientsForSarawat()).
+      clientVat: '', clientCr: '',
       vatRate: 15,
       items,
       rawText: fullText,
@@ -3372,6 +3381,7 @@ async function handleSarawatPdfUpload(input) {
     sarawatState = {
       fileName: file.name,
       quoteNo: '', quoteDate: '', client: '',
+      clientVat: '', clientCr: '',
       vatRate: 15,
       items: [],
       rawText: '(extraction failed: ' + (err.message || 'unknown error') + ')',
@@ -3383,6 +3393,8 @@ async function handleSarawatPdfUpload(input) {
     quoteNo: sarawatState.quoteNo,
     quoteDate: sarawatState.quoteDate,
     client: sarawatState.client,
+    clientVat: sarawatState.clientVat,
+    clientCr: sarawatState.clientCr,
     vatRate: sarawatState.vatRate,
     items: sarawatState.items.map(it => ({
       sno: it.sno || '', itemName: it.itemName || '', description: it.description || '',
@@ -3523,15 +3535,17 @@ function adjustSarawatTierPrice(itemIdx, tierIdx, sign) {
 // resets the DATA, not the whole form/upload).
 function resetSarawatToOriginal() {
   if (!sarawatState || !sarawatState.original) return;
-  const ok = confirm('Reset quotation number, date, client, VAT rate, and all items (with every quantity ' +
-    'tier) back to the originally extracted data from the uploaded PDF?\n\nAll manual edits and % price ' +
-    'adjustments made since upload will be discarded. This cannot be undone.');
+  const ok = confirm('Reset quotation number, date, client (name, VAT number, CR number), VAT rate, and all ' +
+    'items (with every quantity tier) back to the originally extracted data from the uploaded PDF?\n\nAll ' +
+    'manual edits and % price adjustments made since upload will be discarded. This cannot be undone.');
   if (!ok) return;
 
   const orig = sarawatState.original;
   sarawatState.quoteNo   = orig.quoteNo;
   sarawatState.quoteDate = orig.quoteDate;
   sarawatState.client    = orig.client;
+  sarawatState.clientVat = orig.clientVat || '';
+  sarawatState.clientCr  = orig.clientCr || '';
   sarawatState.vatRate   = orig.vatRate;
   sarawatState.items     = orig.items.map(it => ({
     sno: it.sno || '', itemName: it.itemName || '', description: it.description || '',
@@ -3541,6 +3555,86 @@ function resetSarawatToOriginal() {
   sarawatState.adjustPct = '';   // clear the global % field too — no adjustment carries over
 
   recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+// ── Optional manual Daftra client lookup ─────────────────────────────────────
+// Never runs automatically — only triggered by the "Fetch Daftra Clients"
+// button click. Uses the SAME browser-direct Daftra connection already used
+// throughout this file (sub/key read from the sidebar fields), not the
+// /daftra/... proxy route (that belongs to Financial Dashboard only — the two
+// Daftra connection patterns coexist intentionally and are not interchangeable).
+// Fetches once per page load; reopening the picker after a successful fetch
+// reuses the cached list instead of re-fetching.
+async function fetchDaftraClientsForSarawat() {
+  if (sarawatClientPicker.clients) {
+    sarawatClientPicker.open = true;
+    renderSarawatForm();
+    return;
+  }
+  const sub = ($('subdomain')?.value || '').trim();
+  const key = ($('apikey')?.value || '').trim();
+  if (!sub || !key) {
+    alert('Enter your Daftra subdomain and API key in the sidebar first.');
+    return;
+  }
+  sarawatClientPicker.open = true;
+  sarawatClientPicker.loading = true;
+  sarawatClientPicker.error = '';
+  renderSarawatForm();
+
+  const base = `https://${sub}.daftra.com/api2`;
+  const h = { 'APIKEY': key, 'Accept': 'application/json' };
+  try {
+    const clients = [];
+    for (let page = 1; page <= 20; page++) {
+      const r = await fetch(`${base}/clients.json?limit=100&page=${page}`, { headers: h });
+      if (!r.ok) throw new Error(`Daftra returned ${r.status}`);
+      const d = await r.json();
+      const rows = (d.data || []).map(row => row.Client || row).filter(Boolean);
+      if (!rows.length) break;
+      // data.Client.business_name = company name (falls back to first/last name
+      // for individual clients); data.Client.bn1 = VAT, data.Client.bn2 = CR —
+      // same field names as the existing single-client fallback lookup in
+      // openDoc() (data.Client.bn1/bn2).
+      rows.forEach(c => {
+        const name = c.business_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || `Client #${c.id}`;
+        clients.push({ id: String(c.id), name, vat: c.bn1 || '', cr: c.bn2 || '' });
+      });
+      if (rows.length < 100) break;   // last page
+    }
+    clients.sort((a, b) => a.name.localeCompare(b.name));
+    sarawatClientPicker.clients = clients;
+    sarawatClientPicker.loading = false;
+  } catch (err) {
+    sarawatClientPicker.loading = false;
+    sarawatClientPicker.error = 'Failed to fetch Daftra clients: ' + (err.message || 'unknown error');
+  }
+  renderSarawatForm();
+}
+
+function closeSarawatClientPicker() {
+  sarawatClientPicker.open = false;
+  renderSarawatForm();
+}
+
+function filterSarawatClientPicker(query) {
+  sarawatClientPicker.query = query;
+  renderSarawatForm();
+}
+
+// Populates client name + VAT/CR from the selected Daftra record. All three
+// remain freely editable afterward — this only pre-fills them, exactly like
+// the values extracted from the uploaded PDF. Missing VAT/CR on the Daftra
+// record is never blocking — left blank and editable, same as PDF extraction.
+function selectSarawatDaftraClient(id) {
+  if (!sarawatState || !sarawatClientPicker.clients) return;
+  const c = sarawatClientPicker.clients.find(c => c.id === id);
+  if (!c) return;
+  sarawatState.client    = c.name;
+  sarawatState.clientVat = c.vat || '';
+  sarawatState.clientCr  = c.cr || '';
+  sarawatClientPicker.open = false;
   renderSarawatForm();
 }
 
@@ -3650,6 +3744,17 @@ function renderSarawatForm() {
           <div class="form-label">Customer / Client</div>
           <input class="form-input" id="sarawat-client" value="${escapeHtml(s.client)}" placeholder="Not detected — enter manually"
             oninput="updateSarawatField('client',this.value)">
+          <button type="button" class="btn-sm btn-sm-outline" style="width:100%;margin-top:6px;" onclick="fetchDaftraClientsForSarawat()">Fetch Daftra Clients</button>
+        </div>
+        <div class="form-group">
+          <div class="form-label">VAT Number</div>
+          <input class="form-input" id="sarawat-clientVat" value="${escapeHtml(s.clientVat || '')}" placeholder="Not detected — enter manually"
+            oninput="updateSarawatField('clientVat',this.value)">
+        </div>
+        <div class="form-group">
+          <div class="form-label">CR Number</div>
+          <input class="form-input" id="sarawat-clientCr" value="${escapeHtml(s.clientCr || '')}" placeholder="Not detected — enter manually"
+            oninput="updateSarawatField('clientCr',this.value)">
         </div>
         <div class="form-group" style="max-width:110px;">
           <div class="form-label">VAT Rate %</div>
@@ -3657,6 +3762,36 @@ function renderSarawatForm() {
             oninput="updateSarawatField('vatRate',this.value)">
         </div>
       </div>
+
+      ${sarawatClientPicker.open ? `
+      <div style="margin-top:10px;padding:12px;background:var(--cream);border:1px solid var(--rule);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">
+          <div class="form-label" style="margin-bottom:0;">Select a Daftra Client</div>
+          <button type="button" class="btn-sm btn-sm-outline" onclick="closeSarawatClientPicker()">✕ Close</button>
+        </div>
+        ${sarawatClientPicker.loading
+          ? `<div style="font-size:8.5px;color:var(--mid);">Fetching clients from Daftra…</div>`
+          : sarawatClientPicker.error
+            ? `<div style="font-size:8.5px;color:#C0392B;">${escapeHtml(sarawatClientPicker.error)}</div>`
+            : `
+              <input class="form-input" id="sarawat-client-search" placeholder="Search clients by name…"
+                value="${escapeHtml(sarawatClientPicker.query)}" oninput="filterSarawatClientPicker(this.value)" style="margin-bottom:8px;">
+              <div style="max-height:200px;overflow-y:auto;border:1px solid var(--rule);background:var(--white);">
+                ${(() => {
+                  const q = sarawatClientPicker.query.trim().toLowerCase();
+                  const list = (sarawatClientPicker.clients || []).filter(c => !q || c.name.toLowerCase().includes(q));
+                  if (!list.length) return `<div style="padding:10px;font-size:8.5px;color:var(--light);">No matching clients.</div>`;
+                  return list.map(c => `
+                    <div onclick="selectSarawatDaftraClient('${c.id}')"
+                      style="padding:7px 10px;font-size:8.5px;cursor:pointer;border-bottom:1px solid var(--rule);"
+                      onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">
+                      <div style="font-weight:500;color:var(--dark);">${escapeHtml(c.name)}</div>
+                      ${(c.vat || c.cr) ? `<div style="color:var(--light);margin-top:2px;">${c.vat ? 'VAT: ' + escapeHtml(c.vat) : ''}${c.vat && c.cr ? ' · ' : ''}${c.cr ? 'CR: ' + escapeHtml(c.cr) : ''}</div>` : ''}
+                    </div>`).join('');
+                })()}
+              </div>`
+        }
+      </div>` : ''}
 
       <div style="margin-top:14px;">
         <div class="sec-title" style="margin-bottom:6px;">Items — Edit Total to Recalculate Unit Price, VAT &amp; Grand Total</div>
@@ -3775,6 +3910,11 @@ function buildSarawatQuotePDFHTML(s) {
         <div class="pp-info-block">
           <div class="pp-section-heading"><div class="pp-heading-en">Prepared For</div></div>
           <div class="pp-info-name">${escapeHtml(s.client) || 'Client Name'}</div>
+          ${(s.clientVat || s.clientCr) ? `
+          <div class="pp-reg">
+            ${s.clientVat ? `<div class="pp-reg-row"><span class="pp-reg-lbl-en">VAT Reg.</span><span class="pp-reg-val">${escapeHtml(s.clientVat)}</span></div>` : ''}
+            ${s.clientCr ? `<div class="pp-reg-row"><span class="pp-reg-lbl-en">CR No.</span><span class="pp-reg-val">${escapeHtml(s.clientCr)}</span></div>` : ''}
+          </div>` : ''}
         </div>
         <div class="pp-info-block">
           <div class="pp-section-heading"><div class="pp-heading-en">Prepared By</div></div>
@@ -3873,6 +4013,13 @@ function exportVistaQuotationFromSarawat() {
     no: sarawatState.quoteNo || 'SARAWAT-IMPORT',
     date: sarawatState.quoteDate || '',
     client_business_name: sarawatState.client || '',
+    // buildInvoicePDFPageHTML() reads _clientVat/_clientCr (underscore-prefixed,
+    // computed fields set by openDoc()'s fetch flow for normal Daftra documents)
+    // — not client_bn1/client_bn2 directly. Set the same fields here so the
+    // exported Vista quotation's existing VAT Reg./CR No. block picks them up
+    // with zero changes to the shared rendering function.
+    _clientVat: sarawatState.clientVat || '',
+    _clientCr: sarawatState.clientCr || '',
     summary_subtotal: sarawatState.subtotal,
     total_amount: sarawatState.grandTotal,
     summary_tax: sarawatState.vatAmount,
