@@ -62,6 +62,16 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .toggle-box.on::after { content: ''; display: block; width: 7px; height: 7px; background: #fff; }
 .toggle-label { font-size: 12.5px; font-weight: 300; color: var(--mid); }
 
+/* ── Status filter (tri-state, replaces the old Include-Done toggle) ───────── */
+.status-btn-row { display: flex; border: 1px solid var(--rule); }
+.status-btn { flex: 1; font-family: 'Jost', sans-serif; font-size: 10.5px; font-weight: 500;
+              letter-spacing: 0.06em; text-transform: uppercase; padding: 9px 4px; cursor: pointer;
+              border: none; background: var(--cream); color: var(--mid); border-right: 1px solid var(--rule);
+              transition: background 0.15s, color 0.15s; }
+.status-btn:last-child { border-right: none; }
+.status-btn:hover { color: var(--dark); }
+.status-btn.active { background: var(--dark); color: #fff; }
+
 /* ── Media Index sidebar status ──────────────────────────────────────────── */
 .index-status { font-size: 12px; font-weight: 300; color: var(--mid); line-height: 1.85; margin-top: 14px; }
 .index-status-count { font-size: 15px; font-weight: 500; color: var(--dark); display: block; margin-bottom: 3px; }
@@ -649,6 +659,35 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .wl-done-hours { font-size: 13px; font-weight: 400; color: var(--light); }
 .wl-done-note  { font-size: 10px; font-weight: 300; color: var(--light); font-style: italic; }
 
+/* ── Hussam Monthly Performance section ─────────────────────────────────────── */
+.hp-card       { padding: 18px 20px 16px; margin-bottom: 22px; background: var(--white);
+                  border: 1px solid var(--rule); border-left: 4px solid var(--dark); }
+.hp-header     { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+                  flex-wrap: wrap; margin-bottom: 14px; }
+.hp-title      { font-size: 13px; font-weight: 500; color: var(--dark); }
+.hp-month-row  { margin-bottom: 14px; }
+.hp-month-select { width: auto; min-width: 170px; }
+.hp-collapsed-summary { display: flex; gap: 20px; flex-wrap: wrap; align-items: baseline; }
+.hp-collapsed-month   { font-size: 11.5px; font-weight: 500; color: var(--dark); }
+.hp-collapsed-stat    { font-size: 11px; font-weight: 300; color: var(--mid); }
+.hp-collapsed-stat b  { font-weight: 500; color: var(--dark); }
+.hp-stats      { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px; padding-bottom: 14px;
+                  border-bottom: 1px solid var(--rule); }
+.hp-stat       { display: flex; flex-direction: column; align-items: flex-start; min-width: 68px; }
+.hp-stat-val   { font-size: 20px; font-weight: 500; color: var(--dark); line-height: 1.2; }
+.hp-stat-lbl   { font-size: 8.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+                  color: var(--light); margin-top: 2px; }
+.hp-stat-warn .hp-stat-val { color: #C0392B; }
+.hp-status-row { max-width: 280px; margin-bottom: 10px; }
+.hp-task-list  { display: flex; flex-direction: column; max-height: 440px; overflow-y: auto;
+                  margin: 0 -20px; }
+.hp-empty      { padding: 16px 0; font-size: 11px; color: var(--light); }
+.hp-youssef-row { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule);
+                   display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; }
+.hp-youssef-lbl { font-size: 10px; font-weight: 300; color: var(--light); }
+.hp-youssef-stat { font-size: 10.5px; font-weight: 300; color: var(--mid); }
+.hp-youssef-stat b { font-weight: 500; color: var(--dark); }
+
 /* ── Undo toast ──────────────────────────────────────────────────────────── */
 .undo-toast {
   position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
@@ -804,6 +843,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 
     <!-- Workload Health card (populated by renderWorkloadCard after tasks load) -->
     <div id="workloadCard" style="display:none"></div>
+
+    <!-- Hussam Monthly Performance section (populated by renderHussamPerformanceCard) -->
+    <div id="hussamPerfCard" class="hp-card" style="display:none"></div>
 
     <!-- Quick filter chips -->
     <div class="chip-strip" id="chipStrip">
@@ -1089,6 +1131,8 @@ async function loadAllTasks() {
     setSyncInfo();
     applyFilters();
     renderWorkloadCard();       // update workload estimate after each full task load
+    initHpDefaultMonth();       // only sets hpMonth the first time tasks are ever loaded
+    renderHussamPerformanceCard();
     mergeNewTasksIntoIndex();   // mark any unseen tasks as unscanned
   } catch (e) {
     showError(`Could not load tasks: ${e.message}. Is proxy.py running?`);
@@ -2896,6 +2940,167 @@ function renderWorkloadCard() {
       </div>
       <div class="wl-done-note">${doneTasks.length} done total · Estimated completed effort, not a timesheet</div>
     </div>`;
+}
+
+// ── Hussam Monthly Performance ────────────────────────────────────────────────
+// A dedicated, self-contained performance-tracking section — independent of the
+// sidebar/chip filter system on purpose, so it never competes or gets confused
+// with the general task-browsing controls. Always reads directly from allTasks.
+let hpMonth        = '';    // '' = all months, else 'YYYY-MM' (Due date), see initHpDefaultMonth()
+let hpStatusFilter = 'all'; // 'all' | 'done' | 'notdone' — local to this section only
+let hpDefaultSet   = false; // ensures the auto-default month is only computed once, on first load
+let hpCollapsed    = true;  // collapsed by default; session-only (resets on page reload), not persisted
+
+// Sets hpMonth to the current calendar month if Hussam has any task due then,
+// otherwise the most recent month that has a Hussam task, otherwise '' (All
+// months) if Hussam has no dated tasks at all. Only runs once — a later
+// "Refresh Tasks" must not silently override a month the user has since chosen.
+function initHpDefaultMonth() {
+  if (hpDefaultSet) return;
+  hpDefaultSet = true;
+  const hussamMonths = new Set();
+  allTasks.forEach(t => {
+    if (assigneeOf(t) === 'Hussam') {
+      const d = dueDate(t);
+      if (d) hussamMonths.add(d.slice(0, 7));
+    }
+  });
+  const current = todayStr().slice(0, 7);
+  if (hussamMonths.has(current)) { hpMonth = current; return; }
+  if (hussamMonths.size) { hpMonth = Array.from(hussamMonths).sort().pop(); return; }
+  hpMonth = '';
+}
+
+// Shared human-readable label for a 'YYYY-MM' value (or '' → "All months") —
+// used by both the month <select> options and the collapsed summary line.
+function hpMonthLabel(ym) {
+  if (!ym) return 'All months';
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en', { month: 'long', year: 'numeric' });
+}
+
+// Month dropdown options are drawn from every task's Due date (any assignee),
+// not just Hussam's, so the Youssef comparison row can also be checked for a
+// month where Hussam happens to have nothing due.
+function hpMonthOptionsHtml() {
+  const months = new Set();
+  allTasks.forEach(t => {
+    const d = dueDate(t);
+    if (d) months.add(d.slice(0, 7));
+  });
+  const sorted = Array.from(months).sort();
+  return '<option value="">All months</option>' +
+    sorted.map(ym => `<option value="${ym}"${ym === hpMonth ? ' selected' : ''}>${hpMonthLabel(ym)}</option>`).join('');
+}
+
+function onHpMonthChange() {
+  hpMonth = document.getElementById('hpMonthSelect').value;
+  renderHussamPerformanceCard();
+}
+
+function setHpStatusFilter(val) {
+  hpStatusFilter = val;
+  renderHussamPerformanceCard();
+}
+
+function toggleHpCollapsed() {
+  hpCollapsed = !hpCollapsed;
+  renderHussamPerformanceCard();
+}
+
+function renderHussamPerformanceCard() {
+  const el = document.getElementById('hussamPerfCard');
+  if (!el) return;
+  if (!allTasks.length) { el.style.display = 'none'; return; }
+  // Rebuilding this section's innerHTML on every month/status/collapse change can
+  // shift page height and reset scroll position (same underlying cause as the
+  // Sarawat form scroll-jump fix) — save and restore scrollY defensively.
+  const savedScrollY = window.scrollY;
+
+  const hussamMonth = allTasks.filter(t =>
+    assigneeOf(t) === 'Hussam' && (!hpMonth || dueDate(t).slice(0, 7) === hpMonth)
+  );
+  const total   = hussamMonth.length;
+  const done    = hussamMonth.filter(t => status(t) === 'Done').length;
+  const notDone = total - done;
+  const pct     = total > 0 ? Math.round(done / total * 100) : 0;
+
+  el.style.display = '';
+
+  // Collapsed: title + selected month + the 4 headline numbers + Expand — no
+  // interactive month/status controls and no task list, kept deliberately light
+  // so the front page isn't crowded. Full stats (Overdue/Needs Attention),
+  // filtering, and the task list only exist in the expanded view below.
+  if (hpCollapsed) {
+    el.innerHTML = `
+      <div class="hp-header">
+        <span class="hp-title">Hussam Monthly Performance</span>
+        <button type="button" class="btn-sm btn-sm-outline" onclick="toggleHpCollapsed()">Expand</button>
+      </div>
+      <div class="hp-collapsed-summary">
+        <span class="hp-collapsed-month">${hpMonthLabel(hpMonth)}</span>
+        <span class="hp-collapsed-stat">Total <b>${total}</b></span>
+        <span class="hp-collapsed-stat">Done <b>${done}</b></span>
+        <span class="hp-collapsed-stat">Not Done <b>${notDone}</b></span>
+        <span class="hp-collapsed-stat">Completion <b>${pct}%</b></span>
+      </div>`;
+    window.scrollTo(0, savedScrollY);
+    return;
+  }
+
+  const today = todayStr();
+  const overdue = hussamMonth.filter(t => status(t) !== 'Done' && dueDate(t) && dueDate(t) < today).length;
+  // attentionFilter() already handles Blocked / Pending Feedback / overdue / not-
+  // already-reviewed-fresh correctly for any input array — its one Youssef-
+  // specific rule simply never fires here since hussamMonth is Hussam-only.
+  const needsAttn = attentionFilter(hussamMonth).length;
+
+  const listTasks = hussamMonth
+    .filter(t => {
+      if (hpStatusFilter === 'done')    return status(t) === 'Done';
+      if (hpStatusFilter === 'notdone') return status(t) !== 'Done';
+      return true;
+    })
+    .sort((a, b) => (dueDate(a) || '').localeCompare(dueDate(b) || ''));
+
+  const youssefMonth = allTasks.filter(t =>
+    assigneeOf(t) === 'Youssef' && (!hpMonth || dueDate(t).slice(0, 7) === hpMonth)
+  );
+  const yTotal = youssefMonth.length;
+  const yDone  = youssefMonth.filter(t => status(t) === 'Done').length;
+
+  el.innerHTML = `
+    <div class="hp-header">
+      <span class="hp-title">Hussam Monthly Performance</span>
+      <button type="button" class="btn-sm btn-sm-outline" onclick="toggleHpCollapsed()">Collapse</button>
+    </div>
+    <div class="hp-month-row">
+      <select class="form-select hp-month-select" id="hpMonthSelect" onchange="onHpMonthChange()">${hpMonthOptionsHtml()}</select>
+    </div>
+    <div class="hp-stats">
+      <div class="hp-stat"><span class="hp-stat-val">${total}</span><span class="hp-stat-lbl">Total</span></div>
+      <div class="hp-stat"><span class="hp-stat-val">${done}</span><span class="hp-stat-lbl">Done</span></div>
+      <div class="hp-stat"><span class="hp-stat-val">${notDone}</span><span class="hp-stat-lbl">Not Done</span></div>
+      <div class="hp-stat hp-stat-warn"><span class="hp-stat-val">${overdue}</span><span class="hp-stat-lbl">Overdue</span></div>
+      <div class="hp-stat hp-stat-warn"><span class="hp-stat-val">${needsAttn}</span><span class="hp-stat-lbl">Needs Attention</span></div>
+      <div class="hp-stat"><span class="hp-stat-val">${pct}%</span><span class="hp-stat-lbl">Completion</span></div>
+    </div>
+    <div class="status-btn-row hp-status-row" id="hpStatusBtnRow">
+      <button type="button" class="status-btn${hpStatusFilter === 'all' ? ' active' : ''}" onclick="setHpStatusFilter('all')">All</button>
+      <button type="button" class="status-btn${hpStatusFilter === 'done' ? ' active' : ''}" onclick="setHpStatusFilter('done')">Done</button>
+      <button type="button" class="status-btn${hpStatusFilter === 'notdone' ? ' active' : ''}" onclick="setHpStatusFilter('notdone')">Not Done</button>
+    </div>
+    <div class="hp-task-list">
+      ${listTasks.length ? listTasks.map(taskRow).join('') : '<div class="hp-empty">No tasks match this filter.</div>'}
+    </div>
+    <div class="hp-youssef-row">
+      <span class="hp-youssef-lbl">For comparison — Youssef, same month:</span>
+      <span class="hp-youssef-stat">Total <b>${yTotal}</b></span>
+      <span class="hp-youssef-stat">Done <b>${yDone}</b></span>
+      <span class="hp-youssef-stat">Not Done <b>${yTotal - yDone}</b></span>
+    </div>`;
+
+  window.scrollTo(0, savedScrollY);
 }
 
 // ── New Task Modal ────────────────────────────────────────────────────────────
