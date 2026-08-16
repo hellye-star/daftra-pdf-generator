@@ -278,6 +278,72 @@
     #printAllContainer .print-invoice-page:last-child { page-break-after: auto; break-after: auto; }
     #printAllContainer .pdf-page { box-shadow: none !important; margin: 0 auto !important; }
   }
+
+  /* ══ PROPOSAL GENERATOR ══════════════════════════════════════════════════ */
+  #proposalWrap { display: flex; flex-direction: column; gap: 0; }
+  .prop-setup-card { background: var(--white); border: 1px solid var(--rule); padding: 16px 20px; margin-bottom: 12px; }
+  .prop-setup-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .prop-setup-title { font-size: 7.5px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dark); }
+  .prop-setup-hint { font-size: 7.5px; font-weight: 300; color: var(--light); flex: 1; }
+  .prop-setup-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .prop-opt-toggle { font-size: 7px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mid); cursor: pointer; list-style: none; user-select: none; padding: 0; }
+  .prop-opt-toggle::-webkit-details-marker { display: none; }
+  .prop-opt-row { padding-top: 10px; grid-template-columns: repeat(3, 1fr) !important; }
+  .prop-req { color: #C0392B; font-size: 8px; }
+  .prop-opt-lbl { font-size: 7px; color: var(--light); font-weight: 300; }
+
+  .prop-doc-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .prop-doc-tab { font-family: 'Jost', sans-serif; font-size: 7.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; padding: 9px 18px; cursor: pointer; border: 1px solid var(--rule); background: var(--white); color: var(--mid); display: flex; align-items: center; gap: 8px; transition: all 0.15s; }
+  .prop-doc-tab:hover { border-color: var(--dark); color: var(--dark); }
+  .prop-doc-tab-active { border-color: var(--dark) !important; background: var(--dark) !important; color: #fff !important; }
+  .prop-doc-tab-active span { color: rgba(255,255,255,0.65) !important; }
+  .prop-status-ready { font-size: 6px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; background: #EAF4EE; color: #3A7D52; border-radius: 1px; }
+  .prop-status-warn  { font-size: 6px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; background: #FEF3E7; color: #B06B1A; border-radius: 1px; }
+
+  .prop-section-wrap { display: flex; flex-direction: column; gap: 12px; }
+  .prop-section-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .prop-card { background: var(--white); border: 1px solid var(--rule); padding: 18px 20px; }
+  .prop-card-title { font-size: 7px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--mid); margin-bottom: 14px; }
+  .prop-opt-summary { list-style: none; cursor: pointer; display: block; }
+  .prop-opt-summary::-webkit-details-marker { display: none; }
+  .prop-textarea { resize: vertical; font-family: 'Jost', sans-serif; }
+
+  .prop-boq-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  .prop-boq-table th { font-size: 7px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--light); padding: 0 8px 8px 0; border-bottom: 1px solid var(--rule); text-align: left; }
+  .prop-boq-table td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+  .prop-boq-inp { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 300; color: var(--dark); background: var(--cream); border: 1px solid var(--rule); padding: 5px 8px; outline: none; width: 100%; transition: border-color 0.15s; }
+  .prop-boq-inp:focus { border-color: var(--dark); }
+  .prop-boq-num { text-align: right; width: 60px !important; }
+  .prop-boq-total { font-size: 9.5px; font-weight: 500; color: var(--dark); text-align: right; white-space: nowrap; padding-right: 0 !important; }
+  .prop-boq-del { background: none; border: none; color: var(--light); font-size: 14px; cursor: pointer; padding: 0 4px; line-height: 1; }
+  .prop-boq-del:hover { color: #C0392B; }
+  .prop-add-row-btn { font-family: 'Jost', sans-serif; font-size: 7.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); background: none; border: 1px dashed var(--rule); padding: 7px 14px; cursor: pointer; width: 100%; transition: all 0.15s; margin-bottom: 14px; }
+  .prop-add-row-btn:hover { border-color: var(--dark); color: var(--dark); }
+
+  .prop-totals-edit { display: flex; gap: 20px; align-items: center; margin-bottom: 10px; }
+  .prop-totals-opt { display: flex; align-items: center; gap: 8px; }
+  .prop-opt-check { font-size: 9px; font-weight: 300; color: var(--mid); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  .prop-totals-block { border-top: 1px solid var(--rule); padding-top: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .prop-tot-row { display: flex; justify-content: space-between; width: 260px; font-size: 9px; font-weight: 300; color: var(--mid); }
+  .prop-tot-grand { font-size: 11px; font-weight: 600; color: var(--dark); padding-top: 6px; border-top: 1px solid var(--dark); margin-top: 4px; }
+
+  .prop-terms-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+  .prop-auto-list { display: flex; flex-direction: column; gap: 6px; }
+  .prop-auto-item { display: flex; align-items: baseline; gap: 10px; padding: 7px 10px; font-size: 9px; }
+  .prop-auto-ok      { background: #F0F7F2; }
+  .prop-auto-missing { background: var(--cream); }
+  .prop-auto-dot { font-size: 10px; font-weight: 600; color: #3A7D52; flex-shrink: 0; width: 16px; }
+  .prop-auto-missing .prop-auto-dot { color: var(--light); }
+  .prop-auto-label { font-weight: 500; color: var(--dark); flex-shrink: 0; width: 180px; }
+  .prop-auto-note { font-weight: 300; color: var(--mid); }
+
+  .prop-pdf-section { margin-bottom: 16px; }
+  .prop-pdf-sec-title { font-size: 7px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--light); margin-bottom: 6px; padding-bottom: 4px; border-bottom: 0.5px solid var(--rule); }
+  .prop-pdf-sec-body { font-size: 8.5px; font-weight: 400; color: var(--dark); line-height: 1.75; }
+  .prop-pdf-sec-body p { margin-bottom: 6px; }
+  /* ═══════════════════════════════════════════════════════════════════════ */
 </style>
 </head>
 <body>
@@ -464,6 +530,7 @@ function buildTabsHTML() {
     <button class="tab ${currentTab==='receipt_voucher'?'active':''}" onclick="switchTab('receipt_voucher')">Receipt Voucher</button>
     <button class="tab ${currentTab==='purchasing_invoices'?'active':''}" onclick="switchTab('purchasing_invoices')">Purchasing Invoices</button>
     <button class="tab ${currentTab==='sarawat_quote'?'active':''}" onclick="switchTab('sarawat_quote')">Sarawat Quote Import</button>
+    <button class="tab ${currentTab==='proposal'?'active':''}" onclick="switchTab('proposal')">Proposal Generator</button>
   </div>`;
 }
 
@@ -531,6 +598,7 @@ function switchTab(tab) {
   if (tab === 'receipt_voucher')     { showReceiptVoucherTab();   return; }
   if (tab === 'purchasing_invoices') { showPurchasingTab();       return; }
   if (tab === 'sarawat_quote')       { showSarawatQuoteTab();     return; }
+  if (tab === 'proposal')            { showProposalTab();         return; }
   renderList();
 }
 
@@ -4028,6 +4096,652 @@ function exportVistaQuotationFromSarawat() {
   currentDoc = { doc, type: 'estimates' };
   renderPreview();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PROPOSAL GENERATOR
+// ══════════════════════════════════════════════════════════════════════════════
+
+const PROPOSAL_COMPANIES = {
+  vista: {
+    name: 'Vista United Co.',
+    tagline: 'Brand Experience Studio',
+    address: 'Jeddah, KSA — Al Muhammadiya Dist, Muhammad Ibn Hatib Street 23625',
+    website: 'vistaunited.co',
+    phone: '+966 55 568 4753',
+    email: 'youssef@vistaunited.co',
+    vat: '314573358300003',
+    cr: '7053413683',
+    intro: 'Vista United Co. is a brand experience studio specialising in creative production, signage, large-format printing, and branded environments. We deliver comprehensive visual communication solutions for corporate, retail, and event clients across Saudi Arabia.',
+    capabilities: 'Our capabilities span concept development, design, fabrication, and installation — providing end-to-end project delivery for exhibitions, retail activations, corporate interiors, and outdoor signage.',
+    closing: 'We look forward to the opportunity to support your project and deliver a result that reflects your vision. Please do not hesitate to contact us should you require any clarification or additional information.',
+    get logo() { return typeof LOGO_DATA_URL !== 'undefined' ? LOGO_DATA_URL : null; },
+  },
+  sarawat: {
+    name: 'Sarawat Printing Professional',
+    tagline: 'Professional Printing Solutions',
+    address: 'Jeddah, Kingdom of Saudi Arabia',
+    website: '',
+    phone: '',
+    email: '',
+    vat: '',
+    cr: '',
+    intro: 'Sarawat Printing Professional is a leading printing and production company specialising in high-quality commercial and large-format printing solutions, serving businesses across the Kingdom of Saudi Arabia.',
+    capabilities: 'We offer a comprehensive range of printing services including offset printing, digital printing, large-format output, and finishing solutions tailored to each client\'s specific requirements.',
+    closing: 'We look forward to the opportunity to serve you and deliver exceptional printing solutions for your requirements. Please contact us for any further information.',
+    logo: null,
+  },
+};
+
+const PROPOSAL_LS_KEY = 'vista_proposals_v1';
+
+const _defaultProposalState = () => ({
+  company: 'vista',
+  clientName: '', projectName: '', rfqRef: '', submissionDate: '',
+  projectLocation: '', clientContact: '', completionDate: '',
+  activeDoc: 'commercial',
+  boq: [{desc:'',qty:1,unit:'',unitPrice:0}],
+  discountEnabled: false, discount: '',
+  deliveryEnabled: false, deliveryCharge: '',
+  vatRate: 15,
+  paymentTerms: '', validity: '', leadTime: '', commercialNotes: '',
+  scope: '', materials: '', executionMethod: '',
+  installation: '', sustainability: '', qualityControl: '', samples: '', technicalExclusions: '',
+  projectIntro: '',
+});
+
+(function _initProposalState() {
+  try {
+    const raw = localStorage.getItem(PROPOSAL_LS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      window._proposalState = Object.assign(_defaultProposalState(), parsed);
+    } else {
+      window._proposalState = _defaultProposalState();
+    }
+  } catch(_) { window._proposalState = _defaultProposalState(); }
+})();
+
+function _pState() { return window._proposalState; }
+
+function _propSave() {
+  try { localStorage.setItem(PROPOSAL_LS_KEY, JSON.stringify(window._proposalState)); } catch(_) {}
+}
+
+// ── BOQ math ─────────────────────────────────────────────────────────────────
+function _boqLineTotal(r) { return (parseFloat(r.qty)||0) * (parseFloat(r.unitPrice)||0); }
+function _boqSubtotal()   { return _pState().boq.reduce((s,r) => s + _boqLineTotal(r), 0); }
+function _boqDiscount() {
+  if (!_pState().discountEnabled) return 0;
+  const d = String(_pState().discount||'').trim();
+  if (!d) return 0;
+  const v = parseFloat(d);
+  return d.includes('%') ? _boqSubtotal() * v / 100 : v;
+}
+function _boqDelivery() {
+  if (!_pState().deliveryEnabled) return 0;
+  return parseFloat(_pState().deliveryCharge) || 0;
+}
+function _boqBeforeVat()  { return _boqSubtotal() - _boqDiscount() + _boqDelivery(); }
+function _boqVatAmt()     { return _boqBeforeVat() * ((parseFloat(_pState().vatRate)||15) / 100); }
+function _boqGrandTotal() { return _boqBeforeVat() + _boqVatAmt(); }
+function _sar(n) { return 'SAR ' + Number(n||0).toLocaleString('en-SA', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+// ── Status badges ─────────────────────────────────────────────────────────────
+function _propCommSt()  { return _pState().boq.some(r=>parseFloat(r.unitPrice)>0) ? {label:'Ready',cls:'prop-status-ready'} : {label:'Needs pricing',cls:'prop-status-warn'}; }
+function _propTechSt()  { return _pState().scope.trim() ? {label:'Ready',cls:'prop-status-ready'} : {label:'Needs scope',cls:'prop-status-warn'}; }
+function _propMainSt()  { return _pState().clientName.trim() ? {label:'Ready',cls:'prop-status-ready'} : {label:'Needs client',cls:'prop-status-warn'}; }
+
+// ── Sync project setup fields into state ──────────────────────────────────────
+function propSync() {
+  const s = _pState();
+  const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  s.company         = g('propCompany') || s.company;
+  s.clientName      = g('propClient');
+  s.projectName     = g('propProject');
+  s.rfqRef          = g('propRfq');
+  s.submissionDate  = g('propDate');
+  s.projectLocation = g('propLocation');
+  s.clientContact   = g('propContact');
+  s.completionDate  = g('propCompletion');
+  _propSave();
+  _refreshPropDocTabStatus();
+}
+
+function propSave() {
+  propSync();
+  const btn = document.activeElement;
+  if (btn) { const orig = btn.textContent; btn.textContent = 'Saved ✓'; setTimeout(() => btn.textContent = orig, 1500); }
+}
+
+// ── Date formatter ────────────────────────────────────────────────────────────
+function _propFmtDate(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(d,10)} ${mo[parseInt(m,10)-1]} ${y}`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WORKSPACE RENDER
+// ══════════════════════════════════════════════════════════════════════════════
+
+function showProposalTab() {
+  $('statusArea').innerHTML = '';
+  $('mainArea').innerHTML = _buildProposalWorkspace();
+}
+
+function _buildProposalWorkspace() {
+  const s = _pState();
+  const cs = _propCommSt(), ts = _propTechSt(), ms = _propMainSt();
+  const optOpen = s.projectLocation || s.clientContact || s.completionDate;
+  return `
+<div id="proposalWrap">
+  ${buildTabsHTML()}
+  <div class="prop-setup-card">
+    <div class="prop-setup-header">
+      <span class="prop-setup-title">Project Setup</span>
+      <span class="prop-setup-hint">Shared across all three documents — enter once, appears everywhere</span>
+      <button class="btn-sm btn-sm-dark" onclick="propSave()">Save Project</button>
+    </div>
+    <div class="prop-setup-row">
+      <div class="form-group">
+        <div class="form-label">Company</div>
+        <select class="form-input" id="propCompany" onchange="propSync()">
+          <option value="vista" ${s.company==='vista'?'selected':''}>Vista United Co.</option>
+          <option value="sarawat" ${s.company==='sarawat'?'selected':''}>Sarawat Printing Professional</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div class="form-label">Client Name <span class="prop-req">*</span></div>
+        <input class="form-input" id="propClient" value="${escapeHtml(s.clientName)}" placeholder="e.g. MASAR" oninput="propSync()">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Project Name <span class="prop-req">*</span></div>
+        <input class="form-input" id="propProject" value="${escapeHtml(s.projectName)}" placeholder="e.g. Cityscape Booth 2026" oninput="propSync()">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Tender / RFQ Ref <span class="prop-req">*</span></div>
+        <input class="form-input" id="propRfq" value="${escapeHtml(s.rfqRef)}" placeholder="e.g. MASAR-CS-26" oninput="propSync()">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Submission Date <span class="prop-req">*</span></div>
+        <input class="form-input" id="propDate" type="date" value="${escapeHtml(s.submissionDate)}" oninput="propSync()">
+      </div>
+    </div>
+    <details id="propOptDetails" ${optOpen?'open':''} style="margin-top:10px;">
+      <summary class="prop-opt-toggle">&#9656; Optional fields (Location / Contact / Deadline)</summary>
+      <div class="prop-setup-row prop-opt-row" style="margin-top:10px;">
+        <div class="form-group">
+          <div class="form-label">Project Location</div>
+          <input class="form-input" id="propLocation" value="${escapeHtml(s.projectLocation)}" placeholder="e.g. Riyadh Exhibition Centre" oninput="propSync()">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Client Contact</div>
+          <input class="form-input" id="propContact" value="${escapeHtml(s.clientContact)}" placeholder="Name / email / phone" oninput="propSync()">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Required Completion</div>
+          <input class="form-input" id="propCompletion" type="date" value="${escapeHtml(s.completionDate)}" oninput="propSync()">
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="prop-doc-tabs">
+    <button class="prop-doc-tab ${s.activeDoc==='commercial'?'prop-doc-tab-active':''}" onclick="propSwitchDoc('commercial')">
+      Commercial <span class="${cs.cls}">${cs.label}</span>
+    </button>
+    <button class="prop-doc-tab ${s.activeDoc==='technical'?'prop-doc-tab-active':''}" onclick="propSwitchDoc('technical')">
+      Technical <span class="${ts.cls}">${ts.label}</span>
+    </button>
+    <button class="prop-doc-tab ${s.activeDoc==='main'?'prop-doc-tab-active':''}" onclick="propSwitchDoc('main')">
+      Main Proposal <span class="${ms.cls}">${ms.label}</span>
+    </button>
+  </div>
+  <div id="propDocArea">${_buildPropDocContent()}</div>
+</div>`;
+}
+
+function _buildPropDocContent() {
+  const ad = _pState().activeDoc;
+  return ad === 'commercial' ? _buildCommercialUI() :
+         ad === 'technical'  ? _buildTechnicalUI()  : _buildMainUI();
+}
+
+function propSwitchDoc(doc) {
+  _pState().activeDoc = doc;
+  _propSave();
+  const area = document.getElementById('propDocArea');
+  if (area) { area.innerHTML = _buildPropDocContent(); }
+  _refreshPropDocTabStatus();
+}
+
+function _refreshPropDocTabStatus() {
+  const tabs = document.querySelectorAll('.prop-doc-tab');
+  if (!tabs.length) return;
+  const statuses = [_propCommSt(), _propTechSt(), _propMainSt()];
+  tabs.forEach((btn, i) => {
+    const span = btn.querySelector('span');
+    if (span && statuses[i]) { span.className = statuses[i].cls; span.textContent = statuses[i].label; }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMMERCIAL UI
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _buildCommercialUI() {
+  const s = _pState();
+  const rows = s.boq.map((r,i) => `
+    <tr>
+      <td><input class="prop-boq-inp" style="width:100%;" value="${escapeHtml(r.desc)}" placeholder="Description" oninput="propBoqField(${i},'desc',this.value)"></td>
+      <td><input class="prop-boq-inp prop-boq-num" value="${r.qty||1}" oninput="propBoqField(${i},'qty',this.value)"></td>
+      <td><input class="prop-boq-inp" style="width:70px;" value="${escapeHtml(r.unit)}" placeholder="pcs" oninput="propBoqField(${i},'unit',this.value)"></td>
+      <td><input class="prop-boq-inp prop-boq-num" value="${r.unitPrice||''}" placeholder="0.00" oninput="propBoqField(${i},'unitPrice',this.value)"></td>
+      <td class="prop-boq-total" id="propBoqTot${i}">${_sar(_boqLineTotal(r))}</td>
+      <td><button class="prop-boq-del" onclick="propBoqDel(${i})" title="Remove">&#215;</button></td>
+    </tr>`).join('');
+  const showDisc = !!s.discountEnabled, showDel = !!s.deliveryEnabled;
+  return `
+<div class="prop-section-wrap">
+  <div class="prop-section-actions">
+    <button class="btn-sm btn-sm-outline" onclick="propPreviewCommercial()">Preview Commercial</button>
+    <button class="btn-sm btn-sm-dark" onclick="propExportCommercial()">Export PDF</button>
+  </div>
+  <div class="prop-card">
+    <div class="prop-card-title">Bill of Quantities</div>
+    <table class="prop-boq-table">
+      <thead><tr>
+        <th>Description</th>
+        <th style="width:60px;text-align:right">Qty</th>
+        <th style="width:70px">Unit</th>
+        <th style="width:110px;text-align:right">Unit Price</th>
+        <th style="width:120px;text-align:right">Total</th>
+        <th style="width:26px"></th>
+      </tr></thead>
+      <tbody id="propBoqBody">${rows}</tbody>
+    </table>
+    <button class="prop-add-row-btn" onclick="propBoqAdd()">+ Add Row</button>
+    <div class="prop-totals-edit">
+      <label class="prop-opt-check"><input type="checkbox" ${showDisc?'checked':''} onchange="propToggleDiscount(this.checked)">&nbsp;Discount</label>
+      ${showDisc ? `<input class="prop-boq-inp" style="width:120px;" value="${escapeHtml(s.discount)}" placeholder="10% or 500" oninput="propSyncDiscount(this.value)">` : ''}
+      <label class="prop-opt-check" style="margin-left:16px;"><input type="checkbox" ${showDel?'checked':''} onchange="propToggleDelivery(this.checked)">&nbsp;Delivery / Installation</label>
+      ${showDel ? `<input class="prop-boq-inp prop-boq-num" style="width:120px;" value="${escapeHtml(s.deliveryCharge)}" placeholder="Amount" oninput="propSyncDelivery(this.value)">` : ''}
+    </div>
+    <div class="prop-totals-block" id="propTotalsBlock">${_buildTotalsInner()}</div>
+  </div>
+  <div class="prop-card">
+    <div class="prop-card-title">Terms</div>
+    <div class="prop-terms-row">
+      <div class="form-group">
+        <div class="form-label">Payment Terms</div>
+        <input class="form-input" value="${escapeHtml(s.paymentTerms)}" placeholder="e.g. 50% advance, 50% on delivery" oninput="_pState().paymentTerms=this.value;_propSave();">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Validity</div>
+        <input class="form-input" value="${escapeHtml(s.validity)}" placeholder="e.g. 30 days" oninput="_pState().validity=this.value;_propSave();">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Lead Time</div>
+        <input class="form-input" value="${escapeHtml(s.leadTime)}" placeholder="e.g. 25 working days" oninput="_pState().leadTime=this.value;_propSave();">
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:12px;">
+      <div class="form-label">Commercial Notes / Exclusions <span class="prop-opt-lbl">(optional — leave blank to omit from PDF)</span></div>
+      <textarea class="form-input prop-textarea" rows="3" placeholder="Any notes, payment conditions, or exclusions..." oninput="_pState().commercialNotes=this.value;_propSave();">${escapeHtml(s.commercialNotes)}</textarea>
+    </div>
+  </div>
+</div>`;
+}
+
+function _buildTotalsInner() {
+  const s = _pState();
+  const sub = _boqSubtotal(), disc = _boqDiscount(), del = _boqDelivery();
+  const bv = _boqBeforeVat(), vat = _boqVatAmt(), gt = _boqGrandTotal();
+  return `
+    <div class="prop-tot-row"><span>Subtotal</span><span>${_sar(sub)}</span></div>
+    ${s.discountEnabled && disc > 0 ? `<div class="prop-tot-row"><span>Discount</span><span>&minus; ${_sar(disc)}</span></div>` : ''}
+    ${s.deliveryEnabled && del > 0 ? `<div class="prop-tot-row"><span>Delivery / Installation</span><span>${_sar(del)}</span></div>` : ''}
+    <div class="prop-tot-row"><span>Amount Before VAT</span><span>${_sar(bv)}</span></div>
+    <div class="prop-tot-row">
+      <span>VAT <input class="prop-boq-inp prop-boq-num" style="width:40px;display:inline-block;" value="${s.vatRate}" oninput="propSyncVat(this.value)">%</span>
+      <span>${_sar(vat)}</span>
+    </div>
+    <div class="prop-tot-row prop-tot-grand"><span>Grand Total</span><span>${_sar(gt)}</span></div>`;
+}
+
+function propBoqAdd() { _pState().boq.push({desc:'',qty:1,unit:'',unitPrice:0}); _propSave(); propSwitchDoc('commercial'); }
+function propBoqDel(i) {
+  _pState().boq.splice(i,1);
+  if (!_pState().boq.length) _pState().boq.push({desc:'',qty:1,unit:'',unitPrice:0});
+  _propSave(); propSwitchDoc('commercial');
+}
+function propBoqField(i, key, val) {
+  _pState().boq[i][key] = (key==='qty'||key==='unitPrice') ? parseFloat(val)||0 : val;
+  _propSave();
+  const totCell = document.getElementById('propBoqTot'+i);
+  if (totCell) totCell.textContent = _sar(_boqLineTotal(_pState().boq[i]));
+  const totBlock = document.getElementById('propTotalsBlock');
+  if (totBlock) totBlock.innerHTML = _buildTotalsInner();
+  _refreshPropDocTabStatus();
+}
+function propToggleDiscount(on) {
+  _pState().discountEnabled = on;
+  if (on && !_pState().discount) _pState().discount = '';
+  _propSave(); propSwitchDoc('commercial');
+}
+function propToggleDelivery(on) {
+  _pState().deliveryEnabled = on;
+  if (on && !_pState().deliveryCharge) _pState().deliveryCharge = '';
+  _propSave(); propSwitchDoc('commercial');
+}
+function propSyncDiscount(v) { _pState().discount = v; _propSave(); const b=document.getElementById('propTotalsBlock'); if(b) b.innerHTML=_buildTotalsInner(); }
+function propSyncDelivery(v) { _pState().deliveryCharge = v; _propSave(); const b=document.getElementById('propTotalsBlock'); if(b) b.innerHTML=_buildTotalsInner(); }
+function propSyncVat(v) { _pState().vatRate = parseFloat(v)||15; _propSave(); const b=document.getElementById('propTotalsBlock'); if(b) b.innerHTML=_buildTotalsInner(); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TECHNICAL UI
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _buildTechnicalUI() {
+  const s = _pState();
+  const hasOpt = s.installation || s.sustainability || s.qualityControl || s.samples || s.technicalExclusions;
+  return `
+<div class="prop-section-wrap">
+  <div class="prop-section-actions">
+    <button class="btn-sm btn-sm-outline" onclick="propPreviewTechnical()">Preview Technical</button>
+    <button class="btn-sm btn-sm-dark" onclick="propExportTechnical()">Export PDF</button>
+  </div>
+  <div class="prop-card">
+    <div class="prop-card-title">Core Scope</div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <div class="form-label">Scope &amp; Deliverables <span class="prop-req">*</span></div>
+      <textarea class="form-input prop-textarea" rows="5" placeholder="Describe the full scope and list all deliverables..." oninput="_pState().scope=this.value;_propSave();_refreshPropDocTabStatus();">${escapeHtml(s.scope)}</textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <div class="form-label">Materials / Specifications <span class="prop-opt-lbl">(optional)</span></div>
+      <textarea class="form-input prop-textarea" rows="4" placeholder="Substrates, materials, finishes, technical specs..." oninput="_pState().materials=this.value;_propSave();">${escapeHtml(s.materials)}</textarea>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Execution / Production Method <span class="prop-opt-lbl">(optional)</span></div>
+      <textarea class="form-input prop-textarea" rows="4" placeholder="How the work will be produced and delivered..." oninput="_pState().executionMethod=this.value;_propSave();">${escapeHtml(s.executionMethod)}</textarea>
+    </div>
+  </div>
+  <details class="prop-card" ${hasOpt?'open':''}>
+    <summary class="prop-card-title prop-opt-summary">&#9656; Optional Sections <span class="prop-opt-lbl">(empty sections are omitted from PDF)</span></summary>
+    <div style="padding-top:14px;">
+      <div class="form-group" style="margin-bottom:14px;">
+        <div class="form-label">Installation</div>
+        <textarea class="form-input prop-textarea" rows="3" placeholder="Installation scope, site requirements, access..." oninput="_pState().installation=this.value;_propSave();">${escapeHtml(s.installation)}</textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <div class="form-label">Sustainability / Material Approach</div>
+        <textarea class="form-input prop-textarea" rows="3" placeholder="Environmental considerations, material choices..." oninput="_pState().sustainability=this.value;_propSave();">${escapeHtml(s.sustainability)}</textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <div class="form-label">Quality Control</div>
+        <textarea class="form-input prop-textarea" rows="3" placeholder="QC stages, inspection process, approvals..." oninput="_pState().qualityControl=this.value;_propSave();">${escapeHtml(s.qualityControl)}</textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <div class="form-label">Samples / Mockups</div>
+        <textarea class="form-input prop-textarea" rows="2" placeholder="Physical or digital samples, mockup process..." oninput="_pState().samples=this.value;_propSave();">${escapeHtml(s.samples)}</textarea>
+      </div>
+      <div class="form-group">
+        <div class="form-label">Technical Exclusions</div>
+        <textarea class="form-input prop-textarea" rows="3" placeholder="Items explicitly not included in scope..." oninput="_pState().technicalExclusions=this.value;_propSave();">${escapeHtml(s.technicalExclusions)}</textarea>
+      </div>
+    </div>
+  </details>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN PROPOSAL UI
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _buildMainUI() {
+  const s = _pState();
+  const co = PROPOSAL_COMPANIES[s.company];
+  const _ai = (label, note, ok) => `
+    <div class="prop-auto-item ${ok?'prop-auto-ok':'prop-auto-missing'}">
+      <span class="prop-auto-dot">${ok?'&#10003;':'&#9675;'}</span>
+      <span class="prop-auto-label">${label}</span>
+      <span class="prop-auto-note">${escapeHtml(note)}</span>
+    </div>`;
+  return `
+<div class="prop-section-wrap">
+  <div class="prop-section-actions">
+    <button class="btn-sm btn-sm-outline" onclick="propPreviewMain()">Preview Main Proposal</button>
+    <button class="btn-sm btn-sm-dark" onclick="propExportMain()">Export PDF</button>
+  </div>
+  <div class="prop-card">
+    <div class="prop-card-title">Auto-built Content</div>
+    <div class="prop-auto-list">
+      ${_ai('Client &amp; Project', s.clientName&&s.projectName?s.clientName+' — '+s.projectName:'(not set in Project Setup)', !!(s.clientName&&s.projectName))}
+      ${_ai('Company Introduction', '(loaded from company profile)', true)}
+      ${_ai('Scope of Work', s.scope?'(from Technical tab)':'(not entered — go to Technical)', !!s.scope.trim())}
+      ${_ai('Materials &amp; Specs', s.materials?'(from Technical tab)':'(not entered — section omitted)', !!s.materials.trim())}
+      ${_ai('Production Method', s.executionMethod?'(from Technical tab)':'(not entered — section omitted)', !!s.executionMethod.trim())}
+      ${_ai('Timeline', s.leadTime?'Lead time: '+s.leadTime:'(enter Lead Time in Commercial)', !!s.leadTime.trim())}
+      ${_ai('Sustainability', s.sustainability?'(from Technical tab)':'(not entered — section omitted)', !!s.sustainability.trim())}
+      ${_ai('Closing Statement', '(from company profile)', true)}
+    </div>
+  </div>
+  <div class="prop-card">
+    <div class="prop-card-title">Optional Override</div>
+    <div class="form-group">
+      <div class="form-label">Project Introduction / Special Message <span class="prop-opt-lbl">(leave blank to use company introduction)</span></div>
+      <textarea class="form-input prop-textarea" rows="4" placeholder="Custom opening paragraph for this specific proposal..." oninput="_pState().projectIntro=this.value;_propSave();">${escapeHtml(s.projectIntro)}</textarea>
+    </div>
+  </div>
+</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PDF PAGE BUILDERS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _propPdfHeader(co, titleEn, titleAr) {
+  const s = _pState();
+  const logoHtml = co.logo
+    ? `<img class="pp-logo" src="${co.logo}" alt="${escapeHtml(co.name)}" style="max-height:54px;max-width:160px;object-fit:contain;">`
+    : `<div style="font-size:16px;font-weight:600;color:var(--dark);">${escapeHtml(co.name)}</div><div style="font-size:8px;font-weight:300;color:var(--mid);margin-top:2px;">${escapeHtml(co.tagline)}</div>`;
+  const metaParts = [s.rfqRef, s.submissionDate ? _propFmtDate(s.submissionDate) : ''].filter(Boolean);
+  return `
+    <div class="pp-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+      <div class="pp-logo-wrap">${logoHtml}</div>
+      <div style="text-align:right;">
+        <div style="font-size:16px;font-weight:600;color:var(--dark);font-family:'Cormorant Garamond',serif;font-style:italic;">${titleEn}</div>
+        <div style="font-size:10px;font-weight:300;color:var(--mid);font-family:'Cairo',sans-serif;margin-top:2px;">${titleAr}</div>
+        ${metaParts.length ? `<div style="font-size:7.5px;font-weight:300;color:var(--light);margin-top:4px;">${escapeHtml(metaParts.join(' · '))}</div>` : ''}
+      </div>
+    </div>
+    <hr class="pp-rule" style="margin-bottom:14px;">`;
+}
+
+function _propPdfInfoGrid(co) {
+  const s = _pState();
+  return `
+    <div class="pp-info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;">
+      <div class="pp-info-block">
+        <div class="pp-section-heading" style="margin-bottom:6px;">
+          <div class="pp-heading-en">Prepared For</div>
+          <div class="pp-heading-ar">مُعَدٌّ لِـ</div>
+        </div>
+        <div class="pp-info-name">${escapeHtml(s.clientName)||'&mdash;'}</div>
+        <div class="pp-info-body">
+          ${s.projectName ? `<strong>${escapeHtml(s.projectName)}</strong><br>` : ''}
+          ${s.projectLocation ? escapeHtml(s.projectLocation)+'<br>' : ''}
+          ${s.rfqRef ? `Ref: ${escapeHtml(s.rfqRef)}<br>` : ''}
+          ${s.clientContact ? escapeHtml(s.clientContact) : ''}
+        </div>
+      </div>
+      <div class="pp-info-block">
+        <div class="pp-section-heading" style="margin-bottom:6px;">
+          <div class="pp-heading-en">Prepared By</div>
+          <div class="pp-heading-ar">مُعَدٌّ مِن</div>
+        </div>
+        <div class="pp-info-name">${escapeHtml(co.name)}</div>
+        <div class="pp-info-body">
+          ${co.tagline ? escapeHtml(co.tagline)+'<br>' : ''}
+          ${co.address ? escapeHtml(co.address)+'<br>' : ''}
+          ${[co.website&&escapeHtml(co.website), co.phone&&escapeHtml(co.phone)].filter(Boolean).join(' &middot; ')}
+        </div>
+        ${co.vat ? `<div class="pp-reg" style="margin-top:6px;">
+          <div class="pp-reg-row"><span class="pp-reg-lbl-en">VAT Reg.</span><span class="pp-reg-lbl-ar">رقم ض.ق.م</span><span class="pp-reg-val">${escapeHtml(co.vat)}</span></div>
+          ${co.cr ? `<div class="pp-reg-row"><span class="pp-reg-lbl-en">CR No.</span><span class="pp-reg-lbl-ar">س.ت</span><span class="pp-reg-val">${escapeHtml(co.cr)}</span></div>` : ''}
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+function _propSection(title, body) {
+  if (!body || !body.trim()) return '';
+  return `<div class="prop-pdf-section">
+    <div class="prop-pdf-sec-title">${title}</div>
+    <div class="prop-pdf-sec-body">${escapeHtml(body).replace(/\n/g,'<br>')}</div>
+  </div>`;
+}
+
+// ── Commercial PDF ────────────────────────────────────────────────────────────
+function _buildCommercialPDF() {
+  const s = _pState();
+  const co = PROPOSAL_COMPANIES[s.company];
+  const validRows = s.boq.filter(r => r.desc || parseFloat(r.unitPrice) > 0);
+  const rows = validRows.map((r,i) => `
+    <tr>
+      <td style="width:52%;"><div class="pp-item-name">${escapeHtml(r.desc)||'&mdash;'}</div></td>
+      <td style="text-align:right;"><div class="pp-td-r">${parseFloat(r.qty)||1}</div></td>
+      <td style="text-align:right;"><div class="pp-td-r">${escapeHtml(r.unit)||'&mdash;'}</div></td>
+      <td style="text-align:right;"><div class="pp-td-r">${_sar(parseFloat(r.unitPrice)||0)}</div></td>
+      <td style="text-align:right;"><div class="pp-td-r">${_sar(_boqLineTotal(r))}</div></td>
+    </tr>`).join('');
+  const sub=_boqSubtotal(), disc=_boqDiscount(), del=_boqDelivery(), bv=_boqBeforeVat(), vat=_boqVatAmt(), gt=_boqGrandTotal();
+  const termsHtml = [
+    s.paymentTerms ? `<strong>Payment Terms:</strong> ${escapeHtml(s.paymentTerms)}` : '',
+    s.validity     ? `<strong>Validity:</strong> ${escapeHtml(s.validity)}` : '',
+    s.leadTime     ? `<strong>Lead Time:</strong> ${escapeHtml(s.leadTime)}` : '',
+  ].filter(Boolean).join('<br>');
+  return `
+    ${_propPdfHeader(co, 'Commercial Proposal', 'عرض سعر تجاري')}
+    ${_propPdfInfoGrid(co)}
+    <table class="pp-table">
+      <thead><tr>
+        <th>Description / الوصف</th>
+        <th class="r">Qty</th>
+        <th class="r">Unit</th>
+        <th class="r">Unit Price</th>
+        <th class="r">Total</th>
+      </tr></thead>
+      <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--light);padding:20px;">(No items)</td></tr>'}</tbody>
+    </table>
+    <div class="pp-summary-block">
+      <div class="pp-totals">
+        <div class="pp-t-row"><div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع</span></div><span class="pp-t-row-amt">${_sar(sub)}</span></div>
+        ${s.discountEnabled && disc > 0 ? `<div class="pp-t-row"><div class="pp-t-row-lbl"><span class="pp-t-row-en">Discount</span><span class="pp-t-row-ar">خصم</span></div><span class="pp-t-row-amt">&minus; ${_sar(disc)}</span></div>` : ''}
+        ${s.deliveryEnabled && del > 0 ? `<div class="pp-t-row"><div class="pp-t-row-lbl"><span class="pp-t-row-en">Delivery</span><span class="pp-t-row-ar">توصيل</span></div><span class="pp-t-row-amt">${_sar(del)}</span></div>` : ''}
+        <div class="pp-t-row"><div class="pp-t-row-lbl"><span class="pp-t-row-en">Before VAT</span><span class="pp-t-row-ar">قبل الضريبة</span></div><span class="pp-t-row-amt">${_sar(bv)}</span></div>
+        <div class="pp-t-row"><div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT ${s.vatRate}%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div><span class="pp-t-row-amt">${_sar(vat)}</span></div>
+        <div class="pp-t-final"><div class="lbl">Grand Total <span class="lbl-ar">الإجمالي</span></div><span class="val">${_sar(gt)}</span></div>
+      </div>
+    </div>
+    ${termsHtml ? `<div class="pp-terms" style="margin-top:18px;">${termsHtml}</div>` : ''}
+    ${s.commercialNotes ? `<div class="pp-terms" style="margin-top:12px;"><strong>Notes / Exclusions:</strong><br>${escapeHtml(s.commercialNotes).replace(/\n/g,'<br>')}</div>` : ''}`;
+}
+
+// ── Technical PDF ─────────────────────────────────────────────────────────────
+function _buildTechnicalPDF() {
+  const s = _pState();
+  const co = PROPOSAL_COMPANIES[s.company];
+  return `
+    ${_propPdfHeader(co, 'Technical Proposal', 'العرض الفني')}
+    ${_propPdfInfoGrid(co)}
+    ${_propSection('Scope &amp; Deliverables', s.scope)}
+    ${_propSection('Materials &amp; Specifications', s.materials)}
+    ${_propSection('Execution &amp; Production Method', s.executionMethod)}
+    ${_propSection('Installation', s.installation)}
+    ${_propSection('Sustainability &amp; Material Approach', s.sustainability)}
+    ${_propSection('Quality Control', s.qualityControl)}
+    ${_propSection('Samples &amp; Mockups', s.samples)}
+    ${_propSection('Technical Exclusions', s.technicalExclusions)}`;
+}
+
+// ── Main Proposal PDF ─────────────────────────────────────────────────────────
+function _buildMainPDF() {
+  const s = _pState();
+  const co = PROPOSAL_COMPANIES[s.company];
+  const opening = s.projectIntro || co.intro;
+  return `
+    ${_propPdfHeader(co, 'Proposal', 'عرض مُقدّم')}
+    ${_propPdfInfoGrid(co)}
+    ${opening ? `<div class="prop-pdf-section" style="background:var(--cream);padding:12px 14px;border-left:2px solid var(--dark);margin-bottom:18px;"><div class="prop-pdf-sec-body" style="font-style:italic;">${escapeHtml(opening).replace(/\n/g,'<br>')}</div></div>` : ''}
+    ${_propSection('Project Understanding &amp; Scope', s.scope)}
+    ${_propSection('Proposed Approach', s.executionMethod)}
+    ${_propSection('Materials &amp; Specifications', s.materials)}
+    ${s.leadTime||s.completionDate ? `<div class="prop-pdf-section"><div class="prop-pdf-sec-title">Timeline</div><div class="prop-pdf-sec-body">${s.leadTime?'Estimated lead time: '+escapeHtml(s.leadTime):''}${s.leadTime&&s.completionDate?' &middot; ':''}${s.completionDate?'Required by: '+_propFmtDate(s.completionDate):''}</div></div>` : ''}
+    ${_propSection('Sustainability &amp; Environmental Approach', s.sustainability)}
+    ${co.capabilities ? _propSection('Our Capabilities', co.capabilities) : ''}
+    <div class="prop-pdf-section" style="margin-top:24px;padding-top:14px;border-top:0.5px solid var(--rule);">
+      <div class="prop-pdf-sec-body" style="font-style:italic;color:var(--mid);">${escapeHtml(co.closing).replace(/\n/g,'<br>')}</div>
+      ${co.email||co.phone ? `<div style="margin-top:8px;font-size:8px;color:var(--dark);">${[co.email&&escapeHtml(co.email), co.phone&&escapeHtml(co.phone)].filter(Boolean).join(' &middot; ')}</div>` : ''}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PREVIEW & EXPORT
+// ══════════════════════════════════════════════════════════════════════════════
+
+function _propShowPreview(pageInner, titleLabel) {
+  propSync();
+  const s = _pState();
+  const co = PROPOSAL_COMPANIES[s.company];
+  const fname = `${s.clientName||'Proposal'} — ${titleLabel} — ${co.name}.pdf`.replace(/[/\\?%*:|"<>]/g, '-');
+  const area = document.getElementById('propDocArea');
+  if (!area) return;
+  area.innerHTML = `
+    <div class="preview-wrap">
+      <div class="preview-topbar">
+        <span class="preview-label">${titleLabel}</span>
+        <div class="preview-actions">
+          <button class="btn-sm btn-sm-outline" onclick="propSwitchDoc('${escapeHtml(_pState().activeDoc)}')">&#8592; Back to Edit</button>
+          <button class="btn-sm btn-sm-dark" onclick="_propExport('${escapeHtml(fname)}')">Download PDF</button>
+        </div>
+      </div>
+      <div class="pdf-bg">
+        <div class="pdf-page" id="propPdfPage">
+          <div class="pp-body">${pageInner}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _propExport(filename) {
+  const el = document.getElementById('propPdfPage');
+  if (!el) return;
+  html2pdf().set({
+    margin: 0,
+    filename: filename,
+    image: { type: 'jpeg', quality: 0.98 },
+    pagebreak: { mode: ['css','legacy'] },
+    html2canvas: { scale: 2, useCORS: true, scrollY: 0, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(el).save();
+}
+
+function _propFilename(label) {
+  const s = _pState();
+  return `${s.clientName||'Proposal'} — ${label} — ${PROPOSAL_COMPANIES[s.company].name}.pdf`.replace(/[/\\?%*:|"<>]/g, '-');
+}
+
+function propPreviewCommercial() { _pState().activeDoc='commercial'; _propShowPreview(_buildCommercialPDF(), 'Commercial Proposal'); }
+function propPreviewTechnical()  { _pState().activeDoc='technical';  _propShowPreview(_buildTechnicalPDF(),  'Technical Proposal');  }
+function propPreviewMain()       { _pState().activeDoc='main';       _propShowPreview(_buildMainPDF(),        'Main Proposal');        }
+
+function propExportCommercial() { _pState().activeDoc='commercial'; _propShowPreview(_buildCommercialPDF(), 'Commercial Proposal'); setTimeout(()=>_propExport(_propFilename('Commercial Proposal')), 200); }
+function propExportTechnical()  { _pState().activeDoc='technical';  _propShowPreview(_buildTechnicalPDF(),  'Technical Proposal');  setTimeout(()=>_propExport(_propFilename('Technical Proposal')),  200); }
+function propExportMain()       { _pState().activeDoc='main';       _propShowPreview(_buildMainPDF(),        'Main Proposal');        setTimeout(()=>_propExport(_propFilename('Main Proposal')),        200); }
+
+// ── end Proposal Generator ────────────────────────────────────────────────────
 </script>
 </body>
 </html>
