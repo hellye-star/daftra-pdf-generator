@@ -500,6 +500,39 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 .notion-table-note { font-size: 11px; font-weight: 300; color: var(--light);
                      margin-top: 6px; font-style: italic; }
 
+/* ── Notes (page-body text blocks rendered in detail panel) ──────────────── */
+.notion-notes-label { font-size: 10px; font-weight: 500; letter-spacing: 0.14em;
+                      text-transform: uppercase; color: var(--light); margin-bottom: 8px; }
+.notion-notes { max-height: 300px; overflow-y: auto; border: 1px solid var(--rule);
+                background: var(--cream); padding: 16px 20px; margin-bottom: 4px; }
+.notion-notes p  { font-size: 13.5px; font-weight: 300; color: var(--mid); line-height: 1.85;
+                   margin: 0 0 10px; }
+.notion-notes p:last-child { margin-bottom: 0; }
+.notion-notes-h1 { font-size: 16px; font-weight: 500; color: var(--dark);
+                   margin: 12px 0 6px; line-height: 1.3; }
+.notion-notes-h2 { font-size: 14px; font-weight: 500; color: var(--dark);
+                   margin: 10px 0 5px; line-height: 1.35; }
+.notion-notes-h3 { font-size: 13px; font-weight: 500; color: var(--dark);
+                   margin: 9px 0 4px; line-height: 1.4; }
+.notion-notes ul,
+.notion-notes ol  { margin: 0 0 10px; padding-left: 20px; }
+.notion-notes li  { font-size: 13.5px; font-weight: 300; color: var(--mid); line-height: 1.85; }
+.notion-notes-callout { display: flex; gap: 10px; padding: 10px 14px;
+                        background: rgba(0,0,0,0.04); border-left: 3px solid var(--rule);
+                        margin: 0 0 10px; }
+.notion-notes-callout-icon { font-size: 15px; flex-shrink: 0; line-height: 1.85; }
+.notion-notes-callout-text { font-size: 13px; font-weight: 300; color: var(--mid);
+                              line-height: 1.75; }
+.notion-notes blockquote { border-left: 3px solid var(--rule); padding: 6px 14px;
+                           margin: 0 0 10px; font-size: 13px; font-weight: 300;
+                           color: var(--mid); font-style: italic; line-height: 1.75; }
+.notion-notes-todo { display: flex; gap: 9px; align-items: flex-start; margin: 0 0 6px; }
+.notion-notes-todo input[type=checkbox] { margin-top: 4px; flex-shrink: 0; cursor: default; }
+.notion-notes-todo span { font-size: 13.5px; font-weight: 300; color: var(--mid);
+                          line-height: 1.7; }
+.notion-notes-todo span.done { text-decoration: line-through; color: var(--light); }
+.notion-notes a   { color: #3A52A0; text-decoration: underline; }
+
 /* ── Search ──────────────────────────────────────────────────────────────── */
 .search-wrap  { position: relative; }
 .search-input { font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 300;
@@ -520,6 +553,32 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
               font-size: 8px; padding: 3px 8px; }
 .b-favorite { background: #FFFBF0; color: #96700A; border: 1px solid #E8D4A0;
               font-size: 8px; padding: 3px 8px; }
+.b-notes    { background: #F5F0FA; color: #6A4FA0; border: 1px solid #C8B8E8;
+              font-size: 8px; padding: 3px 8px; }
+.b-reqby-y  { background: #EEF1FA; color: #3A52A0; border: 1px solid #C0CCE8;
+              font-size: 8px; padding: 3px 8px; }
+.b-reqby-h  { background: #F0F0EE; color: var(--mid); border: 1px solid var(--rule);
+              font-size: 8px; padding: 3px 8px; }
+.tr-badge-col { display: flex; flex-direction: column; gap: 4px; }
+/* Requested By detail-panel select */
+.detail-rb-select { font-family: 'Jost', sans-serif; font-size: 13px; font-weight: 300;
+                    color: var(--dark); border: 1px solid var(--rule); background: var(--cream);
+                    padding: 5px 8px; width: 100%; cursor: pointer; }
+.detail-rb-select:focus { outline: none; border-color: var(--dark); }
+/* Bulk tag panel (sidebar) */
+.rb-bulk-item  { display: flex; align-items: center; gap: 7px; padding: 6px 0;
+                 border-bottom: 1px solid var(--rule); }
+.rb-bulk-item:last-child { border-bottom: none; }
+.rb-bulk-name  { flex: 1; font-size: 11px; font-weight: 300; color: var(--mid);
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.rb-bulk-btn   { font-family: 'Jost', sans-serif; font-size: 9px; font-weight: 500;
+                 letter-spacing: 0.08em; padding: 3px 8px; border: 1px solid var(--rule);
+                 background: var(--cream); color: var(--mid); cursor: pointer; flex-shrink: 0;
+                 transition: background 0.12s, color 0.12s; }
+.rb-bulk-btn:hover { background: var(--dark); color: #fff; border-color: var(--dark); }
+.rb-bulk-empty { font-size: 11px; font-weight: 300; color: var(--light); font-style: italic;
+                 padding: 4px 0; }
+.rb-bulk-count { font-size: 10px; font-weight: 300; color: var(--light); margin-bottom: 6px; }
 
 /* ── Review bar / button (detail panel) ──────────────────────────────────── */
 .review-bar {
@@ -608,6 +667,9 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
 
 /* ── Notion block renderer ───────────────────────────────────────────────── */
 .nb-body  { max-width: 700px; }
+/* Sub-page drill-down list (e.g. month → individual meeting pages) */
+.nb-subpage-notice { font-size: 10px; font-weight: 500; letter-spacing: 0.16em;
+                     text-transform: uppercase; color: var(--light); margin-bottom: 12px; }
 .nb-h2    { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 600;
             color: var(--dark); margin: 30px 0 10px; line-height: 1.2; }
 .nb-h2:first-child { margin-top: 0; }
@@ -795,6 +857,15 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
             <option>Youssef</option>
           </select>
         </div>
+        <div>
+          <label class="form-label">Requested By</label>
+          <select class="form-select" id="filterReqBy" onchange="onSidebarChange()">
+            <option value="">All</option>
+            <option value="Youssef">Youssef</option>
+            <option value="Hussam">Hussam</option>
+            <option value="__blank__">Blank</option>
+          </select>
+        </div>
         <div class="toggle-row" onclick="toggleDone()">
           <div class="toggle-box" id="toggleDoneBox"></div>
           <span class="toggle-label">Include Done tasks</span>
@@ -831,6 +902,19 @@ body { font-family: 'Jost', sans-serif; background: var(--cream); color: var(--d
         <div id="meetingListArea">
           <div class="meeting-list-empty">Expanding…</div>
         </div>
+      </div>
+    </div>
+
+    <hr class="sidebar-sep">
+
+    <!-- Tag Blank Tasks (local Requested By bulk panel) -->
+    <div class="meeting-panel">
+      <div class="meeting-panel-header" onclick="toggleRBBulkPanel()">
+        <div class="sec-title" style="margin:0">Tag Blank Tasks</div>
+        <span class="meeting-panel-toggle" id="rbBulkToggle">▶</span>
+      </div>
+      <div id="rbBulkBody" style="display:none">
+        <div id="rbBulkList"></div>
       </div>
     </div>
 
@@ -1065,6 +1149,62 @@ let scanAborted   = false;
 let searchQuery   = '';
 let _detailTaskId = null;   // ID of the task currently shown in the detail panel
 
+// ── Requested By (local only — not written to Notion) ────────────────────────
+const RB_KEY = 'vista_requested_by_v1';  // localStorage key
+
+function loadRBStore() {
+  try { const s = localStorage.getItem(RB_KEY); return s ? JSON.parse(s) : {}; }
+  catch { return {}; }
+}
+function saveRBStore(store) {
+  try { localStorage.setItem(RB_KEY, JSON.stringify(store)); } catch {}
+}
+
+// Returns 'Youssef', 'Hussam', or '' (blank/unset) for a given task ID.
+const requestedBy = id => loadRBStore()[id] || '';
+
+function setRequestedBy(taskId, value) {
+  const store = loadRBStore();
+  if (value) store[taskId] = value;
+  else delete store[taskId];
+  saveRBStore(store);
+
+  // Patch badge on any visible task row immediately.
+  document.querySelectorAll(`.task-row[data-id="${taskId}"]`).forEach(row => {
+    const col = row.querySelector('.tr-badge-col');
+    if (!col) return;
+    col.querySelectorAll('.b-reqby-y,.b-reqby-h').forEach(b => b.remove());
+    if (value) {
+      const badge = document.createElement('span');
+      badge.className = value === 'Youssef' ? 'badge b-reqby-y' : 'badge b-reqby-h';
+      badge.textContent = `Req: ${value}`;
+      col.appendChild(badge);
+    }
+  });
+
+  applyFilters();
+  if (document.getElementById('rbBulkBody')?.style.display !== 'none') renderRBBulkList();
+}
+
+// Session-only set: task IDs confirmed to have Notion page-body notes this session.
+// Populated lazily when a task detail is opened and notes are found — no upfront scan.
+const _notesTaskIds = new Set();
+
+function markTaskHasNotes(id) {
+  if (_notesTaskIds.has(id)) return;
+  _notesTaskIds.add(id);
+  // Patch any task-row already in the DOM so the badge appears immediately.
+  document.querySelectorAll(`.task-row[data-id="${id}"]`).forEach(row => {
+    const col = row.querySelector('.tr-badge-col');
+    if (col && !col.querySelector('.b-notes')) {
+      const badge = document.createElement('span');
+      badge.className = 'badge b-notes';
+      badge.textContent = '📝 Notes';
+      col.appendChild(badge);
+    }
+  });
+}
+
 // ── Search ────────────────────────────────────────────────────────────────────
 function onSearchInput(val) {
   searchQuery = val;
@@ -1089,7 +1229,7 @@ function searchMatches(t, q) {
   const fields = [
     taskName(t), description(t), status(t),
     assigneeOf(t), category(t), dueDate(t), due2(t), bucket(t),
-    mediaLabels,
+    mediaLabels, requestedBy(t.id),
   ];
   return fields.some(f => f && f.toLowerCase().includes(q));
 }
@@ -1172,6 +1312,7 @@ function getFilteredTasks() {
   const today   = todayStr();
   const catSel  = document.getElementById('filterCategory').value;
   const asnSel  = document.getElementById('filterAssignee').value;
+  const rbSel   = document.getElementById('filterReqBy')?.value || '';
 
   return allTasks.filter(t => {
     const st  = status(t);
@@ -1186,6 +1327,11 @@ function getFilteredTasks() {
       if (activeChip === 'favorites' && !isFavorite(t))     return false;
       if (catSel && cat         !== catSel) return false;
       if (asnSel && assigneeOf(t) !== asnSel) return false;
+      if (rbSel) {
+        const rb = requestedBy(t.id);
+        if (rbSel === '__blank__') { if (rb) return false; }
+        else if (rb !== rbSel)     return false;
+      }
     }
     return true;
   });
@@ -1372,13 +1518,17 @@ function taskRow(t) {
   const cls        = isYou ? 'youssef-row' : (isAttn ? 'attention-row' : '');
   const meta      = [cat, who].filter(Boolean).join(' · ');
   const dueTxt    = due2(t) || (due ? fmtDate(due) : '—');
+  const rb        = requestedBy(t.id);
   return `
-    <div class="task-row${cls ? ' '+cls : ''}" onclick="openDetail('${t.id}')">
-      <div style="display:flex;flex-direction:column;gap:4px">
+    <div class="task-row${cls ? ' '+cls : ''}" data-id="${t.id}" onclick="openDetail('${t.id}')">
+      <div class="tr-badge-col">
         <span class="badge ${statusClass(st)}">${st}</span>
         ${isRev ? '<span class="badge b-reviewed">✓ Reviewed</span>' : ''}
         ${isRevStale ? '<span class="badge b-stale">Updated Since Review</span>' : ''}
         ${isFav ? '<span class="badge b-favorite">★ Favorite</span>' : ''}
+        ${_notesTaskIds.has(t.id) ? '<span class="badge b-notes">📝 Notes</span>' : ''}
+        ${rb === 'Youssef' ? '<span class="badge b-reqby-y">Req: Youssef</span>' : ''}
+        ${rb === 'Hussam'  ? '<span class="badge b-reqby-h">Req: Hussam</span>'  : ''}
       </div>
       <div class="tr-info">
         <div class="tr-name">${esc(taskName(t))}</div>
@@ -1999,6 +2149,7 @@ async function openDetail(id) {
 function buildDetailHTML(t) {
   const st = status(t), who = assigneeOf(t), cat = category(t);
   const due = dueDate(t), d2 = due2(t), desc = description(t), upd = updated(t);
+  const rb = requestedBy(t.id);
   const today = todayStr();
   const isOverdue  = due && due < today && st !== 'Done';
   const dueDisplay = due ? `${fmtDate(due)}${d2 ? '  ·  ' + d2 : ''}` : '—';
@@ -2035,7 +2186,27 @@ function buildDetailHTML(t) {
     </div>
 
     <div class="detail-section">
+      <div class="detail-sec-title">Notes &amp; Media</div>
+      <div id="detail-media-content">
+        <div class="detail-async-loading">
+          <div class="spinner"></div>
+          <span class="detail-async-text">Fetching page content…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
       <div class="detail-sec-title">Details</div>
+      <div class="detail-row">
+        <span class="detail-lbl">Req. By</span>
+        <span class="detail-val">
+          <select class="detail-rb-select" onchange="setRequestedBy('${t.id}', this.value)">
+            <option value=""${!rb ? ' selected' : ''}>— Unset —</option>
+            <option value="Youssef"${rb === 'Youssef' ? ' selected' : ''}>Youssef</option>
+            <option value="Hussam"${rb === 'Hussam' ? ' selected' : ''}>Hussam</option>
+          </select>
+        </span>
+      </div>
       <div class="detail-row">
         <span class="detail-lbl">Updated</span>
         <span class="detail-val">${fmtDate(upd)}</span>
@@ -2043,16 +2214,6 @@ function buildDetailHTML(t) {
       <div class="detail-row">
         <span class="detail-lbl">Period</span>
         <span class="detail-val">${esc(bucket(t) || '—')}</span>
-      </div>
-    </div>
-
-    <div class="detail-section">
-      <div class="detail-sec-title">Media &amp; Files</div>
-      <div id="detail-media-content">
-        <div class="detail-async-loading">
-          <div class="spinner"></div>
-          <span class="detail-async-text">Fetching page content…</span>
-        </div>
       </div>
     </div>
 
@@ -2100,6 +2261,11 @@ async function loadDetailMedia(pageId) {
 
     // Stale guard: another task may have been opened while this fetch was in flight
     if (_detailTaskId !== pageId) return;
+
+    // Lazily mark this task as having notes if any top-level text blocks exist.
+    const NOTE_TYPES = new Set(['paragraph','heading_1','heading_2','heading_3',
+                                 'bulleted_list_item','numbered_list_item','callout','quote','to_do']);
+    if (topBlocks.some(b => NOTE_TYPES.has(b.type))) markTaskHasNotes(pageId);
 
     // ── Related tasks — ranked across all 5 tiers ─────────────────────────────
     // Tier 5: Linked by You (manual) · Tier 4: Explicit Notion Link ·
@@ -2163,6 +2329,7 @@ async function loadDetailMedia(pageId) {
 function renderMediaBlocks(topBlocks, allBlocks, tableRowsMap = {}, notionUrl = '') {
   const images  = [], links = [], tables = [];
   let   hasText = false;
+  const notesHTML = renderNotionTextBlocks(topBlocks);
 
   const TEXT_TYPES = new Set([
     'heading_1','heading_2','heading_3','paragraph',
@@ -2237,10 +2404,16 @@ function renderMediaBlocks(topBlocks, allBlocks, tableRowsMap = {}, notionUrl = 
     : '';
 
   if (!hasMedia && !tables.length) {
+    if (notesHTML) {
+      // Render page-body text directly instead of showing a placeholder.
+      const openLink = openBtn ? `<div style="margin-top:12px">${openBtn}</div>` : '';
+      return { html: `<div class="notion-notes-label">Notes</div><div class="notion-notes">${notesHTML}</div>${openLink}`, emptyMsg: null };
+    }
     if (hasText) {
+      // Text exists but only in nested/unsupported blocks — show reduced hint.
       return { html: null, emptyMsg: `<div class="media-none media-has-notes">
-        📝&nbsp; This task has notes and text but no attached images, files, or links.
-        <div class="media-none-sub">Open in Notion to read the full brief or description.</div>
+        📝&nbsp; This task has notes in a nested or unsupported block type.
+        <div class="media-none-sub">Open in Notion to read the full content.</div>
         ${openBtn}
       </div>` };
     }
@@ -2253,6 +2426,11 @@ function renderMediaBlocks(topBlocks, allBlocks, tableRowsMap = {}, notionUrl = 
 
   // ── Build HTML ───────────────────────────────────────────────────────────
   let html = '';
+
+  // Notes section — rendered above media when both are present
+  if (notesHTML) {
+    html += `<div class="notion-notes-label">Notes</div><div class="notion-notes">${notesHTML}</div><div style="margin-top:16px"></div>`;
+  }
 
   if (images.length) {
     html += `<div class="media-section-label">Images · ${images.length}</div>
@@ -2294,6 +2472,100 @@ function renderMediaBlocks(topBlocks, allBlocks, tableRowsMap = {}, notionUrl = 
   }
 
   return { html, emptyMsg: null };
+}
+
+// ── Notion text-block renderer (page body notes) ─────────────────────────────
+// Renders top-level text blocks from a Notion page into safe HTML.
+// Call with topBlocks only — nested blocks from allBlocks are intentionally skipped
+// to avoid duplicating callout/toggle children that are already inside their parent.
+function renderNotionTextBlocks(blocks) {
+  const parts = [];
+  let ulBuf = [], olBuf = [];
+
+  function flushUL() {
+    if (!ulBuf.length) return;
+    parts.push(`<ul>${ulBuf.map(i => `<li>${i}</li>`).join('')}</ul>`);
+    ulBuf = [];
+  }
+  function flushOL() {
+    if (!olBuf.length) return;
+    parts.push(`<ol>${olBuf.map(i => `<li>${i}</li>`).join('')}</ol>`);
+    olBuf = [];
+  }
+  function flushLists() { flushUL(); flushOL(); }
+
+  for (const b of blocks) {
+    if (b._nested) continue;   // safety: skip nested blocks if ever mixed in
+    switch (b.type) {
+      case 'paragraph': {
+        flushLists();
+        const rt = richTextToHTML(b.paragraph?.rich_text || []);
+        if (rt) parts.push(`<p>${rt}</p>`);
+        break;
+      }
+      case 'heading_1': {
+        flushLists();
+        const rt = richTextToHTML(b.heading_1?.rich_text || []);
+        if (rt) parts.push(`<div class="notion-notes-h1">${rt}</div>`);
+        break;
+      }
+      case 'heading_2': {
+        flushLists();
+        const rt = richTextToHTML(b.heading_2?.rich_text || []);
+        if (rt) parts.push(`<div class="notion-notes-h2">${rt}</div>`);
+        break;
+      }
+      case 'heading_3': {
+        flushLists();
+        const rt = richTextToHTML(b.heading_3?.rich_text || []);
+        if (rt) parts.push(`<div class="notion-notes-h3">${rt}</div>`);
+        break;
+      }
+      case 'bulleted_list_item': {
+        flushOL();
+        const rt = richTextToHTML(b.bulleted_list_item?.rich_text || []);
+        if (rt) ulBuf.push(rt);
+        break;
+      }
+      case 'numbered_list_item': {
+        flushUL();
+        const rt = richTextToHTML(b.numbered_list_item?.rich_text || []);
+        if (rt) olBuf.push(rt);
+        break;
+      }
+      case 'callout': {
+        flushLists();
+        const icon = b.callout?.icon?.emoji || '';
+        const rt   = richTextToHTML(b.callout?.rich_text || []);
+        if (rt) parts.push(
+          `<div class="notion-notes-callout">` +
+          (icon ? `<span class="notion-notes-callout-icon">${esc(icon)}</span>` : '') +
+          `<div class="notion-notes-callout-text">${rt}</div></div>`
+        );
+        break;
+      }
+      case 'quote': {
+        flushLists();
+        const rt = richTextToHTML(b.quote?.rich_text || []);
+        if (rt) parts.push(`<blockquote>${rt}</blockquote>`);
+        break;
+      }
+      case 'to_do': {
+        flushLists();
+        const rt      = richTextToHTML(b.to_do?.rich_text || []);
+        const checked = b.to_do?.checked ? 'checked' : '';
+        const cls     = b.to_do?.checked ? ' class="done"' : '';
+        if (rt) parts.push(
+          `<div class="notion-notes-todo"><input type="checkbox" disabled ${checked}>` +
+          `<span${cls}>${rt}</span></div>`
+        );
+        break;
+      }
+      // image, file, video, bookmark, table, etc. are handled by renderMediaBlocks
+    }
+  }
+  flushLists();
+  return parts.join('');
 }
 
 // ── Notion table renderer ─────────────────────────────────────────────────────
@@ -2614,7 +2886,23 @@ async function openMeetingPage(id, title) {
     const resp = await fetch(`/notion/${MEETING_PROXY}/blocks/${id}/children?page_size=100`);
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.message || `HTTP ${resp.status}`);
-    bodyEl.innerHTML = renderNotionBlocks(data.results || []);
+    const blocks = data.results || [];
+
+    // If all blocks are child_page entries this is a container page (e.g. a month).
+    // Render a drillable sub-list so the user can click into individual meeting pages.
+    const childPages = blocks.filter(b => b.type === 'child_page');
+    if (childPages.length > 0 && childPages.length === blocks.length) {
+      const rows = childPages.map(b => {
+        const label = esc(b.child_page?.title || '(Untitled)');
+        return `<div class="meeting-list-item"
+          onclick="openMeetingPage('${b.id}','${label.replace(/'/g,'&#39;')}')">${label}</div>`;
+      }).join('');
+      bodyEl.innerHTML =
+        `<div class="nb-subpage-notice">Select a meeting to view its notes:</div>` +
+        `<div class="meeting-list">${rows}</div>`;
+    } else {
+      bodyEl.innerHTML = renderNotionBlocks(blocks);
+    }
   } catch(err) {
     bodyEl.innerHTML = `<div class="nb-error">Could not load content: ${esc(err.message)}</div>`;
   }
@@ -3103,6 +3391,45 @@ function renderHussamPerformanceCard() {
   window.scrollTo(0, savedScrollY);
 }
 
+// ── Requested By Bulk Tag Panel ───────────────────────────────────────────────
+
+function toggleRBBulkPanel() {
+  const body   = document.getElementById('rbBulkBody');
+  const toggle = document.getElementById('rbBulkToggle');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (toggle) toggle.textContent = isOpen ? '▶' : '▼';
+  if (!isOpen) renderRBBulkList();
+}
+
+function renderRBBulkList() {
+  const el = document.getElementById('rbBulkList');
+  if (!el) return;
+  const store  = loadRBStore();
+  // Show active (non-Done) untagged tasks only to keep the list focused.
+  const blanks = allTasks
+    .filter(t => !store[t.id] && status(t) !== 'Done')
+    .sort((a, b) => taskName(a).localeCompare(taskName(b)));
+  if (!blanks.length) {
+    el.innerHTML = '<div class="rb-bulk-empty">All active tasks are tagged.</div>';
+    return;
+  }
+  const shown = blanks.slice(0, 30);
+  const more  = blanks.length - shown.length;
+  el.innerHTML =
+    `<div class="rb-bulk-count">${blanks.length} untagged active task${blanks.length !== 1 ? 's' : ''}</div>` +
+    shown.map(t => {
+      const label = esc(taskName(t));
+      return `<div class="rb-bulk-item">
+        <span class="rb-bulk-name" title="${label}">${label}</span>
+        <button class="rb-bulk-btn" onclick="setRequestedBy('${t.id}','Youssef')">Y</button>
+        <button class="rb-bulk-btn" onclick="setRequestedBy('${t.id}','Hussam')">H</button>
+      </div>`;
+    }).join('') +
+    (more > 0 ? `<div class="rb-bulk-count" style="margin-top:6px">${more} more — filter by Blank to see all</div>` : '');
+}
+
 // ── New Task Modal ────────────────────────────────────────────────────────────
 
 function openNewTaskModal() {
@@ -3113,6 +3440,7 @@ function openNewTaskModal() {
   document.getElementById('nt-status').value   = 'Not started';
   document.getElementById('nt-due').value      = '';
   document.getElementById('nt-desc').value     = '';
+  document.getElementById('nt-reqby').value    = 'Youssef';
   document.getElementById('nt-error').style.display   = 'none';
   document.getElementById('nt-success').style.display = 'none';
   document.getElementById('nt-submit').disabled = false;
@@ -3133,6 +3461,7 @@ async function submitNewTask() {
   const status   = document.getElementById('nt-status').value;
   const due      = document.getElementById('nt-due').value;
   const desc     = document.getElementById('nt-desc').value.trim();
+  const reqby    = document.getElementById('nt-reqby').value;
 
   const errorEl   = document.getElementById('nt-error');
   const successEl = document.getElementById('nt-success');
@@ -3177,6 +3506,9 @@ async function submitNewTask() {
       submitBtn.textContent = 'Create Task';
       return;
     }
+
+    // Tag locally with Requested By — not written to Notion.
+    if (reqby && data.id) setRequestedBy(data.id, reqby);
 
     successEl.textContent   = `Task "${esc(name)}" created successfully.`;
     successEl.style.display = 'block';
@@ -3293,6 +3625,14 @@ loadAllTasks();
           <label class="nt-label" for="nt-due">Due date</label>
           <input id="nt-due" class="nt-input" type="date">
         </div>
+      </div>
+      <div class="nt-field">
+        <label class="nt-label" for="nt-reqby">Requested By</label>
+        <select id="nt-reqby" class="nt-select">
+          <option value="Youssef" selected>Youssef</option>
+          <option value="Hussam">Hussam</option>
+          <option value="">— Unset —</option>
+        </select>
       </div>
       <div class="nt-field">
         <label class="nt-label" for="nt-desc">Description</label>
