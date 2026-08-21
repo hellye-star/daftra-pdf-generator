@@ -173,6 +173,27 @@
   .pp-table-quo th:nth-child(n+3), .pp-table-quo td:nth-child(n+3),
   .pp-table-tail-quo td:nth-child(n+3) { text-align: right; }
 
+  /* ── Quotation item photo (optional, Quotation only) — client-side, session-scoped ──
+     .pp-item-photo         = thumbnail rendered inside renderQuoRow() (appears in PDF/print)
+     .quo-photo-*           = live Daftra quotation photo panel, outside #pdfPage (no-print)
+     .sarawat-item-photo-*  = photo controls inside Sarawat item cards (no-print)          */
+  .pp-item-photo { display: block; max-width: 90px; max-height: 90px; width: auto; height: auto; object-fit: contain; margin-top: 5px; border: 0.5px solid #E0DDD8; }
+
+  .quo-photo-panel { background: var(--white); border: 1px solid var(--rule); padding: 14px 16px; margin-bottom: 14px; }
+  .quo-photo-panel-title { font-size: 7.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); margin-bottom: 10px; }
+  .quo-photo-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .quo-photo-row:last-child { border-bottom: none; }
+  .quo-photo-thumb { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--cream); border: 1px solid var(--rule); overflow: hidden; }
+  .quo-photo-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .quo-photo-empty { font-size: 6px; color: var(--light); text-align: center; padding: 2px; }
+  .quo-photo-name { flex: 1; font-size: 8.5px; font-weight: 400; color: var(--dark); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .quo-photo-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .quo-photo-btn { display: inline-block; }
+
+  .sarawat-item-photo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .sarawat-item-photo-thumb { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--cream); border: 1px solid var(--rule); overflow: hidden; }
+  .sarawat-item-photo-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
   /* Invoice tail — last 2 rows + totals kept together; prevents orphan totals on page 2 */
   .pp-invoice-tail { page-break-inside: avoid; break-inside: avoid; margin-top: 0; }
   .pp-table-tail { width: 100%; border-collapse: collapse; margin-top: 0; }
@@ -634,6 +655,41 @@ async function imageUrlToDataUrl(url) {
   });
 }
 
+// ── Quotation item photo (optional, Quotation only) ──────────────────────────
+// Client-side only: read a user-picked file, downscale it on a canvas so a
+// huge phone photo can't bloat/break the PDF layout, and hand back a data URL.
+// Never uploaded anywhere, never persisted — lives only on the in-memory item
+// object for the current session (per Youssef's instruction: no localStorage,
+// no backend, no proxy.py changes for this feature).
+const QUO_PHOTO_ACCEPT  = 'image/jpeg,image/png,image/webp';
+const QUO_PHOTO_MAX_DIM = 900;   // px, longest edge after downscale
+const QUO_PHOTO_QUALITY = 0.82;  // re-encode quality (ignored for PNG, which stays lossless)
+
+function readAndResizeImageToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) { reject(new Error('No file provided')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not decode image'));
+      img.onload = () => {
+        const scale = Math.min(1, QUO_PHOTO_MAX_DIM / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        // Keep PNG lossless (preserves transparency); re-encode everything else as JPEG.
+        const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        resolve(canvas.toDataURL(outType, QUO_PHOTO_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function openDoc(index) {
   const sub  = $('subdomain').value.trim();
   const key  = $('apikey').value.trim();
@@ -789,8 +845,9 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
     const vatPct    = it.tax1_percent || '15%';
     const vatAmt    = parseFloat(it.tax1_value || it.summary_tax1 || (beforeTax * 0.15) || 0);
     const withVat   = parseFloat(it.subtotal || (beforeTax + vatAmt) || 0);
+    const photo     = it._photoDataUrl || '';
     return `<tr>
-      <td><div class="pp-item-name">${name}</div></td>
+      <td><div class="pp-item-name">${name}</div>${photo ? `<img class="pp-item-photo" src="${photo}" alt="">` : ''}</td>
       <td><div class="pp-item-desc" style="font-weight:400;">${desc}</div></td>
       <td class="pp-td-r">${price.toLocaleString('en',{minimumFractionDigits:2})}</td>
       <td class="pp-td-r">${qty % 1 === 0 ? qty : qty.toFixed(2)}</td>
@@ -977,6 +1034,11 @@ function renderPreview() {
   const isInv  = type === 'invoices';
   const qrPayload = doc._qrPayload || '';
 
+  // Optional per-item photo panel — Quotation (estimates) only, never for invoices.
+  const quoPhotoPanel = (!isInv && (doc._items || []).length)
+    ? buildQuoPhotoPanelHTML(doc._items)
+    : '';
+
   $('mainArea').innerHTML = `
     <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <div style="font-size:8.5px;font-weight:300;color:var(--mid);">← <span style="cursor:pointer;text-decoration:underline;" onclick="renderList()">Back to list</span></div>
@@ -985,6 +1047,7 @@ function renderPreview() {
         <button class="btn-sm btn-sm-dark" onclick="downloadPDF()">Download PDF</button>
       </div>
     </div>
+    ${quoPhotoPanel}
     <div class="preview-wrap">
       <div class="pdf-bg">
         <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
@@ -1010,6 +1073,61 @@ function renderPreview() {
       console.log(`  ${sel} →`, rect ? `top:${rect.top.toFixed(1)} left:${rect.left.toFixed(1)} w:${rect.width.toFixed(1)} h:${rect.height.toFixed(1)}` : 'NOT FOUND');
     });
   }, 200);
+}
+
+// ── Quotation item photo panel (live Daftra quotations) ──────────────────────
+// Shown only above the preview (no-print) for type==='estimates'. Lists each
+// doc._items[] entry with a thumbnail + Add/Replace/Remove Photo controls.
+// Photos are stored directly on the item object (it._photoDataUrl) so they
+// survive re-renders via the same currentDoc.doc._items array reference.
+function buildQuoPhotoPanelHTML(items) {
+  const rows = items.map((it, i) => {
+    const name  = escapeHtml(String(it.item || it.product_name || it.name || `Item ${i + 1}`));
+    const photo = it._photoDataUrl || '';
+    return `
+      <div class="quo-photo-row">
+        <div class="quo-photo-thumb">${photo ? `<img src="${photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
+        <div class="quo-photo-name">${name}</div>
+        <div class="quo-photo-actions">
+          <label class="btn-sm btn-sm-outline quo-photo-btn">${photo ? 'Replace Photo' : 'Add Photo'}
+            <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onQuoItemPhotoSelected(${i}, this)">
+          </label>
+          ${photo ? `<button class="btn-sm btn-sm-outline" onclick="removeQuoItemPhoto(${i})">Remove Photo</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="no-print quo-photo-panel">
+      <div class="quo-photo-panel-title">Item Photos (Optional)</div>
+      ${rows}
+    </div>`;
+}
+
+async function onQuoItemPhotoSelected(itemIdx, inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+    alert('Please choose a JPG, PNG, or WebP image.');
+    inputEl.value = '';
+    return;
+  }
+  try {
+    const dataUrl = await readAndResizeImageToDataUrl(file);
+    const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
+    if (!items || !items[itemIdx]) return;
+    items[itemIdx]._photoDataUrl = dataUrl;
+    renderPreview();
+  } catch (e) {
+    console.error('[Quotation photo] failed:', e);
+    alert('Could not load that image. Please try a different file.');
+  }
+}
+
+function removeQuoItemPhoto(itemIdx) {
+  const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
+  if (!items || !items[itemIdx]) return;
+  items[itemIdx]._photoDataUrl = '';
+  renderPreview();
 }
 
 // Render the Daftra-provided d64 QR payload into an inline canvas.
@@ -3528,7 +3646,7 @@ function updateSarawatTier(itemIdx, tierIdx, field, val) {
 
 function addSarawatItem() {
   if (!sarawatState) return;
-  sarawatState.items.push({ sno: '', itemName: '', description: '', qtyDisplay: '', qtyReview: false, tiers: [{ qty: 1, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' }] });
+  sarawatState.items.push({ sno: '', itemName: '', description: '', qtyDisplay: '', qtyReview: false, photo: '', tiers: [{ qty: 1, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' }] });
   recomputeSarawatTotals();
   renderSarawatForm();
 }
@@ -3537,6 +3655,34 @@ function removeSarawatItemGroup(itemIdx) {
   if (!sarawatState) return;
   sarawatState.items.splice(itemIdx, 1);
   recomputeSarawatTotals();
+  renderSarawatForm();
+}
+
+// Optional per-item photo (Vista Quotation export only) — client-side, session-scoped.
+// Stored on sarawatState.items[itemIdx].photo, so it moves with the item through
+// add/edit/remove (splice/push mutate the same array the photo lives on).
+async function onSarawatItemPhotoSelected(itemIdx, inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+    alert('Please choose a JPG, PNG, or WebP image.');
+    inputEl.value = '';
+    return;
+  }
+  try {
+    const dataUrl = await readAndResizeImageToDataUrl(file);
+    if (!sarawatState || !sarawatState.items[itemIdx]) return;
+    sarawatState.items[itemIdx].photo = dataUrl;
+    renderSarawatForm();
+  } catch (e) {
+    console.error('[Sarawat photo] failed:', e);
+    alert('Could not load that image. Please try a different file.');
+  }
+}
+
+function removeSarawatItemPhoto(itemIdx) {
+  if (!sarawatState || !sarawatState.items[itemIdx]) return;
+  sarawatState.items[itemIdx].photo = '';
   renderSarawatForm();
 }
 
@@ -3768,6 +3914,13 @@ function renderSarawatForm() {
         <input class="form-input sarawat-item-name" id="sarawat-item-${i}-name" value="${escapeHtml(it.itemName || '')}" placeholder="Item name"
           oninput="updateSarawatItemField(${i},'itemName',this.value)">
         <button class="btn-sm btn-sm-outline" onclick="removeSarawatItemGroup(${i})">✕ Remove Item</button>
+      </div>
+      <div class="sarawat-item-photo-row">
+        <div class="sarawat-item-photo-thumb">${it.photo ? `<img src="${it.photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
+        <label class="btn-sm btn-sm-outline quo-photo-btn">${it.photo ? 'Replace Photo' : 'Add Photo'}
+          <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onSarawatItemPhotoSelected(${i}, this)">
+        </label>
+        ${it.photo ? `<button class="btn-sm btn-sm-outline" onclick="removeSarawatItemPhoto(${i})">Remove Photo</button>` : ''}
       </div>
       <textarea class="sarawat-item-desc" id="sarawat-item-${i}-desc" placeholder="Full description / specifications"
         oninput="updateSarawatItemField(${i},'description',this.value)">${escapeHtml(it.description || '')}</textarea>
@@ -4074,6 +4227,9 @@ function exportVistaQuotationFromSarawat() {
         tax1_percent: sarawatState.vatRate + '%',
         tax1_value: t.total * rate,
         subtotal: t.total * (1 + rate),
+        // Optional item photo — only carried on the first tier row, same rule
+        // as item/description above, so it isn't repeated across tier rows.
+        _photoDataUrl: j === 0 ? (it.photo || '') : '',
       });
     });
   });
