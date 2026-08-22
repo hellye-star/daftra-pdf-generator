@@ -174,10 +174,21 @@
   .pp-table-tail-quo td:nth-child(n+3) { text-align: right; }
 
   /* ── Quotation item photo (optional, Quotation only) — client-side, session-scoped ──
-     .pp-item-photo         = thumbnail rendered inside renderQuoRow() (appears in PDF/print)
+     .pp-item-photo   = thumbnail rendered inside renderQuoRow() (appears in PDF/print).
+                         max-width/max-height are set inline per-item from QUO_PHOTO_SIZES
+                         (Small/Medium/Large — see buildQuoPhotoPanelHTML()/renderSarawatForm()),
+                         so no fixed size lives here.
+     .pp-item-group   = <tbody> wrapping one item's main row + optional photo-continuation
+                         row as a single page-break-safe unit (see renderQuoRow()).
+     .pp-photo-cell   = the colspan=2 cell (Item+Description width only) holding the photo;
+                         the remaining colspan=6 cell keeps Price/Qty/Tax/Totals column
+                         widths structurally unchanged.
      .quo-photo-*           = live Daftra quotation photo panel, outside #pdfPage (no-print)
      .sarawat-item-photo-*  = photo controls inside Sarawat item cards (no-print)          */
-  .pp-item-photo { display: block; max-width: 90px; max-height: 90px; width: auto; height: auto; object-fit: contain; margin-top: 5px; border: 0.5px solid #E0DDD8; }
+  .pp-item-photo { display: block; width: auto; height: auto; object-fit: contain; margin-top: 5px; border: 0.5px solid #E0DDD8; }
+  .pp-item-group { page-break-inside: avoid; break-inside: avoid; }
+  .pp-item-group tr:not(:last-child) { border-bottom: none; }
+  .pp-photo-cell { padding-top: 2px; }
 
   .quo-photo-panel { background: var(--white); border: 1px solid var(--rule); padding: 14px 16px; margin-bottom: 14px; }
   .quo-photo-panel-title { font-size: 7.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); margin-bottom: 10px; }
@@ -190,12 +201,72 @@
   .quo-photo-actions { display: flex; gap: 6px; flex-shrink: 0; }
   .quo-photo-btn { display: inline-block; }
 
+  .quo-delivery-panel { background: var(--white); border: 1px solid var(--rule); padding: 12px 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; }
+  .quo-delivery-label { font-size: 8.5px; font-weight: 500; color: var(--dark); }
+  .quo-delivery-input { width: 90px; padding: 6px 8px; font-size: 8.5px; font-family: inherit; border: 1px solid var(--rule); background: var(--cream); color: var(--dark); }
+
   .sarawat-item-photo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .sarawat-item-photo-thumb { width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--cream); border: 1px solid var(--rule); overflow: hidden; }
   .sarawat-item-photo-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
-  /* Invoice tail — last 2 rows + totals kept together; prevents orphan totals on page 2 */
+  /* ── Quotation-only readability scope (pdf-page-quo) ──────────────────────────
+     Applied only to #pdfPage when type==='estimates' (see renderPreview()). The
+     base .pp-* sizes below are shared with renderRow() (invoices) and were tuned
+     for the app's 1.8x on-screen preview scale, not the true-size PDF export —
+     at true size they render at ~6.4pt, well under a comfortable print minimum.
+     These overrides only take effect inside .pdf-page-quo, so Invoice/DN/Receipt/
+     Purchasing/Sarawat-original/Proposal output is completely unaffected. */
+  .pdf-page-quo .pp-table th { font-size: 9.5px; }
+  .pdf-page-quo .th-ar { font-size: 8.5px; }
+  .pdf-page-quo .pp-item-name { font-size: 11px; }
+  .pdf-page-quo .pp-item-desc { font-size: 10.5px; text-align: start; }
+  /* Token-based description spacing — see quoDescRenderTokens()/rewrapQuoDescriptions().
+     Gaps between words come entirely from margin, never from a literal space character
+     (html2canvas was found to silently drop spaces around RTL/LTR bdi boundaries even
+     in an already-correct, non-wrapping line — this sidesteps it by leaving no space
+     character for it to drop). Symmetric non-logical margin on purpose: avoids relying
+     on html2canvas supporting CSS logical properties (margin-inline-*). */
+  .pdf-page-quo .pp-item-desc .quo-desc-line { white-space: nowrap; }
+  .pdf-page-quo .pp-item-desc .quo-desc-token { display: inline-block; margin: 0 2px; unicode-bidi: isolate; }
+  .pdf-page-quo .pp-item-desc .quo-desc-token:first-child { margin-inline-start: 0; }
+  .pdf-page-quo .pp-item-desc .quo-desc-token:last-child { margin-inline-end: 0; }
+  .pdf-page-quo .pp-td-r { font-size: 11px; }
+  .pdf-page-quo .pp-terms { font-size: 9.5px; }
+  .pdf-page-quo .pp-terms strong { font-size: 9px; }
+
+  /* ── Quotation-only header compaction ──────────────────────────────────────
+     Recovers vertical room so Subtotal/VAT/Total can stay on page 1 for a real
+     2-item quotation, without touching approved font sizes, photo sizes, column
+     widths, or the logo's own rendered size/position.
+     Root cause of most of the reclaimed space: .pp-logo has transform:translateY(-48px)
+     to visually nudge it up, but transform never changes layout — the shared .pp-header
+     grid still reserves the logo's full untransformed ~150px box height, leaving ~48px
+     of genuinely empty reserved space below where the logo actually paints. Capping
+     .pp-logo-wrap's own box to just past the logo's true visible bottom edge (measured
+     live) reclaims that space with zero visual change to the logo itself (overflow
+     stays visible, so nothing is clipped). The rest is several small, individually
+     subtle margin/padding trims across the header stack, per Youssef's request to
+     use many small reductions rather than one aggressive one. Font sizes, photo
+     sizes, item-row layout, and column widths are untouched by every rule below. */
+  .pdf-page-quo { padding-top: 22px; }                          /* was 28px (base .pdf-page) — -6px */
+  .pdf-page-quo .pp-logo-wrap { height: 105px; overflow: visible; }  /* was ~150px natural box — -45px */
+  .pdf-page-quo .pp-header { margin-bottom: 10px; }              /* was 14px (base .pp-header) — -4px */
+  .pdf-page-quo .pp-rule { margin-bottom: 11px; }                /* was 16px (base .pp-rule) — -5px */
+  .pdf-page-quo .pp-info-grid { margin-bottom: 13px; }           /* was 18px (base .pp-info-grid) — -5px */
+  .pdf-page-quo .pp-section-heading { margin-bottom: 8px; }      /* was 10px (base .pp-section-heading) — -2px */
+  .pdf-page-quo .pp-reg { margin-top: 6px; padding-top: 5px; }   /* was 8px/7px (base .pp-reg) — -4px */
+
+  /* Invoice tail — last 2 rows + totals kept together; prevents orphan totals on page 2.
+     Restored to its original shared behavior — Invoice keeps this protection exactly as
+     before. Quotation gets an override right below: wrapping the tail-table+totals in one
+     avoid-protected block, on top of the already-avoid-protected item rows above it, made
+     html2pdf's pagebreak algorithm treat the whole run (thead through totals) as one
+     unbreakable chain for a 2-item real quotation — when the totals didn't fit on page 1,
+     it backtracked the break all the way above the first item instead of just before the
+     totals, wasting most of page 1. Invoices never hit this in testing, so their original
+     "keep tail+totals together" behavior is preserved unchanged. */
   .pp-invoice-tail { page-break-inside: avoid; break-inside: avoid; margin-top: 0; }
+  .pdf-page-quo .pp-invoice-tail { page-break-inside: auto; break-inside: auto; }
   .pp-table-tail { width: 100%; border-collapse: collapse; margin-top: 0; }
   .pp-table-tail tbody tr { border-bottom: 0.5px solid #D8D5CF; page-break-inside: avoid; break-inside: avoid; }
   .pp-table-tail td { padding: 9px 0; vertical-align: top; }
@@ -204,6 +275,56 @@
   .pp-terms { margin-top: 28px; padding: 8px 11px; border-left: 1.5px solid #D8D5CF; font-size: 7.5px; font-weight: 300; color: #6B6B67; line-height: 1.85; page-break-inside: avoid; break-inside: avoid; }
   .pp-terms strong { font-weight: 600; color: #1C1C1A; display: block; margin-bottom: 3px; font-size: 7px; }
   .pp-validity-badge { display: inline-block; background: #1C1C1A; color: white; font-size: 5px; font-weight: 300; letter-spacing: 0.14em; text-transform: uppercase; padding: 2.5px 6px; margin-top: 6px; }
+
+  /* Delivery Timeline (validity strip) — Arabic tokens, same proven fix as the
+     quotation description renderer's .quo-desc-token: html2canvas drops literal
+     space characters between Arabic words even outside any wrap/bidi-mixing
+     scenario, so gaps come entirely from margin, never a space character. */
+  .dtl-ar { font-family: 'Cairo', sans-serif; letter-spacing: 0; font-weight: 400; font-style: normal; unicode-bidi: isolate; }
+  .dtl-tok { display: inline-block; margin: 0 2px; }
+  .dtl-tok:first-child { margin-inline-start: 0; }
+  .dtl-tok:last-child { margin-inline-end: 0; }
+
+  /* Terms inner (EN/AR bilingual pair) — same values as the original inline styles,
+     just promoted to classes so closing-compact (below) can reflow them without
+     touching font sizes. Default (stacked / non-quotation-closing) arrangement is
+     side-by-side, identical to the original always-side-by-side layout. */
+  .pp-terms-inner { display: flex; gap: 0; align-items: stretch; }
+  .pp-terms-en { flex: 1; padding-right: 14px; border-right: 0.5px solid #E0DDD8; }
+  .pp-terms-en .pp-terms-title { font-size: 6.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #1C1C1A; margin-bottom: 6px; }
+  .pp-terms-en .pp-terms-list { line-height: 2; font-size: 7.5px; font-weight: 300; color: #6B6B67; }
+  .pp-terms-ar { flex: 1; padding-left: 14px; text-align: right; }
+  .pp-terms-ar .pp-terms-title { font-family: 'Cairo', sans-serif; font-size: 7px; font-weight: 600; color: #1C1C1A; margin-bottom: 6px; }
+  .pp-terms-ar .pp-terms-list { font-family: 'Cairo', sans-serif; line-height: 2; font-size: 7.5px; font-weight: 300; color: #6B6B67; direction: rtl; }
+
+  /* ── Adaptive closing section (Terms + Totals) — Quotation only ────────────
+     Two modes, chosen by live measurement in layoutQuoClosing() (called from
+     renderPreview()), never by a fixed media query — a fixed breakpoint can't
+     know how many items/photos already used up the page above this block:
+       closing-compact: Terms (left, 63%) | Totals (right, 33%), one flex row.
+       closing-stacked: original layout — Totals first, full-width Terms below
+                         (Terms keeps its own side-by-side EN/AR internally,
+                         via the default .pp-terms-inner rule above).
+     The whole block is one page-break-avoid unit in either mode: this session's
+     PDF pipeline (html2canvas via html2pdf mode:['css']) cannot split a block
+     cleanly mid-render, so a closing block that wouldn't fit in the remaining
+     page space must move to the next page as a whole rather than be sliced —
+     compact is only used when it's been measured to fit without that happening. */
+  .pp-closing { page-break-inside: avoid; break-inside: avoid; }
+  .pp-closing.closing-compact { display: flex; align-items: flex-start; margin-top: 10px; }
+  .pp-closing.closing-compact .pp-closing-terms { width: 65%; margin-right: 5%; box-sizing: border-box; }
+  .pp-closing.closing-compact .pp-closing-totals { width: 30%; box-sizing: border-box; }
+  .pp-closing.closing-compact .pp-terms { margin-top: 0; }
+  .pp-closing.closing-compact .pp-summary-block { margin-top: 0; }
+  /* Terms keeps its existing side-by-side EN/AR sub-layout even in compact mode
+     (just narrower, ~63% of page width instead of the full width) rather than
+     stacking EN above AR — stacking nearly doubled the block's height, which
+     defeated the whole point of compact mode (fitting on the same page as the
+     items/totals). Narrower columns wrap a little more on the longest line;
+     that's an acceptable trade envisioned by "preserve as much as practical". */
+  .pp-closing.closing-stacked { display: block; margin-top: 0; }
+  .pp-closing.closing-stacked .pp-closing-terms { width: 100%; margin-right: 0; }
+  .pp-closing.closing-stacked .pp-closing-totals { width: 100%; }
 
   /* Footer */
   .pp-footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9px; color: #777; line-height: 1.5; page-break-inside: avoid; break-inside: avoid; }
@@ -275,6 +396,7 @@
   .purch-modal-body { flex: 1; overflow: auto; display: flex; align-items: stretch; background: #e5e4e0; }
   .purch-modal-body iframe { width: 100%; height: 100%; border: none; }
   .purch-modal-body img { display: block; max-width: 100%; max-height: 100%; margin: auto; object-fit: contain; padding: 16px; }
+
   .purch-upload-panel { background: var(--white); border: 1px solid var(--rule); padding: 14px 16px; margin-bottom: 14px; }
   .purch-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
   .purch-search { font-family: 'Jost', sans-serif; font-size: 10px; font-weight: 300; flex: 1; color: var(--dark); background: var(--cream); border: 1px solid var(--rule); padding: 7px 10px; outline: none; transition: border-color 0.15s; }
@@ -454,6 +576,7 @@ let currentTab = 'invoices';
 let daftraFetched = false;   // true once a Daftra fetch has completed at least once (see fetchDocuments())
 let currentDoc = null;
 let dnState = null;
+
 let rvState = null;
 let purchasingFiles = [];    // cache from /purchasing-invoices/list
 let purchasingSearch = '';   // active search string in purchasing tab
@@ -662,8 +785,18 @@ async function imageUrlToDataUrl(url) {
 // object for the current session (per Youssef's instruction: no localStorage,
 // no backend, no proxy.py changes for this feature).
 const QUO_PHOTO_ACCEPT  = 'image/jpeg,image/png,image/webp';
-const QUO_PHOTO_MAX_DIM = 900;   // px, longest edge after downscale
-const QUO_PHOTO_QUALITY = 0.82;  // re-encode quality (ignored for PNG, which stays lossless)
+const QUO_PHOTO_MAX_DIM = 800;   // px, longest edge after downscale
+const QUO_PHOTO_QUALITY = 0.90;  // re-encode quality (ignored for PNG, which stays lossless)
+
+// Display-size presets for the PDF photo-continuation row — maximum bounding
+// boxes only (object-fit:contain, never crops/stretches). 800px source/0.90
+// quality above comfortably covers all three at html2canvas scale:3.
+const QUO_PHOTO_SIZES = {
+  small:  { w: 112, h: 112, label: 'Small'  },
+  medium: { w: 170, h: 150, label: 'Medium' },
+  large:  { w: 220, h: 180, label: 'Large'  },
+};
+const QUO_PHOTO_SIZE_DEFAULT = 'medium';
 
 function readAndResizeImageToDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -835,7 +968,12 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
     </tr>`;
   };
 
-  // Quotation row renderer (8 columns) — uses confirmed Daftra EstimateItem field names
+  // Quotation row renderer (8 columns) — uses confirmed Daftra EstimateItem field names.
+  // Returns a whole <tbody class="pp-item-group"> per item (not a bare <tr>) so an
+  // optional photo-continuation row — spanning the Item+Description columns only,
+  // numeric columns untouched — can be grouped with its item's main row and kept
+  // page-break-safe as one unit. See buildInvoicePDFPageHTML()'s table assembly below,
+  // which interpolates these tbody chunks directly instead of wrapping them again.
   const renderQuoRow = it => {
     const name      = it.item || it.product_name || it.name || '—';
     const desc      = it.description || it.note || it.notes || '';
@@ -846,9 +984,10 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
     const vatAmt    = parseFloat(it.tax1_value || it.summary_tax1 || (beforeTax * 0.15) || 0);
     const withVat   = parseFloat(it.subtotal || (beforeTax + vatAmt) || 0);
     const photo     = it._photoDataUrl || '';
-    return `<tr>
-      <td><div class="pp-item-name">${name}</div>${photo ? `<img class="pp-item-photo" src="${photo}" alt="">` : ''}</td>
-      <td><div class="pp-item-desc" style="font-weight:400;">${desc}</div></td>
+    const photoSize = QUO_PHOTO_SIZES[it._photoSize] || QUO_PHOTO_SIZES[QUO_PHOTO_SIZE_DEFAULT];
+    const mainRow = `<tr>
+      <td><div class="pp-item-name">${name}</div></td>
+      <td><div class="pp-item-desc" data-raw-desc="${escapeHtml(desc)}" style="font-weight:400;">${renderMixedDirectionDescription(desc)}</div></td>
       <td class="pp-td-r">${price.toLocaleString('en',{minimumFractionDigits:2})}</td>
       <td class="pp-td-r">${qty % 1 === 0 ? qty : qty.toFixed(2)}</td>
       <td class="pp-td-r">${beforeTax.toLocaleString('en',{minimumFractionDigits:2})}</td>
@@ -856,6 +995,11 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
       <td class="pp-td-r">${vatAmt.toLocaleString('en',{minimumFractionDigits:2})}</td>
       <td class="pp-td-r">${withVat.toLocaleString('en',{minimumFractionDigits:2})}</td>
     </tr>`;
+    const photoRow = photo ? `<tr>
+      <td colspan="2" class="pp-photo-cell"><img class="pp-item-photo" style="max-width:${photoSize.w}px;max-height:${photoSize.h}px;" src="${photo}" alt=""></td>
+      <td colspan="6"></td>
+    </tr>` : '';
+    return `<tbody class="pp-item-group">${mainRow}${photoRow}</tbody>`;
   };
 
   // Split: last 2 rows stay with the totals block to prevent orphan totals on page 2
@@ -864,22 +1008,60 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
   const allRowsArr = items.map(isInv ? renderRow : renderQuoRow);
   const headRows   = items.length ? allRowsArr.slice(0, Math.max(0, allRowsArr.length - TAIL_ROWS)).join('') : `<tr><td colspan="${colSpan}" style="padding:16px 0;font-size:7px;color:#ADADAA;font-weight:300;">No line items returned</td></tr>`;
   const tailRows   = items.length ? allRowsArr.slice(-TAIL_ROWS).join('') : '';
+  // renderQuoRow() already returns full <tbody> chunks (one per item, so its optional
+  // photo row can be grouped/page-break-protected with the item's main row) — only
+  // invoices' bare-<tr> renderRow() output (and the no-items fallback <tr>) still needs
+  // an outer <tbody> wrapper added at the call site below.
+  const headRowsHTML = (isInv || !items.length) ? `<tbody>${headRows}</tbody>` : headRows;
+  const tailRowsHTML = tailRows ? (isInv ? `<tbody>${tailRows}</tbody>` : tailRows) : '';
 
+  // Optional manual Delivery Timeline (Working Days) — Quotation only, session-only,
+  // set via the no-print field in buildQuoDeliveryPanelHTML()/the Sarawat form and
+  // carried on doc._deliveryDays (live) or copied there from sarawatState.deliveryDays
+  // at export time (exportVistaQuotationFromSarawat()). Re-validated here (not just
+  // trusting the input's own sanitizer) so a blank/invalid value never renders.
+  const deliveryDaysNum = parseInt(doc._deliveryDays, 10);
+  const hasDelivery = !isInv && Number.isFinite(deliveryDaysNum) && deliveryDaysNum >= 1;
+  // Arabic word-to-word gaps rendered as literal space characters were found earlier
+  // in this session (see the mixed-direction description renderer notes) to be
+  // silently dropped by html2canvas even outside any wrapping/bidi-mixing scenario —
+  // reproduced live here too ("مدة التسليم" / "أيام عمل" rendered word-merged with no
+  // fix applied). Same proven fix: each Arabic word is its own inline-block token
+  // with the gap coming from CSS margin, never a space character for html2canvas to drop.
+  const dtlLabelAr = `<bdi class="dtl-ar" dir="rtl"><span class="dtl-tok">مدة</span><span class="dtl-tok">التسليم</span></bdi>`;
+  const dtlValueAr = `<bdi class="dtl-ar" dir="rtl"><span class="dtl-tok">${deliveryDaysNum}</span><span class="dtl-tok">أيام</span><span class="dtl-tok">عمل</span></bdi>`;
+  const deliveryBlock = hasDelivery ? `
+        <div>
+          <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;">Delivery Timeline &nbsp;·&nbsp; ${dtlLabelAr}</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;color:#1C1C1A;margin-top:2px;">${deliveryDaysNum} Working Days &nbsp;·&nbsp; ${dtlValueAr}</div>
+        </div>` : '';
+
+  // hasDelivery decides not just the content but the wrapper markup itself: even
+  // an empty extra flex div around "Valid Until" measurably grew the strip's real
+  // rendered height (a fraction of a px was enough to flip the already-borderline
+  // approved one-page quotation 000032 back to a spurious blank 2nd page — caught
+  // by generating the real PDF with delivery days left blank and finding 2 pages).
+  // So the blank case renders the exact original single-div markup, byte-for-byte,
+  // guaranteeing zero effect on already-approved pagination when this feature isn't used.
+  const validUntilBlock = `
+        <div>
+          <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;">Valid Until &nbsp;·&nbsp; <span style="font-family:'Cairo',sans-serif;letter-spacing:0;font-weight:400;">صالح حتى</span></div>
+          <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;color:#1C1C1A;margin-top:2px;">${validUntil}</div>
+        </div>`;
   const validityStrip = !isInv ? `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:8px 12px;background:#F7F6F4;border-left:2px solid #C8A96A;">
-      <div>
-        <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;">Valid Until &nbsp;·&nbsp; <span style="font-family:'Cairo',sans-serif;letter-spacing:0;font-weight:400;">صالح حتى</span></div>
-        <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;color:#1C1C1A;margin-top:2px;">${validUntil}</div>
-      </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:6px 12px;background:#F7F6F4;border-left:2px solid #C8A96A;">
+      ${hasDelivery ? `<div style="display:flex;align-items:center;gap:28px;">${validUntilBlock}${deliveryBlock}</div>` : validUntilBlock}
       <div style="font-size:5.5px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;background:#1C1C1A;color:#fff;padding:3px 8px;">Pending Acceptance</div>
     </div>` : '';
 
-  const termsSection = !isInv ? `
-    <div class="pp-terms" style="padding:10px 14px;">
-      <div style="display:flex;gap:0;align-items:stretch;">
-        <div style="flex:1;padding-right:14px;border-right:0.5px solid #E0DDD8;">
-          <div style="font-size:6.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:#1C1C1A;margin-bottom:6px;">Terms &amp; Conditions</div>
-          <div style="line-height:2;font-size:7.5px;font-weight:300;color:#6B6B67;">
+  // Terms inner content (EN/AR) is shared, unchanged markup between both closing
+  // modes — only the surrounding CSS (flex-direction, widths) differs per mode.
+  // See layoutQuoClosing() for how closing-compact vs closing-stacked is chosen.
+  const termsInnerHTML = !isInv ? `
+      <div class="pp-terms-inner">
+        <div class="pp-terms-en">
+          <div class="pp-terms-title">Terms &amp; Conditions</div>
+          <div class="pp-terms-list">
             <div>&middot;&nbsp; This quotation is valid for 30 days from the date of issue.</div>
             <div>&middot;&nbsp; 50% advance payment is required upon approval.</div>
             <div>&middot;&nbsp; Remaining balance is due before delivery.</div>
@@ -887,9 +1069,9 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
             <div>&middot;&nbsp; All prices include VAT at 15% unless otherwise stated.</div>
           </div>
         </div>
-        <div style="flex:1;padding-left:14px;text-align:right;">
-          <div style="font-family:'Cairo',sans-serif;font-size:7px;font-weight:600;color:#1C1C1A;margin-bottom:6px;">الشروط والأحكام</div>
-          <div style="font-family:'Cairo',sans-serif;line-height:2;font-size:7.5px;font-weight:300;color:#6B6B67;direction:rtl;">
+        <div class="pp-terms-ar">
+          <div class="pp-terms-title">الشروط والأحكام</div>
+          <div class="pp-terms-list">
             <div>هذا العرض صالح لمدة 30 يومًا من تاريخ الإصدار. &middot;</div>
             <div>يُشترط دفع 50% من القيمة الإجمالية دفعةً مقدمة عند الموافقة. &middot;</div>
             <div>يُسدَّد المبلغ المتبقي قبل التسليم. &middot;</div>
@@ -897,7 +1079,44 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
             <div>جميع الأسعار تشمل ضريبة القيمة المضافة 15% ما لم يُذكر خلاف ذلك. &middot;</div>
           </div>
         </div>
-      </div>
+      </div>` : '';
+  const termsBlockHTML = !isInv ? `<div class="pp-terms" style="padding:10px 14px;">${termsInnerHTML}</div>` : '';
+
+  // Totals block — identical markup regardless of closing mode; only its container
+  // changes (bundled inside .pp-invoice-tail for invoices, moved into .pp-closing
+  // for quotations — see below).
+  const summaryBlockHTML = `
+        <div class="pp-summary-block">
+          <div class="pp-totals">
+            <div class="pp-t-row">
+              <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع الفرعي</span></div>
+              <span class="pp-t-row-amt">SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            </div>
+            <div class="pp-t-row">
+              <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT 15%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div>
+              <span class="pp-t-row-amt">SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            </div>
+            <div class="pp-t-final">
+              <div><span class="lbl">${totLabel}</span><span class="lbl-ar">${totLabelAr}</span></div>
+              <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
+            </div>
+          </div>
+        </div>`;
+
+  // Adaptive closing section (Quotation only) — Terms + Totals grouped as one
+  // page-break-safe unit. Starts in compact (side-by-side) mode; layoutQuoClosing()
+  // (called from renderPreview() once this is actually in the DOM) measures the
+  // real rendered block against the real page boundary and switches to stacked
+  // mode (totals first, full-width terms below) if compact wouldn't fit cleanly.
+  // DOM order is deliberately terms-then-totals: that's the correct visual order
+  // for compact (flex row, terms left/totals right) with zero CSS needed; when
+  // layoutQuoClosing() switches to stacked it physically reorders totals-first
+  // to match "totals remain first" rather than relying on flex `order` (safer
+  // against html2canvas's own, sometimes-incomplete, CSS support).
+  const closingHTML = !isInv ? `
+    <div class="pp-closing closing-compact" id="pp-closing">
+      <div class="pp-closing-terms">${termsBlockHTML}</div>
+      <div class="pp-closing-totals">${summaryBlockHTML}</div>
     </div>` : '';
 
   return `
@@ -985,34 +1204,21 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
           <th class="r" style="width:12%;">Total+VAT <span class="th-ar">مع الضريبة</span></th>
           `}
         </tr></thead>
-        <tbody>${headRows}</tbody>
+        ${headRowsHTML}
       </table>
 
-      <!-- INVOICE/QUOTATION TAIL — last 2 rows + totals kept together; prevents orphan page -->
+      <!-- INVOICE/QUOTATION TAIL — last 2 rows kept together; totals stay bundled
+           here only for invoices (unchanged). Quotation totals move into the
+           adaptive .pp-closing block below, paired with Terms & Conditions. -->
       <div class="pp-invoice-tail">
         ${tailRows ? (isInv
-          ? `<table class="pp-table-tail"><colgroup><col style="width:52%"><col style="width:9%"><col style="width:20%"><col style="width:19%"></colgroup><tbody>${tailRows}</tbody></table>`
-          : `<table class="pp-table-tail pp-table-tail-quo"><colgroup><col style="width:18%"><col style="width:20%"><col style="width:10%"><col style="width:7%"><col style="width:14%"><col style="width:7%"><col style="width:12%"><col style="width:12%"></colgroup><tbody>${tailRows}</tbody></table>`
+          ? `<table class="pp-table-tail"><colgroup><col style="width:52%"><col style="width:9%"><col style="width:20%"><col style="width:19%"></colgroup>${tailRowsHTML}</table>`
+          : `<table class="pp-table-tail pp-table-tail-quo"><colgroup><col style="width:18%"><col style="width:20%"><col style="width:10%"><col style="width:7%"><col style="width:14%"><col style="width:7%"><col style="width:12%"><col style="width:12%"></colgroup>${tailRowsHTML}</table>`
         ) : ''}
-        <div class="pp-summary-block">
-          <div class="pp-totals">
-            <div class="pp-t-row">
-              <div class="pp-t-row-lbl"><span class="pp-t-row-en">Subtotal</span><span class="pp-t-row-ar">المجموع الفرعي</span></div>
-              <span class="pp-t-row-amt">SAR ${subtotal.toLocaleString('en',{minimumFractionDigits:2})}</span>
-            </div>
-            <div class="pp-t-row">
-              <div class="pp-t-row-lbl"><span class="pp-t-row-en">VAT 15%</span><span class="pp-t-row-ar">ضريبة القيمة المضافة</span></div>
-              <span class="pp-t-row-amt">SAR ${taxAmt.toLocaleString('en',{minimumFractionDigits:2})}</span>
-            </div>
-            <div class="pp-t-final">
-              <div><span class="lbl">${totLabel}</span><span class="lbl-ar">${totLabelAr}</span></div>
-              <span class="val">SAR ${total.toLocaleString('en',{minimumFractionDigits:2})}</span>
-            </div>
-          </div>
-        </div>
+        ${isInv ? summaryBlockHTML : ''}
       </div>
 
-      ${termsSection}
+      ${closingHTML}
     </div>
 
     <!-- FOOTER: invoices only -->
@@ -1038,6 +1244,8 @@ function renderPreview() {
   const quoPhotoPanel = (!isInv && (doc._items || []).length)
     ? buildQuoPhotoPanelHTML(doc._items)
     : '';
+  // Optional manual Delivery Timeline field — Quotation (estimates) only.
+  const quoDeliveryPanel = !isInv ? buildQuoDeliveryPanelHTML(doc) : '';
 
   $('mainArea').innerHTML = `
     <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
@@ -1047,16 +1255,25 @@ function renderPreview() {
         <button class="btn-sm btn-sm-dark" onclick="downloadPDF()">Download PDF</button>
       </div>
     </div>
+    ${quoDeliveryPanel}
     ${quoPhotoPanel}
     <div class="preview-wrap">
       <div class="pdf-bg">
         <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
-        <div class="pdf-page" id="pdfPage">
+        <div class="pdf-page${isInv ? '' : ' pdf-page-quo'}" id="pdfPage">
           ${buildInvoicePDFPageHTML(doc, type, c)}
         </div>
         </div>
       </div>
     </div>`;
+
+  // Quotation only: now that the row is actually in the DOM, its Description
+  // column has a real measurable width — replace the first-paint fallback
+  // description markup with lines precisely pre-wrapped to that width.
+  if (!isInv) rewrapQuoDescriptions();
+  // Quotation only: choose closing-compact vs closing-stacked (Terms + Totals)
+  // against the real rendered height, now that descriptions are done reflowing.
+  if (!isInv) layoutQuoClosing();
 
   // Render Daftra QR payload into inline canvas — html2canvas captures it natively, no CORS
   if (isInv && qrPayload) renderQR('pp-qr-target', qrPayload); // QR invoices only — not quotations
@@ -1075,6 +1292,44 @@ function renderPreview() {
   }, 200);
 }
 
+// ── Delivery Timeline (Working Days) — optional, manual, Quotation only ──────
+// Session-only, no backend, no localStorage — same storage pattern as item
+// photos: kept directly on the doc object (doc._deliveryDays) for live Daftra
+// quotations, or on sarawatState.deliveryDays for the Sarawat import path,
+// copied onto its exported doc object at export time. Rendered into the
+// validity strip by buildInvoicePDFPageHTML() (see deliveryBlock there) only
+// when a valid positive integer is present — blank/invalid never renders.
+//
+// Shared sanitizer: blank stays blank; 0, negative, and non-numeric text are
+// rejected back to blank; decimals are normalized (floored) rather than
+// rejected outright, e.g. "10.7" -> 10 — matches the input's own min="1"
+// step="1" hinting without silently keeping a value the PDF can't show.
+function sanitizeDeliveryDaysInput(raw) {
+  const trimmed = String(raw == null ? '' : raw).trim();
+  if (trimmed === '') return '';
+  const n = Math.floor(Number(trimmed));
+  return (Number.isFinite(n) && n >= 1) ? n : '';
+}
+
+function onQuoDeliveryDaysChanged(inputEl) {
+  const normalized = sanitizeDeliveryDaysInput(inputEl.value);
+  inputEl.value = normalized;
+  const doc = currentDoc && currentDoc.doc;
+  if (!doc) return;
+  doc._deliveryDays = normalized;
+  renderPreview();
+}
+
+function buildQuoDeliveryPanelHTML(doc) {
+  const val = (doc._deliveryDays === undefined || doc._deliveryDays === null) ? '' : doc._deliveryDays;
+  return `
+    <div class="no-print quo-delivery-panel">
+      <label class="quo-delivery-label" for="quoDeliveryDaysInput">Delivery Timeline (Working Days)</label>
+      <input type="number" id="quoDeliveryDaysInput" class="quo-delivery-input" min="1" step="1" inputmode="numeric"
+        placeholder="e.g. 10" value="${escapeHtml(String(val))}" onchange="onQuoDeliveryDaysChanged(this)">
+    </div>`;
+}
+
 // ── Quotation item photo panel (live Daftra quotations) ──────────────────────
 // Shown only above the preview (no-print) for type==='estimates'. Lists each
 // doc._items[] entry with a thumbnail + Add/Replace/Remove Photo controls.
@@ -1084,11 +1339,15 @@ function buildQuoPhotoPanelHTML(items) {
   const rows = items.map((it, i) => {
     const name  = escapeHtml(String(it.item || it.product_name || it.name || `Item ${i + 1}`));
     const photo = it._photoDataUrl || '';
+    const curSize = it._photoSize || QUO_PHOTO_SIZE_DEFAULT;
+    const sizeOptions = Object.keys(QUO_PHOTO_SIZES)
+      .map(k => `<option value="${k}"${curSize === k ? ' selected' : ''}>${QUO_PHOTO_SIZES[k].label}</option>`).join('');
     return `
       <div class="quo-photo-row">
         <div class="quo-photo-thumb">${photo ? `<img src="${photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
         <div class="quo-photo-name">${name}</div>
         <div class="quo-photo-actions">
+          ${photo ? `<select class="purch-tag-sel" title="Photo Size" onchange="setQuoItemPhotoSize(${i}, this.value)">${sizeOptions}</select>` : ''}
           <label class="btn-sm btn-sm-outline quo-photo-btn">${photo ? 'Replace Photo' : 'Add Photo'}
             <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onQuoItemPhotoSelected(${i}, this)">
           </label>
@@ -1116,6 +1375,7 @@ async function onQuoItemPhotoSelected(itemIdx, inputEl) {
     const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
     if (!items || !items[itemIdx]) return;
     items[itemIdx]._photoDataUrl = dataUrl;
+    if (!items[itemIdx]._photoSize) items[itemIdx]._photoSize = QUO_PHOTO_SIZE_DEFAULT;
     renderPreview();
   } catch (e) {
     console.error('[Quotation photo] failed:', e);
@@ -1127,6 +1387,13 @@ function removeQuoItemPhoto(itemIdx) {
   const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
   if (!items || !items[itemIdx]) return;
   items[itemIdx]._photoDataUrl = '';
+  renderPreview();
+}
+
+function setQuoItemPhotoSize(itemIdx, size) {
+  const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
+  if (!items || !items[itemIdx] || !QUO_PHOTO_SIZES[size]) return;
+  items[itemIdx]._photoSize = size;
   renderPreview();
 }
 
@@ -1206,10 +1473,11 @@ async function downloadPDF() {
       margin: 0,
       filename,
       pagebreak: {
-        mode: ['css', 'legacy'],
+        mode: ['css'],
         avoid: ['.pp-footer', '.pp-summary-block', '.pp-info-grid', '.pp-totals']
       },
-      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 3, useCORS: true, scrollY: 0 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     }).from(el).save().then(() => {
       wrapper.style.transform = prevTransform;
@@ -1225,6 +1493,221 @@ async function downloadPDF() {
 
 function escapeHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Mixed Arabic/English description renderer (Quotation only) ───────────────
+// html2canvas re-implements text layout for its canvas output rather than using
+// the browser's native renderer. Three things were tried, in order, on the way
+// to this final approach — kept here as a record since the failure of each step
+// is exactly why the next one exists:
+//  1. dir="auto" + unicode-bidi:plaintext — mixed runs visually reordered
+//     (e.g. "Android و iOS" -> "iOSAndroid").
+//  2. Explicit per-line dir + <bdi dir="ltr"> isolation for Latin/technical runs
+//     — fixed the reordering, but html2canvas was still dropping literal spaces
+//     around RTL/LTR boundaries (and even between plain Arabic words at its own
+//     wrap points).
+//  3. Manually pre-wrapping to the real measured column width and marking each
+//     line white-space:nowrap — proved the bug isn't about *where* html2canvas
+//     wraps: a live DOM check showed a single already-correct, non-wrapping,
+//     properly-spaced line (confirmed via element.textContent) still rasterized
+//     with the spaces gone. html2canvas's own text-painting for dir="rtl" runs
+//     containing embedded <bdi> spans silently drops literal space characters,
+//     regardless of layout.
+// Final approach: don't represent inter-word gaps as characters at all. Each
+// word/phrase is its own inline-block token (<span>/<bdi>), rendered with zero
+// whitespace between the tags in the markup, and the visual gap comes entirely
+// from CSS margin (.quo-desc-token). There is no space character left for
+// html2canvas to drop. Order is never touched — dir="rtl" on the line plus the
+// browser's normal bidi reordering of inline-level boxes places RTL/LTR tokens
+// correctly; multi-word Latin/technical phrases (e.g. "Prime Gate") are kept as
+// one token via the same contiguous-run regex used previously.
+// Still pre-wraps to the real measured Description-column width (rewrapQuoDescriptions,
+// run once the row is actually in the DOM) so every visual line fits the column.
+// Never reorders characters or alters the source text; only tokenizes and escapes.
+
+const QUO_DESC_ARABIC_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
+const QUO_DESC_LATIN_RUN_RE = /[A-Za-z0-9][A-Za-z0-9.\-+%°]*(?:[ ]+[A-Za-z0-9][A-Za-z0-9.\-+%°]*)*/g;
+const QUO_DESC_FONT_PX = 10.5; // must match .pdf-page-quo .pp-item-desc font-size
+const QUO_DESC_FONT_FAMILY = "'Jost', sans-serif"; // must match .pdf-page font-family
+
+function quoDescDetectDir(line) {
+  for (const ch of line) {
+    if (QUO_DESC_ARABIC_RE.test(ch)) return 'rtl';
+    if (/[A-Za-z]/.test(ch)) return 'ltr';
+  }
+  return null; // no strong-direction character on this line — let the browser decide
+}
+
+// Splits one line of plain text (space-joined words) into discrete tokens —
+// each Arabic/plain word is its own token; each contiguous Latin/technical run
+// (15W, Android, iOS, "Prime Gate", 1000mAh, Parker, ...) stays one single token.
+function quoDescTokenizeLine(lineText) {
+  const tokens = [];
+  let last = 0, m;
+  QUO_DESC_LATIN_RUN_RE.lastIndex = 0;
+  while ((m = QUO_DESC_LATIN_RUN_RE.exec(lineText)) !== null) {
+    const before = lineText.slice(last, m.index).trim();
+    if (before) before.split(/\s+/).forEach(w => { if (w) tokens.push({ text: w, isLatin: false }); });
+    tokens.push({ text: m[0], isLatin: true });
+    last = m.index + m[0].length;
+  }
+  const after = lineText.slice(last).trim();
+  if (after) after.split(/\s+/).forEach(w => { if (w) tokens.push({ text: w, isLatin: false }); });
+  return tokens;
+}
+
+// Renders tokens with zero whitespace between tags — every visual gap comes
+// from .quo-desc-token's CSS margin, never from a literal space character.
+function quoDescRenderTokens(tokens) {
+  return tokens.map(t => t.isLatin
+    ? `<bdi class="quo-desc-token quo-desc-ltr" dir="ltr">${escapeHtml(t.text)}</bdi>`
+    : `<span class="quo-desc-token">${escapeHtml(t.text)}</span>`
+  ).join('');
+}
+
+function quoDescRenderLine(lineText, dir) {
+  return `<div class="quo-desc-line" dir="${dir}">${quoDescRenderTokens(quoDescTokenizeLine(lineText))}</div>`;
+}
+
+// First-paint fallback, used only until rewrapQuoDescriptions() replaces it with
+// lines precisely pre-wrapped to the real column width. Uses the exact same
+// tokenizer/renderer as the precise pass — one rendering path, not two.
+function renderMixedDirectionDescription(text) {
+  if (!text) return '';
+  // Deliberately plain: escaped text per source line, normal (wrapping) white-space,
+  // no tokens. This is a transient first-paint value only -- rewrapQuoDescriptions()
+  // replaces it synchronously in the same renderPreview() call, before any paint.
+  // Using the nowrap token markup here too would force the table's auto-layout to
+  // widen the Description column to fit the unwrapped text, corrupting the very
+  // column-width measurement rewrapQuoDescriptions() depends on.
+  return String(text).split('\n').map(line => {
+    if (line === '') return '<div>&nbsp;</div>';
+    return `<div dir="${quoDescDetectDir(line) || 'auto'}">${escapeHtml(line)}</div>`;
+  }).join('');
+}
+
+let _quoDescMeasureCtx = null;
+function quoDescMeasureWidth(text) {
+  if (!_quoDescMeasureCtx) _quoDescMeasureCtx = document.createElement('canvas').getContext('2d');
+  _quoDescMeasureCtx.font = `${QUO_DESC_FONT_PX}px ${QUO_DESC_FONT_FAMILY}`;
+  return _quoDescMeasureCtx.measureText(text).width;
+}
+
+// Greedy word-wrap of one logical source line to maxWidth, measured with the
+// actual quotation description font via canvas measureText() (not an arbitrary
+// character count). Operates on the text in logical (source) order — direction
+// only affects how each finished visual line is displayed, never the tokenizing.
+// Returns plain space-joined line strings; quoDescRenderLine() re-tokenizes each
+// one for the actual token-based rendering.
+function quoDescWrapToWidth(line, maxWidth) {
+  const words = line.split(/\s+/).filter(Boolean);
+  if (!words.length) return [''];
+  const out = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? current + ' ' + word : word;
+    if (current && quoDescMeasureWidth(candidate) > maxWidth) {
+      out.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) out.push(current);
+  return out;
+}
+
+// Runs once per quotation render, after the row is actually in the DOM (so
+// el.clientWidth is the real rendered Description-column width — unaffected by
+// the on-screen preview's 1.8x CSS transform, since transform never changes
+// layout box sizes). Replaces each description with token-based lines pre-wrapped
+// to that exact width. A wider safety margin than a plain-text estimate needs,
+// since each token boundary carries a small CSS margin on top of the glyph width
+// measureText() reports.
+function rewrapQuoDescriptions() {
+  const els = document.querySelectorAll('#pdfPage .pp-item-desc[data-raw-desc]');
+  els.forEach(el => {
+    const raw = el.getAttribute('data-raw-desc');
+    if (raw === null) return;
+    const maxWidth = el.clientWidth - 6; // safety margin for token-margin overhead
+    if (!maxWidth || maxWidth < 5) return;
+    el.innerHTML = raw.split('\n').map(srcLine => {
+      if (srcLine === '') return '<div>&nbsp;</div>';
+      const dir = quoDescDetectDir(srcLine) || 'auto';
+      return quoDescWrapToWidth(srcLine, maxWidth)
+        .map(vLine => quoDescRenderLine(vLine, dir))
+        .join('');
+    }).join('');
+  });
+}
+
+// Chooses closing-compact vs closing-stacked for the adaptive Terms+Totals
+// block (see the .pp-closing CSS block and closingHTML in buildInvoicePDFPageHTML())
+// by measuring the ACTUAL rendered block against the real A4 page boundary,
+// rather than a fixed breakpoint — the right choice depends on how much of the
+// page the preceding items/photos already used, which can't be known in CSS.
+//
+// Measurement notes:
+//  - offsetHeight is unaffected by the on-screen preview's transform:scale(1.8)
+//    wrapper (CSS transform never changes an element's own layout-box
+//    measurements), so no scale correction is needed — same principle
+//    rewrapQuoDescriptions() already relies on via clientWidth.
+//  - The closing block is always the last thing in #pdfPage for a quotation
+//    (the invoice-only footer never renders here), so page.offsetHeight — not
+//    closing's own bottom edge — is what actually determines the true total
+//    rendered height html2canvas will slice into pages. #pdfPage's own
+//    unavoidable padding-bottom (24px) trails after the closing block; a first
+//    version of this function measured only the closing block itself and
+//    missed that trailing padding, which was still enough on its own to push
+//    the *total* page height a few px past the boundary — producing a fully
+//    blank extra trailing page even though the visible content fit. Using
+//    page.offsetHeight for yEnd instead fixes that at the source.
+//  - PAGE_HEIGHT_PX mirrors the actual export config: jsPDF format 'a4',
+//    margin:0 (downloadPDF()) — one PDF page is exactly 297mm of this
+//    unscaled DOM, and html2pdf mode:['css'] pushes any page-break-inside:avoid
+//    element (like .pp-closing) whole onto the next page if it would otherwise
+//    be sliced by that boundary, rather than splitting it.
+function layoutQuoClosing() {
+  const closing = document.querySelector('#pdfPage .pp-closing');
+  if (!closing) return; // invoices never have this block
+  const page = document.getElementById('pdfPage');
+  const termsCol = closing.querySelector('.pp-closing-terms');
+  const totalsCol = closing.querySelector('.pp-closing-totals');
+  if (!termsCol || !totalsCol) return;
+
+  // Always re-measure starting from compact — a doc's items/photos can change
+  // between renders (photo added/removed/resized), so a previous stacked
+  // decision must not stick around once it's no longer necessary.
+  closing.classList.remove('closing-stacked');
+  closing.classList.add('closing-compact');
+  if (closing.firstElementChild !== termsCol) closing.insertBefore(termsCol, totalsCol);
+
+  const MM_TO_PX = 96 / 25.4;
+  const PAGE_HEIGHT_PX = 297 * MM_TO_PX; // ~1122.5 — matches jsPDF format:'a4', margin:0
+  // A real bug lived here: an earlier version subtracted a 6px "safety margin" from
+  // yEnd before comparing against PAGE_HEIGHT_PX, intending to be conservative. That
+  // actually did the opposite — it shrank the measured height, so a genuine ~5.5px
+  // overflow (total page height 1128 vs a 1122.5 boundary, with real delivery-timeline
+  // content) rounded back under the threshold and reported "fits" when it didn't,
+  // producing a spurious blank trailing page. ROUNDING_EPS_PX exists only to stop
+  // exact-multiple ties (yEnd landing precisely on a page boundary) from being
+  // misread as crossing into the next page — it must never be large enough to mask
+  // a real overflow the way the old margin did.
+  const ROUNDING_EPS_PX = 0.5;
+
+  const yEnd = page.offsetHeight; // includes #pdfPage's own trailing bottom padding
+  const yStart = yEnd - closing.offsetHeight;
+
+  const startPage = Math.floor(yStart / PAGE_HEIGHT_PX);
+  const endPage = Math.floor((yEnd - ROUNDING_EPS_PX) / PAGE_HEIGHT_PX);
+  const fitsCleanly = startPage === endPage;
+
+  if (!fitsCleanly) {
+    closing.classList.remove('closing-compact');
+    closing.classList.add('closing-stacked');
+    // Stacked mode requires totals first, full-width Terms underneath.
+    if (closing.firstElementChild !== totalsCol) closing.insertBefore(totalsCol, termsCol);
+  }
 }
 
 function showDNTab() {
@@ -3553,6 +4036,7 @@ async function handleSarawatPdfUpload(input) {
       // "Fetch Daftra Clients" lookup (see fetchDaftraClientsForSarawat()).
       clientVat: '', clientCr: '',
       vatRate: 15,
+      deliveryDays: '', // optional manual Delivery Timeline (Working Days) — never detected from the PDF
       items,
       rawText: fullText,
     };
@@ -3569,6 +4053,7 @@ async function handleSarawatPdfUpload(input) {
       quoteNo: '', quoteDate: '', client: '',
       clientVat: '', clientCr: '',
       vatRate: 15,
+      deliveryDays: '',
       items: [],
       rawText: '(extraction failed: ' + (err.message || 'unknown error') + ')',
     };
@@ -3620,6 +4105,18 @@ function updateSarawatField(field, val) {
   renderSarawatForm();
 }
 
+// Delivery Timeline uses its own onchange handler (not updateSarawatField) so the
+// same sanitizeDeliveryDaysInput() rules apply as the live-quotation field (see
+// its definition near buildQuoDeliveryPanelHTML()) — reject 0/negative/text back
+// to blank, normalize decimals — and so a full form re-render isn't triggered on
+// every keystroke, only once the field loses focus.
+function onSarawatDeliveryDaysChanged(inputEl) {
+  const normalized = sanitizeDeliveryDaysInput(inputEl.value);
+  inputEl.value = normalized;
+  if (!sarawatState) return;
+  sarawatState.deliveryDays = normalized;
+}
+
 // Item-level fields — S.No, name, and the shared technical description —
 // edited once per product regardless of how many quantity tiers it has.
 function updateSarawatItemField(itemIdx, field, val) {
@@ -3646,7 +4143,7 @@ function updateSarawatTier(itemIdx, tierIdx, field, val) {
 
 function addSarawatItem() {
   if (!sarawatState) return;
-  sarawatState.items.push({ sno: '', itemName: '', description: '', qtyDisplay: '', qtyReview: false, photo: '', tiers: [{ qty: 1, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' }] });
+  sarawatState.items.push({ sno: '', itemName: '', description: '', qtyDisplay: '', qtyReview: false, photo: '', photoSize: '', tiers: [{ qty: 1, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' }] });
   recomputeSarawatTotals();
   renderSarawatForm();
 }
@@ -3673,6 +4170,7 @@ async function onSarawatItemPhotoSelected(itemIdx, inputEl) {
     const dataUrl = await readAndResizeImageToDataUrl(file);
     if (!sarawatState || !sarawatState.items[itemIdx]) return;
     sarawatState.items[itemIdx].photo = dataUrl;
+    if (!sarawatState.items[itemIdx].photoSize) sarawatState.items[itemIdx].photoSize = QUO_PHOTO_SIZE_DEFAULT;
     renderSarawatForm();
   } catch (e) {
     console.error('[Sarawat photo] failed:', e);
@@ -3683,6 +4181,12 @@ async function onSarawatItemPhotoSelected(itemIdx, inputEl) {
 function removeSarawatItemPhoto(itemIdx) {
   if (!sarawatState || !sarawatState.items[itemIdx]) return;
   sarawatState.items[itemIdx].photo = '';
+  renderSarawatForm();
+}
+
+function setSarawatItemPhotoSize(itemIdx, size) {
+  if (!sarawatState || !sarawatState.items[itemIdx] || !QUO_PHOTO_SIZES[size]) return;
+  sarawatState.items[itemIdx].photoSize = size;
   renderSarawatForm();
 }
 
@@ -3917,6 +4421,7 @@ function renderSarawatForm() {
       </div>
       <div class="sarawat-item-photo-row">
         <div class="sarawat-item-photo-thumb">${it.photo ? `<img src="${it.photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
+        ${it.photo ? `<select class="purch-tag-sel" title="Photo Size" onchange="setSarawatItemPhotoSize(${i}, this.value)">${Object.keys(QUO_PHOTO_SIZES).map(k => `<option value="${k}"${(it.photoSize || QUO_PHOTO_SIZE_DEFAULT) === k ? ' selected' : ''}>${QUO_PHOTO_SIZES[k].label}</option>`).join('')}</select>` : ''}
         <label class="btn-sm btn-sm-outline quo-photo-btn">${it.photo ? 'Replace Photo' : 'Add Photo'}
           <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onSarawatItemPhotoSelected(${i}, this)">
         </label>
@@ -3981,6 +4486,11 @@ function renderSarawatForm() {
           <div class="form-label">VAT Rate %</div>
           <input class="form-input" id="sarawat-vatRate" type="number" min="0" step="0.01" value="${escapeHtml(s.vatRate)}"
             oninput="updateSarawatField('vatRate',this.value)">
+        </div>
+        <div class="form-group" style="max-width:170px;">
+          <div class="form-label">Delivery Timeline (Working Days)</div>
+          <input class="form-input" id="sarawat-deliveryDays" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 10"
+            value="${escapeHtml(String(s.deliveryDays || ''))}" onchange="onSarawatDeliveryDaysChanged(this)">
         </div>
       </div>
 
@@ -4230,6 +4740,7 @@ function exportVistaQuotationFromSarawat() {
         // Optional item photo — only carried on the first tier row, same rule
         // as item/description above, so it isn't repeated across tier rows.
         _photoDataUrl: j === 0 ? (it.photo || '') : '',
+        _photoSize: j === 0 ? (it.photoSize || QUO_PHOTO_SIZE_DEFAULT) : '',
       });
     });
   });
@@ -4247,6 +4758,7 @@ function exportVistaQuotationFromSarawat() {
     summary_subtotal: sarawatState.subtotal,
     total_amount: sarawatState.grandTotal,
     summary_tax: sarawatState.vatAmount,
+    _deliveryDays: sarawatState.deliveryDays || '',
     _items: items,
   };
   currentDoc = { doc, type: 'estimates' };
