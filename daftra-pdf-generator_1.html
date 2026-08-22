@@ -1030,10 +1030,21 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
   // with the gap coming from CSS margin, never a space character for html2canvas to drop.
   const dtlLabelAr = `<bdi class="dtl-ar" dir="rtl"><span class="dtl-tok">مدة</span><span class="dtl-tok">التسليم</span></bdi>`;
   const dtlValueAr = `<bdi class="dtl-ar" dir="rtl"><span class="dtl-tok">${deliveryDaysNum}</span><span class="dtl-tok">أيام</span><span class="dtl-tok">عمل</span></bdi>`;
+  // line-height:16px on the value line is a metrics fix, not a typography change:
+  // Cairo's natural line-height at 13px is noticeably taller than Cormorant
+  // Garamond's (Arabic scripts generally need more vertical room for diacritics),
+  // so mixing the Cairo-font Arabic tokens into this line inflated its own line
+  // box to 24px even though no font-size changed — measured live (this line vs.
+  // Valid Until's plain-date value line, otherwise styled identically: 24px vs
+  // 16px), and that 8px alone accounted for the entire validity-strip growth that
+  // pushed real quotation 000032 off the approved one-page compact layout. An
+  // explicit line-height clamps the line box to the same height as Valid Until's,
+  // regardless of which font is painting which token — font size, weight, and
+  // content are unchanged and remain fully readable.
   const deliveryBlock = hasDelivery ? `
         <div>
           <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;">Delivery Timeline &nbsp;·&nbsp; ${dtlLabelAr}</div>
-          <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;color:#1C1C1A;margin-top:2px;">${deliveryDaysNum} Working Days &nbsp;·&nbsp; ${dtlValueAr}</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:13px;line-height:16px;color:#1C1C1A;margin-top:2px;">${deliveryDaysNum} Working Days &nbsp;·&nbsp; ${dtlValueAr}</div>
         </div>` : '';
 
   // hasDelivery decides not just the content but the wrapper markup itself: even
