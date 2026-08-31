@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vista — Google Keep / Site Notes Import (M-Keep-1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  /* ============================================================
+     Vista — Keep / Site Notes Import (Milestone M-Keep-1)
+     Standalone. Vendors pdf.js from CDN (same version the rest of
+     the project already uses). NOT coupled to the Sarawat importer.
+     Produces DRAFT items only — nothing is written to a project
+     until the reviewer clicks Approve.
+     ============================================================ */
+  :root{
+    --paper:#FFFFFF; --cream:#FAF8F4; --cream-2:#FBF9F6; --cream-edge:#ECE5D8;
+    --emerald:#1A5C46; --emerald-soft:#3A7A62; --emerald-wash:#EEF4F0; --forest:#0E3D2E;
+    --gold:#B8A47C; --gold-ink:#8C7643; --gold-wash:#F7F1E6;
+    --ink:#1E1E1B; --grey:#5A5A54; --grey-soft:#8A897F; --faint:#B6B4AA;
+    --rule:#E3E1D9; --rule-strong:#CBC8BE;
+    --stop:#9C3A34; --stop-wash:#F6EAE8; --amber:#8A5E1E; --amber-wash:#F7F0E1;
+    --r:11px;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:var(--cream-2); }
+  body{ font-family:'Inter','Helvetica Neue',Arial,sans-serif; color:var(--ink); line-height:1.45; font-size:14px; -webkit-font-smoothing:antialiased; }
+  button{ font:inherit; cursor:pointer; color:inherit; }
+  input,textarea,select{ font:inherit; border:1px solid var(--rule-strong); border-radius:7px; padding:7px 9px; background:var(--paper); color:var(--ink); outline:none; width:100%; }
+  input:focus,textarea:focus,select:focus{ border-color:var(--emerald); }
+  textarea{ resize:vertical; min-height:46px; line-height:1.5; }
+
+  .appbar{ position:sticky; top:0; z-index:40; background:var(--paper); border-bottom:1px solid var(--emerald);
+    display:flex; align-items:center; gap:12px; padding:11px 16px; }
+  .appbar .mk{ width:20px; height:20px; }
+  .appbar .mk svg{ width:100%; height:100%; display:block; }
+  .appbar .title{ font-family:'Playfair Display',Georgia,serif; font-weight:600; color:var(--emerald); font-size:16px; flex:1; }
+  .appbar .sub{ font-size:11px; color:var(--grey-soft); letter-spacing:.03em; }
+
+  .wrap{ max-width:1040px; margin:0 auto; padding:18px 16px 160px; }
+  .card{ background:var(--paper); border:1px solid var(--rule); border-radius:var(--r); padding:15px; margin-bottom:13px; }
+  .eyebrow{ font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--gold-ink); margin-bottom:9px; }
+  .hint{ font-size:11.5px; color:var(--grey-soft); }
+  .muted{ color:var(--grey-soft); }
+  .mt6{margin-top:7px} .mt10{margin-top:11px} .mt14{margin-top:15px}
+  .row{ display:flex; gap:10px; flex-wrap:wrap; }
+  h2.big{ font-family:'Playfair Display',Georgia,serif; font-weight:600; color:var(--emerald); font-size:19px; margin:0 0 4px; }
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; border-radius:9px; padding:10px 16px; font-weight:600; font-size:13.5px; border:1px solid transparent; }
+  .btn-primary{ background:var(--emerald); color:#fff; }
+  .btn-ghost{ background:var(--paper); border-color:var(--emerald); color:var(--emerald); }
+  .btn-sm{ padding:7px 11px; font-size:12px; border-radius:7px; }
+  .btn-danger{ background:var(--stop); color:#fff; }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+
+  .drop{ border:2px dashed var(--rule-strong); border-radius:14px; background:var(--cream);
+    padding:46px 20px; text-align:center; }
+  .drop.hot{ border-color:var(--emerald); background:var(--emerald-wash); }
+  .drop .big2{ font-family:'Playfair Display',serif; font-size:20px; color:var(--emerald); margin-bottom:6px; }
+
+  .banner{ border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:13px; }
+  .banner.warn{ background:var(--amber-wash); border:1px solid #E4CFA0; color:var(--amber); }
+  .banner.stop{ background:var(--stop-wash); border:1px solid #E0C4C1; color:var(--stop); }
+  .banner.ok{ background:var(--emerald-wash); border:1px solid #BFD4C9; color:var(--emerald); }
+
+  /* ---- validation summary ---- */
+  .stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:9px; }
+  .stat{ background:var(--cream); border:1px solid var(--cream-edge); border-radius:9px; padding:9px 11px; }
+  .stat .n{ font-family:'Playfair Display',serif; font-weight:600; font-size:20px; color:var(--forest); }
+  .stat .l{ font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--gold-ink); margin-top:2px; }
+
+  /* ---- draft card ---- */
+  .draft{ background:var(--paper); border:1px solid var(--rule); border-radius:var(--r); margin-bottom:14px; overflow:hidden; }
+  .draft.review{ border-color:#E4CFA0; }
+  .draft.low{ border-color:#E0C4C1; }
+  .draft > .dh{ display:flex; align-items:center; gap:10px; padding:10px 13px; border-bottom:1px solid var(--rule); background:var(--cream-2); flex-wrap:wrap; }
+  .draft > .dh .sel{ width:16px; height:16px; }
+  .draft > .dh .src{ font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--grey); }
+  .conf{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; border-radius:5px; }
+  .conf.high{ background:var(--emerald); color:#fff; }
+  .conf.med{ background:var(--gold-wash); color:var(--gold-ink); border:1px solid var(--cream-edge); }
+  .conf.low{ background:var(--stop-wash); color:var(--stop); }
+  .conf.manual{ background:var(--forest); color:#fff; }
+  .draft.manual{ border-color:var(--gold); }
+  .draft.manual > .dh{ background:var(--gold-wash); }
+  .linkbtn{ background:none; border:0; color:var(--emerald); font-size:11px; font-weight:600; text-decoration:underline; padding:0 2px; cursor:pointer; }
+  .newitem-bar{ display:flex; justify-content:center; margin:4px 0 16px; }
+  .newitem-bar button{ background:var(--emerald-wash); border:1px dashed var(--emerald); color:var(--emerald); border-radius:9px; padding:9px 18px; font-weight:600; font-size:13px; cursor:pointer; }
+  .flagchip{ font-size:9px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; padding:2px 6px; border-radius:4px; background:var(--amber-wash); color:var(--amber); border:1px solid #E4CFA0; }
+  .draft > .dh .dh-actions{ margin-left:auto; display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; }
+  .draft > .dh .dh-actions button{ border:1px solid var(--rule-strong); background:var(--paper); border-radius:6px; padding:5px 8px; font-size:11px; color:var(--grey); }
+  .draft > .dh .dh-actions button.danger{ color:var(--stop); }
+
+  .draft > .db{ padding:13px; display:grid; grid-template-columns:1fr; gap:13px; }
+  @media(min-width:820px){ .draft > .db{ grid-template-columns:340px 1fr; } }
+
+  .photostrip{ display:flex; flex-wrap:wrap; gap:8px; }
+  .pchip{ width:96px; border:1px solid var(--rule-strong); border-radius:8px; overflow:hidden; background:var(--cream); position:relative; }
+  .pchip img{ display:block; width:100%; height:78px; object-fit:cover; background:var(--cream); }
+  .pchip .role{ font-size:8px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; text-align:center; padding:3px 2px; }
+  .pchip.existing .role{ background:var(--emerald); color:#fff; }
+  .pchip.simulation .role{ background:var(--emerald-soft); color:#fff; }
+  .pchip.reference .role{ background:var(--cream); color:var(--grey); border-top:1px solid var(--cream-edge); }
+  .pchip .src{ position:absolute; top:3px; left:3px; background:rgba(255,255,255,.9); font-size:8px; font-weight:700; color:var(--forest); padding:1px 4px; border-radius:3px; }
+  .pchip .pmenu{ position:absolute; top:3px; right:3px; background:rgba(255,255,255,.92); border:1px solid var(--rule-strong); border-radius:5px; width:20px; height:18px; font-size:11px; line-height:1; color:var(--grey); }
+  .photos-none{ font-size:11.5px; color:var(--faint); padding:16px 0; text-align:center; border:1px dashed var(--rule-strong); border-radius:8px; }
+
+  .fld{ margin-bottom:9px; }
+  .fld > label{ display:block; font-size:9.5px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--gold-ink); margin-bottom:3px; }
+  .fld .warn{ color:var(--amber); font-weight:600; font-size:10px; margin-left:6px; }
+  .dimrow{ display:flex; gap:7px; align-items:flex-end; }
+  .dimrow .fld{ margin:0; }
+  .dimrow .fld.axis{ flex:1; }
+  .dimrow .fld.unit{ flex:0 0 92px; }
+  .rawdim{ font-size:11px; color:var(--grey); background:var(--cream); border:1px solid var(--cream-edge); border-radius:6px; padding:5px 8px; margin-top:5px; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .rawtext{ font-size:11px; color:var(--grey-soft); white-space:pre-wrap; background:var(--cream-2); border:1px solid var(--rule); border-radius:7px; padding:8px 10px; max-height:120px; overflow:auto; }
+
+  /* ---- sheet menu ---- */
+  .sheetmenu{ position:fixed; inset:0; z-index:60; background:rgba(14,26,20,.4); display:flex; align-items:center; justify-content:center; padding:18px; }
+  .sheetmenu .inner{ background:var(--paper); border-radius:12px; padding:8px; width:280px; max-width:100%; }
+  .sheetmenu button{ display:block; width:100%; text-align:left; background:none; border:0; padding:12px 12px; font-size:13.5px; border-bottom:1px solid var(--rule); }
+  .sheetmenu button:last-child{ border-bottom:0; }
+  .sheetmenu button.danger{ color:var(--stop); font-weight:600; }
+  .sheetmenu .mtitle{ font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--gold-ink); padding:8px 12px 4px; }
+
+  /* ---- approve bar ---- */
+  .approvebar{ position:fixed; left:0; right:0; bottom:0; z-index:40; background:var(--paper); border-top:1px solid var(--emerald);
+    padding:12px 16px; }
+  .approvebar .inner{ max-width:1040px; margin:0 auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .approvebar .count{ font-size:12.5px; color:var(--grey); }
+  .approvebar select, .approvebar input{ width:auto; min-width:180px; }
+  .approvebar .grow{ flex:1; }
+
+  .overlay{ position:fixed; inset:0; z-index:70; background:rgba(14,26,20,.6); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .dialog{ background:var(--paper); border-radius:12px; padding:18px; max-width:400px; width:100%; }
+  .dialog h3{ font-family:'Playfair Display',serif; color:var(--emerald); font-size:17px; margin-bottom:8px; }
+  .dialog p{ font-size:13px; color:var(--grey); margin-bottom:14px; }
+  .dialog .acts{ display:flex; gap:9px; } .dialog .acts .btn{ flex:1; }
+  .toast{ position:fixed; left:50%; bottom:80px; transform:translateX(-50%); z-index:80; background:var(--forest); color:#fff; font-size:12.5px; padding:9px 15px; border-radius:20px; opacity:0; transition:opacity .18s; pointer-events:none; }
+  .toast.show{ opacity:1; }
+
+  /* ---- add-photo tile ---- */
+  .pchip.add{ border:1px dashed var(--rule-strong); background:var(--cream-2); display:flex; flex-direction:column; align-items:center; justify-content:center; height:99px; color:var(--emerald); font-size:11px; font-weight:600; gap:3px; cursor:pointer; }
+  .pchip.add .plus{ font-size:18px; line-height:1; }
+  .pchip img{ cursor:zoom-in; }
+
+  /* ---- lightbox ---- */
+  .lightbox{ position:fixed; inset:0; z-index:75; background:rgba(10,20,15,.92); display:flex; flex-direction:column; }
+  .lightbox .lbtop{ display:flex; align-items:center; gap:12px; padding:12px 16px; color:#fff; font-size:12.5px; }
+  .lightbox .lbtop .role{ font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px; background:rgba(255,255,255,.16); padding:3px 8px; border-radius:5px; }
+  .lightbox .lbtop .grow{ flex:1; }
+  .lightbox .lbtop button{ background:rgba(255,255,255,.14); color:#fff; border:0; border-radius:7px; padding:8px 13px; font-size:13px; }
+  .lightbox .lbstage{ flex:1; display:flex; align-items:center; justify-content:center; padding:0 8px 16px; min-height:0; }
+  .lightbox .lbstage img{ max-width:100%; max-height:100%; object-fit:contain; border-radius:6px; background:#000; }
+  .lightbox .nav{ position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.16); color:#fff; border:0; width:44px; height:60px; font-size:22px; border-radius:8px; }
+  .lightbox .nav.prev{ left:10px; } .lightbox .nav.next{ right:10px; }
+
+  /* ---- Proposal Details (collapsed) ---- */
+  .pdetails{ border-top:1px solid var(--rule); margin-top:11px; }
+  .pdetails > summary{ list-style:none; cursor:pointer; padding:11px 2px 4px; font-size:10px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--gold-ink); display:flex; align-items:center; gap:7px; }
+  .pdetails > summary::-webkit-details-marker{ display:none; }
+  .pdetails > summary .tw{ transition:transform .15s; } .pdetails[open] > summary .tw{ transform:rotate(90deg); }
+  .pdetails > summary .setflag{ font-size:9px; font-weight:600; letter-spacing:0; text-transform:none; color:var(--emerald); background:var(--emerald-wash); border:1px solid #BFD4C9; padding:1px 6px; border-radius:4px; }
+  .pdbody{ padding:8px 0 4px; }
+  .pgroup{ margin-bottom:12px; }
+  .pglabel{ font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--grey); margin-bottom:5px; }
+  .pglabel .pgsumm{ color:var(--emerald); font-weight:600; letter-spacing:0; text-transform:none; margin-left:7px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:5px; }
+  .chip{ border:1px solid var(--rule-strong); background:var(--paper); border-radius:20px; padding:5px 10px; font-size:11.5px; color:var(--grey); }
+  .chip.on{ background:var(--emerald); border-color:var(--emerald); color:#fff; }
+  .chip.sub{ border-radius:7px; } .chip.other{ font-style:italic; }
+  .subgroup{ margin-top:6px; padding-left:10px; border-left:2px solid var(--rule); }
+  .sglabel{ font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); margin-bottom:4px; }
+  .seg{ display:inline-flex; border:1px solid var(--rule-strong); border-radius:8px; overflow:hidden; flex-wrap:wrap; }
+  .seg button{ background:var(--paper); border:0; border-right:1px solid var(--rule-strong); padding:6px 10px; font-size:11.5px; color:var(--grey); }
+  .seg button:last-child{ border-right:0; }
+  .seg button.on{ background:var(--emerald); color:#fff; }
+  .seg.warn button.on{ background:var(--stop); }
+  .cirow{ display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
+  .cirow input[type=text],.cirow input:not([data-v]){ flex:1; min-width:160px; }
+  .cirow .del{ background:none; border:0; color:var(--stop); font-size:15px; padding:0 4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<input type="file" id="pick" accept="application/pdf" hidden>
+<input type="file" id="photopick" accept="image/*" capture="environment" hidden>
+<div id="lb-root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   0 · Vista mark
+   ============================================================ */
+const MARK_SVG = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
+ + ['M25 15 50 85 75 15|1','M28 15 50 79 72 15|.85','M31 15 50 73 69 15|.7','M34 15 50 67 66 15|.55','M37 15 50 61 63 15|.4','M40 15 50 55 60 15|.28','M43 15 50 49 57 15|.18']
+   .map(s=>{const[d,o]=s.split('|');return '<path d="'+d+'" fill="none" stroke="#1A5C46" stroke-width="1.4" opacity="'+o+'"/>';}).join('')
+ + '</svg>';
+
+/* ============================================================
+   1 · Shared IndexedDB  (vista_tpb — identical schema to the dashboard)
+      Written to ONLY on Approve.
+   ============================================================ */
+const DB_NAME='vista_tpb', DB_VER=1;
+let _dbp=null;
+function openDB(){
+  if(_dbp) return _dbp;
+  _dbp = new Promise((res,rej)=>{
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = e=>{
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains('projects')) db.createObjectStore('projects',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('photos')){
+        const s = db.createObjectStore('photos',{keyPath:'id'});
+        s.createIndex('by_project','projectId'); s.createIndex('by_item','itemId');
+      }
+    };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+  return _dbp;
+}
+const rq = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+async function dbGet(s,k){ const d=await openDB(); return rq(d.transaction(s).objectStore(s).get(k)); }
+async function dbGetAll(s){ const d=await openDB(); return rq(d.transaction(s).objectStore(s).getAll()); }
+async function dbPut(s,v){ const d=await openDB(); return rq(d.transaction(s,'readwrite').objectStore(s).put(v)); }
+
+/* ============================================================
+   2 · pdf.js worker
+   ============================================================ */
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/* ============================================================
+   3 · Utilities
+   ============================================================ */
+const $  = s => document.querySelector(s);
+const app = ()=> $('#app');
+const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2,9);
+const now = ()=> Date.now();
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const has = s => s!=null && String(s).trim()!=='';
+let toastT;
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
+function clean(s){ return String(s||'').replace(/​/g,'').replace(/ /g,' ').replace(/[ \t]+/g,' ').trim(); }
+
+/* ============================================================
+   4 · PDF extraction  (native text + page-render photo crop)
+   ============================================================ */
+const TITLE_MIN_SIZE = 13.5;   // GoogleSans-Bold title = 15pt · body = 11pt
+
+function groupLines(items){
+  const rows = [];
+  items.forEach(it=>{
+    if(!it.str) return;
+    const tr = it.transform || [1,0,0,1,0,0];
+    const size = Math.hypot(tr[2], tr[3]) || it.height || 11;
+    const y = tr[5], x = tr[4];
+    let row = rows.find(r => Math.abs(r.y - y) < 4);
+    if(!row){ row = { y, size, parts:[] }; rows.push(row); }
+    row.size = Math.max(row.size, size);
+    row.parts.push({ x, str: it.str });
+  });
+  rows.sort((a,b)=> b.y - a.y);
+  return rows.map(r=>({
+    text: clean(r.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join('')),
+    size: r.size,
+    y: r.y,                       // PDF baseline y (higher = further up the page)
+    isTitle: r.size >= TITLE_MIN_SIZE
+  })).filter(l=>l.text);
+}
+
+function imageBoxesFromOps(opList){
+  const OPS = pdfjsLib.OPS;
+  const boxes = [];
+  let ctm=[1,0,0,1,0,0]; const stack=[];
+  const mul=(a,b)=>[ a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1], a[0]*b[2]+a[2]*b[3],
+                     a[1]*b[2]+a[3]*b[3], a[0]*b[4]+a[2]*b[5]+a[4], a[1]*b[4]+a[3]*b[5]+a[5] ];
+  const paintOps = [OPS.paintImageXObject, OPS.paintImageXObjectRepeat, OPS.paintInlineImageXObject, OPS.paintJpegXObject]
+                    .filter(v=>v!==undefined);
+  for(let i=0;i<opList.fnArray.length;i++){
+    const fn=opList.fnArray[i], a=opList.argsArray[i];
+    if(fn===OPS.save) stack.push(ctm.slice());
+    else if(fn===OPS.restore) ctm = stack.pop() || [1,0,0,1,0,0];
+    else if(fn===OPS.transform) ctm = mul(ctm, a);
+    else if(paintOps.indexOf(fn)!==-1){
+      const pts=[[0,0],[1,0],[1,1],[0,1]].map(([x,y])=>[ ctm[0]*x+ctm[2]*y+ctm[4], ctm[1]*x+ctm[3]*y+ctm[5] ]);
+      const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+      boxes.push({ x0:Math.min(...xs), y0:Math.min(...ys), x1:Math.max(...xs), y1:Math.max(...ys) });
+    }
+  }
+  return boxes;
+}
+
+async function canvasToJpeg(canvas, maxDim){
+  maxDim = maxDim || 2000;
+  let w = canvas.width, h = canvas.height;
+  if(Math.max(w,h) > maxDim){
+    const s = maxDim / Math.max(w,h);
+    const c2 = document.createElement('canvas');
+    c2.width = Math.round(w*s); c2.height = Math.round(h*s);
+    c2.getContext('2d').drawImage(canvas, 0,0, c2.width, c2.height);
+    canvas = c2;
+  }
+  return await new Promise(r=> canvas.toBlob(r, 'image/jpeg', 0.82));
+}
+
+async function extractPage(pdf, pageNum, progress){
+  const page = await pdf.getPage(pageNum);
+  const pageH = page.getViewport({ scale: 1 }).height;
+  const tc = await page.getTextContent();
+  const lines = groupLines(tc.items).map(l=>({ ...l, top: pageH - l.y }));   // top = distance from page top
+  const textLen = lines.reduce((a,l)=>a+l.text.length, 0);
+
+  let images = [];
+  let renderFailed = false;
+  let boxes = [];
+  try{ boxes = imageBoxesFromOps(await page.getOperatorList()); }
+  catch(e){ renderFailed = true; }
+
+  if(boxes.length){
+    const scale = 3;
+    const vp = page.getViewport({ scale });
+    const pc = document.createElement('canvas');
+    pc.width = Math.ceil(vp.width); pc.height = Math.ceil(vp.height);
+    try{
+      await page.render({ canvasContext: pc.getContext('2d'), viewport: vp }).promise;
+      // de-dup near-identical boxes (repeat ops)
+      const uniq = [];
+      boxes.forEach(b=>{ if(!uniq.some(u=> Math.abs(u.x0-b.x0)<2 && Math.abs(u.y0-b.y0)<2 && Math.abs(u.x1-b.x1)<2)) uniq.push(b); });
+      for(const b of uniq){
+        const p0 = vp.convertToViewportPoint(b.x0, b.y0);
+        const p1 = vp.convertToViewportPoint(b.x1, b.y1);
+        const cx = Math.min(p0[0],p1[0]), cy = Math.min(p0[1],p1[1]);
+        const cw = Math.abs(p1[0]-p0[0]), ch = Math.abs(p1[1]-p0[1]);
+        if(cw < 24 || ch < 24) continue;
+        const crop = document.createElement('canvas');
+        crop.width = Math.round(cw); crop.height = Math.round(ch);
+        crop.getContext('2d').drawImage(pc, Math.round(cx), Math.round(cy), Math.round(cw), Math.round(ch), 0,0, crop.width, crop.height);
+        const blob = await canvasToJpeg(crop);
+        images.push({ blob, w: crop.width, h: crop.height, bbox: b,
+                      top: pageH - b.y1, bot: pageH - b.y0, x: b.x0 });
+      }
+    }catch(e){ renderFailed = true; }
+    pc.width = pc.height = 0;
+  }
+
+  // reading order: top-to-bottom, then left-to-right
+  images.sort((a,b)=>{
+    if(Math.abs(a.top - b.top) > 20) return a.top - b.top;
+    return a.x - b.x;
+  });
+
+  if(progress) progress(pageNum);
+  return { pageNum, pageH, lines, images, textLen, expectedImages: boxes.length, renderFailed };
+}
+
+async function extractDocument(arrayBuffer, fileName, onProgress){
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const N = pdf.numPages;
+  const pages = [];
+  let totalText = 0, pagesWithText = 0, totalExpectedImgs = 0, totalGotImgs = 0;
+  const errors = [];
+  for(let i=1;i<=N;i++){
+    let pg;
+    try{ pg = await extractPage(pdf, i, onProgress ? p=>onProgress(p, N) : null); }
+    catch(e){ errors.push({ page:i, error:String(e && e.message || e) }); continue; }
+    pages.push(pg);
+    totalText += pg.textLen;
+    if(pg.textLen >= 12) pagesWithText++;
+    totalExpectedImgs += pg.expectedImages;
+    totalGotImgs += pg.images.length;
+    if(pg.expectedImages > pg.images.length) errors.push({ page:i, error:(pg.expectedImages - pg.images.length)+' image(s) not extracted' });
+    if(pg.renderFailed) errors.push({ page:i, error:'page render failed' });
+  }
+  const scanned = totalText < 200 || pagesWithText < Math.max(2, N*0.12);
+  return { fileName, pageCount:N, pages, totalText, pagesWithText, scanned, errors, totalExpectedImgs, totalGotImgs };
+}
+
+/* ============================================================
+   5 · Dimension parsing  (aggressive numbers, NEVER silent unit convert)
+   ============================================================ */
+const NUM = '(\\d+(?:[.,]\\s?\\d+)?)';
+const UNIT = '(mm|cm|m)?';
+const AX  = '(width|height|depth|w|h|d)?';
+const DIM_RE = new RegExp(
+  AX+'\\s*'+UNIT+'\\s*'+NUM+'\\s*'+UNIT+'\\s*'+AX+
+  '\\s*[x*×X·]\\s*'+
+  AX+'\\s*'+UNIT+'\\s*'+NUM+'\\s*'+UNIT+'\\s*'+AX+
+  '(?:\\s*[x*×X·]\\s*'+AX+'\\s*'+UNIT+'\\s*'+NUM+'\\s*'+UNIT+'\\s*'+AX+')?'
+, 'i');
+
+function num(s){ if(s==null) return null; const v = parseFloat(String(s).replace(',', '.').replace(/\s/g,'')); return isFinite(v) ? v : null; }
+function axLetter(a){ if(!a) return null; a=a.toLowerCase(); if(a[0]==='w') return 'w'; if(a[0]==='h') return 'h'; if(a[0]==='d') return 'd'; return null; }
+
+function parseDimLine(line){
+  const m = DIM_RE.exec(line);
+  if(!m) return null;
+  // groups per number: [preAxis, preUnit, NUM, postUnit, postAxis]  ×3
+  const trips = [
+    { ax:m[1], u1:m[2], n:m[3], u2:m[4], ax2:m[5] },
+    { ax:m[6], u1:m[7], n:m[8], u2:m[9], ax2:m[10] },
+    { ax:m[11], u1:m[12], n:m[13], u2:m[14], ax2:m[15] },
+  ].filter(t => t.n != null);
+  const explicitUnit = trips.map(t=> (t.u1||t.u2||'').toLowerCase()).find(u=>u) ||
+                       (/\b(mm|cm|m)\b/i.exec(line)||[])[1];
+  const dims = { w:null, h:null, d:null };
+  const order = ['w','h','d'];
+  trips.forEach((t,i)=>{
+    let ax = axLetter(t.ax) || axLetter(t.ax2) || order[i];
+    if(dims[ax] != null) ax = order.find(o=>dims[o]==null) || ax;
+    dims[ax] = num(t.n);
+  });
+  // depth keyword anywhere → last number is depth
+  if(/depth/i.test(line) && dims.d == null && trips.length>=2){
+    const vals = trips.map(t=>num(t.n));
+    dims.d = vals[vals.length-1];
+    if(dims.h === dims.d) dims.h = vals[vals.length-2] ?? dims.h;
+  }
+  const vals = [dims.w, dims.h, dims.d].filter(v=>v!=null);
+  let unit = explicitUnit ? explicitUnit.toLowerCase() : null;
+  let unitInferred = false;
+  if(!unit && vals.length){
+    const anyDecimal = vals.some(v=> !Number.isInteger(v));
+    const allSmall = vals.every(v=> v < 20);
+    const anyBig = vals.some(v=> v >= 20);
+    if(anyDecimal && allSmall){ unit = 'm'; unitInferred = true; }
+    else if(anyBig && vals.every(v=>Number.isInteger(v))){ unit = 'cm'; unitInferred = true; }
+    else { unit = 'cm'; unitInferred = true; }   // best guess, flagged
+  }
+  return {
+    raw: clean(m[0]),
+    w: dims.w, h: dims.h, d: dims.d,
+    unit, unitExplicit: !!explicitUnit, unitInferred,
+    needsUnitConfirmation: !explicitUnit
+  };
+}
+
+/* ============================================================
+   6 · Segmentation  — bold-15 title = item boundary
+      Photos are never dropped. Everything is surfaced.
+   ============================================================ */
+const DIM_WORDS = /\b(w|h|d|l|width|height|depth|length|size|sizes|dim|dims|dimension|dimensions|by|approx|about|around|each|side|cm|mm|m|is|are|the|of|and|to|raised)\b/gi;
+function isDimOnly(text){
+  const d = parseDimLine(text);
+  if(!d) return false;
+  // "just a dimension" = removing the matched numbers + label words leaves almost nothing real
+  const rest = clean(text.replace(d.raw,''))
+    .replace(DIM_WORDS,'')
+    .replace(/[0-9x×*·:.,\-\/()@]/g,'')
+    .replace(/\s+/g,'').trim();
+  return rest.length < 3;
+}
+function stripFiller(s){ return clean(String(s||'').replace(/[\s:_=.-]+(is|are|was|of|the)?\s*$/i,'').replace(/^[\s:_=.-]+/,'')); }
+function looksLikeName(text){
+  const t = clean(text);
+  if(!t || t.length > 60) return false;
+  if(isDimOnly(t)) return false;
+  const words = t.split(/\s+/);
+  const letters = (t.match(/[A-Za-z؀-ۿ]/g)||[]).length;
+  return words.length <= 8 && letters >= Math.max(2, t.length*0.4);
+}
+
+/* Break one page into ordered blocks (reading order, top → bottom).
+   Consecutive text lines with no image between them and a small vertical
+   gap are merged into one paragraph block. */
+function pageBlocks(pg){
+  const items = [];
+  pg.lines.forEach(l=> items.push({ kind:'text', top:l.top, bot:l.top + (l.size||11), line:l }));
+  pg.images.forEach(im=> items.push({ kind:'img', top:im.top, bot:im.bot, im }));
+  items.sort((a,b)=> a.top - b.top || (a.kind==='img'?-1:1));
+  const blocks = [];
+  let para = null;
+  for(const it of items){
+    if(it.kind === 'text'){
+      const gap = para ? it.top - para.bot : Infinity;
+      if(para && gap < Math.max(30, 2.6*(it.line.size||11))){
+        para.lines.push(it.line); para.bot = it.bot;
+      } else {
+        para = { type:'text', page:pg.pageNum, lines:[it.line], top:it.top, bot:it.bot };
+        blocks.push(para);
+      }
+    } else {
+      para = null;
+      blocks.push({ type:'photo', page:pg.pageNum, top:it.top, bot:it.bot, im:it.im });
+    }
+  }
+  return blocks;
+}
+
+/* Geometry-first segmentation.
+   Reading order rules:
+     · a photo cluster attaches to the FIRST meaningful text block below it
+       (across a page break when the photos sit with no description under them)
+     · multiple photo/description pairs on one page => multiple groups
+     · a text block with no photos above it either continues the current group
+       (plain continuation notes) or opens its own photo-less group (title / dimension)
+   Bold-title font size is kept only as a naming + confidence signal. */
+function segment(doc){
+  const stream = [];
+  doc.pages.forEach(pg=> stream.push(...pageBlocks(pg)));
+
+  const groups = [];
+  let cur = null;
+  let pending = [];      // photos waiting for their description
+  let order = 0;
+
+  const blockText = tb => tb.lines.map(l=>l.text).join(' ');
+  const meaningful = tb => {
+    if(!tb.lines.length) return false;
+    if(tb.lines.some(l=>l.isTitle)) return true;
+    if(parseDimLine(blockText(tb))) return true;
+    return blockText(tb).split(/\s+/).filter(Boolean).length >= 2;
+  };
+  const newGroup = () => { cur = { titleText:null, titlePage:null, bodyLines:[], photos:[], pages:new Set(), untitled:true }; groups.push(cur); return cur; };
+  const takePending = g => { pending.forEach(p=>{ g.photos.push(p); g.pages.add(p.sourcePage); }); pending = []; };
+  const addText = (g, tb) => {
+    g.pages.add(tb.page);
+    tb.lines.forEach(l=>{
+      if(l.isTitle && !g.titleText){ g.titleText = l.text; g.titlePage = tb.page; g.untitled = false; }
+      else g.bodyLines.push(l.text);
+    });
+  };
+
+  for(const b of stream){
+    if(b.type === 'photo'){
+      pending.push({ blob:b.im.blob, w:b.im.w, h:b.im.h, sourcePage:b.page, order:order++ });
+      continue;
+    }
+    // text block
+    if(!meaningful(b)){
+      if(cur) addText(cur, b);          // trivial fragment → note on current group, photos stay pending
+      else { newGroup(); addText(cur, b); }
+      continue;
+    }
+    const hasTitle = b.lines.some(l=>l.isTitle);
+    const dimOnly  = b.lines.every(l=> isDimOnly(l.text) || !clean(l.text));
+    if(pending.length){
+      newGroup(); takePending(cur); addText(cur, b);
+    } else if(cur && !hasTitle && !dimOnly){
+      addText(cur, b);                  // continuation prose for the current group
+    } else {
+      newGroup(); addText(cur, b);      // titled / dimension block that has no photos above it
+    }
+  }
+
+  // trailing photos with no following description → last group (flagged)
+  if(pending.length && groups.length){
+    const g = groups[groups.length-1];
+    pending.forEach(p=>{ g.photos.push(p); g.pages.add(p.sourcePage); });
+    g._trailingPhotos = true;
+  } else if(pending.length){
+    newGroup(); takePending(cur); cur._trailingPhotos = true;
+  }
+  return groups;
+}
+
+/* ============================================================
+   7 · Group → draft item
+   ============================================================ */
+function groupToDraft(g, fileName, idx){
+  const flags = [];
+  const body = g.bodyLines.slice();
+
+  // ---- name ----
+  let name = '', nameSource = '';
+  if(g.titleText && !isDimOnly(g.titleText)){
+    // title may embed a dimension → split at first dim token
+    const mm = DIM_RE.exec(g.titleText);
+    const before = mm ? stripFiller(g.titleText.slice(0, mm.index)) : '';
+    if(mm && before.replace(/[^A-Za-z؀-ۿ]/g,'').length >= 3){
+      name = before;
+      body.unshift(g.titleText.slice(mm.index));   // keep the dim for parsing below
+      nameSource = 'title p'+g.titlePage+' (dimension split off)';
+    } else {
+      name = clean(g.titleText);
+      nameSource = 'title p'+g.titlePage;
+    }
+  } else if(g.titleText && isDimOnly(g.titleText)){
+    body.unshift(g.titleText);
+    flags.push('title is a dimension');
+  }
+  if(!name){
+    const cand = body.find(t=> looksLikeName(t));
+    if(cand){ name = stripFiller(cand); nameSource = 'guessed from note text'; flags.push('name guessed'); }
+    else { name = 'Untitled — page ' + (g.titlePage || [...g.pages][0] || '?'); nameSource = 'no title in source'; flags.push('no title in source'); }
+  }
+  if(name && name === name.toLowerCase()) name = name.charAt(0).toUpperCase() + name.slice(1);
+
+  // ---- dimensions ----
+  const dimLines = body.map(t=>({ t, d: parseDimLine(t) })).filter(x=>x.d);
+  let dims;
+  if(dimLines.length){
+    dims = { ...dimLines[0].d, extra: dimLines.slice(1).map(x=>x.d.raw) };
+    if(dimLines.length > 1) flags.push('multiple dimension sets');
+    if(dims.needsUnitConfirmation) flags.push('unit '+ (dims.unitInferred ? 'inferred ('+dims.unit+')' : 'missing'));
+  } else {
+    dims = { raw:'', w:null, h:null, d:null, unit:null, unitExplicit:false, unitInferred:false, needsUnitConfirmation:true, extra:[] };
+    flags.push('no dimensions found');
+  }
+
+  // ---- notes = body lines that are not the name and not a parsed dimension ----
+  const dimRawSet = new Set(dimLines.map(x=>x.d.raw));
+  const notesLines = body.filter(t=>{
+    if(t === name) return false;
+    if(dimRawSet.has(clean(t))) return false;
+    const dm = parseDimLine(t);
+    if(dm && isDimOnly(t)) return false;
+    return has(t);
+  });
+  const notesText = notesLines.join('\n');
+
+  // ---- photos: all preserved, roles assigned ----
+  const photos = g.photos.map((p,i)=>({
+    id: uid(), blob: p.blob, url: URL.createObjectURL(p.blob), w: p.w, h: p.h,
+    sourcePage: p.sourcePage, order: i,
+    role: i === 0 ? 'existing' : 'reference'
+  }));
+  if(!photos.length) flags.push('no photos');
+  if(g._trailingPhotos) flags.push('photos attached by proximity');
+  if(g.untitled && !flags.includes('no title in source')) flags.push('no title in source');
+
+  const qty = 1;
+  flags.push('quantity not stated');
+
+  const draft = {
+    id: uid(), idx,
+    name, nameSource,
+    photos,
+    dims,
+    notesText,
+    qty, qtyUnit:'no.', qtyStated:false,
+    selected: true,
+    _unitTouched: false,
+    flags,
+    // --- same shape as technical-proposal-dashboard.html item model ---
+    presets: {},
+    status: { design:'pending', sample:'na', production:'not_started',
+              designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
+    clientInputs: [],
+    detailsOpen: false,
+    keepSource: {
+      file: fileName,
+      pages: [...new Set([...g.pages, ...g.photos.map(p=>p.sourcePage)])].sort((a,b)=>a-b),
+      rawText: [ g.titleText, ...g.bodyLines ].filter(has).join('\n'),
+      photoRefs: g.photos.map((p,i)=>({ page:p.sourcePage, order:i }))
+    }
+  };
+  draft.confidence = scoreConfidence(draft);
+  return draft;
+}
+
+function scoreConfidence(d){
+  let s = 1;
+  const f = d.flags;
+  if(f.some(x=>x.startsWith('no title')||x.startsWith('name guessed'))) s -= 0.35;
+  if(f.includes('title is a dimension')) s -= 0.12;
+  if(f.some(x=>x.startsWith('unit'))) s -= 0.15;
+  if(f.includes('multiple dimension sets')) s -= 0.15;
+  if(f.includes('photos attached by proximity')) s -= 0.2;
+  if(f.includes('no photos')) s -= 0.12;
+  if(f.includes('no dimensions found')) s -= 0.12;
+  return Math.max(0, Math.min(1, s));
+}
+const confBand = c => c >= 0.75 ? 'high' : c >= 0.5 ? 'med' : 'low';
+
+/* ============================================================
+   7b · Technical Proposal field model
+        — the SAME enum keys / data shape as technical-proposal-dashboard.html
+          so approved drafts open cleanly in the normal dashboard.
+   ============================================================ */
+const PRESET_GROUPS = [
+  { key:'branding', label:'Branding / Logo', options:[
+      '3D Letters','Raised / 3D Logo','Laser-Cut Logo / Letters','Embossed Logo','Debossed Logo',
+      'Engraving','Laser Engraving','Etched','CNC / Routed Cut','UV Print','Screen Print',
+      'Sticker / Vinyl Branding','Cut Vinyl','Paint Branding'],
+    sub:[ { key:'letterBuild', label:'3D Letter build', showIf:v=>v.includes('3D Letters'),
+            options:['Acrylic','Stainless Steel','Aluminum','Painted Metal','Front Lit','Halo Lit','Non-Illuminated'] } ] },
+  { key:'fabrication', label:'Fabrication', options:[
+      'Flat Panel','Box-Up','3D Letters','Folded / Bent Metal','Welded Structure','Acrylic Fabrication','Custom Fabrication'] },
+  { key:'material', label:'Main Material', options:[
+      'Acrylic','Aluminum','ACP','Stainless Steel','Galvanized Steel','Mild Steel','PVC / Foam Board','Wood / MDF','Fabric','Glass','Existing Surface'] },
+  { key:'finish', label:'Finish', options:[
+      'Painted','Powder Coated','Brushed','Polished','Matte','Gloss','Metallic','Sticker / Wrapped','Laminated'] },
+  { key:'existingWork', label:'Existing Work', exclusive:['Keep As Is'], options:[
+      'Keep As Is','Remove Existing','Modify Existing','Replace Branding Only','Reuse Existing Base / Structure','Surface Preparation','Repaint'],
+    note:{ key:'existingWorkNote', label:'Removal / modification detail',
+           showIf:v=>v.some(x=>x!=='Keep As Is') && v.length>0 } },
+  { key:'lighting', label:'Lighting', exclusive:['None'], options:[
+      'None','LED','Hidden LED','Halo Lit','Front Lit','Back Lit','Lightbox'],
+    sub:[ { key:'power', label:'Power / Electrical', showIf:v=>v.length>0 && !(v.length===1 && v[0]==='None'),
+            options:['Existing Power','New Power Required','Cabling Required','Driver / Access Required'] } ] },
+  { key:'access', label:'Access', exclusive:['Normal'], options:[
+      'Normal','Ladder','Scaffold','Scissor Lift','Boom Lift','Crane'],
+    note:{ key:'accessNote', label:'Access note',
+           showIf:v=>v.some(x=>['Scaffold','Scissor Lift','Boom Lift','Crane'].includes(x)) } },
+  { key:'environment', label:'Environment / Protection', options:[
+      'Indoor','Outdoor','Weather Resistant','Waterproof','UV Resistant'] },
+];
+const UNITS = ['no.','set','lot','panels','poles','units','m','m²'];
+const STATUS = {
+  design:     [['pending','Pending'],['approved','Approved'],['revision_required','Revision Required'],['rejected','Rejected']],
+  sample:     [['na','N/A'],['pending','Pending'],['approved','Approved'],['rejected','Rejected']],
+  production: [['not_started','Not Started'],['ready_for_production','Ready for Production'],['in_production','In Production'],['ready_for_installation','Ready for Installation'],['installed','Installed']],
+};
+const PRIORITY = [['urgent','Urgent'],['required','Required'],['optional','Optional']];
+
+function pgv(d,key){ if(!d.presets[key]) d.presets[key]={values:[],other:''}; return d.presets[key]; }
+function presetSummary(d, g){
+  const parts=[]; const gv=(d.presets[g.key]||{});
+  (gv.values||[]).forEach(v=>parts.push(v));
+  if(gv.other) parts.push('Other: '+gv.other);
+  for(const s of (g.sub||[])){
+    if(!s.showIf(gv.values||[])) continue;
+    const sv=(d.presets[s.key]||{});
+    (sv.values||[]).forEach(v=>parts.push(v));
+    if(sv.other) parts.push('Other: '+sv.other);
+  }
+  return parts.join(' · ');
+}
+function pruneHidden(d, g){
+  const gv = pgv(d, g.key);
+  for(const s of (g.sub||[])){
+    if(!s.showIf(gv.values)){ if(d.presets[s.key]){ d.presets[s.key].values=[]; d.presets[s.key].other=''; } STATE.otherOpen.delete(s.key); }
+  }
+  if(g.note && !g.note.showIf(gv.values)) d.presets[g.note.key] = '';
+}
+function presetsAnySet(d){
+  return PRESET_GROUPS.some(g=> presetSummary(d,g)) ||
+    d.status.design!=='pending' || d.status.sample!=='na' || d.status.production!=='not_started' ||
+    (d.clientInputs||[]).length>0;
+}
+
+/* ============================================================
+   8 · State
+   ============================================================ */
+const STATE = { view:'upload', doc:null, drafts:[], projects:[], otherOpen:new Set(), lb:null };
+
+/* ============================================================
+   9 · Views
+   ============================================================ */
+function shell(inner){
+  app().innerHTML =
+    '<div class="appbar"><span class="mk">'+MARK_SVG+'</span>'
+    + '<span class="title">Google Keep / Site Notes Import</span>'
+    + '<span class="sub">M-Keep-1 · drafts only — nothing is imported until you approve</span></div>'
+    + '<div class="wrap">'+inner+'</div>';
+}
+
+function renderUpload(){
+  shell(
+    '<div class="card">'
+    + '<div class="eyebrow">Step 1 · Upload</div>'
+    + '<div class="drop" id="drop">'
+    +   '<div class="big2">Drop a Google Keep export PDF</div>'
+    +   '<div class="hint" style="margin-bottom:14px">Native-text PDFs (Keep → Google Docs → Print to PDF) work best. Image-only / scanned PDFs are detected and flagged — OCR import is not enabled yet.</div>'
+    +   '<button class="btn btn-primary" data-choose>Choose PDF…</button>'
+    + '</div>'
+    + '</div>'
+  );
+}
+
+function renderProcessing(msg){
+  shell('<div class="card"><div class="eyebrow">Working</div><div class="hint">'+esc(msg)+'</div></div>');
+}
+
+function statBox(n, l){ return '<div class="stat"><div class="n">'+n+'</div><div class="l">'+esc(l)+'</div></div>'; }
+
+function renderReview(){
+  const d = STATE.doc, drafts = STATE.drafts;
+  const clean_hi = drafts.filter(x=>confBand(x.confidence)==='high').length;
+  const needs = drafts.filter(x=>confBand(x.confidence)!=='high').length;
+  const orphans = drafts.filter(x=> x.flags.includes('no title in source') || x.flags.includes('photos attached by proximity')).length;
+  const totalPhotos = drafts.reduce((a,x)=>a+x.photos.length,0);
+  const unitCases = drafts.filter(x=> x.flags.some(f=>f.startsWith('unit'))).length;
+  const titles = d.pages.reduce((a,p)=> a + (p.lines.some(l=>l.isTitle)?1:0), 0);
+
+  let html = '';
+
+  if(d.scanned){
+    html += '<div class="banner stop"><b>This document appears image-based.</b> Only '+d.totalText+' characters of native text were found across '+d.pageCount+' pages. OCR import is not enabled yet — the drafts below are unreliable. (OCR is the next import enhancement.)</div>';
+  }
+
+  html += '<div class="card"><h2 class="big">Import review — '+esc(d.fileName)+'</h2>'
+    + '<div class="hint" style="margin-bottom:11px">'+d.pageCount+' pages · every source photo is preserved · nothing is written to a project until you approve.</div>'
+    + '<div class="stats">'
+    +   statBox(titles, 'Titles detected')
+    +   statBox(drafts.length, 'Draft items')
+    +   statBox(clean_hi, 'High confidence')
+    +   statBox(needs, 'Need review')
+    +   statBox(orphans, 'Orphan / untitled')
+    +   statBox(d.totalGotImgs + ' / ' + d.totalExpectedImgs, 'Photos extracted')
+    +   statBox(totalPhotos, 'Photos associated')
+    +   statBox(unitCases, 'Unit to confirm')
+    +   statBox(d.errors.length, 'Extraction issues')
+    + '</div>'
+    + (d.errors.length ? '<div class="banner warn mt10"><b>Extraction issues:</b> '
+        + d.errors.slice(0,8).map(e=>'p'+e.page+' — '+esc(e.error)).join(' · ')
+        + (d.errors.length>8 ? ' · +'+(d.errors.length-8)+' more' : '') + '</div>' : '')
+    + '</div>';
+
+  const newItemBar = pos => '<div class="newitem-bar"><button data-newitem="'+pos+'">+ New Item (manual)</button></div>';
+
+  html += newItemBar(0);
+  drafts.forEach((x,i)=> html += renderDraft(x, i));
+  html += newItemBar(drafts.length);
+
+  html += '<div style="height:20px"></div>';
+  shell(html);
+  // approve bar is position:fixed — mount it once, outside .wrap
+  document.querySelectorAll('.approvebar').forEach(b=>b.remove());
+  const bar = document.createElement('div');
+  bar.innerHTML = renderApproveBar();
+  document.body.appendChild(bar.firstElementChild);
+}
+
+const ROLE_LABEL = { existing:'Existing', simulation:'Simulation', sample:'Sample', reference:'Reference' };
+function renderDraft(x, i){
+  const band = confBand(x.confidence);
+  const rc = { existing:0, simulation:0, sample:0, reference:0 };
+  x.photos.forEach(p=> rc[p.role] = (rc[p.role]||0)+1);
+  const pchips = x.photos.map((p,pi)=>
+      '<div class="pchip '+p.role+'">'
+      + '<span class="src">'+(p.keep===false ? 'added' : 'p'+p.sourcePage)+'</span>'
+      + '<button class="pmenu" data-pmenu data-d="'+i+'" data-p="'+pi+'">⋯</button>'
+      + '<img src="'+p.url+'" data-zoom data-d="'+i+'" data-p="'+pi+'" alt="">'
+      + '<div class="role">'+ROLE_LABEL[p.role]+'</div>'
+      + '</div>').join('')
+    + '<button class="pchip add" data-addphoto data-d="'+i+'"><span class="plus">+</span>Add Photo</button>';
+
+  const dm = x.dims;
+  const srcLabel = x.manual ? 'Manual item' : ('Source p'+x.keepSource.pages.join(', p'));
+  const badge = x.manual
+    ? '<span class="conf manual">manual</span>'
+    : '<span class="conf '+band+'">'+Math.round(x.confidence*100)+'% '+({high:'high',med:'review',low:'low'}[band])+'</span>';
+  const last = STATE.drafts.length-1;
+  const srcBlock = x.manual
+    ? '<div class="fld"><label>Source</label><div class="rawtext">Manual item — created in the review screen. No Keep source text.</div></div>'
+    : '<div class="fld"><label>Original Keep text (page '+esc(x.keepSource.pages.join(', '))+')</label><div class="rawtext">'+esc(x.keepSource.rawText || '(none)')+'</div></div>';
+  return '<div class="draft '+(x.manual?'manual':band==='low'?'low':band==='med'?'review':'')+'" data-draft="'+i+'">'
+    + '<div class="dh">'
+    +   '<input type="checkbox" class="sel" data-sel="'+i+'" '+(x.selected?'checked':'')+'>'
+    +   '<span class="src">'+esc(srcLabel)+'</span>'
+    +   badge
+    +   x.flags.map(f=>'<span class="flagchip">'+esc(f)+'</span>').join('')
+    +   '<span class="dh-actions">'
+    +     '<button data-move="'+i+'" data-dir="-1" title="Move up" '+(i===0?'disabled':'')+'>▲</button>'
+    +     '<button data-move="'+i+'" data-dir="1" title="Move down" '+(i===last?'disabled':'')+'>▼</button>'
+    +     '<button data-merge="'+i+'" data-dir="-1" '+(i===0?'disabled':'')+'>merge&nbsp;↑</button>'
+    +     '<button data-merge="'+i+'" data-dir="1" '+(i===last?'disabled':'')+'>merge&nbsp;↓</button>'
+    +     '<button data-splitmenu="'+i+'">split</button>'
+    +     '<button class="danger" data-discard="'+i+'">discard</button>'
+    +   '</span>'
+    + '</div>'
+    + '<div class="db">'
+    +   '<div>'
+    +     '<div class="fld"><label>Photos ('+x.photos.length+') · '
+    +        rc.existing+' existing · '+rc.simulation+' sim · '+rc.sample+' sample · '+rc.reference+' ref'
+    +        (x.photos.length?' <button class="linkbtn" data-dlall="'+i+'">⬇ download all</button>':'')+'</label>'
+    +        '<div class="photostrip">'+pchips+'</div>'
+    +        (x.photos.length?'':'<div class="hint mt6">No photos grouped here — use Add Photo, or move one in from another item.</div>')
+    +     '</div>'
+    +   '</div>'
+    +   '<div>'
+    +     '<div class="fld"><label>Suggested item name <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">— '+esc(x.nameSource)+'</span></label>'
+    +        '<input data-f="name" data-d="'+i+'" value="'+esc(x.name)+'"></div>'
+    +     '<div class="dimrow">'
+    +       '<div class="fld axis"><label>W</label><input data-f="dw" data-d="'+i+'" value="'+esc(dm.w==null?'':dm.w)+'" inputmode="decimal"></div>'
+    +       '<div class="fld axis"><label>H</label><input data-f="dh" data-d="'+i+'" value="'+esc(dm.h==null?'':dm.h)+'" inputmode="decimal"></div>'
+    +       '<div class="fld axis"><label>D</label><input data-f="dd" data-d="'+i+'" value="'+esc(dm.d==null?'':dm.d)+'" inputmode="decimal"></div>'
+    +       '<div class="fld unit"><label>Unit'+(dm.needsUnitConfirmation?'<span class="warn">⚠ '+(dm.unitInferred?'inferred':'confirm')+'</span>':'')+'</label>'
+    +         '<select data-f="unit" data-d="'+i+'">'
+    +           ['','mm','cm','m'].map(u=>'<option value="'+u+'" '+(dm.unit===u?'selected':'')+'>'+(u||'—')+'</option>').join('')
+    +         '</select></div>'
+    +     '</div>'
+    +     (dm.raw ? '<div class="rawdim">raw: '+esc(dm.raw)+(dm.extra&&dm.extra.length?'   ·   also: '+esc(dm.extra.join('  |  ')):'')+'</div>' : '')
+    +     '<div class="row mt10">'
+    +       '<div class="fld" style="flex:0 0 120px"><label>Quantity '+((!x.qtyStated && !x.manual)?'<span class="warn">⚠ not stated</span>':'')+'</label>'
+    +          '<input data-f="qty" data-d="'+i+'" value="'+esc(x.qty)+'" inputmode="numeric"></div>'
+    +       '<div class="fld" style="flex:1;min-width:200px"><label>Notes'+(x.manual?'':' (site)')+'</label>'
+    +          '<textarea data-f="notes" data-d="'+i+'">'+esc(x.notesText)+'</textarea></div>'
+    +     '</div>'
+    +     srcBlock
+    +     proposalDetailsHtml(x, i)
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function proposalDetailsHtml(x, i){
+  const anySet = presetsAnySet(x);
+  const head = '<summary><span class="tw">▸</span> Proposal Details'
+    + (anySet ? '<span class="setflag">has values</span>'
+             : '<span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none">optional — fill now or later in the dashboard</span>')
+    + '</summary>';
+  // lazy: only build the (large) body when the section is actually open
+  if(!x.detailsOpen) return '<details class="pdetails" data-pd="'+i+'">'+head+'<div class="pdbody"></div></details>';
+
+  let body = '';
+  for(const g of PRESET_GROUPS) body += presetGroupHtml(x, g, i);
+
+  const s = x.status;
+  const seg = (name, opts, cur, warn) =>
+    '<div class="seg small'+((warn||[]).includes(cur)?' warn':'')+'" data-seg="'+name+'" data-d="'+i+'">'
+    + opts.map(([v,l])=>'<button data-v="'+v+'" class="'+(v===cur?'on':'')+'">'+esc(l)+'</button>').join('') + '</div>';
+
+  let sampleDetail = '';
+  if(s.sample !== 'na'){
+    sampleDetail =
+      '<div class="row mt6">'
+      + '<div class="fld"><label>Sample photo</label><button class="btn btn-ghost btn-sm" data-addphoto data-d="'+i+'" data-role="sample">+ Sample photo</button></div>'
+      + '<div class="fld"><label>Sample revision</label><input data-f="sampleRev" data-d="'+i+'" value="'+esc(s.sampleRev||'')+'" placeholder="Rev A"></div>'
+      + '</div>'
+      + '<div class="row">'
+      + '<div class="fld"><label>Approved by</label><input data-f="sampleBy" data-d="'+i+'" value="'+esc(s.sampleBy||'')+'" placeholder="Name"></div>'
+      + '<div class="fld"><label>Approval date</label><input data-f="sampleDate" data-d="'+i+'" value="'+esc(s.sampleDate||'')+'" placeholder="YYYY-MM-DD" inputmode="numeric"></div>'
+      + '</div>'
+      + '<div class="fld"><label>Comment</label><input data-f="sampleComment" data-d="'+i+'" value="'+esc(s.sampleComment||'')+'" placeholder="Optional"></div>';
+  }
+  let designDetail = '';
+  if(['rejected','revision_required'].includes(s.design)){
+    designDetail = '<div class="fld mt6"><label>Design comment</label><input data-f="designComment" data-d="'+i+'" value="'+esc(s.designComment||'')+'" placeholder="What needs changing…"></div>';
+  }
+
+  const ci = (x.clientInputs||[]).map((r,ri)=>
+    '<div class="cirow">'
+    + '<div class="seg" data-ciprio data-d="'+i+'" data-ri="'+ri+'">'
+    +   PRIORITY.map(([v,l])=>'<button data-v="'+v+'" class="'+(r.priority===v?'on':'')+'">'+esc(l)+'</button>').join('')
+    + '</div>'
+    + '<input type="text" data-citext data-d="'+i+'" data-ri="'+ri+'" value="'+esc(r.text||'')+'" placeholder="Required input from client…">'
+    + '<button class="del" data-cidel data-d="'+i+'" data-ri="'+ri+'">✕</button>'
+    + '</div>').join('');
+
+  return '<details class="pdetails" open data-pd="'+i+'">'
+    + head
+    + '<div class="pdbody">'
+    +   body
+    +   '<div class="pgroup"><div class="pglabel">Unit of quantity</div>'
+    +     '<select data-f="qtyUnit" data-d="'+i+'" style="max-width:160px">'
+    +       UNITS.map(u=>'<option '+(u===x.qtyUnit?'selected':'')+'>'+esc(u)+'</option>').join('')
+    +     '</select></div>'
+    +   '<div class="pgroup"><div class="pglabel">Design status</div>'+seg('design', STATUS.design, s.design, ['rejected'])+designDetail+'</div>'
+    +   '<div class="pgroup"><div class="pglabel">Sample status</div>'+seg('sample', STATUS.sample, s.sample, ['rejected'])+sampleDetail+'</div>'
+    +   '<div class="pgroup"><div class="pglabel">Production status</div>'+seg('production', STATUS.production, s.production)+'</div>'
+    +   '<div class="pgroup"><div class="pglabel">Client inputs</div>'
+    +     (ci || '<div class="hint" style="margin-bottom:6px">None.</div>')
+    +     '<button class="btn btn-ghost btn-sm" data-ciadd data-d="'+i+'">+ Add client input</button></div>'
+    + '</div></details>';
+}
+
+function presetGroupHtml(d, g, i){
+  const gv = pgv(d, g.key);
+  const chips = g.options.map(o=>
+    '<button class="chip'+(gv.values.includes(o)?' on':'')+'" data-chip data-d="'+i+'" data-g="'+g.key+'" data-o="'+esc(o)+'">'+esc(o)+'</button>'
+  ).join('');
+  const otherOn = (gv.other||'')!=='' || STATE.otherOpen.has(g.key+'@'+d.id);
+  const otherChip = '<button class="chip other'+(otherOn?' on':'')+'" data-chipother data-d="'+i+'" data-g="'+g.key+'">Other…</button>';
+  const otherField = otherOn
+    ? '<input class="mt6" data-pp="'+g.key+'.other" data-d="'+i+'" value="'+esc(gv.other||'')+'" placeholder="Other — '+esc(g.label)+'">' : '';
+  let subs = '';
+  for(const s of (g.sub||[])){
+    if(!s.showIf(gv.values)) continue;
+    const sv = pgv(d, s.key);
+    subs += '<div class="subgroup"><div class="sglabel">'+esc(s.label)+'</div><div class="chips">'
+      + s.options.map(o=>'<button class="chip sub'+(sv.values.includes(o)?' on':'')+'" data-chipsub data-d="'+i+'" data-g="'+s.key+'" data-o="'+esc(o)+'">'+esc(o)+'</button>').join('')
+      + '</div></div>';
+  }
+  let noteField = '';
+  if(g.note && g.note.showIf(gv.values)){
+    noteField = '<input class="mt6" data-pp="'+g.note.key+'" data-d="'+i+'" value="'+esc(d.presets[g.note.key]||'')+'" placeholder="'+esc(g.note.label)+'">';
+  }
+  const summ = presetSummary(d, g);
+  return '<div class="pgroup"><div class="pglabel">'+esc(g.label)+(summ?'<span class="pgsumm">'+esc(summ)+'</span>':'')+'</div>'
+    + '<div class="chips">'+chips+otherChip+'</div>'+otherField+subs+noteField+'</div>';
+}
+
+function renderApproveBar(){
+  const sel = STATE.drafts.filter(x=>x.selected).length;
+  const projOpts = STATE.projects.map(p=>'<option value="'+p.id+'">'+esc(p.name||'Untitled')+' ('+((p.items||[]).length)+' items)</option>').join('');
+  return '<div class="approvebar"><div class="inner">'
+    + '<span class="count"><b>'+sel+'</b> of '+STATE.drafts.length+' selected</span>'
+    + '<select id="approve-target">'
+    +   '<option value="__new">➕ New project…</option>'
+    +   projOpts
+    + '</select>'
+    + '<input id="approve-newname" placeholder="New project name" style="display:none">'
+    + '<span class="grow"></span>'
+    + '<button class="btn btn-ghost btn-sm" data-back-upload>Start over</button>'
+    + '<button class="btn btn-primary" data-approve '+(sel?'':'disabled')+'>Approve selected →</button>'
+    + '</div></div>';
+}
+
+/* ============================================================
+   10 · Review actions
+   ============================================================ */
+function reRender(){
+  // strip any fixed approve bars before re-render
+  document.querySelectorAll('.approvebar').forEach(b=>b.remove());
+  const y = window.scrollY;
+  renderReview();
+  window.scrollTo(0, y);
+}
+/* refresh just one card in place — keeps chip/status edits snappy and
+   avoids scrolling on every tap. Falls back to a full re-render. */
+function reRenderCard(i){
+  const el = document.querySelector('.draft[data-draft="'+i+'"]');
+  if(!el){ reRender(); return; }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = renderDraft(STATE.drafts[i], i);
+  el.replaceWith(tmp.firstElementChild);
+}
+function draftAt(i){ return STATE.drafts[i]; }
+
+const STATUS_FIELDS = ['designComment','sampleRev','sampleDate','sampleBy','sampleComment'];
+function setField(i, f, v){
+  const x = draftAt(i); if(!x) return;
+  if(f==='name') x.name = v;
+  else if(f==='notes') x.notesText = v;
+  else if(f==='qty'){ x.qty = v; x.qtyStated = has(v) && String(v)!=='1'; }
+  else if(f==='qtyUnit') x.qtyUnit = v;
+  else if(f==='dw') x.dims.w = num(v);
+  else if(f==='dh') x.dims.h = num(v);
+  else if(f==='dd') x.dims.d = num(v);
+  else if(f==='unit'){ x.dims.unit = v; x._unitTouched = true; x.dims.needsUnitConfirmation = false;
+    x.flags = x.flags.filter(fl=>!fl.startsWith('unit')); }
+  else if(STATUS_FIELDS.includes(f)) x.status[f] = v;
+  x.confidence = scoreConfidence(x);
+}
+function setPresetPath(i, path, v){
+  const x = draftAt(i); if(!x) return;
+  const parts = path.split('.');
+  if(parts.length === 2){ pgv(x, parts[0])[parts[1]] = v; }      // "<key>.other"
+  else { x.presets[parts[0]] = v; }                               // note key -> string
+}
+function setPhotoRole(di, pi, role){
+  const x = draftAt(di); const ph = x.photos[pi]; if(!ph) return;
+  if(role==='existing' || role==='simulation' || role==='sample'){
+    x.photos.forEach(p=>{ if(p.role===role) p.role='reference'; });
+  }
+  ph.role = role;
+  x.confidence = scoreConfidence(x);
+  reRenderCard(di);
+}
+async function fileToPhoto(file){
+  let bmp;
+  try{ bmp = await createImageBitmap(file); }
+  catch(e){ bmp = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(file); }); }
+  const c = document.createElement('canvas');
+  c.width = bmp.width; c.height = bmp.height;
+  c.getContext('2d').drawImage(bmp, 0, 0);
+  const blob = await canvasToJpeg(c);
+  return { blob, w: c.width, h: c.height };
+}
+async function addPhotoToDraft(di, file, forcedRole){
+  const x = draftAt(di); if(!x) return;
+  let p;
+  try{ p = await fileToPhoto(file); }
+  catch(e){ toast('Could not read that image'); return; }
+  const role = forcedRole ||
+    (await sheetMenu('Role for this photo', [
+      {label:'Existing', v:'existing'}, {label:'Simulation / Proposed', v:'simulation'},
+      {label:'Sample', v:'sample'}, {label:'Reference', v:'reference'},
+    ]) || {v:'reference'}).v;
+  if(role==='existing'||role==='simulation'||role==='sample') x.photos.forEach(q=>{ if(q.role===role) q.role='reference'; });
+  x.photos.push({ id:uid(), blob:p.blob, url:URL.createObjectURL(p.blob), w:p.w, h:p.h,
+    sourcePage:null, keep:false, order:x.photos.length, role });
+  x.flags = x.flags.filter(f=>f!=='no photos');
+  x.confidence = scoreConfidence(x);
+  reRenderCard(di);
+}
+function movePhoto(di, pi, targetIdx){
+  const x = draftAt(di); const [ph] = x.photos.splice(pi,1);
+  ph.role = 'reference';
+  draftAt(targetIdx).photos.push(ph);
+  [x, draftAt(targetIdx)].forEach(d=>{
+    if(!d.photos.some(p=>p.role==='existing') && d.photos[0]) d.photos[0].role='existing';
+    d.confidence = scoreConfidence(d);
+  });
+  reRender();
+}
+function removePhoto(di, pi){
+  const x = draftAt(di); const [ph] = x.photos.splice(pi,1);
+  URL.revokeObjectURL(ph.url);
+  if(!x.photos.some(p=>p.role==='existing') && x.photos[0]) x.photos[0].role='existing';
+  x.confidence = scoreConfidence(x);
+  reRenderCard(di);
+}
+function mergeDraft(i, dir){
+  const j = i + dir;
+  if(j < 0 || j >= STATE.drafts.length) return;
+  const a = STATE.drafts[Math.min(i,j)], b = STATE.drafts[Math.max(i,j)];
+  // a keeps name/dims/presets/status; b folds in
+  b.photos.forEach(p=>{ p.role = (p.role==='existing'||p.role==='simulation'||p.role==='sample') ? 'reference' : p.role; });
+  a.photos.push(...b.photos);
+  a.notesText = [a.notesText, b.notesText].filter(has).join('\n');
+  a.clientInputs = (a.clientInputs||[]).concat(b.clientInputs||[]);
+  if(b.dims.raw) a.dims.extra = (a.dims.extra||[]).concat([b.dims.raw]).concat(b.dims.extra||[]);
+  a.keepSource.pages = [...new Set(a.keepSource.pages.concat(b.keepSource.pages))].sort((m,n)=>m-n);
+  a.keepSource.rawText = [a.keepSource.rawText, b.keepSource.rawText].filter(has).join('\n---\n');
+  a.flags = [...new Set(a.flags.concat(['merged from p'+b.keepSource.pages.join(',')]))].filter(f=>f!=='no photos');
+  a.confidence = scoreConfidence(a);
+  STATE.drafts.splice(Math.max(i,j), 1);
+  reRender();
+}
+function splitDraft(i, atPhoto){
+  const x = draftAt(i);
+  if(atPhoto <= 0 || atPhoto >= x.photos.length) return;
+  const moved = x.photos.splice(atPhoto);
+  moved.forEach((p,k)=> p.role = k===0 ? 'existing' : 'reference');
+  const nd = {
+    id: uid(), idx: x.idx + 0.5,
+    name: x.name + ' (2)', nameSource: 'split from previous',
+    photos: moved,
+    dims: { raw:'', w:null,h:null,d:null, unit:null, unitExplicit:false, unitInferred:false, needsUnitConfirmation:true, extra:[] },
+    notesText:'', qty:1, qtyUnit:'no.', qtyStated:false, selected:true, _unitTouched:false,
+    presets:{}, status:{ design:'pending', sample:'na', production:'not_started', designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
+    clientInputs:[], detailsOpen:false,
+    flags:['from split','quantity not stated','no dimensions found'],
+    keepSource:{ file:x.keepSource.file, pages:[...new Set(moved.map(p=>p.sourcePage).filter(Boolean))].sort((a,b)=>a-b), rawText:'(split — original text kept on the first item)', photoRefs: moved.map((p,k)=>({page:p.sourcePage,order:k})) }
+  };
+  nd.confidence = scoreConfidence(nd);
+  if(!x.photos.some(p=>p.role==='existing') && x.photos[0]) x.photos[0].role='existing';
+  x.confidence = scoreConfidence(x);
+  STATE.drafts.splice(i+1, 0, nd);
+  reRender();
+}
+function discardDraft(i){
+  draftAt(i).photos.forEach(p=>URL.revokeObjectURL(p.url));
+  STATE.drafts.splice(i,1); reRender();
+}
+function moveDraft(i, dir){
+  const j = i + dir;
+  if(j < 0 || j >= STATE.drafts.length) return;
+  const [d] = STATE.drafts.splice(i,1);
+  STATE.drafts.splice(j,0,d);
+  reRender();
+  const el = document.querySelector('.draft[data-draft="'+j+'"]');
+  if(el) el.scrollIntoView({ block:'center' });
+}
+
+/* ---- manual (non-Keep) draft ---- */
+function newManualDraft(atIndex){
+  const nd = {
+    id: uid(), idx: -1,
+    name:'', nameSource:'Manual item', manual:true,
+    photos:[],
+    dims:{ raw:'', w:null,h:null,d:null, unit:null, unitExplicit:false, unitInferred:false, needsUnitConfirmation:true, extra:[] },
+    notesText:'', qty:1, qtyUnit:'no.', qtyStated:false,
+    selected:true, _unitTouched:false,
+    presets:{}, status:{ design:'pending', sample:'na', production:'not_started', designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
+    clientInputs:[], detailsOpen:false,
+    confidence:1, flags:[],
+    keepSource:{ file: STATE.doc ? STATE.doc.fileName : null, pages:[], rawText:'(manual item — created in review)', photoRefs:[], manual:true }
+  };
+  const at = Math.max(0, Math.min(atIndex, STATE.drafts.length));
+  STATE.drafts.splice(at, 0, nd);
+  reRender();
+  const el = document.querySelector('.draft[data-draft="'+at+'"]');
+  if(el){ el.scrollIntoView({ block:'center' }); const nm = el.querySelector('[data-f="name"]'); if(nm) nm.focus(); }
+}
+
+/* ---- photo download ---- */
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.style.display = 'none';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); }, 1500);
+}
+function slugName(s){ return String(s||'').trim().replace(/[^\w]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24); }
+function photoFilename(d, di, photo){
+  let item = 'Item-' + String(di+1).padStart(2,'0');
+  const nm = slugName(d.name);
+  if(nm && !/^Untitled/i.test(d.name.trim())) item += '-' + nm;
+  const sameRole = d.photos.filter(p=>p.role===photo.role);
+  const roleCap = photo.role.charAt(0).toUpperCase()+photo.role.slice(1);
+  const role = sameRole.length > 1 ? roleCap+'-'+String(sameRole.indexOf(photo)+1).padStart(2,'0') : roleCap;
+  const src = photo.keep===false ? 'Manual' : ('Page-'+photo.sourcePage);
+  return ['Keep', item, role, src].join('_') + '.jpg';
+}
+function downloadPhoto(di, pi){
+  const d = STATE.drafts[di], p = d && d.photos[pi]; if(!p) return;
+  downloadBlob(p.blob, photoFilename(d, di, p));
+}
+async function downloadAllItemPhotos(di){
+  const d = STATE.drafts[di]; if(!d || !d.photos.length){ toast('No photos'); return; }
+  toast('Downloading '+d.photos.length+' photo'+(d.photos.length>1?'s':'')+'…');
+  for(const p of d.photos){
+    downloadBlob(p.blob, photoFilename(d, di, p));
+    await new Promise(r=>setTimeout(r, 400));   // stagger so the browser accepts each save
+  }
+}
+
+/* ============================================================
+   11 · Approve  →  write to vista_tpb
+   ============================================================ */
+function toMM(v, unit){
+  if(v == null || v === '' || isNaN(v)) return '';
+  const n = parseFloat(v);
+  if(unit === 'mm') return String(Math.round(n));
+  if(unit === 'cm') return String(Math.round(n*10));
+  if(unit === 'm')  return String(Math.round(n*1000));
+  return String(n);
+}
+function blankItem(){
+  return { presets:{}, clientInputs:[],
+    status:{ design:'pending', sample:'na', production:'not_started', designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
+    ar:{ name:'', locationRef:'', scope:'', site:'', technical:'', criticalInstaller:'', clientInputs:{} } };
+}
+async function approveImport(targetId, newName){
+  const chosen = STATE.drafts.filter(x=>x.selected);
+  if(!chosen.length){ toast('Nothing selected'); return; }
+
+  let project;
+  if(targetId === '__new'){
+    const t = now();
+    project = { id: uid(), name: newName || 'Imported from Keep', client:'', location:'', revision:'R1',
+      descriptor:'', preparedBy:'', dateOfIssue:'', docRef:'', createdAt:t, updatedAt:t, items:[] };
+  } else {
+    project = await dbGet('projects', targetId);
+    if(!project){ toast('Project not found'); return; }
+  }
+  if(!Array.isArray(project.items)) project.items = [];
+
+  for(const x of chosen){
+    // deep-clone presets so the stored item is independent of the review state
+    const presets = JSON.parse(JSON.stringify(x.presets || {}));
+    const it = Object.assign(blankItem(), {
+      id: uid(),
+      number: String(project.items.length + 1).padStart(2,'0'),
+      name: x.name || 'Untitled item',
+      locationRef: '',
+      qty: { value: (parseInt(x.qty,10) || 1), unit: x.qtyUnit || 'no.' },
+      dims: { w: toMM(x.dims.w, x.dims.unit), h: toMM(x.dims.h, x.dims.unit), d: toMM(x.dims.d, x.dims.unit),
+              mountingHeight:'', projection:'' },
+      photoIds: {},
+      referencePhotoIds: [],
+      presets,
+      status: JSON.parse(JSON.stringify(x.status)),
+      clientInputs: (x.clientInputs||[]).filter(r=>has(r.text)).map(r=>({ priority:r.priority||'required', text:r.text })),
+      notes: { scope:'', site: x.notesText || '', technical:'', criticalInstaller:'' },
+      keepSource: {
+        file: x.keepSource.file,
+        manual: !!x.manual,
+        pages: x.keepSource.pages,
+        rawText: x.keepSource.rawText,
+        dimsRaw: x.dims.raw,
+        dimsExtra: x.dims.extra || [],
+        unit: x.dims.unit,
+        unitConfirmed: !!(x.dims.unitExplicit || x._unitTouched),
+        photoRefs: x.photos.map(p=>({ page:p.sourcePage, order:p.order, role:p.role, added:p.keep===false }))
+      },
+      importFlags: x.flags,
+      createdAt: now(), updatedAt: now()
+    });
+
+    for(const p of x.photos){
+      const pid = uid();
+      const primary = (p.role==='existing'||p.role==='simulation'||p.role==='sample');
+      await dbPut('photos', { id: pid, projectId: project.id, itemId: it.id,
+        slot: primary ? p.role : 'reference',
+        blob: p.blob, mime:'image/jpeg', w:p.w, h:p.h, bytes:p.blob.size, createdAt: now(),
+        keepPage: p.sourcePage });
+      if(primary) it.photoIds[p.role] = pid;
+      else it.referencePhotoIds.push(pid);
+    }
+    project.items.push(it);
+  }
+  project.updatedAt = now();
+  await dbPut('projects', project);
+
+  shell('<div class="card"><div class="banner ok"><b>'+chosen.length+' item'+(chosen.length>1?'s':'')+' imported</b> into “'+esc(project.name)+'”. They are now editable in the Technical Proposal dashboard like any other draft item.</div>'
+    + '<div class="hint">keepSource (filename, page numbers, original raw text, photo/page references) is stored on every imported item. Reference photos are kept on the item and will surface in the dashboard later.</div>'
+    + '<div class="row mt14"><button class="btn btn-ghost" data-back-upload>Import another PDF</button></div></div>');
+  document.querySelectorAll('.approvebar').forEach(b=>b.remove());
+}
+
+/* ============================================================
+   12 · Pipeline entry
+   ============================================================ */
+async function runImport(file){
+  renderProcessing('Reading ' + file.name + ' …');
+  const buf = await file.arrayBuffer();
+  let doc;
+  try{
+    doc = await extractDocument(buf, file.name, (p,N)=> renderProcessing('Extracting page ' + p + ' of ' + N + ' …'));
+  }catch(e){
+    shell('<div class="card"><div class="banner stop"><b>Could not read this PDF.</b> '+esc(String(e && e.message || e))+'</div>'
+      + '<button class="btn btn-ghost mt10" data-back-upload>Back</button></div>');
+    return;
+  }
+  const groups = segment(doc);
+  const drafts = groups
+    .filter(g=> g.photos.length || g.bodyLines.some(has) || g.titleText)
+    .map((g,i)=> groupToDraft(g, doc.fileName, i));
+  STATE.doc = doc;
+  STATE.drafts = drafts;
+  try{ STATE.projects = (await dbGetAll('projects')).sort((a,b)=>b.updatedAt-a.updatedAt); }catch(e){ STATE.projects = []; }
+  STATE.view = 'review';
+  renderReview();
+  console.log('[keep-import] pages', doc.pageCount, 'drafts', drafts.length,
+    'photos', drafts.reduce((a,x)=>a+x.photos.length,0), 'errors', doc.errors.length);
+  window.__keepImport = { doc, drafts };
+}
+
+/* ============================================================
+   12b · Lightbox
+   ============================================================ */
+function openLightbox(di, pi){ STATE.lb = { di, pi }; renderLightbox(); }
+function closeLightbox(){ STATE.lb = null; $('#lb-root').innerHTML = ''; }
+function lbStep(delta){
+  if(!STATE.lb) return;
+  const d = STATE.drafts[STATE.lb.di]; if(!d) return closeLightbox();
+  STATE.lb.pi = (STATE.lb.pi + delta + d.photos.length) % d.photos.length;
+  renderLightbox();
+}
+function renderLightbox(){
+  const root = $('#lb-root');
+  if(!STATE.lb){ root.innerHTML=''; return; }
+  const d = STATE.drafts[STATE.lb.di]; const p = d && d.photos[STATE.lb.pi];
+  if(!p){ closeLightbox(); return; }
+  const n = d.photos.length;
+  root.innerHTML = '<div class="lightbox" data-lb>'
+    + '<div class="lbtop">'
+    +   '<span class="role">'+ROLE_LABEL[p.role]+'</span>'
+    +   '<span>'+(p.keep===false ? 'Added photo' : 'Keep source — page '+p.sourcePage)+' · '+(STATE.lb.pi+1)+' / '+n+'</span>'
+    +   '<span>'+esc(d.name||'')+'</span>'
+    +   '<span class="grow"></span>'
+    +   '<button data-lbclose>Close ✕</button>'
+    + '</div>'
+    + '<div class="lbstage">'
+    +   (n>1 ? '<button class="nav prev" data-lbprev>‹</button>' : '')
+    +   '<img src="'+p.url+'" alt="">'
+    +   (n>1 ? '<button class="nav next" data-lbnext>›</button>' : '')
+    + '</div></div>';
+}
+
+/* ============================================================
+   13 · Events
+   ============================================================ */
+let PHOTO_TARGET = null;   // { di, role }
+function sheetMenu(title, actions){
+  return new Promise(res=>{
+    const o = document.createElement('div'); o.className='sheetmenu';
+    o.innerHTML = '<div class="inner">'+(title?'<div class="mtitle">'+esc(title)+'</div>':'')
+      + actions.map((a,i)=>'<button data-i="'+i+'" class="'+(a.danger?'danger':'')+'">'+esc(a.label)+'</button>').join('')+'</div>';
+    o.addEventListener('click', e=>{
+      if(e.target===o){ o.remove(); res(null); return; }
+      const b = e.target.closest('[data-i]'); if(b){ o.remove(); res(actions[+b.dataset.i]); }
+    });
+    document.body.appendChild(o);
+  });
+}
+
+document.addEventListener('click', async e=>{
+  const t = e.target;
+
+  // lightbox
+  if(t.closest('[data-lbclose]')){ closeLightbox(); return; }
+  if(t.closest('[data-lbprev]')){ lbStep(-1); return; }
+  if(t.closest('[data-lbnext]')){ lbStep(1); return; }
+  if(t.closest('[data-lb]') && !t.closest('.lbtop') && !t.closest('.lbstage img') && !t.closest('.nav')){ closeLightbox(); return; }
+  const zi = t.closest('[data-zoom]');
+  if(zi){ openLightbox(+zi.dataset.d, +zi.dataset.p); return; }
+
+  const ni = t.closest('[data-newitem]');
+  if(ni){ newManualDraft(+ni.dataset.newitem); return; }
+  const mv = t.closest('[data-move]');
+  if(mv){ moveDraft(+mv.dataset.move, +mv.dataset.dir); return; }
+  const dla = t.closest('[data-dlall]');
+  if(dla){ downloadAllItemPhotos(+dla.dataset.dlall); return; }
+
+  if(t.closest('[data-choose]') || t.closest('[data-back-upload]')){
+    if(t.closest('[data-back-upload]')){ document.querySelectorAll('.approvebar').forEach(b=>b.remove()); renderUpload(); }
+    $('#pick').value=''; $('#pick').click(); return;
+  }
+
+  // add photo (card button or sample-photo button)
+  const ap = t.closest('[data-addphoto]');
+  if(ap){ PHOTO_TARGET = { di:+ap.dataset.d, role: ap.dataset.role || null };
+    $('#photopick').value=''; $('#photopick').click(); return; }
+
+  const pm = t.closest('[data-pmenu]');
+  if(pm){
+    const di = +pm.dataset.d, pi = +pm.dataset.p;
+    const ph = STATE.drafts[di].photos[pi];
+    const others = STATE.drafts.map((d,idx)=>({d,idx})).filter(o=>o.idx!==di);
+    const acts = [
+      { label:'Download Photo', v:['download'] },
+      { label:'Set as Existing', v:['role','existing'] },
+      { label:'Set as Simulation / Proposed', v:['role','simulation'] },
+      { label:'Set as Sample', v:['role','sample'] },
+      { label:'Keep as Reference', v:['role','reference'] },
+      { label:'Split — new item from here', v:['split'] },
+      ...others.slice(0,10).map(o=>({ label:'Move to → '+(o.d.name || (o.d.manual?'Manual item '+(o.idx+1):'item '+(o.idx+1))), v:['move',o.idx] })),
+      { label:'Remove from draft', v:['remove'], danger:true },
+    ];
+    const a = await sheetMenu('Photo — '+(ph.keep===false?'added':'page '+ph.sourcePage), acts);
+    if(!a) return;
+    if(a.v[0]==='download') downloadPhoto(di, pi);
+    else if(a.v[0]==='role') setPhotoRole(di, pi, a.v[1]);
+    else if(a.v[0]==='move') movePhoto(di, pi, a.v[1]);
+    else if(a.v[0]==='split') splitDraft(di, pi);
+    else if(a.v[0]==='remove') removePhoto(di, pi);
+    return;
+  }
+
+  const mg = t.closest('[data-merge]');
+  if(mg){ mergeDraft(+mg.dataset.merge, +mg.dataset.dir); return; }
+
+  const sm = t.closest('[data-splitmenu]');
+  if(sm){
+    const di = +sm.dataset.splitmenu; const x = STATE.drafts[di];
+    if(x.photos.length < 2){ toast('Needs 2+ photos to split'); return; }
+    const a = await sheetMenu('Split “'+(x.name||'item')+'” before photo…',
+      x.photos.slice(1).map((p,k)=>({ label:'Photo '+(k+2)+' ('+(p.keep===false?'added':'page '+p.sourcePage)+')', v:k+1 })));
+    if(a) splitDraft(di, a.v);
+    return;
+  }
+
+  const dc = t.closest('[data-discard]');
+  if(dc){ discardDraft(+dc.dataset.discard); return; }
+
+  // --- preset chips ---
+  const chip = t.closest('[data-chip], [data-chipsub]');
+  if(chip){
+    const di = +chip.dataset.d, gkey = chip.dataset.g, opt = chip.dataset.o;
+    const x = STATE.drafts[di]; const store = pgv(x, gkey);
+    const parentGrp = PRESET_GROUPS.find(g=>g.key===gkey) || {};
+    const idx = store.values.indexOf(opt);
+    if(idx>=0) store.values.splice(idx,1);
+    else if((parentGrp.exclusive||[]).includes(opt)) store.values=[opt];
+    else { store.values = store.values.filter(v=>!(parentGrp.exclusive||[]).includes(v)); store.values.push(opt); }
+    if(parentGrp.key) pruneHidden(x, parentGrp);
+    x.confidence = scoreConfidence(x); reRenderCard(di); return;
+  }
+  const co = t.closest('[data-chipother]');
+  if(co){
+    const di = +co.dataset.d, gkey = co.dataset.g, x = STATE.drafts[di];
+    const k = gkey+'@'+x.id;
+    if(STATE.otherOpen.has(k)){ STATE.otherOpen.delete(k); pgv(x,gkey).other=''; }
+    else STATE.otherOpen.add(k);
+    reRenderCard(di); return;
+  }
+  // --- status segmented ---
+  const seg = t.closest('[data-seg] button');
+  if(seg){
+    const box = seg.closest('[data-seg]'); const di = +box.dataset.d, name = box.dataset.seg, x = STATE.drafts[di];
+    x.status[name] = seg.dataset.v;
+    x.confidence = scoreConfidence(x); reRenderCard(di); return;
+  }
+  // --- client inputs ---
+  const ciAdd = t.closest('[data-ciadd]');
+  if(ciAdd){ const di = +ciAdd.dataset.d; STATE.drafts[di].clientInputs.push({ priority:'required', text:'' }); reRenderCard(di);
+    const f = document.querySelectorAll('.draft[data-draft="'+di+'"] [data-citext]'); if(f.length) f[f.length-1].focus(); return; }
+  const ciDel = t.closest('[data-cidel]');
+  if(ciDel){ const di = +ciDel.dataset.d; STATE.drafts[di].clientInputs.splice(+ciDel.dataset.ri,1); reRenderCard(di); return; }
+  const ciP = t.closest('[data-ciprio] button');
+  if(ciP){ const box = ciP.closest('[data-ciprio]');
+    STATE.drafts[+box.dataset.d].clientInputs[+box.dataset.ri].priority = ciP.dataset.v; reRenderCard(+box.dataset.d); return; }
+
+  if(t.closest('[data-approve]')){
+    const sel = $('#approve-target').value;
+    const nn = ($('#approve-newname')||{}).value || '';
+    if(sel==='__new' && !nn.trim()){ toast('Enter a project name'); $('#approve-newname').focus(); return; }
+    await approveImport(sel, nn.trim());
+    return;
+  }
+});
+
+// remember Proposal Details open/closed per draft; build the body lazily on first open
+let _pdBusy = false;
+document.addEventListener('toggle', e=>{
+  const d = e.target && e.target.matches && e.target.matches('details[data-pd]') ? e.target : null;
+  if(!d || _pdBusy) return;
+  const i = +d.dataset.pd, x = STATE.drafts[i]; if(!x) return;
+  const was = x.detailsOpen;
+  x.detailsOpen = d.open;
+  if(d.open && !was){ _pdBusy = true; reRenderCard(i); _pdBusy = false; }
+}, true);
+
+document.addEventListener('keydown', e=>{
+  if(!STATE.lb) return;
+  if(e.key==='Escape') closeLightbox();
+  else if(e.key==='ArrowLeft') lbStep(-1);
+  else if(e.key==='ArrowRight') lbStep(1);
+});
+
+document.addEventListener('input', e=>{
+  const t = e.target;
+  if(t.dataset.pp != null && t.dataset.d != null){ setPresetPath(+t.dataset.d, t.dataset.pp, t.value); return; }
+  if(t.dataset.f != null && t.dataset.d != null){
+    setField(+t.dataset.d, t.dataset.f, t.value);
+    if(t.dataset.f==='unit') reRenderCard(+t.dataset.d);
+    return;
+  }
+  if(t.dataset.citext != null){
+    STATE.drafts[+t.dataset.d].clientInputs[+t.dataset.ri].text = t.value; return;
+  }
+});
+document.addEventListener('change', e=>{
+  const t = e.target;
+  if(t.dataset.sel != null){ STATE.drafts[+t.dataset.sel].selected = t.checked;
+    const c = document.querySelector('.approvebar .count'); if(c) c.innerHTML = '<b>'+STATE.drafts.filter(x=>x.selected).length+'</b> of '+STATE.drafts.length+' selected';
+    return; }
+  if(t.dataset.f === 'unit'){ setField(+t.dataset.d, 'unit', t.value); reRenderCard(+t.dataset.d); return; }
+  if(t.dataset.f === 'qtyUnit'){ setField(+t.dataset.d, 'qtyUnit', t.value); return; }
+  if(t.id === 'approve-target'){
+    const nn = $('#approve-newname'); if(nn) nn.style.display = t.value==='__new' ? 'block' : 'none';
+    return;
+  }
+});
+$('#photopick').addEventListener('change', async e=>{
+  const f = e.target.files && e.target.files[0];
+  if(f && PHOTO_TARGET){ await addPhotoToDraft(PHOTO_TARGET.di, f, PHOTO_TARGET.role); }
+  PHOTO_TARGET = null; e.target.value='';
+});
+
+// drag & drop
+document.addEventListener('dragover', e=>{ e.preventDefault(); const d=$('#drop'); if(d) d.classList.add('hot'); });
+document.addEventListener('dragleave', e=>{ const d=$('#drop'); if(d) d.classList.remove('hot'); });
+document.addEventListener('drop', e=>{
+  e.preventDefault(); const d=$('#drop'); if(d) d.classList.remove('hot');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(f && f.type==='application/pdf') runImport(f);
+});
+$('#pick').addEventListener('change', e=>{
+  const f = e.target.files && e.target.files[0];
+  if(f) runImport(f);
+});
+
+/* ============================================================
+   14 · Init
+   ============================================================ */
+renderUpload();
+</script>
+</body>
+</html>
