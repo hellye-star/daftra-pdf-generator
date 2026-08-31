@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Vista United — Technical Proposal Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     Vista United — Technical Proposal Builder · Dashboard (Milestone 1)
+     Data entry only. Persistence: IndexedDB. Render template (PDF) is
+     the SEPARATE approved file and is not touched here.
+     Brand: Deep Emerald #1A5C46 · Forest #0E3D2E · Warm Gold #B8A47C
+            Warm Cream #FAF8F4 · Inter (UI) · Playfair Display (headings)
+     ============================================================ */
+  :root{
+    --paper:#FFFFFF; --cream:#FAF8F4; --cream-2:#FBF9F6; --cream-edge:#ECE5D8;
+    --emerald:#1A5C46; --emerald-soft:#3A7A62; --emerald-wash:#EEF4F0; --forest:#0E3D2E;
+    --gold:#B8A47C; --gold-ink:#8C7643; --gold-wash:#F7F1E6;
+    --ink:#1E1E1B; --grey:#5A5A54; --grey-soft:#8A897F; --faint:#B6B4AA;
+    --rule:#E3E1D9; --rule-strong:#CBC8BE;
+    --stop:#9C3A34; --stop-wash:#F6EAE8; --amber:#8A5E1E; --amber-wash:#F7F0E1;
+    --r:11px;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; }
+  body{
+    font-family:'Inter','Helvetica Neue',Arial,sans-serif; color:var(--ink);
+    background:var(--cream-2); line-height:1.45; font-size:14px;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  button{ font:inherit; cursor:pointer; color:inherit; }
+  input,textarea,select{
+    font:inherit; width:100%; border:1px solid var(--rule-strong); border-radius:8px;
+    padding:9px 10px; background:var(--paper); color:var(--ink); outline:none;
+  }
+  input:focus,textarea:focus,select:focus{ border-color:var(--emerald); }
+  textarea{ resize:vertical; min-height:58px; line-height:1.5; }
+  ::placeholder{ color:var(--faint); }
+  a{ color:var(--emerald); }
+
+  /* ---------- app frame ---------- */
+  .appbar{
+    position:sticky; top:0; z-index:30; background:var(--paper);
+    border-bottom:1px solid var(--emerald);
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    padding-top:calc(10px + env(safe-area-inset-top));
+  }
+  .appbar .mark{ width:20px; height:20px; flex:0 0 auto; }
+  .appbar .mark svg{ width:100%; height:100%; display:block; }
+  .appbar .back{
+    border:1px solid var(--rule-strong); background:var(--paper); border-radius:8px;
+    padding:6px 10px; font-size:13px; color:var(--emerald); font-weight:600; flex:0 0 auto;
+  }
+  .appbar .title{
+    font-family:'Playfair Display',Georgia,serif; font-weight:600; font-size:16px;
+    color:var(--emerald); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .appbar .save{ font-size:11px; color:var(--grey-soft); flex:0 0 auto; letter-spacing:.02em; min-width:56px; text-align:right; }
+  .appbar .save.on{ color:var(--emerald-soft); }
+  .appbar .menu{
+    border:1px solid var(--rule-strong); background:var(--paper); border-radius:8px;
+    width:34px; height:32px; font-size:16px; color:var(--grey); flex:0 0 auto;
+  }
+  .wrap{ max-width:780px; margin:0 auto; padding:14px 12px 130px; }
+
+  h2.screen{ font-family:'Playfair Display',Georgia,serif; font-weight:600; color:var(--emerald); font-size:20px; margin:2px 2px 12px; }
+
+  /* ---------- card ---------- */
+  .card{ background:var(--paper); border:1px solid var(--rule); border-radius:var(--r); padding:13px; margin-bottom:11px; }
+  .card > .eyebrow{
+    font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--gold-ink);
+    display:flex; align-items:center; gap:8px; margin-bottom:10px;
+  }
+  .card > .eyebrow .rt{ margin-left:auto; font-weight:600; letter-spacing:.04em; color:var(--grey-soft); text-transform:none; font-size:10px; }
+  .card.collapsed > .body{ display:none; }
+  .card > .eyebrow.tog{ cursor:pointer; }
+  .card > .eyebrow.tog::after{ content:"–"; margin-left:8px; color:var(--faint); font-weight:400; }
+  .card.collapsed > .eyebrow.tog::after{ content:"+"; }
+
+  .field{ margin-bottom:10px; }
+  .field:last-child{ margin-bottom:0; }
+  .field > label{ display:block; font-size:10px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--gold-ink); margin-bottom:4px; }
+  .row{ display:flex; gap:9px; }
+  .row > *{ flex:1; min-width:0; }
+  .mt6{ margin-top:7px; } .mt10{ margin-top:10px; }
+  .hint{ font-size:11px; color:var(--grey-soft); margin-top:3px; }
+  .muted{ color:var(--grey-soft); }
+
+  /* ---------- buttons ---------- */
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    border-radius:9px; padding:11px 16px; font-weight:600; font-size:14px; border:1px solid transparent; }
+  .btn-primary{ background:var(--emerald); color:#fff; }
+  .btn-ghost{ background:var(--paper); border-color:var(--emerald); color:var(--emerald); }
+  .btn-sm{ padding:8px 12px; font-size:12.5px; border-radius:8px; }
+  .btn.full{ width:100%; }
+  .linkbtn{ background:none; border:0; color:var(--emerald); font-weight:600; font-size:13px; text-decoration:underline; padding:6px 2px; }
+
+  .bottombar{
+    position:fixed; left:0; right:0; bottom:0; z-index:30; background:var(--paper);
+    border-top:1px solid var(--rule); display:flex; gap:9px;
+    padding:10px 12px; padding-bottom:calc(10px + env(safe-area-inset-bottom));
+  }
+  .bottombar .btn{ flex:1; }
+
+  /* ---------- projects list ---------- */
+  .plist{ display:flex; flex-direction:column; gap:9px; }
+  .pcard{ background:var(--paper); border:1px solid var(--rule); border-radius:var(--r); padding:13px; display:flex; align-items:flex-start; gap:10px; }
+  .pcard .pmain{ flex:1; min-width:0; }
+  .pcard .pn{ font-family:'Playfair Display',Georgia,serif; font-weight:600; font-size:16px; color:var(--forest); }
+  .pcard .psub{ font-size:12px; color:var(--grey); margin-top:2px; }
+  .pcard .pmeta{ font-size:11px; color:var(--grey-soft); margin-top:6px; display:flex; gap:10px; flex-wrap:wrap; }
+  .pcard .revb{ font-size:10px; font-weight:700; color:var(--gold-ink); background:var(--gold-wash); border:1px solid var(--cream-edge); padding:2px 7px; border-radius:5px; letter-spacing:.05em; }
+  .emptyish{ text-align:center; padding:40px 16px; color:var(--grey-soft); }
+  .emptyish .big{ font-family:'Playfair Display',Georgia,serif; font-size:20px; color:var(--emerald); margin-bottom:6px; }
+
+  /* ---------- item list (overview) ---------- */
+  .itemrow{ display:flex; flex-wrap:wrap; gap:8px 9px; align-items:center; background:var(--paper); border:1px solid var(--rule);
+    border-radius:10px; padding:9px 10px; margin-bottom:8px; }
+  .itemrow .irtap{ display:flex; gap:9px; align-items:center; flex:1 1 150px; min-width:0; }
+  .itemrow .thumb{ width:46px; height:36px; border-radius:6px; object-fit:cover; background:var(--cream); border:1px solid var(--rule); flex:0 0 auto; }
+  .itemrow .thumb.empty{ display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--faint); }
+  .itemrow .imain{ flex:1 1 auto; min-width:0; }
+  .itemrow .inum{ font-family:'Playfair Display',Georgia,serif; font-weight:700; color:var(--gold-ink); font-size:12px; }
+  .itemrow .inm{ font-weight:600; color:var(--forest); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+  .itemrow .isub{ font-size:11px; color:var(--grey-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .itemrow .flags{ display:flex; gap:5px; align-items:center; flex-wrap:wrap; flex:1 1 100%; margin-top:2px; order:3; }
+  .sc{ font-size:8.5px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; padding:2px 5px; border-radius:4px; white-space:nowrap; }
+  .sc.g{ background:var(--emerald); color:#fff; } .sc.gw{ background:var(--emerald-wash); color:var(--emerald); }
+  .sc.p{ background:var(--cream); color:var(--grey); border:1px solid var(--cream-edge); }
+  .sc.r{ background:var(--stop-wash); color:var(--stop); } .sc.a{ background:var(--gold-wash); color:var(--gold-ink); }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .dot.urgent{ background:var(--stop); } .dot.sample{ background:var(--amber); }
+  .itemrow .ord{ display:flex; gap:4px; flex:0 0 auto; }
+  .itemrow .ord button, .itemrow .rowmenu{ width:30px; height:30px; border:1px solid var(--rule-strong); background:var(--paper); border-radius:6px; font-size:12px; color:var(--grey); line-height:1; }
+  .itemrow .ord button:disabled{ opacity:.35; }
+
+  /* ---------- chips / segmented ---------- */
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ display:inline-flex; align-items:center; min-height:34px; padding:5px 11px; border-radius:18px;
+    border:1px solid var(--rule-strong); background:var(--paper); color:var(--ink); font-size:12.5px; }
+  .chip.on{ background:var(--emerald); border-color:var(--emerald); color:#fff; font-weight:600; }
+  .chip.other{ border-style:dashed; color:var(--gold-ink); }
+  .chip.other.on{ background:var(--gold-ink); border-color:var(--gold-ink); color:#fff; border-style:solid; }
+  .chip.sub{ min-height:30px; font-size:12px; padding:4px 10px; }
+  .subgroup{ margin-top:9px; padding:9px 10px; background:var(--emerald-wash); border-radius:8px; }
+  .subgroup .sglabel{ font-size:9.5px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--emerald); margin-bottom:6px; }
+
+  .pgroup{ padding:11px 0; border-bottom:1px solid var(--rule); }
+  .pgroup:first-child{ padding-top:2px; } .pgroup:last-child{ border-bottom:0; padding-bottom:2px; }
+  .pgroup .pglabel{ font-size:10px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--gold-ink); margin-bottom:7px; display:flex; gap:8px; align-items:baseline; }
+  .pgroup .pgsumm{ font-size:11px; color:var(--emerald); font-weight:500; margin-left:auto; text-align:right; max-width:60%; text-transform:none; letter-spacing:0; }
+
+  .seg{ display:flex; border:1px solid var(--rule-strong); border-radius:8px; overflow:hidden; }
+  .seg button{ flex:1; min-height:40px; background:var(--paper); border:0; border-right:1px solid var(--rule);
+    font-size:11.5px; color:var(--grey); padding:4px 5px; font-weight:500; }
+  .seg button:last-child{ border-right:0; }
+  .seg button.on{ background:var(--emerald); color:#fff; font-weight:700; }
+  .seg.warn button.on{ background:var(--stop); }
+  .seg.small button{ min-height:34px; font-size:11px; }
+
+  /* ---------- photos ---------- */
+  .photogrid{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .photoslot{ position:relative; border:1.5px dashed var(--rule-strong); border-radius:10px; background:var(--cream);
+    aspect-ratio:4/3; overflow:hidden; display:flex; align-items:center; justify-content:center; text-align:center; width:100%; }
+  .photoslot.primary{ grid-column:1 / -1; aspect-ratio:16/9; border-color:var(--emerald); background:var(--emerald-wash); margin-bottom:9px; }
+  .photoslot.filled{ border-style:solid; border-color:var(--rule-strong); background:var(--cream); }
+  .photoslot img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .photoslot .ph-label{ padding:12px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--emerald); }
+  .photoslot .ph-label small{ display:block; font-weight:500; letter-spacing:.02em; text-transform:none; color:var(--grey-soft); margin-top:4px; font-size:10.5px; }
+  .photoslot .ph-label .cam{ font-size:20px; }
+  .photoslot .ph-tag{ position:absolute; left:6px; bottom:6px; background:rgba(255,255,255,.92); color:var(--forest);
+    font-size:8.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:3px 6px; border-radius:4px; }
+  .photoslot .ph-actions{ position:absolute; right:6px; top:6px; display:flex; gap:5px; }
+  .photoslot .ph-actions button{ background:rgba(255,255,255,.94); border:1px solid var(--rule-strong); border-radius:6px;
+    font-size:10.5px; font-weight:600; color:var(--forest); padding:4px 7px; }
+  .photoslot .ph-actions button.del{ color:var(--stop); }
+  .photoslot .ph-size{ position:absolute; right:6px; bottom:6px; background:rgba(255,255,255,.9); color:var(--grey-soft);
+    font-size:8.5px; padding:2px 5px; border-radius:4px; }
+
+  /* ---------- client inputs ---------- */
+  .cirow{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-bottom:10px;
+    border:1px solid var(--rule); border-radius:9px; padding:8px; }
+  .cirow .seg{ flex:1 1 170px; }
+  .cirow .seg button{ min-height:36px; font-size:10.5px; }
+  .cirow .seg.u button.on{ background:var(--stop); }
+  .cirow .seg.q button.on{ background:var(--gold-ink); }
+  .cirow input{ flex:1 1 100%; order:3; }
+  .cirow .del{ flex:0 0 auto; width:34px; height:34px; border:1px solid var(--rule-strong); background:var(--paper); border-radius:7px; color:var(--stop); font-size:13px; }
+  @media (min-width:620px){
+    .cirow{ flex-wrap:nowrap; border:0; padding:0; }
+    .cirow .seg{ flex:0 0 190px; }
+    .cirow input{ flex:1 1 auto; order:0; }
+  }
+
+  /* ---------- overlays ---------- */
+  .overlay{ position:fixed; inset:0; z-index:60; background:rgba(14,26,20,.66); display:flex; align-items:center; justify-content:center; padding:18px; }
+  .lightbox img{ max-width:100%; max-height:82vh; border-radius:8px; display:block; }
+  .lightbox .x{ position:absolute; top:14px; right:16px; background:#fff; border:0; border-radius:8px; padding:8px 12px; font-weight:700; }
+  .dialog{ background:var(--paper); border-radius:12px; padding:18px; max-width:340px; width:100%; }
+  .dialog h3{ font-family:'Playfair Display',serif; color:var(--emerald); font-size:17px; margin-bottom:6px; }
+  .dialog p{ font-size:13px; color:var(--grey); margin-bottom:14px; }
+  .dialog .acts{ display:flex; gap:9px; } .dialog .acts .btn{ flex:1; }
+  .btn-danger{ background:var(--stop); color:#fff; }
+
+  .toast{ position:fixed; left:50%; bottom:88px; transform:translateX(-50%); z-index:70;
+    background:var(--forest); color:#fff; font-size:12.5px; font-weight:500; padding:9px 15px; border-radius:20px;
+    opacity:0; transition:opacity .18s; pointer-events:none; }
+  .toast.show{ opacity:1; }
+
+  .banner{ background:var(--stop-wash); border:1px solid #E0C4C1; color:var(--stop); font-size:12px; border-radius:9px; padding:9px 11px; margin-bottom:11px; }
+
+  .sheetmenu{ position:fixed; inset:0; z-index:60; background:rgba(14,26,20,.4); display:flex; align-items:flex-end; }
+  .sheetmenu .inner{ background:var(--paper); width:100%; border-radius:14px 14px 0 0; padding:8px 8px calc(14px + env(safe-area-inset-bottom)); }
+  .sheetmenu button{ display:block; width:100%; text-align:left; background:none; border:0; padding:14px 12px; font-size:14.5px; border-bottom:1px solid var(--rule); }
+  .sheetmenu button:last-child{ border-bottom:0; }
+  .sheetmenu button.danger{ color:var(--stop); font-weight:600; }
+
+  @media (min-width:560px){
+    .cirow .seg{ flex:0 0 190px; }
+  }
+  /* ---------- export / preview ---------- */
+  .expv{ border:1px solid var(--rule-strong); border-radius:9px; overflow:hidden; background:#DDDBD5; }
+  .expv iframe{ width:100%; height:68vh; min-height:420px; border:0; display:block; background:#DDDBD5; }
+  .expitem{ display:flex; align-items:center; gap:9px; padding:8px 2px; border-bottom:1px solid var(--rule); font-size:13px; }
+  .expitem:last-child{ border-bottom:0; }
+  .expitem input{ width:16px; height:16px; flex:0 0 auto; }
+  .expitem b{ color:var(--gold-ink); }
+  .expitems{ margin-left:6px; }
+  /* full-height capture mode (?screens=1) */
+  body.capture .bottombar{ position:static; }
+  body.capture .wrap{ padding-bottom:20px; }
+  body.capture .appbar{ position:static; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<input type="file" id="filepick" accept="image/*" hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   0 · Brand mark (genuine Vista "V" — 7 converging strokes)
+   ============================================================ */
+const MARK_SVG = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
+ + ['M25 15 50 85 75 15|1','M28 15 50 79 72 15|.85','M31 15 50 73 69 15|.7','M34 15 50 67 66 15|.55','M37 15 50 61 63 15|.4','M40 15 50 55 60 15|.28','M43 15 50 49 57 15|.18']
+   .map(s=>{const [d,o]=s.split('|');return '<path d="'+d+'" fill="none" stroke="#1A5C46" stroke-width="1.4" opacity="'+o+'"/>';}).join('')
+ + '</svg>';
+
+/* ============================================================
+   1 · Field model — quick-select technical presets
+      Every group also supports "Other + note".
+      `sub` = progressive-disclosure sub-options.  `note` = conditional text field.
+      `exclusive` options clear the rest of the group when picked.
+   ============================================================ */
+const PRESET_GROUPS = [
+  { key:'branding', label:'Branding / Logo', options:[
+      '3D Letters','Raised / 3D Logo','Laser-Cut Logo / Letters','Embossed Logo','Debossed Logo',
+      'Engraving','Laser Engraving','Etched','CNC / Routed Cut','UV Print','Screen Print',
+      'Sticker / Vinyl Branding','Cut Vinyl','Paint Branding'],
+    sub:[ { key:'letterBuild', label:'3D Letter build', showIf:v=>v.includes('3D Letters'),
+            options:['Acrylic','Stainless Steel','Aluminum','Painted Metal','Front Lit','Halo Lit','Non-Illuminated'] } ] },
+
+  { key:'fabrication', label:'Fabrication', options:[
+      'Flat Panel','Box-Up','3D Letters','Folded / Bent Metal','Welded Structure','Acrylic Fabrication','Custom Fabrication'] },
+
+  { key:'material', label:'Main Material', options:[
+      'Acrylic','Aluminum','ACP','Stainless Steel','Galvanized Steel','Mild Steel','PVC / Foam Board','Wood / MDF','Fabric','Glass','Existing Surface'] },
+
+  { key:'finish', label:'Finish', options:[
+      'Painted','Powder Coated','Brushed','Polished','Matte','Gloss','Metallic','Sticker / Wrapped','Laminated'] },
+
+  { key:'existingWork', label:'Existing Work', exclusive:['Keep As Is'], options:[
+      'Keep As Is','Remove Existing','Modify Existing','Replace Branding Only','Reuse Existing Base / Structure','Surface Preparation','Repaint'],
+    note:{ key:'existingWorkNote', label:'Removal / modification detail',
+           showIf:v=>v.some(x=>x!=='Keep As Is') && v.length>0 } },
+
+  { key:'lighting', label:'Lighting', exclusive:['None'], options:[
+      'None','LED','Hidden LED','Halo Lit','Front Lit','Back Lit','Lightbox'],
+    sub:[ { key:'power', label:'Power / Electrical', showIf:v=>v.length>0 && !(v.length===1 && v[0]==='None'),
+            options:['Existing Power','New Power Required','Cabling Required','Driver / Access Required'] } ] },
+
+  { key:'access', label:'Access', exclusive:['Normal'], options:[
+      'Normal','Ladder','Scaffold','Scissor Lift','Boom Lift','Crane'],
+    note:{ key:'accessNote', label:'Access note',
+           showIf:v=>v.some(x=>['Scaffold','Scissor Lift','Boom Lift','Crane'].includes(x)) } },
+
+  { key:'environment', label:'Environment / Protection', options:[
+      'Indoor','Outdoor','Weather Resistant','Waterproof','UV Resistant'] },
+];
+
+const UNITS = ['no.','set','lot','panels','poles','units','m','m²'];
+
+const STATUS = {
+  design:     [['pending','Pending'],['approved','Approved'],['revision_required','Revision Required'],['rejected','Rejected']],
+  sample:     [['na','N/A'],['pending','Pending'],['approved','Approved'],['rejected','Rejected']],
+  production: [['not_started','Not Started'],['ready_for_production','Ready for Production'],['in_production','In Production'],['ready_for_installation','Ready for Installation'],['installed','Installed']],
+};
+const PRIORITY = [['urgent','Urgent'],['required','Required'],['optional','Optional']];
+
+/* ============================================================
+   2 · Arabic dictionary — clean translation hook.
+      Enum / status / preset / unit labels resolve through here.
+      Free-text Arabic overrides live per-item in item.ar.*
+      (No automatic / API translation is wired — deliberate.)
+   ============================================================ */
+const AR = {
+  groups:{ branding:'معالجة الشعار / العلامة', fabrication:'التصنيع', material:'المادة الأساسية', finish:'التشطيب',
+    existingWork:'التعامل مع القائم', lighting:'الإضاءة', access:'الوصول للموقع',
+    environment:'البيئة / الحماية', letterBuild:'تكوين الحروف ثلاثية الأبعاد', power:'الكهرباء / التغذية' },
+  options:{
+    '3D Letters':'حروف ثلاثية الأبعاد','Raised / 3D Logo':'شعار بارز / ثلاثي الأبعاد','Laser-Cut Logo / Letters':'قص ليزر للشعار / الحروف',
+    'Embossed Logo':'شعار مُحدَّب (بارز)','Debossed Logo':'شعار غائر','Engraving':'حفر','Laser Engraving':'حفر ليزر','Etched':'تنميش',
+    'CNC / Routed Cut':'قص CNC / راوتر','UV Print':'طباعة UV','Screen Print':'طباعة سلك سكرين','Sticker / Vinyl Branding':'ستيكر / فينيل',
+    'Cut Vinyl':'فينيل مقصوص','Paint Branding':'دهان',
+    'Flat Panel':'لوحة مسطحة','Box-Up':'بوكس-أب','Folded / Bent Metal':'معدن مطوي / منثني','Welded Structure':'هيكل ملحوم',
+    'Acrylic Fabrication':'تصنيع أكريليك','Custom Fabrication':'تصنيع خاص',
+    'Acrylic':'أكريليك','Aluminum':'ألومنيوم','ACP':'ألوكوبوند (ACP)','Stainless Steel':'ستانلس ستيل','Galvanized Steel':'حديد مجلفن',
+    'Mild Steel':'حديد أسود','PVC / Foam Board':'PVC / فوم بورد','Wood / MDF':'خشب / MDF','Fabric':'قماش','Glass':'زجاج','Existing Surface':'السطح القائم',
+    'Painted':'مدهون','Powder Coated':'دهان إلكتروستاتيك','Brushed':'مصنفر','Polished':'ملمّع','Matte':'مطفي','Gloss':'لامع','Metallic':'ميتاليك',
+    'Sticker / Wrapped':'ستيكر / تغليف','Laminated':'مغلّف (لامينيت)',
+    'Keep As Is':'الإبقاء كما هو','Remove Existing':'إزالة القائم','Modify Existing':'تعديل القائم','Replace Branding Only':'استبدال العلامة فقط',
+    'Reuse Existing Base / Structure':'إعادة استخدام القاعدة / الهيكل القائم','Surface Preparation':'تحضير السطح','Repaint':'إعادة دهان',
+    'None':'بدون','LED':'LED','Hidden LED':'LED مخفي','Halo Lit':'إضاءة هالو (خلفية)','Front Lit':'إضاءة أمامية','Back Lit':'إضاءة خلفية','Lightbox':'صندوق مضيء',
+    'Existing Power':'كهرباء قائمة','New Power Required':'مصدر كهرباء جديد مطلوب','Cabling Required':'تمديد كابلات مطلوب','Driver / Access Required':'محوّل / نقطة صيانة مطلوبة',
+    'Adhesive':'لاصق','Mechanical Screws':'براغي ميكانيكية','Chemical Anchor':'بلوت كيميائي','Steel Frame':'هيكل فولاذي','Wall Mounted':'تركيب على الجدار',
+    'Floor Mounted':'تركيب على الأرض','Freestanding':'قائم بذاته','Hanging / Suspended':'معلّق',
+    'Normal':'عادي','Ladder':'سلّم','Scaffold':'سقالة','Scissor Lift':'رافعة مقصية','Boom Lift':'رافعة ذراع','Crane':'رافعة (كرين)',
+    'Indoor':'داخلي','Outdoor':'خارجي','Weather Resistant':'مقاوم للعوامل الجوية','Waterproof':'مقاوم للماء','UV Resistant':'مقاوم للأشعة فوق البنفسجية',
+    'Painted Metal':'معدن مدهون','Non-Illuminated':'غير مضاء',
+  },
+  status:{ pending:'قيد الانتظار', approved:'معتمد', revision_required:'يتطلب مراجعة', rejected:'مرفوض', na:'لا ينطبق',
+    not_started:'لم يبدأ', ready_for_production:'جاهز للإنتاج', in_production:'قيد الإنتاج', ready_for_installation:'جاهز للتركيب', installed:'تم التركيب' },
+  priority:{ urgent:'عاجل', required:'مطلوب', optional:'اختياري' },
+  units:{ 'no.':'عدد', set:'طقم', lot:'دفعة', panels:'لوح', poles:'عمود', units:'وحدة', m:'م', 'm²':'م²' },
+};
+/** Translation hook. lang: 'en' | 'ar'. Falls back to English. */
+function label(kind, key, lang){
+  if(lang==='ar' && AR[kind] && AR[kind][key]) return AR[kind][key];
+  return key; // english labels are the keys themselves
+}
+
+/* ============================================================
+   3 · IndexedDB — projects + photos (blobs). Used from the start
+      so the PWA milestone needs no storage rewrite.
+   ============================================================ */
+const DB_NAME='vista_tpb', DB_VER=1;
+let _dbp=null;
+function openDB(){
+  if(_dbp) return _dbp;
+  _dbp = new Promise((res,rej)=>{
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = e=>{
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains('projects')) db.createObjectStore('projects',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('photos')){
+        const s = db.createObjectStore('photos',{keyPath:'id'});
+        s.createIndex('by_project','projectId');
+        s.createIndex('by_item','itemId');
+      }
+    };
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>rej(r.error);
+  });
+  return _dbp;
+}
+function reqP(r){ return new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+
+/* Optional volatile store — only for ?screens=1 review captures (no persistence).
+   The shipping app always uses IndexedDB. */
+const MEM = { on:false, projects:new Map(), photos:new Map() };
+function memOut(store,v){
+  if(v==null) return v;
+  if(store==='photos') return v;               // keep Blob reference intact
+  return JSON.parse(JSON.stringify(v));         // detach project docs
+}
+function memIn(store,v){ return store==='photos' ? v : JSON.parse(JSON.stringify(v)); }
+
+async function dbGet(store,key){
+  if(MEM.on) return memOut(store, MEM[store].get(key)) || undefined;
+  const d=await openDB(); return reqP(d.transaction(store).objectStore(store).get(key));
+}
+async function dbGetAll(store){
+  if(MEM.on) return [...MEM[store].values()].map(v=>memOut(store,v));
+  const d=await openDB(); return reqP(d.transaction(store).objectStore(store).getAll());
+}
+async function dbPut(store,val){
+  if(MEM.on){ MEM[store].set(val.id, memIn(store,val)); return val.id; }
+  const d=await openDB(); return reqP(d.transaction(store,'readwrite').objectStore(store).put(val));
+}
+async function dbDel(store,key){
+  if(MEM.on){ MEM[store].delete(key); return; }
+  const d=await openDB(); return reqP(d.transaction(store,'readwrite').objectStore(store).delete(key));
+}
+async function dbIndexAll(store,index,key){
+  if(MEM.on){
+    const f = index==='by_project' ? 'projectId' : 'itemId';
+    return [...MEM[store].values()].filter(r=>r[f]===key).map(v=>memOut(store,v));
+  }
+  const d=await openDB(); return reqP(d.transaction(store).objectStore(store).index(index).getAll(key));
+}
+
+/* ============================================================
+   4 · Model helpers
+   ============================================================ */
+const uid = ()=> Date.now().toString(36) + Math.random().toString(36).slice(2,9);
+const now = ()=> Date.now();
+
+function newProject(){
+  const t=now();
+  return { id:uid(), name:'Untitled Project', client:'', location:'', revision:'R1',
+           descriptor:'', preparedBy:'', dateOfIssue:'', docRef:'',
+           createdAt:t, updatedAt:t, items:[] };
+}
+function newItem(project){
+  const n = project.items.length + 1;
+  return {
+    id:uid(),
+    number: String(n).padStart(2,'0'),
+    name:'', locationRef:'',
+    qty:{ value:1, unit:'no.' },
+    dims:{ w:'', h:'', d:'', mountingHeight:'', projection:'' },
+    photoIds:{},                       // { existing, simulation, sample, after } -> photo id
+    presets:{},                        // presets[groupKey] = {values:[], other:''}; notes stored as presets[noteKey] = ''
+    status:{ design:'pending', sample:'na', production:'not_started',
+             designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
+    clientInputs:[],
+    notes:{ scope:'', site:'', technical:'', criticalInstaller:'' },
+    ar:{ name:'', locationRef:'', scope:'', site:'', technical:'', criticalInstaller:'', clientInputs:{} },
+    createdAt:now(), updatedAt:now()
+  };
+}
+function pg(item,key){ if(!item.presets[key]) item.presets[key]={values:[],other:''}; return item.presets[key]; }
+function renumber(project){ project.items.forEach((it,i)=> it.number=String(i+1).padStart(2,'0')); }
+
+/* forward migration — drop retired preset groups from older stored projects.
+   Non-destructive to everything else; persisted on the next save. */
+const RETIRED_PRESET_KEYS = ['installation'];
+function migrateProject(project){
+  let changed = false;
+  (project.items||[]).forEach(it=>{
+    if(!it.presets) return;
+    for(const k of RETIRED_PRESET_KEYS){
+      if(k in it.presets){ delete it.presets[k]; changed = true; }
+    }
+  });
+  return changed;
+}
+
+async function deleteItemDeep(project, item){
+  const ph = await dbIndexAll('photos','by_item', item.id);
+  for(const p of ph) await dbDel('photos', p.id);
+  project.items = project.items.filter(x=>x.id!==item.id);
+  renumber(project);
+}
+async function deleteProjectDeep(id){
+  const ph = await dbIndexAll('photos','by_project', id);
+  for(const p of ph) await dbDel('photos', p.id);
+  await dbDel('projects', id);
+}
+function duplicateItem(project, item){
+  const clone = JSON.parse(JSON.stringify(item));
+  clone.id = uid();
+  clone.photoIds = {};               // photos are re-shot, not copied
+  clone.name = (item.name || 'Item') + ' (copy)';
+  clone.createdAt = clone.updatedAt = now();
+  const idx = project.items.findIndex(x=>x.id===item.id);
+  project.items.splice(idx+1, 0, clone);
+  renumber(project);
+  return clone;
+}
+
+/* ============================================================
+   5 · Images — resized / compressed client-side before saving.
+      Keeps enough resolution for the A4 technical PDF + the
+      full-width installer simulation page (~2000 px long edge).
+   ============================================================ */
+const IMG_MAX_DIM = 2000;
+const IMG_QUALITY = 0.82;
+async function processImage(file){
+  let bmp;
+  try{ bmp = await createImageBitmap(file, { imageOrientation:'from-image' }); }
+  catch(_){ bmp = await createImageBitmap(file); }
+  const scale = Math.min(1, IMG_MAX_DIM / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width*scale));
+  const h = Math.max(1, Math.round(bmp.height*scale));
+  const c = document.createElement('canvas'); c.width=w; c.height=h;
+  c.getContext('2d').drawImage(bmp,0,0,w,h);
+  if(bmp.close) bmp.close();
+  const blob = await new Promise(r=> c.toBlob(r,'image/jpeg',IMG_QUALITY));
+  return { blob, w, h, bytes:blob.size, mime:'image/jpeg' };
+}
+async function setPhoto(project,item,slot,file){
+  const proc = await processImage(file);
+  const old = item.photoIds && item.photoIds[slot];
+  if(old){ await dbDel('photos', old); }
+  const id = uid();
+  await dbPut('photos', { id, projectId:project.id, itemId:item.id, slot,
+    blob:proc.blob, mime:proc.mime, w:proc.w, h:proc.h, bytes:proc.bytes, createdAt:now() });
+  item.photoIds = item.photoIds || {};
+  item.photoIds[slot] = id;
+  await commitSave();
+}
+async function removePhoto(project,item,slot){
+  const id = item.photoIds && item.photoIds[slot];
+  if(id){ await dbDel('photos', id); delete item.photoIds[slot]; await commitSave(); }
+}
+
+/* placeholder site imagery for the sample project (sync — no async encode) */
+function dataUrlToBlob(u){
+  const [meta,b64]=u.split(','); const mime=(meta.match(/:(.*?);/)||[])[1]||'image/jpeg';
+  const bin=atob(b64); const arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+function makePlaceholder(title, kind){
+  const P = { existing:['#EDEBE6','#8C8B84'], simulation:['#EEF4F0','#1A5C46'],
+              sample:['#FAF6EE','#8C7643'], after:['#FBF9F6','#B6B4AA'] }[kind];
+  const W=1600,H=1000, c=document.createElement('canvas'); c.width=W; c.height=H;
+  const x=c.getContext('2d');
+  x.fillStyle=P[0]; x.fillRect(0,0,W,H);
+  x.strokeStyle=P[1]; x.lineWidth=3; x.strokeRect(46,46,W-92,H-92);
+  // light "gateway" line-art
+  x.globalAlpha=.5;
+  x.strokeRect(360,300,880,120); x.strokeRect(420,420,60,360); x.strokeRect(1120,420,60,360);
+  x.beginPath(); x.moveTo(180,790); x.lineTo(W-180,790); x.stroke();
+  x.globalAlpha=1;
+  x.fillStyle=P[1]; x.textAlign='center';
+  x.font='700 52px Inter, Arial, sans-serif'; x.fillText(title.toUpperCase(), W/2, 560);
+  x.fillStyle='#8A897F'; x.font='500 26px Inter, Arial, sans-serif';
+  x.fillText('PLACEHOLDER — REPLACE WITH REAL SITE PHOTO', W/2, 610);
+  return dataUrlToBlob(c.toDataURL('image/jpeg', 0.85));
+}
+async function seedSampleProject(demo){
+  const p = newProject();
+  if(demo){ p.id = 'demo-project'; }
+  p.name = 'SABIC Riyadh Technical Center';
+  p.client = 'SABIC — Corporate Facilities Division';
+  p.location = 'Riyadh Technical Center, Northern Ring Road, Riyadh, KSA';
+  p.revision = 'R2';
+  p.descriptor = 'Exterior Signage & Environmental Branding Package';
+  p.preparedBy = 'Vista United — Projects & Technical Department';
+  p.dateOfIssue = '2026-08-31';
+
+  const a = newItem(p);
+  if(demo){ a.id = 'demo-item-1'; }
+  a.name='Main Gate Entrance'; a.locationRef='GATE-01';
+  a.qty={ value:1, unit:'no.' };
+  a.dims={ w:'6400', h:'1150', d:'180', mountingHeight:'900', projection:'' };
+  a.presets = {
+    branding:{ values:['3D Letters','Laser-Cut Logo / Letters'], other:'' },
+    letterBuild:{ values:['Acrylic','Front Lit'], other:'' },
+    fabrication:{ values:['Box-Up','3D Letters'], other:'' },
+    material:{ values:['Aluminum','Acrylic','Stainless Steel'], other:'' },
+    finish:{ values:['Powder Coated','Brushed','Matte'], other:'' },
+    existingWork:{ values:['Remove Existing','Surface Preparation'], other:'' },
+    existingWorkNote:'Remove redundant legacy acrylic panel (1800 × 600); cap 2 old fixing penetrations.',
+    lighting:{ values:['Front Lit'], other:'' },
+    power:{ values:['New Power Required','Driver / Access Required'], other:'' },
+    access:{ values:['Scaffold'], other:'' },
+    accessNote:'Scaffold tower to beam level · ~4 hr low-traffic gate-closure window, no crane.',
+    environment:{ values:['Outdoor','Weather Resistant','UV Resistant'], other:'' },
+  };
+  a.status = { design:'approved', sample:'approved', production:'ready_for_production',
+    designComment:'', sampleRev:'Rev C', sampleDate:'2026-08-21', sampleBy:'Eng. F. Al-Otaibi',
+    sampleComment:'Rev B returned — letter face too bright; opal grade changed, re-approved at Rev C.' };
+  a.clientInputs = [
+    { priority:'urgent', text:'Final logo artwork — vector, outlined, latest brand version' },
+    { priority:'urgent', text:'Material confirmation — approve tray finish RAL 9005 matt vs. satin' },
+    { priority:'urgent', text:'Electrical-point confirmation — location of switched fused spur at canopy' },
+  ];
+  a.notes = {
+    scope:'Fabricated aluminium tray sign fixed to the existing gate portal beam. Face-lit push-through acrylic letters, brushed stainless returns. Supply, deliver and install including test & commissioning of lighting.',
+    site:'Existing painted steel portal sound; light surface corrosion at east pier base to be treated before fixing. Overhead clearance 5.9 m to underside of beam.',
+    technical:'', criticalInstaller:'Overhead clearance 5.9 m · isolate LED supply before work · security escort required for gate area · ~4 hr low-traffic closure window.' };
+  p.items.push(a);
+
+  const b = newItem(p);
+  if(demo){ b.id = 'demo-item-2'; }
+  b.name='Building Facade — Main Identity'; b.locationRef='FAC-02';
+  b.qty={ value:9, unit:'units' };
+  b.dims={ w:'11800', h:'1100', d:'90', mountingHeight:'', projection:'90' };
+  b.presets = {
+    branding:{ values:['3D Letters'], other:'' },
+    letterBuild:{ values:['Aluminum','Halo Lit'], other:'' },
+    fabrication:{ values:['3D Letters','Welded Structure'], other:'' },
+    material:{ values:['Aluminum','ACP'], other:'' },
+    finish:{ values:['Powder Coated'], other:'' },
+    existingWork:{ values:['Remove Existing'], other:'' },
+    lighting:{ values:['Halo Lit'], other:'' },
+    power:{ values:['New Power Required'], other:'' },
+    access:{ values:['Crane','Boom Lift'], other:'' },
+    accessNote:'Mobile crane (min. 50 t) + MEWP · road-closure permit · banksman · wind limit 9 m/s.',
+    environment:{ values:['Outdoor','Weather Resistant'], other:'' },
+  };
+  b.status = { design:'approved', sample:'pending', production:'not_started',
+    designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' };
+  b.clientInputs = [ { priority:'urgent', text:'Illuminated facade lettering — material & finish confirmation (ACP + acrylic)' } ];
+  b.notes = { scope:'', site:'', technical:'', criticalInstaller:'' };   // empty optional notes test
+  p.items.push(b);
+
+  // item C — SACA fence: Sample = N/A, ready for installation, has simulation -> CLEARED TO PROCEED
+  //          minimal presets (several groups empty), one non-urgent client input
+  const c = newItem(p);
+  if(demo){ c.id = 'demo-item-3'; }
+  c.name='SACA Perimeter Fence Panels'; c.locationRef='SACA-03';
+  c.qty={ value:46, unit:'panels' };
+  c.dims={ w:'1200', h:'2400', d:'', mountingHeight:'', projection:'' };
+  c.presets = {
+    branding:{ values:['Cut Vinyl'], other:'' },
+    material:{ values:['ACP'], other:'' },
+    lighting:{ values:['None'], other:'' },
+    access:{ values:['Normal'], other:'' },
+    environment:{ values:['Outdoor','UV Resistant'], other:'' },
+  };
+  c.status = { design:'approved', sample:'na', production:'ready_for_installation',
+    designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' };
+  c.clientInputs = [ { priority:'required', text:'Confirm panel spacing at the two vehicle gates' } ];  // must NOT block installer
+  c.notes = { scope:'Cut-vinyl branding applied to 46 existing SACA fence panels.', site:'', technical:'', criticalInstaller:'' };
+  p.items.push(c);
+
+  // item D — Flag Area: design Rejected -> DO NOT PROCEED — DESIGN NOT APPROVED
+  const d = newItem(p);
+  if(demo){ d.id = 'demo-item-4'; }
+  d.name='Flag Area — Ceremonial Court'; d.locationRef='FLAG-04';
+  d.qty={ value:3, unit:'poles' };
+  d.dims={ w:'', h:'8000', d:'', mountingHeight:'', projection:'' };
+  d.presets = {
+    fabrication:{ values:['Welded Structure'], other:'' },
+    material:{ values:['Stainless Steel'], other:'' },
+    finish:{ values:['Brushed'], other:'' },
+    lighting:{ values:['None'], other:'' },
+    access:{ values:['Crane'], other:'' },
+    environment:{ values:['Outdoor','Weather Resistant'], other:'' },
+  };
+  d.status = { design:'rejected', sample:'na', production:'not_started',
+    designComment:'Ceremonial court layout returned — pole spacing and setback to be revised.',
+    sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' };
+  d.clientInputs = [
+    { priority:'urgent', text:'Approve the revised ceremonial court layout (R2)' },
+    { priority:'optional', text:'Preferred flag finial style' },
+  ];
+  d.notes = { scope:'', site:'', technical:'', criticalInstaller:'' };
+  p.items.push(d);
+
+  await dbPut('projects', p);
+
+  async function ph(item, slot, title, kind){
+    const blob = await makePlaceholder(title, kind); const id = uid();
+    await dbPut('photos', { id, projectId:p.id, itemId:item.id, slot, blob, mime:'image/jpeg', w:1600, h:1000, bytes:blob.size, createdAt:now() });
+    item.photoIds[slot] = id;
+  }
+  // A — all four photos
+  await ph(a,'existing','Existing Condition','existing');
+  await ph(a,'simulation','Proposed Simulation','simulation');
+  await ph(a,'sample','Sample Photo','sample');
+  await ph(a,'after','After Installation','after');
+  // B — existing only (NO simulation -> pending layout + missing-sim test)
+  await ph(b,'existing','Existing Condition','existing');
+  // C — existing + simulation (needed for CLEARED)
+  await ph(c,'existing','Existing Condition','existing');
+  await ph(c,'simulation','Proposed Simulation','simulation');
+  // D — existing only
+  await ph(d,'existing','Existing Condition','existing');
+
+  await dbPut('projects', p);
+  return p.id;
+}
+
+/* ============================================================
+   6 · State + persistence
+   ============================================================ */
+const STATE = {
+  project:null,
+  photoCache:new Map(),   // photoId -> {rec, url}
+  otherOpen:new Set(),     // group keys whose "Other" field is forced visible
+  collapsed:new Set(['notes','projmeta']),
+  exportPack:'client',
+  exportItems:null,   // null = all; else Set of item ids
+};
+let saveTimer=null;
+function scheduleSave(){
+  setSaveFlag('Saving…', false);
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(commitSave, 420);
+}
+async function commitSave(){
+  clearTimeout(saveTimer); saveTimer=null;
+  if(!STATE.project) return;
+  STATE.project.updatedAt = now();
+  try{ await dbPut('projects', STATE.project); setSaveFlag('Saved ✓', true); }
+  catch(e){ setSaveFlag('Save failed', false); console.error(e); }
+}
+function setSaveFlag(txt, on){
+  const el = document.querySelector('.appbar .save');
+  if(el){ el.textContent = txt; el.classList.toggle('on', !!on); }
+}
+window.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') commitSave(); });
+window.addEventListener('pagehide', ()=>{ commitSave(); });
+
+/* ============================================================
+   7 · Utilities
+   ============================================================ */
+const $ = s=> document.querySelector(s);
+const app = ()=> $('#app');
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function setPath(o,p,v){ const k=p.split('.'), last=k.pop(); let t=o; for(const kk of k){ if(t[kk]==null) t[kk]={}; t=t[kk]; } t[last]=v; }
+function getPath(o,p){ return p.split('.').reduce((a,k)=> a==null?a:a[k], o); }
+function relTime(ts){
+  const s = Math.floor((Date.now()-ts)/1000);
+  if(s<60) return 'just now';
+  if(s<3600) return Math.max(1,Math.floor(s/60))+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  if(s<7*86400) return Math.floor(s/86400)+'d ago';
+  return new Date(ts).toLocaleDateString();
+}
+let toastTimer;
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1600);
+}
+function confirmDialog(title, msg, danger){
+  return new Promise(res=>{
+    const o=document.createElement('div'); o.className='overlay';
+    o.innerHTML='<div class="dialog"><h3>'+esc(title)+'</h3><p>'+esc(msg)+'</p><div class="acts">'
+      +'<button class="btn btn-ghost" data-x="0">Cancel</button>'
+      +'<button class="btn '+(danger?'btn-danger':'btn-primary')+'" data-x="1">Confirm</button></div></div>';
+    o.addEventListener('click',e=>{
+      if(e.target===o){ o.remove(); res(false); return; }
+      const x=e.target.closest('[data-x]'); if(x){ o.remove(); res(x.dataset.x==='1'); }
+    });
+    document.body.appendChild(o);
+  });
+}
+function sheetMenu(actions){
+  return new Promise(res=>{
+    const o=document.createElement('div'); o.className='sheetmenu';
+    o.innerHTML='<div class="inner">'+actions.map((a,i)=>'<button data-i="'+i+'" class="'+(a.danger?'danger':'')+'">'+esc(a.label)+'</button>').join('')+'</div>';
+    o.addEventListener('click',e=>{
+      if(e.target===o){ o.remove(); res(null); return; }
+      const b=e.target.closest('[data-i]'); if(b){ o.remove(); res(actions[+b.dataset.i]); }
+    });
+    document.body.appendChild(o);
+  });
+}
+function lightbox(url){
+  const o=document.createElement('div'); o.className='overlay lightbox';
+  o.innerHTML='<button class="x">Close</button><img src="'+url+'" alt="">';
+  o.addEventListener('click',e=>{ if(e.target===o || e.target.classList.contains('x')) o.remove(); });
+  document.body.appendChild(o);
+}
+
+/* ---- photo url cache ---- */
+function clearPhotoCache(){
+  STATE.photoCache.forEach(v=> URL.revokeObjectURL(v.url));
+  STATE.photoCache.clear();
+}
+async function loadProjectPhotos(projectId){
+  clearPhotoCache();
+  const recs = await dbIndexAll('photos','by_project', projectId);
+  for(const r of recs) STATE.photoCache.set(r.id, { rec:r, url:URL.createObjectURL(r.blob) });
+}
+function photoUrl(id){ const v=STATE.photoCache.get(id); return v?v.url:null; }
+function photoRec(id){ const v=STATE.photoCache.get(id); return v?v.rec:null; }
+
+/* ============================================================
+   8 · Router
+   ============================================================ */
+function parseHash(){
+  const parts = location.hash.replace(/^#\/?/,'').split('/').filter(Boolean);
+  if(parts[0]==='p' && parts[2]==='i') return { view:'item', pid:parts[1], iid:parts[3] };
+  if(parts[0]==='p' && parts[2]==='export') return { view:'export', pid:parts[1] };
+  if(parts[0]==='p') return { view:'overview', pid:parts[1] };
+  return { view:'projects' };
+}
+function go(hash){ location.hash = hash; }
+
+async function render(){
+  await commitSave();                 // flush pending edits before switching
+  const r = parseHash();
+
+  if(r.view==='projects'){ STATE.project=null; clearPhotoCache(); return renderProjects(); }
+
+  const p = await dbGet('projects', r.pid);
+  if(!p){ go('#/'); return; }
+  STATE.project = p;
+  if(migrateProject(p)){ try{ await dbPut('projects', p); }catch(_){} }
+  await loadProjectPhotos(p.id);
+
+  if(r.view==='overview'){ STATE.otherOpen.clear(); return renderOverview(p); }
+  if(r.view==='export'){ return renderExport(p); }
+  if(r.view==='item'){
+    const it = p.items.find(x=>x.id===r.iid);
+    if(!it){ go('#/p/'+p.id); return; }
+    STATE.otherOpen.clear();
+    return renderItem(p, it);
+  }
+}
+window.addEventListener('hashchange', render);
+
+/* ============================================================
+   9 · View — Projects
+   ============================================================ */
+async function renderProjects(){
+  let projects=[];
+  try{ projects = await dbGetAll('projects'); }
+  catch(e){ /* storage unavailable */ }
+  projects.sort((a,b)=> b.updatedAt - a.updatedAt);
+
+  const list = projects.length ? '<div class="plist">' + projects.map(p=>{
+    const urg = p.items.some(it=> (it.clientInputs||[]).some(c=>c.priority==='urgent'));
+    const smp = p.items.some(it=> ['pending','rejected'].includes(it.status && it.status.sample));
+    return '<div class="pcard" data-open="'+p.id+'">'
+      + '<div class="pmain">'
+      +   '<div class="pn">'+esc(p.name||'Untitled Project')+'</div>'
+      +   '<div class="psub">'+esc([p.client,p.location].filter(Boolean).join(' · ')||'No client / location yet')+'</div>'
+      +   '<div class="pmeta"><span class="revb">'+esc(p.revision||'R1')+'</span>'
+      +     '<span>'+p.items.length+' item'+(p.items.length===1?'':'s')+'</span>'
+      +     '<span>edited '+relTime(p.updatedAt)+'</span>'
+      +     (urg?'<span style="color:var(--stop);font-weight:600">● urgent input</span>':'')
+      +     (smp?'<span style="color:var(--amber);font-weight:600">● sample review</span>':'')
+      +   '</div>'
+      + '</div>'
+      + '<button class="menu" data-pmenu="'+p.id+'">⋯</button>'
+      + '</div>';
+  }).join('') + '</div>'
+  : '<div class="emptyish"><div class="big">No projects yet</div>'
+    + '<div style="margin-bottom:16px">Create a proposal project, then add items on site.</div></div>';
+
+  app().innerHTML =
+    '<div class="appbar"><span class="mark">'+MARK_SVG+'</span>'
+    + '<span class="title">Technical Proposals</span>'
+    + '<button class="btn btn-primary btn-sm" data-newproject>+ New</button></div>'
+    + '<div class="wrap">'
+    +   list
+    +   '<div style="text-align:center;margin-top:18px">'
+    +     '<button class="linkbtn" data-loadsample>Load sample project (Main Gate demo)</button>'
+    +   '</div>'
+    + '</div>';
+}
+
+/* ============================================================
+   10 · View — Project Overview
+   ============================================================ */
+function statChip(kind, val){
+  const map = {
+    design:{ approved:['g','D Approved'], pending:['p','D Pending'], revision_required:['a','D Revision'], rejected:['r','D Rejected'] },
+    sample:{ approved:['g','S Approved'], pending:['p','S Pending'], rejected:['r','S Rejected'], na:['p','S N/A'] },
+    production:{ not_started:['p','P Not Started'], ready_for_production:['gw','P Ready · Prod'], in_production:['a','P In Production'], ready_for_installation:['gw','P Ready · Install'], installed:['g','P Installed'] },
+  };
+  const m = (map[kind]||{})[val] || ['p', kind];
+  return '<span class="sc '+m[0]+'">'+esc(m[1])+'</span>';
+}
+function renderOverview(p){
+  const items = p.items.map((it,i)=>{
+    const urg = (it.clientInputs||[]).some(c=>c.priority==='urgent');
+    const smp = ['pending','rejected'].includes(it.status && it.status.sample);
+    const th = it.photoIds && it.photoIds.existing && photoUrl(it.photoIds.existing);
+    return '<div class="itemrow">'
+      + '<div class="irtap" data-openitem="'+it.id+'">'
+      +   (th ? '<img class="thumb" src="'+th+'" alt="">' : '<div class="thumb empty">◱</div>')
+      +   '<div class="imain">'
+      +     '<span class="inm"><span class="inum">'+esc(it.number)+'</span> '+esc(it.name||'Untitled item')+'</span>'
+      +     '<div class="isub">'+esc(it.locationRef||'—')+' · Qty '+esc(it.qty.value)+' '+esc(it.qty.unit)+'</div>'
+      +   '</div>'
+      + '</div>'
+      + '<div class="ord">'
+      +   '<button data-moveitem="'+it.id+'" data-dir="-1" '+(i===0?'disabled':'')+'>▲</button>'
+      +   '<button data-moveitem="'+it.id+'" data-dir="1" '+(i===p.items.length-1?'disabled':'')+'>▼</button>'
+      + '</div>'
+      + '<button class="rowmenu" data-itemmenu="'+it.id+'">⋯</button>'
+      + '<div class="flags">'
+      +   statChip('design', it.status.design) + statChip('sample', it.status.sample) + statChip('production', it.status.production)
+      +   (urg?'<span class="dot urgent" title="Urgent client input"></span>':'')
+      +   (smp?'<span class="dot sample" title="Sample pending / rejected"></span>':'')
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  const dcol = STATE.collapsed.has('projmeta');
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/">‹ Projects</button>'
+    + '<span class="title">'+esc(p.name||'Untitled Project')+'</span>'
+    + '<span class="save">Saved ✓</span>'
+    + '<button class="menu" data-projmenu>⋯</button></div>'
+    + '<div class="wrap">'
+    +  '<div class="card"><div class="eyebrow">Project</div><div class="body">'
+    +    '<div class="field"><label>Project name</label><input data-pf="name" value="'+esc(p.name)+'" placeholder="e.g. SABIC Riyadh Technical Center"></div>'
+    +    '<div class="field"><label>Client</label><input data-pf="client" value="'+esc(p.client)+'" placeholder="Client / division"></div>'
+    +    '<div class="field"><label>Location</label><input data-pf="location" value="'+esc(p.location)+'" placeholder="Site / address"></div>'
+    +    '<div class="field"><label>Revision</label><input data-pf="revision" value="'+esc(p.revision)+'" placeholder="R1" style="max-width:120px"></div>'
+    +  '</div></div>'
+    +  '<div class="card'+(dcol?' collapsed':'')+'" id="card-projmeta"><div class="eyebrow tog" data-toggle="projmeta">Proposal details (PDF cover)</div><div class="body">'
+    +    '<div class="field"><label>Project descriptor / scope</label><input data-pf="descriptor" value="'+esc(p.descriptor||'')+'" placeholder="e.g. Exterior Signage & Environmental Branding Package"></div>'
+    +    '<div class="field"><label>Prepared by</label><input data-pf="preparedBy" value="'+esc(p.preparedBy||'')+'" placeholder="Vista United — Projects & Technical Department"></div>'
+    +    '<div class="row">'
+    +      '<div class="field"><label>Date of issue</label><input data-pf="dateOfIssue" value="'+esc(p.dateOfIssue||'')+'" placeholder="YYYY-MM-DD" inputmode="numeric"></div>'
+    +      '<div class="field"><label>Document ref</label><input data-pf="docRef" value="'+esc(p.docRef||'')+'" placeholder="auto: VU-…-TP-'+esc(p.revision||'R1')+'"></div>'
+    +    '</div>'
+    +    '<div class="hint">Blank fields fall back to sensible defaults on the PDF.</div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Items <span class="rt">'+p.items.length+' total</span></div><div class="body">'
+    +    (items || '<div class="hint" style="margin-bottom:10px">No items yet — add the first one.</div>')
+    +    '<button class="btn btn-ghost btn-sm full mt6" data-additem>+ Add Item</button>'
+    +  '</div></div>'
+    +  (p.items.length
+        ? '<button class="btn btn-primary full mt10" data-export>Export / Preview PDF →</button>'
+        : '')
+    + '</div>';
+}
+
+/* ============================================================
+   10b · View — Export / Preview
+   ============================================================ */
+const RENDERER_FILE = 'technical-proposal-builder.html';
+function exportUrl(p){
+  let u = RENDERER_FILE + '?project=' + encodeURIComponent(p.id) + '&mode=' + STATE.exportPack;
+  if(STATE.exportItems && STATE.exportItems.size && STATE.exportItems.size < p.items.length){
+    u += '&items=' + [...STATE.exportItems].map(encodeURIComponent).join(',');
+  }
+  return u;
+}
+function renderExport(p){
+  const allSel = !STATE.exportItems || STATE.exportItems.size === 0 || STATE.exportItems.size === p.items.length;
+  const itemChecks = p.items.map(it=>{
+    const on = allSel || STATE.exportItems.has(it.id);
+    return '<label class="expitem"><input type="checkbox" data-expitem="'+it.id+'"'+(on?' checked':'')+'>'
+      + '<span><b>'+esc(it.number)+'</b> '+esc(it.name||'Untitled item')+'</span></label>';
+  }).join('');
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'">‹ '+esc(p.name||'Project')+'</button>'
+    + '<span class="title">Export / Preview</span></div>'
+    + '<div class="wrap">'
+    +  '<div class="card"><div class="eyebrow">Pack</div><div class="body">'
+    +    '<div class="seg" data-exppack>'
+    +      '<button data-v="client" class="'+(STATE.exportPack==='client'?'on':'')+'">Client Proposal (EN)</button>'
+    +      '<button data-v="installer" class="'+(STATE.exportPack==='installer'?'on':'')+'">Installer Pack</button>'
+    +    '</div>'
+    +    '<div class="field mt10"><label>Items included '+(STATE.exportPack==='client'?'(the proposal normally covers every item)':'')+'</label>'
+    +      '<label class="expitem"><input type="checkbox" data-expall'+(allSel?' checked':'')+'><span><b>All items</b> ('+p.items.length+')</span></label>'
+    +      '<div class="expitems">'+itemChecks+'</div>'
+    +    '</div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Preview <span class="rt">live from saved data</span></div><div class="body">'
+    +    '<div class="expv"><iframe id="expframe" src="'+esc(exportUrl(p))+'"></iframe></div>'
+    +    '<div class="row mt10">'
+    +      '<button class="btn btn-ghost" data-expopen>Open full preview ↗</button>'
+    +      '<button class="btn btn-primary" data-expprint>Print / Save as PDF</button>'
+    +    '</div>'
+    +    '<div class="hint mt6">Save-as-PDF: choose “Save as PDF”, A4, margins <b>None</b>, and enable “Background graphics”.</div>'
+    +  '</div></div>'
+    + '</div>';
+}
+
+/* ============================================================
+   11 · View — Fast Item Editor
+   ============================================================ */
+function segHtml(name, options, current, warnVals){
+  const warn = (warnVals||[]).includes(current);
+  return '<div class="seg small'+(warn?' warn':'')+'" data-seg="'+name+'">'
+    + options.map(([v,lab])=> '<button data-v="'+v+'" class="'+(v===current?'on':'')+'">'+esc(lab)+'</button>').join('')
+    + '</div>';
+}
+function presetSummary(item, g){
+  const parts=[];
+  const gv = (item.presets[g.key]||{});
+  (gv.values||[]).forEach(v=>parts.push(v));
+  if(gv.other) parts.push('Other: '+gv.other);
+  for(const s of (g.sub||[])){
+    if(!s.showIf(gv.values||[])) continue;
+    const sv=(item.presets[s.key]||{});
+    (sv.values||[]).forEach(v=>parts.push(v));
+    if(sv.other) parts.push('Other: '+sv.other);
+  }
+  return parts.join(' · ');
+}
+/* drop stored sub-group / note data that is no longer disclosed */
+function pruneHidden(item, g){
+  const gv = pg(item, g.key);
+  for(const s of (g.sub||[])){
+    if(!s.showIf(gv.values)){ if(item.presets[s.key]){ item.presets[s.key].values=[]; item.presets[s.key].other=''; } STATE.otherOpen.delete(s.key); }
+  }
+  if(g.note && !g.note.showIf(gv.values)) item.presets[g.note.key] = '';
+}
+function presetGroupHtml(item, g){
+  const gv = pg(item, g.key);
+  const chips = g.options.map(o=>
+    '<button class="chip'+(gv.values.includes(o)?' on':'')+'" data-chip data-g="'+g.key+'" data-o="'+esc(o)+'">'+esc(o)+'</button>'
+  ).join('');
+  const otherOn = (gv.other||'')!=='' || STATE.otherOpen.has(g.key);
+  const otherChip = '<button class="chip other'+(otherOn?' on':'')+'" data-chipother data-g="'+g.key+'">Other…</button>';
+  const otherField = otherOn
+    ? '<input class="mt6" data-p="presets.'+g.key+'.other" value="'+esc(gv.other||'')+'" placeholder="Other — '+esc(g.label)+'">'
+    : '';
+
+  let subs='';
+  for(const s of (g.sub||[])){
+    if(!s.showIf(gv.values)) continue;
+    const sv = pg(item, s.key);
+    const sOtherOn = (sv.other||'')!=='' || STATE.otherOpen.has(s.key);
+    subs += '<div class="subgroup"><div class="sglabel">'+esc(s.label)+'</div><div class="chips">'
+      + s.options.map(o=> '<button class="chip sub'+(sv.values.includes(o)?' on':'')+'" data-chipsub data-g="'+s.key+'" data-o="'+esc(o)+'">'+esc(o)+'</button>').join('')
+      + '<button class="chip sub other'+(sOtherOn?' on':'')+'" data-chipother data-g="'+s.key+'">Other…</button>'
+      + '</div>'
+      + (sOtherOn ? '<input class="mt6" data-p="presets.'+s.key+'.other" value="'+esc(sv.other||'')+'" placeholder="Other — '+esc(s.label)+'">' : '')
+      + '</div>';
+  }
+
+  let noteField='';
+  if(g.note && g.note.showIf(gv.values)){
+    noteField = '<input class="mt6" data-p="presets.'+g.note.key+'" value="'+esc(item.presets[g.note.key]||'')+'" placeholder="'+esc(g.note.label)+'">';
+  }
+
+  const summ = presetSummary(item, g);
+  return '<div class="pgroup">'
+    + '<div class="pglabel">'+esc(g.label)+ (summ?'<span class="pgsumm">'+esc(summ)+'</span>':'') +'</div>'
+    + '<div class="chips">'+chips+otherChip+'</div>'
+    + otherField + subs + noteField
+    + '</div>';
+}
+function photosCardHtml(project, item){
+  const slot = (key,label,hint,primary)=>{
+    const id = item.photoIds && item.photoIds[key];
+    if(id && photoUrl(id)){
+      const rec = photoRec(id);
+      const kb = rec ? Math.round(rec.bytes/1024)+' KB' : '';
+      return '<div class="photoslot filled'+(primary?' primary':'')+'">'
+        + '<img src="'+photoUrl(id)+'" data-viewphoto="'+id+'" alt="">'
+        + '<div class="ph-actions"><button data-replacephoto data-slot="'+key+'">Replace</button>'
+        +   '<button class="del" data-removephoto data-slot="'+key+'">Remove</button></div>'
+        + '<div class="ph-tag">'+esc(label)+'</div>'
+        + (kb?'<div class="ph-size">'+kb+'</div>':'')
+        + '</div>';
+    }
+    return '<button class="photoslot'+(primary?' primary':'')+'" data-addphoto data-slot="'+key+'">'
+      + '<div class="ph-label"><span class="cam">📷</span><br>'+esc(label)+'<small>'+esc(hint)+'</small></div>'
+      + '</button>';
+  };
+  return '<div class="card" id="card-photos"><div class="eyebrow">Photos</div><div class="body">'
+    + slot('existing','Existing Condition','Tap to capture or upload the site photo first', true)
+    + '<div class="photogrid">'
+    +   slot('simulation','Proposed Simulation / Design','Approved visual')
+    +   slot('sample','Sample Photo','If a physical sample exists')
+    +   slot('after','After Installation','Added on completion')
+    + '</div>'
+    + '</div></div>';
+}
+function statusCardHtml(item){
+  const s = item.status;
+  let designDetail='';
+  if(['rejected','revision_required'].includes(s.design)){
+    designDetail = '<div class="field mt10"><label>Design comment</label>'
+      + '<textarea data-p="status.designComment" placeholder="What needs changing…">'+esc(s.designComment||'')+'</textarea></div>';
+  }
+  let sampleDetail='';
+  if(s.sample!=='na'){
+    sampleDetail = '<div class="row mt10">'
+      + '<div class="field"><label>Sample revision</label><input data-p="status.sampleRev" value="'+esc(s.sampleRev||'')+'" placeholder="Rev A"></div>'
+      + '<div class="field"><label>Approval date</label><input data-p="status.sampleDate" value="'+esc(s.sampleDate||'')+'" placeholder="YYYY-MM-DD" inputmode="numeric"></div>'
+      + '</div>'
+      + '<div class="field"><label>Approved / reviewed by</label><input data-p="status.sampleBy" value="'+esc(s.sampleBy||'')+'" placeholder="Name"></div>'
+      + '<div class="field"><label>Rejection / client comment</label><textarea data-p="status.sampleComment" placeholder="Optional">'+esc(s.sampleComment||'')+'</textarea></div>';
+  }
+  return '<div class="card" id="card-status"><div class="eyebrow">Status</div><div class="body">'
+    + '<div class="field"><label>Design</label>'+segHtml('design', STATUS.design, s.design, ['rejected'])+'</div>'
+    + '<div class="field"><label>Sample</label>'+segHtml('sample', STATUS.sample, s.sample, ['rejected'])+'</div>'
+    + '<div class="field"><label>Production</label>'+segHtml('production', STATUS.production, s.production)+'</div>'
+    + designDetail + sampleDetail
+    + '</div></div>';
+}
+function clientInputsCardHtml(item){
+  const rows = (item.clientInputs||[]).map((ci,idx)=>
+    '<div class="cirow">'
+    + '<div class="seg '+(ci.priority==='urgent'?'u':ci.priority==='optional'?'q':'')+'" data-ciprioseg data-i="'+idx+'">'
+    +   PRIORITY.map(([v,lab])=> '<button data-v="'+v+'" class="'+(ci.priority===v?'on':'')+'">'+esc(lab)+'</button>').join('')
+    + '</div>'
+    + '<input data-citext data-i="'+idx+'" value="'+esc(ci.text)+'" placeholder="Required input from client…">'
+    + '<button class="del" data-cidel data-i="'+idx+'">✕</button>'
+    + '</div>'
+  ).join('');
+  return '<div class="card" id="card-ci"><div class="eyebrow">Client Inputs</div><div class="body">'
+    + (rows || '<div class="hint" style="margin-bottom:8px">None yet.</div>')
+    + '<button class="btn btn-ghost btn-sm mt6" data-ciadd>+ Add client input</button>'
+    + '</div></div>';
+}
+function collapsedNotesCardHtml(item){
+  const col = STATE.collapsed.has('notes');
+  return '<div class="card'+(col?' collapsed':'')+'" id="card-notes">'
+    + '<div class="eyebrow tog" data-toggle="notes">Optional notes</div>'
+    + '<div class="body">'
+    +   '<div class="field"><label>Scope / Description</label><textarea data-p="notes.scope" placeholder="Optional">'+esc(item.notes.scope||'')+'</textarea></div>'
+    +   '<div class="field"><label>Site Notes</label><textarea data-p="notes.site" placeholder="Optional">'+esc(item.notes.site||'')+'</textarea></div>'
+    +   '<div class="field"><label>Technical Notes</label><textarea data-p="notes.technical" placeholder="Optional">'+esc(item.notes.technical||'')+'</textarea></div>'
+    +   '<div class="field"><label>Critical Installer Note</label><textarea data-p="notes.criticalInstaller" placeholder="One short line for the installer sheet">'+esc(item.notes.criticalInstaller||'')+'</textarea></div>'
+    + '</div></div>';
+}
+function refreshCard(which, item){
+  const map = { photos:()=>photosCardHtml(STATE.project,item), status:()=>statusCardHtml(item),
+                ci:()=>clientInputsCardHtml(item), notes:()=>collapsedNotesCardHtml(item),
+                presets:()=>presetsCardHtml(item) };
+  const el = document.getElementById('card-'+which);
+  if(el && map[which]){ el.outerHTML = map[which](); }
+}
+function presetsCardHtml(item){
+  return '<div class="card" id="card-presets"><div class="eyebrow">Technical Presets <span class="rt">tap to select</span></div><div class="body">'
+    + PRESET_GROUPS.map(g=> presetGroupHtml(item,g)).join('')
+    + '</div></div>';
+}
+
+function renderItem(p, it){
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'">‹ '+esc(p.name||'Project')+'</button>'
+    + '<span class="title">Item '+esc(it.number)+'</span>'
+    + '<span class="save on">Saved ✓</span></div>'
+    + '<div class="wrap">'
+
+    + '<div class="card"><div class="eyebrow">Identity &amp; Size</div><div class="body">'
+    +   '<div class="row">'
+    +     '<div class="field" style="flex:0 0 74px"><label>Item No.</label><input value="'+esc(it.number)+'" disabled style="text-align:center;font-family:Playfair Display,serif;font-weight:700;color:var(--emerald)"></div>'
+    +     '<div class="field"><label>Item name / location</label><input data-p="name" value="'+esc(it.name)+'" placeholder="e.g. Main Gate Entrance"></div>'
+    +   '</div>'
+    +   '<div class="row">'
+    +     '<div class="field"><label>Location ref</label><input data-p="locationRef" value="'+esc(it.locationRef)+'" placeholder="GATE-01"></div>'
+    +     '<div class="field"><label>Quantity</label>'
+    +       '<div style="display:flex;gap:6px;align-items:center">'
+    +         '<button class="rowmenu" data-qty="-1" style="width:34px;height:38px">−</button>'
+    +         '<input data-p="qty.value" value="'+esc(it.qty.value)+'" inputmode="numeric" style="text-align:center">'
+    +         '<button class="rowmenu" data-qty="1" style="width:34px;height:38px">+</button>'
+    +       '</div>'
+    +     '</div>'
+    +     '<div class="field" style="flex:0 0 92px"><label>Unit</label><select data-p="qty.unit">'
+    +        UNITS.map(u=>'<option '+(u===it.qty.unit?'selected':'')+'>'+esc(u)+'</option>').join('')
+    +     '</select></div>'
+    +   '</div>'
+    +   '<div class="field"><label>Dimensions — W × H × D (mm)</label><div class="row">'
+    +     '<input data-p="dims.w" value="'+esc(it.dims.w)+'" inputmode="decimal" placeholder="W">'
+    +     '<input data-p="dims.h" value="'+esc(it.dims.h)+'" inputmode="decimal" placeholder="H">'
+    +     '<input data-p="dims.d" value="'+esc(it.dims.d)+'" inputmode="decimal" placeholder="D">'
+    +   '</div></div>'
+    +   '<div class="row">'
+    +     '<div class="field"><label>Mounting height (mm) — optional</label><input data-p="dims.mountingHeight" value="'+esc(it.dims.mountingHeight)+'" inputmode="decimal" placeholder="e.g. 900"></div>'
+    +     '<div class="field"><label>Projection (mm) — optional</label><input data-p="dims.projection" value="'+esc(it.dims.projection)+'" inputmode="decimal" placeholder="e.g. 90"></div>'
+    +   '</div>'
+    + '</div></div>'
+
+    + photosCardHtml(p, it)
+    + presetsCardHtml(it)
+    + statusCardHtml(it)
+    + clientInputsCardHtml(it)
+    + collapsedNotesCardHtml(it)
+
+    + '</div>'
+
+    + '<div class="bottombar">'
+    +   '<button class="btn btn-ghost" data-back="#/p/'+p.id+'">Done</button>'
+    +   '<button class="btn btn-primary" data-nextitem>Save &amp; Next Item →</button>'
+    + '</div>';
+}
+
+/* ============================================================
+   12 · Events (delegated)
+   ============================================================ */
+function currentItem(){
+  const r = parseHash();
+  if(r.view!=='item' || !STATE.project) return null;
+  return STATE.project.items.find(x=>x.id===r.iid) || null;
+}
+
+document.addEventListener('input', e=>{
+  const t = e.target;
+  // project fields
+  if(t.dataset.pf!=null && STATE.project){
+    STATE.project[t.dataset.pf] = t.value;
+    if(t.dataset.pf==='name'){ const ti=document.querySelector('.appbar .title'); if(ti) ti.textContent = t.value||'Untitled Project'; }
+    scheduleSave(); return;
+  }
+  const it = currentItem();
+  if(!it) return;
+  if(t.dataset.p!=null){ setPath(it, t.dataset.p, t.value); scheduleSave(); return; }
+  if(t.dataset.citext!=null){ it.clientInputs[+t.dataset.i].text = t.value; scheduleSave(); return; }
+});
+
+document.addEventListener('change', e=>{
+  const t=e.target;
+
+  /* export item selection */
+  if(t.dataset.expall!=null && STATE.project){
+    STATE.exportItems = t.checked ? null : new Set();
+    renderExport(STATE.project); return;
+  }
+  if(t.dataset.expitem!=null && STATE.project){
+    const p = STATE.project;
+    if(!STATE.exportItems || STATE.exportItems.size===0) STATE.exportItems = new Set(p.items.map(x=>x.id));
+    if(t.checked) STATE.exportItems.add(t.dataset.expitem); else STATE.exportItems.delete(t.dataset.expitem);
+    renderExport(p); return;
+  }
+
+  const it=currentItem();
+  if(it && t.dataset.p!=null){ setPath(it, t.dataset.p, t.value); scheduleSave(); }
+});
+
+document.addEventListener('click', async e=>{
+  const t = e.target;
+  const closest = s => t.closest(s);
+
+  /* ----- navigation ----- */
+  const back = closest('[data-back]'); if(back){ go(back.dataset.back); return; }
+
+  if(closest('[data-newproject]')){
+    const p = newProject(); await dbPut('projects', p); go('#/p/'+p.id); return;
+  }
+  if(closest('[data-loadsample]')){
+    toast('Building sample…');
+    const id = await seedSampleProject(); go('#/p/'+id); return;
+  }
+  const openP = closest('[data-open]'); if(openP){ go('#/p/'+openP.dataset.open); return; }
+  const openI = closest('[data-openitem]'); if(openI){ go('#/p/'+STATE.project.id+'/i/'+openI.dataset.openitem); return; }
+
+  /* ----- projects list menu ----- */
+  const pm = closest('[data-pmenu]');
+  if(pm){
+    const p = await dbGet('projects', pm.dataset.pmenu);
+    const a = await sheetMenu([{label:'Open',v:'open'},{label:'Delete project',v:'del',danger:true}]);
+    if(a && a.v==='open') go('#/p/'+p.id);
+    if(a && a.v==='del'){
+      if(await confirmDialog('Delete project?', '"'+ (p.name||'Untitled') +'" and all its items and photos will be removed.', true)){
+        await deleteProjectDeep(p.id); render();
+      }
+    }
+    return;
+  }
+
+  /* ----- overview: project menu ----- */
+  if(closest('[data-projmenu]')){
+    const p = STATE.project;
+    const a = await sheetMenu([{label:'Delete project',v:'del',danger:true}]);
+    if(a && a.v==='del' && await confirmDialog('Delete project?', 'This removes all items and photos.', true)){
+      await deleteProjectDeep(p.id); go('#/');
+    }
+    return;
+  }
+
+  /* ----- export / preview ----- */
+  if(closest('[data-export]')){ go('#/p/'+STATE.project.id+'/export'); return; }
+  const epk = closest('[data-exppack] button');
+  if(epk){ STATE.exportPack = epk.dataset.v; renderExport(STATE.project); return; }
+  if(closest('[data-expopen]')){ window.open(exportUrl(STATE.project), '_blank'); return; }
+  if(closest('[data-expprint]')){
+    const f = document.getElementById('expframe');
+    try{ f.contentWindow.focus(); f.contentWindow.print(); }
+    catch(err){ window.open(exportUrl(STATE.project), '_blank'); }
+    return;
+  }
+
+  /* ----- overview: items ----- */
+  if(closest('[data-additem]')){
+    const it = newItem(STATE.project); STATE.project.items.push(it); await commitSave();
+    go('#/p/'+STATE.project.id+'/i/'+it.id); return;
+  }
+  const mv = closest('[data-moveitem]');
+  if(mv){
+    const arr = STATE.project.items;
+    const i = arr.findIndex(x=>x.id===mv.dataset.moveitem);
+    const j = i + (+mv.dataset.dir);
+    if(j>=0 && j<arr.length){ [arr[i],arr[j]]=[arr[j],arr[i]]; renumber(STATE.project); await commitSave(); renderOverview(STATE.project); }
+    return;
+  }
+  const im = closest('[data-itemmenu]');
+  if(im){
+    const it = STATE.project.items.find(x=>x.id===im.dataset.itemmenu);
+    const a = await sheetMenu([{label:'Open',v:'open'},{label:'Duplicate',v:'dup'},{label:'Delete item',v:'del',danger:true}]);
+    if(!a) return;
+    if(a.v==='open') go('#/p/'+STATE.project.id+'/i/'+it.id);
+    if(a.v==='dup'){ const c=duplicateItem(STATE.project, it); await commitSave(); renderOverview(STATE.project); toast('Item duplicated'); }
+    if(a.v==='del' && await confirmDialog('Delete item?', '"'+(it.name||'Untitled item')+'" and its photos will be removed.', true)){
+      await deleteItemDeep(STATE.project, it); await commitSave(); await loadProjectPhotos(STATE.project.id); renderOverview(STATE.project);
+    }
+    return;
+  }
+
+  /* ----- item editor ----- */
+  const it = currentItem();
+
+  const qb = closest('[data-qty]');
+  if(qb && it){
+    let v = parseInt(it.qty.value,10); if(isNaN(v)) v=0;
+    v = Math.max(0, v + (+qb.dataset.qty));
+    it.qty.value = v;
+    const inp = document.querySelector('[data-p="qty.value"]'); if(inp) inp.value = v;
+    scheduleSave(); return;
+  }
+
+  const seg = closest('[data-seg] button');
+  if(seg && it){
+    const name = seg.parentElement.dataset.seg;
+    setPath(it, 'status.'+name, seg.dataset.v);
+    scheduleSave(); refreshCard('status', it); return;
+  }
+
+  const chip = closest('[data-chip], [data-chipsub]');
+  if(chip && it){
+    const gkey = chip.dataset.g, opt = chip.dataset.o;
+    const store = pg(it, gkey);
+    const parentGrp = PRESET_GROUPS.find(g=>g.key===gkey);           // top-level group?
+    const grp = parentGrp || {};
+    const i = store.values.indexOf(opt);
+    if(i>=0){
+      store.values.splice(i,1);
+    } else if((grp.exclusive||[]).includes(opt)){
+      store.values = [opt];
+    } else {
+      store.values = store.values.filter(v=> !(grp.exclusive||[]).includes(v));
+      store.values.push(opt);
+    }
+    if(parentGrp) pruneHidden(it, parentGrp);
+    scheduleSave(); refreshCard('presets', it); return;
+  }
+  const co = closest('[data-chipother]');
+  if(co && it){
+    const gkey = co.dataset.g;
+    if(STATE.otherOpen.has(gkey)){ STATE.otherOpen.delete(gkey); pg(it,gkey).other=''; }
+    else STATE.otherOpen.add(gkey);
+    scheduleSave(); refreshCard('presets', it); return;
+  }
+
+  const cadd = closest('[data-ciadd]');
+  if(cadd && it){
+    it.clientInputs.push({ priority:'required', text:'' });
+    scheduleSave(); refreshCard('ci', it);
+    const fields = document.querySelectorAll('[data-citext]');
+    if(fields.length) fields[fields.length-1].focus();
+    return;
+  }
+  const cdel = closest('[data-cidel]');
+  if(cdel && it){ it.clientInputs.splice(+cdel.dataset.i,1); scheduleSave(); refreshCard('ci', it); return; }
+  const cprio = closest('[data-ciprioseg] button');
+  if(cprio && it){
+    it.clientInputs[+cprio.parentElement.dataset.i].priority = cprio.dataset.v;
+    scheduleSave(); refreshCard('ci', it); return;
+  }
+
+  const tog = closest('[data-toggle]');
+  if(tog){
+    const k = tog.dataset.toggle;
+    if(STATE.collapsed.has(k)) STATE.collapsed.delete(k); else STATE.collapsed.add(k);
+    tog.parentElement.classList.toggle('collapsed');
+    return;
+  }
+
+  /* ----- photos ----- */
+  const addp = closest('[data-addphoto], [data-replacephoto]');
+  if(addp && it){
+    const fp = $('#filepick');
+    fp.dataset.slot = addp.dataset.slot || addp.dataset.replacephoto || addp.dataset.addphoto;
+    fp.value = '';
+    fp.click();
+    return;
+  }
+  const rmp = closest('[data-removephoto]');
+  if(rmp && it){
+    if(await confirmDialog('Remove photo?', 'This deletes the stored image.', true)){
+      await removePhoto(STATE.project, it, rmp.dataset.slot);
+      await loadProjectPhotos(STATE.project.id);
+      refreshCard('photos', it);
+    }
+    return;
+  }
+  const vp = closest('[data-viewphoto]');
+  if(vp){ const u = photoUrl(vp.dataset.viewphoto); if(u) lightbox(u); return; }
+
+  const nx = closest('[data-nextitem]');
+  if(nx && it){
+    await commitSave();
+    const nit = newItem(STATE.project); STATE.project.items.push(nit); await commitSave();
+    go('#/p/'+STATE.project.id+'/i/'+nit.id);
+    return;
+  }
+});
+
+$('#filepick').addEventListener('change', async e=>{
+  const file = e.target.files && e.target.files[0];
+  const slot = e.target.dataset.slot;
+  const it = currentItem();
+  if(!file || !it) return;
+  toast('Processing photo…');
+  try{
+    await setPhoto(STATE.project, it, slot, file);
+    await loadProjectPhotos(STATE.project.id);
+    refreshCard('photos', it);
+    toast('Photo saved');
+  }catch(err){ console.error(err); toast('Could not read that image'); }
+  e.target.value='';
+});
+
+/* ============================================================
+   13 · Init
+   ============================================================ */
+(async function init(){
+  const qs = new URLSearchParams(location.search);
+  const screens = qs.get('screens')==='1';       // volatile in-memory mode (review captures only)
+  const demo    = qs.get('demo')==='1' || screens;
+
+  if(screens){ MEM.on = true; document.body.classList.add('capture'); }
+  else{
+    try{ await openDB(); }
+    catch(e){
+      app().innerHTML = '<div class="wrap"><div class="banner">This browser is blocking local storage (IndexedDB). '
+        + 'Open the file directly (not in a private window) to use the builder.</div></div>';
+      return;
+    }
+  }
+
+  if(demo){
+    try{
+      const existing = await dbGet('projects','demo-project');
+      if(!existing) await seedSampleProject(true);
+      if(!location.hash) location.hash = '#/p/demo-project';
+    }catch(_){}
+  }
+  if(!location.hash) location.hash = '#/';
+  render();
+})();
+</script>
+</body>
+</html>
