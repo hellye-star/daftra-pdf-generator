@@ -257,6 +257,34 @@
   .expitem input{ width:16px; height:16px; flex:0 0 auto; }
   .expitem b{ color:var(--gold-ink); }
   .expitems{ margin-left:6px; }
+
+  /* ---------- Create Vista Quotation (Phase 1 bridge) ---------- */
+  .qitem{ border:1px solid var(--rule); border-radius:10px; padding:12px; margin-bottom:11px; background:var(--paper); }
+  .qitem.off{ opacity:.5; }
+  .qitem-head{ display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+  .qitem-head .qnum{ font-size:11px; font-weight:700; color:var(--gold-ink); }
+  .qitem-head input[type=checkbox]{ width:16px; height:16px; flex:0 0 auto; accent-color:var(--emerald); }
+  .qphotos{ display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+  .qph{ width:112px; border:1px solid var(--rule); border-radius:8px; overflow:hidden; background:var(--cream); }
+  .qph.p{ border-color:var(--emerald); box-shadow:0 0 0 1px var(--emerald) inset; }
+  .qph.s{ border-color:var(--gold-ink); box-shadow:0 0 0 1px var(--gold-ink) inset; }
+  .qph img{ display:block; width:100%; height:78px; object-fit:cover; cursor:pointer; }
+  .qph-tag{ font-size:8.5px; font-weight:700; letter-spacing:.08em; text-align:center; padding:2px 0; color:var(--grey-soft); min-height:14px; }
+  .qph.p .qph-tag{ color:var(--emerald); }
+  .qph.s .qph-tag{ color:var(--gold-ink); }
+  .qph-btns{ display:flex; border-top:1px solid var(--rule); }
+  .qph-btns button{ flex:1; font-size:9.5px; padding:4px 0; background:var(--paper); border:0; border-right:1px solid var(--rule); color:var(--grey-soft); }
+  .qph-btns button:last-child{ border-right:0; }
+  .qph-btns button.on{ background:var(--emerald); color:#fff; }
+  .qph-none{ font-size:11px; color:var(--faint); padding:6px 0; }
+  .qwarn{ background:#FBF3E0; border:1px solid #E7D5A8; color:var(--gold-ink); font-size:12px; border-radius:9px; padding:9px 11px; margin-bottom:11px; }
+  .qc-picker{ border:1px solid var(--rule); border-radius:10px; padding:10px; margin-bottom:11px; background:var(--cream); }
+  .qc-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:12px; }
+  .qc-results{ max-height:230px; overflow:auto; display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+  .qc-row{ text-align:left; background:var(--paper); border:1px solid var(--rule); border-radius:7px; padding:7px 9px; display:flex; flex-direction:column; gap:2px; }
+  .qc-row:hover{ border-color:var(--emerald); }
+  .qc-nm{ font-size:13px; font-weight:600; color:var(--ink); }
+  .qc-meta{ font-size:11px; color:var(--grey-soft); }
   /* full-height capture mode (?screens=1) */
   body.capture .bottombar{ position:static; }
   body.capture .wrap{ padding-bottom:20px; }
@@ -768,6 +796,7 @@ const STATE = {
   collapsed:new Set(['notes','projmeta']),
   exportPack:'client',
   exportItems:null,   // null = all; else Set of item ids
+  quote:null,         // Create Vista Quotation — prep-screen working state
 };
 let saveTimer=null;
 function scheduleSave(){
@@ -880,6 +909,7 @@ function parseHash(){
   const parts = location.hash.replace(/^#\/?/,'').split('/').filter(Boolean);
   if(parts[0]==='p' && parts[2]==='i') return { view:'item', pid:parts[1], iid:parts[3] };
   if(parts[0]==='p' && parts[2]==='export') return { view:'export', pid:parts[1] };
+  if(parts[0]==='p' && parts[2]==='quote') return { view:'quote', pid:parts[1] };
   if(parts[0]==='p') return { view:'overview', pid:parts[1] };
   return { view:'projects' };
 }
@@ -899,6 +929,7 @@ async function render(){
 
   if(r.view==='overview'){ STATE.otherOpen.clear(); return renderOverview(p); }
   if(r.view==='export'){ return renderExport(p); }
+  if(r.view==='quote'){ return renderQuote(p); }
   if(r.view==='item'){
     const it = p.items.find(x=>x.id===r.iid);
     if(!it){ go('#/p/'+p.id); return; }
@@ -1024,6 +1055,7 @@ function renderOverview(p){
     +  '</div></div>'
     +  (p.items.length
         ? '<button class="btn btn-primary full mt10" data-export>Export / Preview PDF →</button>'
+          + '<button class="btn btn-ghost full mt10" data-quote>Create Vista Quotation →</button>'
         : '')
     + '</div>';
 }
@@ -1375,12 +1407,21 @@ document.addEventListener('change', e=>{
     renderExport(p); return;
   }
 
+  /* create-vista-quotation prep screen */
+  if(t.dataset.qinc!=null && STATE.quote){ quoteToggleInclude(t.dataset.qinc, t.checked); return; }
+  if(t.dataset.qf!=null && STATE.quote){ quoteSetField(t.dataset.qf, t.value, t.dataset.qitem || null); return; }
+
   const it=currentItem();
   if(it && t.dataset.p!=null){
     setPath(it, t.dataset.p, t.value);
     if(t.dataset.p==='currency' || t.dataset.p==='qty.unit') syncPricingTotal(it);
     scheduleSave();
   }
+});
+
+/* live client-search filter — repaints only the results list, never the screen */
+document.addEventListener('input', e=>{
+  if(e.target.dataset.qcsearch != null){ QCLIENT.query = e.target.value; quotePaintClientResults(); }
 });
 
 document.addEventListener('click', async e=>{
@@ -1423,6 +1464,18 @@ document.addEventListener('click', async e=>{
     }
     return;
   }
+
+  /* ----- create vista quotation ----- */
+  if(closest('[data-quote]')){ go('#/p/'+STATE.project.id+'/quote'); return; }
+  const qphb = closest('[data-qphrole]');
+  if(qphb){ quoteSetPhoto(qphb.dataset.qitem, qphb.dataset.pid, qphb.dataset.qphrole); return; }
+  const qzoom = closest('img[data-qzoom]');
+  if(qzoom){ lightbox([qzoom.src], 0); return; }
+  if(closest('[data-qopen]')){ await openInVistaQuotation(); return; }
+  if(closest('[data-qcfetch]')){ await quoteFetchDaftraClients(); return; }
+  if(closest('[data-qcclose]')){ quoteCloseClientPicker(); return; }
+  const qcpick = closest('[data-qcpick]');
+  if(qcpick){ quoteSelectDaftraClient(qcpick.dataset.qcpick); return; }
 
   /* ----- export / preview ----- */
   if(closest('[data-export]')){ go('#/p/'+STATE.project.id+'/export'); return; }
@@ -1618,6 +1671,573 @@ $('#filepick').addEventListener('change', async e=>{
   }catch(err){ console.error(err); toast('Could not read that image'); }
   e.target.value=''; e.target.multiple=false;
 });
+
+/* ============================================================
+   10c · View — Create Vista Quotation  (Phase 1 bridge)
+   ------------------------------------------------------------
+   Prepares a clean, fully editable payload and hands it to the
+   EXISTING Vista quotation editor/PDF (daftra-pdf-generator_1.html).
+   No quotation template is created here. Transfer goes through a
+   dedicated single-use IndexedDB (vista_quotation_handoff) — the
+   vista_tpb schema is never touched.
+   ============================================================ */
+const QUOTE_GENERATOR_FILE = 'daftra-pdf-generator_1.html';
+const QUOTE_HANDOFF_DB = 'vista_quotation_handoff';
+const QUOTE_VAT_RATE = 0.15;
+
+function qGroupVals(it, key){
+  const g = it.presets && it.presets[key];
+  return (g && Array.isArray(g.values)) ? g.values.slice() : [];
+}
+function qDimsPhrase(it){
+  const d = it.dims || {};
+  const w = parseFloat(d.w), h = parseFloat(d.h);
+  const m = n => (n/1000).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+  if(isFinite(w) && w>0 && isFinite(h) && h>0) return 'approx. '+m(w)+' × '+m(h)+' m';
+  if(isFinite(w) && w>0) return 'approx. '+m(w)+' m wide';
+  if(isFinite(h) && h>0) return 'approx. '+m(h)+' m high';
+  return '';
+}
+/* lower-case for prose, but keep ALL-CAPS acronyms (ACP, LED, PVC, MDF, UV, CNC) intact */
+function qLc(s){
+  return String(s||'').split(/(\s+|\/)/).map(tok=>{
+    const w = tok.trim();
+    if(!w) return tok;
+    if(w.length<=4 && w===w.toUpperCase() && /[A-Z]/.test(w)) return tok;
+    return tok.toLowerCase();
+  }).join('');
+}
+const Q_EXISTWORK_PHRASE = {
+  'Remove Existing':'removal of existing work',
+  'Modify Existing':'modification of existing work',
+  'Replace Branding Only':'replacement of existing branding',
+  'Reuse Existing Base / Structure':'reuse of the existing base / structure',
+  'Surface Preparation':'surface preparation',
+  'Repaint':'repainting',
+};
+/* Compose a concise commercial line from data that ALREADY EXISTS on the item.
+   Never invents a spec. Never dumps the full Technical Specifications table.
+   Fully editable by the user before transfer. */
+function composeQuoteDescription(it){
+  const scope = String((it.notes && it.notes.scope) || '').trim().replace(/\s+/g,' ').replace(/[.;,\s]+$/,'');
+  const material    = qGroupVals(it,'material').join(' / ');
+  const fabrication = [...qGroupVals(it,'branding'), ...qGroupVals(it,'fabrication')]
+                        .filter((v,i,a)=>a.indexOf(v)===i).join(', ');
+  const finish   = qGroupVals(it,'finish').join(' / ');
+  const lighting = qGroupVals(it,'lighting').filter(v=>v && v!=='None');
+  const existWork = qGroupVals(it,'existingWork').filter(v=>v && v!=='Keep As Is');
+  const existNote = String((it.presets && it.presets.existingWorkNote) || '').trim().replace(/[.;,\s]+$/,'');
+
+  let lead = scope;
+  if(!lead){
+    const bits = [];
+    if(lighting.length) bits.push('illuminated');
+    if(material) bits.push(qLc(material));
+    if(fabrication) bits.push(qLc(fabrication));
+    lead = bits.join(' ').trim() || String(it.name || '').trim();
+  }
+
+  const parts = [];
+  if(lead) parts.push(lead);
+  const dim = qDimsPhrase(it); if(dim) parts.push(dim);
+  if(finish) parts.push(qLc(finish)+' finish');
+  if(lighting.length && !/illuminat|lit|led|light/i.test(parts.join(' ')))
+    parts.push(qLc(lighting.join(' / '))+' lighting');
+
+  let out = parts.filter(Boolean).join(', ');
+  if(existWork.length || existNote){
+    // Existing-work handling only — never appended with "and installation".
+    // Installation is added ONLY if the item's own stored scope/technical text
+    // actually mentions it (checked below); nothing is invented here.
+    const ewPhrase = existNote
+      ? existNote
+      : existWork.map(v=> Q_EXISTWORK_PHRASE[v] || qLc(v)).join(' and ');
+    out += (out ? ', ' : '') + 'including ' + ewPhrase;
+  }
+  const scopeText = ((it.notes && (it.notes.scope||'') + ' ' + (it.notes.technical||'')) || '').toLowerCase();
+  if(/\binstall(ation|ing|ed|s)?\b/.test(scopeText) && !/install/i.test(out))
+    out += (out ? ', ' : '') + 'including installation';
+  out = out.replace(/\s+/g,' ').trim();
+  if(out) out = out.charAt(0).toUpperCase() + out.slice(1) + '.';
+  return out;
+}
+
+function buildQuoteState(p){
+  return {
+    pid: p.id,
+    quoteNo: '',
+    client: p.client || '',
+    clientVat: '',
+    clientCr: '',
+    clientAddress1: '',
+    clientCity: '',
+    clientPostal: '',
+    daftraClientId: '',
+    deliveryDays: '',
+    notes: '',
+    items: p.items.map(it=>({
+      id: it.id,
+      include: true,
+      name: it.name || 'Untitled item',
+      description: composeQuoteDescription(it),
+      qty: (it.qty && it.qty.value != null) ? String(it.qty.value) : '1',
+      unit: (it.qty && it.qty.unit) || 'no.',
+      unitPrice: it.unitPrice || '',
+      currency: it.currency || 'SAR',
+      photoPrimary: primaryExisting(it) || null,
+      photoSecondary: null,
+      _existing: existingIds(it).slice(),
+    })),
+  };
+}
+function ensureQuoteState(p){
+  if(!STATE.quote || STATE.quote.pid !== p.id){
+    STATE.quote = buildQuoteState(p);
+    QCLIENT.open = false; QCLIENT.query = '';   // fresh screen — collapse the picker
+  }
+  return STATE.quote;
+}
+
+function quoteSetField(f, val, itemId){
+  const q = STATE.quote; if(!q) return;
+  if(itemId){ const x = q.items.find(i=>i.id===itemId); if(x) x[f] = val; }
+  else { q[f] = val; }
+  // re-render for fields that drive the header warnings / SAR block
+  if(f==='currency' || f==='unitPrice' || f==='quoteNo') renderQuote(STATE.project);
+}
+function quoteToggleInclude(itemId, on){
+  const x = STATE.quote && STATE.quote.items.find(i=>i.id===itemId);
+  if(x){ x.include = !!on; renderQuote(STATE.project); }
+}
+function quoteSetPhoto(itemId, pid, role){
+  const x = STATE.quote && STATE.quote.items.find(i=>i.id===itemId);
+  if(!x) return;
+  if(role==='primary'){
+    x.photoPrimary = (x.photoPrimary===pid) ? null : pid;
+    if(x.photoSecondary===pid) x.photoSecondary = null;
+  } else {
+    x.photoSecondary = (x.photoSecondary===pid) ? null : pid;
+    if(x.photoPrimary===pid) x.photoPrimary = null;
+  }
+  renderQuote(STATE.project);
+}
+
+function quoteToday(){
+  const d = new Date(); const p = n => String(n).padStart(2,'0');
+  return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear();
+}
+function quoteSanitizeDays(raw){
+  const s = String(raw==null?'':raw).trim();
+  if(!s) return '';
+  const n = Math.floor(Number(s));
+  return (isFinite(n) && n>=1) ? n : '';
+}
+/* two-button dialog with custom labels; resolves true on the primary action */
+function quoteConfirm2(title, msg, okLabel, cancelLabel){
+  return new Promise(res=>{
+    const o=document.createElement('div'); o.className='overlay';
+    o.innerHTML='<div class="dialog"><h3>'+esc(title)+'</h3><p>'+esc(msg)+'</p><div class="acts">'
+      +'<button class="btn btn-ghost" data-x="0">'+esc(cancelLabel)+'</button>'
+      +'<button class="btn btn-primary" data-x="1">'+esc(okLabel)+'</button></div></div>';
+    o.addEventListener('click',e=>{
+      if(e.target===o){ o.remove(); res(false); return; }
+      const x=e.target.closest('[data-x]'); if(x){ o.remove(); res(x.dataset.x==='1'); }
+    });
+    document.body.appendChild(o);
+  });
+}
+
+/* ── Fetch client from Daftra ────────────────────────────────────────────────
+   Uses the SAME read-only proxy the Financial Dashboard uses: GET /daftra/…
+   The API key lives only in proxy.py / config.json — never in browser code.
+   Requires the suite to be served by proxy.py (same origin). If it is not
+   reachable (e.g. opened via a plain static server) the picker degrades to a
+   clear message and manual entry still works. */
+const QCLIENT = { open:false, loading:false, error:'', clients:null, query:'' };
+
+async function quoteFetchDaftraClients(){
+  if(QCLIENT.clients){ QCLIENT.open = true; renderQuote(STATE.project); return; }
+  QCLIENT.open = true; QCLIENT.loading = true; QCLIENT.error = '';
+  if(!QCLIENT.query) QCLIENT.query = (STATE.quote && STATE.quote.client) || '';
+  renderQuote(STATE.project);
+  try{
+    const all = [];
+    for(let page=1; page<=20; page++){
+      const res = await fetch('/daftra/clients.json?limit=100&page='+page, { headers:{ 'Accept':'application/json' } });
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if(!res.ok || ct.indexOf('json') === -1){
+        let msg = 'HTTP ' + res.status;
+        try{ const j = await res.json(); msg = j.error || j.message || msg; }catch(_){}
+        throw new Error(msg);
+      }
+      const j = await res.json();
+      const rows = (j.data || []).map(r => r.Client || r).filter(Boolean);
+      rows.forEach(c=>{
+        const name = c.business_name
+          || (String(c.first_name||'') + ' ' + String(c.last_name||'')).trim()
+          || ('Client #' + c.id);
+        all.push({
+          id: String(c.id), name,
+          vat: String(c.bn1 || '').trim(), cr: String(c.bn2 || '').trim(),
+          address1: String(c.address1 || c.address || '').trim(),
+          city: String(c.city || '').trim(),
+          postal: String(c.postal_code || c.zip || '').trim(),
+        });
+      });
+      const pc = parseInt((j.pagination||{}).page_count || 0, 10);
+      if(rows.length < 100) break;
+      if(pc && page >= pc) break;
+    }
+    all.sort((a,b)=> a.name.localeCompare(b.name));
+    QCLIENT.clients = all;
+  }catch(err){
+    QCLIENT.error = 'Could not reach Daftra (' + (err.message || 'unknown') + '). '
+      + 'Open the suite through proxy.py to use client lookup — you can still type the details in manually.';
+  }
+  QCLIENT.loading = false;
+  renderQuote(STATE.project);
+}
+function quoteCloseClientPicker(){ QCLIENT.open = false; renderQuote(STATE.project); }
+function quoteClientMatches(){
+  const q = String(QCLIENT.query || '').trim().toLowerCase();
+  const list = QCLIENT.clients || [];
+  if(!q) return list.slice(0, 40);
+  return list.filter(c =>
+    c.name.toLowerCase().includes(q) || c.vat.includes(q) || c.cr.includes(q)
+  ).slice(0, 40);
+}
+function quotePaintClientResults(){
+  const box = document.getElementById('qc-results');
+  if(!box) return;
+  const m = quoteClientMatches();
+  box.innerHTML = m.length
+    ? m.map(c =>
+        '<button class="qc-row" data-qcpick="'+esc(c.id)+'">'
+        + '<span class="qc-nm">'+esc(c.name)+'</span>'
+        + '<span class="qc-meta">'+(c.vat?('VAT '+esc(c.vat)):'no VAT')+(c.cr?('  ·  CR '+esc(c.cr)):'')+'</span>'
+        + '</button>').join('')
+    : '<div class="hint" style="padding:8px 2px">No matching client.</div>';
+}
+function quoteSelectDaftraClient(id){
+  const c = QCLIENT.clients && QCLIENT.clients.find(x=>x.id===id);
+  if(!c || !STATE.quote) return;
+  STATE.quote.client         = c.name;
+  STATE.quote.clientVat      = c.vat || '';
+  STATE.quote.clientCr       = c.cr || '';
+  STATE.quote.clientAddress1 = c.address1 || '';
+  STATE.quote.clientCity     = c.city || '';
+  STATE.quote.clientPostal   = c.postal || '';
+  STATE.quote.daftraClientId = c.id;
+  QCLIENT.open = false;
+  toast('Client filled from Daftra — values stay editable');
+  renderQuote(STATE.project);
+}
+function quoteClientPickerHtml(){
+  if(!QCLIENT.open) return '';
+  let inner;
+  if(QCLIENT.loading){
+    inner = '<div class="hint" style="padding:6px 2px">Loading clients from Daftra…</div>';
+  } else if(QCLIENT.error){
+    inner = '<div class="qwarn" style="margin:0">'+esc(QCLIENT.error)+'</div>';
+  } else {
+    const m = quoteClientMatches();
+    inner = '<input id="qc-search" data-qcsearch value="'+esc(QCLIENT.query)+'" placeholder="Search company / VAT / CR" autocomplete="off">'
+      + '<div id="qc-results" class="qc-results">'
+      + (m.length
+          ? m.map(c => '<button class="qc-row" data-qcpick="'+esc(c.id)+'"><span class="qc-nm">'+esc(c.name)+'</span>'
+              + '<span class="qc-meta">'+(c.vat?('VAT '+esc(c.vat)):'no VAT')+(c.cr?('  ·  CR '+esc(c.cr)):'')+'</span></button>').join('')
+          : '<div class="hint" style="padding:8px 2px">No matching client.</div>')
+      + '</div>';
+  }
+  return '<div class="qc-picker">'
+    + '<div class="qc-head"><b>Daftra clients</b>'
+    + '<button class="btn btn-ghost btn-sm" data-qcclose>Close</button></div>'
+    + inner + '</div>';
+}
+
+/* Combine the selected 1–2 existing photos into ONE clean image so the existing
+   single-photo quotation layout (doc._items[]._photoDataUrl) is reused unchanged.
+   Aspect ratio preserved, no crop, small white gap, no labels. */
+function quoteLoadImg(blob){
+  return new Promise((res,rej)=>{
+    const url = URL.createObjectURL(blob);
+    const im = new Image();
+    im.onload  = ()=>{ im._url = url; res(im); };
+    im.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error('image decode failed')); };
+    im.src = url;
+  });
+}
+async function composeQuotePhoto(primaryId, secondaryId){
+  const ids = [primaryId, secondaryId].filter(Boolean);
+  if(!ids.length) return '';
+  const blobs = ids.map(id=>{ const r = photoRec(id); return r && r.blob; }).filter(Boolean);
+  if(!blobs.length) return '';
+
+  let imgs = [];
+  try { imgs = await Promise.all(blobs.map(quoteLoadImg)); }
+  catch(e){ console.warn('[Quotation] photo compose failed:', e); return ''; }
+
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  const BG = '#ffffff';
+  let out = '';
+
+  if(imgs.length === 1){
+    const im = imgs[0];
+    const s = Math.min(1, 900 / Math.max(im.naturalWidth, im.naturalHeight));
+    cv.width  = Math.max(1, Math.round(im.naturalWidth * s));
+    cv.height = Math.max(1, Math.round(im.naturalHeight * s));
+    ctx.fillStyle = BG; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.drawImage(im, 0,0, cv.width, cv.height);
+  } else {
+    const H = 560, GAP = 14;
+    const panels = imgs.slice(0,2).map(im=>{
+      const s = H / im.naturalHeight;
+      return { im, w: Math.max(1, Math.round(im.naturalWidth * s)), h: H };
+    });
+    cv.width  = panels.reduce((a,p)=>a+p.w,0) + GAP;
+    cv.height = H;
+    ctx.fillStyle = BG; ctx.fillRect(0,0,cv.width,cv.height);
+    let x = 0;
+    for(const p of panels){
+      ctx.drawImage(p.im, 0,0, p.im.naturalWidth, p.im.naturalHeight, x, 0, p.w, p.h);
+      x += p.w + GAP;
+    }
+    if(cv.width > 1500){
+      const s = 1500 / cv.width;
+      const c2 = document.createElement('canvas');
+      c2.width = 1500; c2.height = Math.round(cv.height * s);
+      const g2 = c2.getContext('2d');
+      g2.fillStyle = BG; g2.fillRect(0,0,c2.width,c2.height);
+      g2.drawImage(cv, 0,0, c2.width, c2.height);
+      out = c2.toDataURL('image/jpeg', 0.9);
+    }
+  }
+  if(!out) out = cv.toDataURL('image/jpeg', 0.9);
+  imgs.forEach(im=>{ if(im._url) URL.revokeObjectURL(im._url); });
+  return out;
+}
+
+function quoteOpenHandoffDB(){
+  return new Promise((res,rej)=>{
+    const r = indexedDB.open(QUOTE_HANDOFF_DB, 1);
+    r.onupgradeneeded = ()=>{
+      const db = r.result;
+      if(!db.objectStoreNames.contains('payload')) db.createObjectStore('payload',{keyPath:'id'});
+    };
+    r.onsuccess = ()=>res(r.result);
+    r.onerror   = ()=>rej(r.error);
+  });
+}
+async function quoteWriteHandoff(doc){
+  const db = await quoteOpenHandoffDB();
+  await new Promise((res,rej)=>{
+    const tx = db.transaction('payload','readwrite');
+    tx.objectStore('payload').put({
+      id:'current', createdAt:Date.now(), source:'technical-proposal',
+      pid: STATE.quote.pid, doc,
+    });
+    tx.oncomplete = ()=>res();
+    tx.onerror    = ()=>rej(tx.error);
+  });
+}
+
+async function openInVistaQuotation(){
+  const q = STATE.quote; if(!q) return;
+  const inc = q.items.filter(x=>x.include);
+  if(!inc.length){ toast('Select at least one item'); return; }
+
+  // HARD BLOCK — this milestone's Vista quotation template is SAR-only.
+  const nonSar = inc.filter(x=>x.currency && x.currency!=='SAR');
+  if(nonSar.length){
+    await confirmDialog('SAR only',
+      'This Vista quotation template currently supports SAR only. '
+      +'Change item currency to SAR before continuing.', false);
+    return;
+  }
+
+  // Blank quotation number — never auto-fill 001 silently; make the user choose.
+  if(!String(q.quoteNo || '').trim()){
+    const ok = await quoteConfirm2('Quotation number is blank',
+      'No Quotation No. was entered. The quotation will open without a number for you to fill in. Continue?',
+      'Continue Anyway', 'Go Back');
+    if(!ok) return;
+  }
+
+  // Missing Unit Price — warn, never guess.
+  const noPrice = inc.filter(x=>moneyNum(x.unitPrice)==null);
+  if(noPrice.length){
+    const ok = await quoteConfirm2('Missing Unit Price',
+      noPrice.length+' selected item'+(noPrice.length>1?'s have':' has')+' no Unit Price. '
+      +(noPrice.length>1?'They':'It')+' will appear as SAR 0.00 in the quotation.',
+      'Continue Anyway', 'Go Back / Review Prices');
+    if(!ok) return;
+  }
+
+  toast('Preparing quotation…');
+  const round2 = n => Math.round((Number(n)+Number.EPSILON)*100)/100;
+  let subtotal = 0;
+  const _items = [];
+  for(const x of inc){
+    const price = moneyNum(x.unitPrice);
+    const qty   = moneyNum(x.qty);
+    const before = round2((price!=null && qty!=null) ? price*qty : 0);
+    subtotal += before;
+
+    let desc = String(x.description || '').trim();
+    const unit = String(x.unit || '').trim();
+    // The quotation row has a numeric Qty column but no Unit column — note a
+    // non-trivial unit of measure in the description so it still prints. This
+    // is a factual unit tag, not commercial scope.
+    if(unit && unit.toLowerCase() !== 'no.'){
+      const tag = '(per ' + unit + ')';
+      desc = desc ? (/[.]\s*$/.test(desc) ? desc.replace(/\s*\.\s*$/, '') + ' ' + tag + '.' : desc + ' ' + tag)
+                  : tag;
+    }
+
+    // Pre-compose every photo variant the user might want in the quotation
+    // editor: photo 1 alone, photo 2 alone, and both side-by-side. The generator
+    // switches between them with no re-compositing (setQuoItemPhotoVariant).
+    const pP = x.photoPrimary, pS = x.photoSecondary;
+    const variants = {};
+    if(pP)        variants.primary   = await composeQuotePhoto(pP, null);
+    if(pS)        variants.secondary = await composeQuotePhoto(pS, null);
+    if(pP && pS)  variants.both      = await composeQuotePhoto(pP, pS);
+    const defKey = (pP && pS) ? 'both' : (pP ? 'primary' : (pS ? 'secondary' : null));
+
+    _items.push({
+      item: x.name || '—',
+      description: desc,
+      unit_price: (x.unitPrice==='' || price==null) ? '' : price,
+      quantity:   (x.qty==='' || qty==null) ? '' : qty,
+      item_subtotal: before,
+      tax1_percent: '15%',
+      tax1_value: round2(before * QUOTE_VAT_RATE),
+      subtotal:   round2(before * (1 + QUOTE_VAT_RATE)),
+      _photoDataUrl: defKey ? variants[defKey] : '',
+      _photoSize: (defKey === 'both') ? 'large' : 'medium',
+      ...(Object.keys(variants).length > 1
+          ? { _tpPhotoVariants: variants, _tpPhotoActive: defKey }
+          : {}),
+    });
+  }
+
+  const doc = {
+    no: String(q.quoteNo || '').trim(),
+    date: quoteToday(),
+    client_business_name: q.client || '',
+    _clientVat: q.clientVat || '',
+    _clientCr:  q.clientCr || '',
+    client_address1:     String(q.clientAddress1 || '').trim(),
+    client_city:         String(q.clientCity || '').trim(),
+    client_postal_code:  String(q.clientPostal || '').trim(),
+    summary_subtotal: round2(subtotal),
+    summary_tax:      round2(subtotal * QUOTE_VAT_RATE),
+    total_amount:     round2(subtotal * (1 + QUOTE_VAT_RATE)),
+    _deliveryDays:    quoteSanitizeDays(q.deliveryDays),
+    _quotationNotes:  String(q.notes || '').trim(),
+    _items,
+  };
+
+  try { await quoteWriteHandoff(doc); }
+  catch(e){ console.error(e); toast('Could not prepare the handoff'); return; }
+
+  window.open(QUOTE_GENERATOR_FILE + '?tpquo=' + Date.now() + '#tp-quo', '_blank');
+}
+
+function renderQuote(p){
+  const q = ensureQuoteState(p);
+  const nonSar = q.items.filter(x=>x.include && x.currency && x.currency!=='SAR');
+  const noPrice = q.items.filter(x=>x.include && moneyNum(x.unitPrice)==null);
+  const blocked = nonSar.length > 0;
+  const curOpts  = c => CURRENCIES.map(k=>'<option'+(k===c?' selected':'')+'>'+k+'</option>').join('');
+  const unitOpts = u => UNITS.map(k=>'<option'+(k===u?' selected':'')+'>'+esc(k)+'</option>').join('')
+                        + (UNITS.includes(u) ? '' : '<option selected>'+esc(u)+'</option>');
+
+  const itemHtml = q.items.map((x,i)=>{
+    const existing = x._existing.filter(pid=>photoUrl(pid));
+    const photos = existing.length
+      ? '<div class="qphotos">'+existing.map(pid=>{
+          const isP = x.photoPrimary===pid, isS = x.photoSecondary===pid;
+          return '<div class="qph'+(isP?' p':'')+(isS?' s':'')+'">'
+            + '<img src="'+photoUrl(pid)+'" alt="" data-qzoom="'+esc(pid)+'">'
+            + '<div class="qph-tag">'+(isP?'PRIMARY':(isS?'SECONDARY':''))+'</div>'
+            + '<div class="qph-btns">'
+            +   '<button data-qphrole="primary" data-qitem="'+esc(x.id)+'" data-pid="'+esc(pid)+'" class="'+(isP?'on':'')+'">Primary</button>'
+            +   '<button data-qphrole="secondary" data-qitem="'+esc(x.id)+'" data-pid="'+esc(pid)+'" class="'+(isS?'on':'')+'">2nd</button>'
+            + '</div></div>';
+        }).join('')+'</div>'
+      : '<div class="qph-none">No existing photos on this item.</div>';
+
+    return '<div class="qitem'+(x.include?'':' off')+'">'
+      + '<div class="qitem-head">'
+      +   '<input type="checkbox" data-qinc="'+esc(x.id)+'"'+(x.include?' checked':'')+'>'
+      +   '<span class="qnum">'+esc((p.items[i]&&p.items[i].number)||'')+'</span>'
+      +   '<input data-qf="name" data-qitem="'+esc(x.id)+'" value="'+esc(x.name)+'" placeholder="Item name">'
+      + '</div>'
+      + '<div class="field"><label>Quotation description</label>'
+      +   '<textarea data-qf="description" data-qitem="'+esc(x.id)+'" rows="3" placeholder="Concise commercial description — editable">'+esc(x.description)+'</textarea></div>'
+      + '<div class="row">'
+      +   '<div class="field"><label>Quantity</label><input data-qf="qty" data-qitem="'+esc(x.id)+'" value="'+esc(x.qty)+'" inputmode="decimal"></div>'
+      +   '<div class="field"><label>Unit</label><select data-qf="unit" data-qitem="'+esc(x.id)+'">'+unitOpts(x.unit)+'</select></div>'
+      + '</div>'
+      + '<div class="row">'
+      +   '<div class="field"><label>Unit price</label><input data-qf="unitPrice" data-qitem="'+esc(x.id)+'" value="'+esc(x.unitPrice)+'" inputmode="decimal" placeholder="blank = not priced"></div>'
+      +   '<div class="field"><label>Currency</label><select data-qf="currency" data-qitem="'+esc(x.id)+'">'+curOpts(x.currency)+'</select></div>'
+      + '</div>'
+      + '<div class="field" style="margin-bottom:0"><label>Existing photos — choose up to 2</label>'+photos+'</div>'
+      + '</div>';
+  }).join('');
+
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'">‹ '+esc(p.name||'Project')+'</button>'
+    + '<span class="title">Create Vista Quotation</span></div>'
+    + '<div class="wrap">'
+    +  (blocked
+        ? '<div class="banner">This Vista quotation template currently supports SAR only. '
+          + 'Change item currency to SAR before continuing.'
+          + ' <b>('+[...new Set(nonSar.map(x=>x.currency))].join(', ')+' on '+nonSar.length+' item'+(nonSar.length>1?'s':'')+')</b></div>'
+        : '')
+    +  (!blocked && noPrice.length
+        ? '<div class="qwarn">'+noPrice.length+' selected item'+(noPrice.length>1?'s have':' has')+' no Unit Price — '
+          + (noPrice.length>1?'they':'it')+' will appear as SAR 0.00. You can still continue intentionally.</div>'
+        : '')
+    +  '<div class="card"><div class="eyebrow">Quotation</div><div class="body">'
+    +    '<div class="field" style="margin-bottom:0"><label>Quotation No.</label>'
+    +      '<input data-qf="quoteNo" value="'+esc(q.quoteNo)+'" placeholder="e.g. VU-2026-0142" style="max-width:260px">'
+    +      (String(q.quoteNo||'').trim() ? '' : '<div class="qwarn" style="margin-top:8px">Quotation number is blank — you can continue and fill it in later, but it won’t be auto-generated.</div>')
+    +    '</div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Client'
+    +    ' <button class="btn btn-ghost btn-sm" data-qcfetch style="float:right;margin-top:-4px">Fetch client from Daftra</button></div><div class="body">'
+    +    quoteClientPickerHtml()
+    +    '<div class="field"><label>Client name</label><input data-qf="client" value="'+esc(q.client)+'" placeholder="Client / company"></div>'
+    +    '<div class="row">'
+    +      '<div class="field"><label>VAT reg. no.</label><input data-qf="clientVat" value="'+esc(q.clientVat)+'" placeholder="Optional"></div>'
+    +      '<div class="field"><label>CR no.</label><input data-qf="clientCr" value="'+esc(q.clientCr)+'" placeholder="Optional"></div>'
+    +    '</div>'
+    +    '<div class="field" style="margin-bottom:0"><label>Address <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(optional — shown on the quotation)</span></label>'
+    +      '<input data-qf="clientAddress1" value="'+esc(q.clientAddress1)+'" placeholder="Street / building" style="margin-bottom:6px">'
+    +      '<div class="row"><div class="field" style="margin-bottom:0"><input data-qf="clientCity" value="'+esc(q.clientCity)+'" placeholder="City"></div>'
+    +      '<div class="field" style="margin-bottom:0"><input data-qf="clientPostal" value="'+esc(q.clientPostal)+'" placeholder="Postal code"></div></div>'
+    +    '</div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Delivery &amp; notes</div><div class="body">'
+    +    '<div class="field"><label>Delivery / production — working days</label><input data-qf="deliveryDays" value="'+esc(q.deliveryDays)+'" inputmode="numeric" placeholder="e.g. 10" style="max-width:150px"></div>'
+    +    '<div class="field" style="margin-bottom:0"><label>Quotation notes / regulations</label><textarea data-qf="notes" rows="3" placeholder="Optional — printed as an extra block below the standard Vista terms">'+esc(q.notes)+'</textarea></div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Items <span class="rt">'+q.items.filter(x=>x.include).length+' of '+q.items.length+' selected</span></div><div class="body">'
+    +    (itemHtml || '<div class="hint">This project has no items.</div>')
+    +  '</div></div>'
+    +  '<button class="btn btn-primary full mt10" data-qopen'+(blocked?' disabled style="opacity:.45;cursor:not-allowed"':'')+'>Open in Vista Quotation →</button>'
+    +  '<div class="hint mt6">'
+    +    (blocked
+        ? 'Transfer is blocked while any selected item uses a non-SAR currency.'
+        : 'Opens the existing Vista quotation editor in a new tab with these items pre-filled. Prices, notes, delivery days and photos stay editable there before the PDF is downloaded.')
+    +  '</div>'
+    + '</div>';
+}
 
 /* ============================================================
    13 · Init

@@ -1130,6 +1130,18 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
       <div class="pp-closing-totals">${summaryBlockHTML}</div>
     </div>` : '';
 
+  // Optional free-form Quotation Notes / Regulations (Quotation only) — an
+  // ADDITIONAL block that never replaces the standard hardcoded Terms above.
+  // Rendered only when doc._quotationNotes has text; blank => byte-for-byte
+  // unchanged output. Filled via buildQuoNotesPanelHTML()'s no-print field or
+  // carried in from a Technical Proposal handoff (importVistaQuotationFromTP()).
+  const quoNotesText = (!isInv && doc._quotationNotes != null) ? String(doc._quotationNotes).trim() : '';
+  const quoNotesBlockHTML = quoNotesText ? `
+      <div class="pp-quo-notes" style="margin-top:8px;padding:9px 13px;background:#F7F6F4;border-left:2px solid #C8A96A;page-break-inside:avoid;">
+        <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:3px;">Notes &amp; Regulations &nbsp;&middot;&nbsp; <span style="font-family:'Cairo',sans-serif;letter-spacing:0;font-weight:400;">ملاحظات وتنظيمات</span></div>
+        <div style="font-family:'Jost',sans-serif;font-size:8.5px;font-weight:300;line-height:1.55;color:#1C1C1A;white-space:pre-wrap;unicode-bidi:plaintext;">${escapeHtml(quoNotesText)}</div>
+      </div>` : '';
+
   return `
     <!-- HEADER: logo | QR (invoices only) | title -->
     <div class="pp-header${isInv ? '' : ' pp-header-quo'}">
@@ -1230,6 +1242,7 @@ function buildInvoicePDFPageHTML(doc, type, c, qrTargetId = 'pp-qr-target') {
       </div>
 
       ${closingHTML}
+      ${quoNotesBlockHTML}
     </div>
 
     <!-- FOOTER: invoices only -->
@@ -1257,6 +1270,8 @@ function renderPreview() {
     : '';
   // Optional manual Delivery Timeline field — Quotation (estimates) only.
   const quoDeliveryPanel = !isInv ? buildQuoDeliveryPanelHTML(doc) : '';
+  // Optional free-form Quotation Notes / Regulations editor — Quotation only.
+  const quoNotesPanel = !isInv ? buildQuoNotesPanelHTML(doc) : '';
 
   $('mainArea').innerHTML = `
     <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
@@ -1267,6 +1282,7 @@ function renderPreview() {
       </div>
     </div>
     ${quoDeliveryPanel}
+    ${quoNotesPanel}
     ${quoPhotoPanel}
     <div class="preview-wrap">
       <div class="pdf-bg">
@@ -1347,14 +1363,25 @@ function buildQuoDeliveryPanelHTML(doc) {
 // Photos are stored directly on the item object (it._photoDataUrl) so they
 // survive re-renders via the same currentDoc.doc._items array reference.
 function buildQuoPhotoPanelHTML(items) {
+  const VLABEL = { both: 'Both photos', primary: 'Photo 1 only', secondary: 'Photo 2 only' };
   const rows = items.map((it, i) => {
     const name  = escapeHtml(String(it.item || it.product_name || it.name || `Item ${i + 1}`));
     const photo = it._photoDataUrl || '';
     const curSize = it._photoSize || QUO_PHOTO_SIZE_DEFAULT;
     const sizeOptions = Object.keys(QUO_PHOTO_SIZES)
       .map(k => `<option value="${k}"${curSize === k ? ' selected' : ''}>${QUO_PHOTO_SIZES[k].label}</option>`).join('');
+    // TP-sourced items carry the pre-composed variants (1 photo, the other photo,
+    // both side-by-side) so the main quotation image can be switched here with no
+    // re-compositing. Only shown when more than one variant exists.
+    const V = it._tpPhotoVariants;
+    const vKeys = (V && typeof V === 'object') ? Object.keys(V).filter(k => V[k]) : [];
+    const variantRow = (vKeys.length > 1) ? `
+        <div style="flex-basis:100%;display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <span style="font-size:7px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:var(--mid);">Quotation image</span>
+          ${vKeys.map(k => `<button class="btn-sm ${photo && photo === V[k] ? 'btn-sm-dark' : 'btn-sm-outline'}" onclick="setQuoItemPhotoVariant(${i}, '${k}')">${VLABEL[k] || k}</button>`).join('')}
+        </div>` : '';
     return `
-      <div class="quo-photo-row">
+      <div class="quo-photo-row"${variantRow ? ' style="flex-wrap:wrap;"' : ''}>
         <div class="quo-photo-thumb">${photo ? `<img src="${photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
         <div class="quo-photo-name">${name}</div>
         <div class="quo-photo-actions">
@@ -1364,13 +1391,26 @@ function buildQuoPhotoPanelHTML(items) {
           </label>
           ${photo ? `<button class="btn-sm btn-sm-outline" onclick="removeQuoItemPhoto(${i})">Remove Photo</button>` : ''}
         </div>
+        ${variantRow}
       </div>`;
   }).join('');
   return `
     <div class="no-print quo-photo-panel">
-      <div class="quo-photo-panel-title">Item Photos (Optional)</div>
+      <div class="quo-photo-panel-title">Item Photos — the image shown on the quotation PDF (change / replace / remove below)</div>
       ${rows}
     </div>`;
+}
+
+// Switch a TP-sourced item's main quotation image between the pre-composed
+// variants (photo 1 / photo 2 / both) without any re-compositing.
+function setQuoItemPhotoVariant(itemIdx, key) {
+  const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
+  const it = items && items[itemIdx];
+  if (!it || !it._tpPhotoVariants || !it._tpPhotoVariants[key]) return;
+  it._photoDataUrl = it._tpPhotoVariants[key];
+  it._tpPhotoActive = key;
+  it._photoSize = (key === 'both') ? 'large' : 'medium';
+  renderPreview();
 }
 
 async function onQuoItemPhotoSelected(itemIdx, inputEl) {
@@ -1386,6 +1426,7 @@ async function onQuoItemPhotoSelected(itemIdx, inputEl) {
     const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
     if (!items || !items[itemIdx]) return;
     items[itemIdx]._photoDataUrl = dataUrl;
+    items[itemIdx]._tpPhotoActive = null;   // custom upload — no variant is active
     if (!items[itemIdx]._photoSize) items[itemIdx]._photoSize = QUO_PHOTO_SIZE_DEFAULT;
     renderPreview();
   } catch (e) {
@@ -1398,6 +1439,7 @@ function removeQuoItemPhoto(itemIdx) {
   const items = currentDoc && currentDoc.doc && currentDoc.doc._items;
   if (!items || !items[itemIdx]) return;
   items[itemIdx]._photoDataUrl = '';
+  items[itemIdx]._tpPhotoActive = null;
   renderPreview();
 }
 
@@ -4775,6 +4817,115 @@ function exportVistaQuotationFromSarawat() {
   currentDoc = { doc, type: 'estimates' };
   renderPreview();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TECHNICAL PROPOSAL → VISTA QUOTATION  (bridge — Phase 1)
+// ──────────────────────────────────────────────────────────────────────────────
+// Same pattern as exportVistaQuotationFromSarawat() above: build a Daftra-
+// estimate-shaped `doc` and hand it to the EXISTING pipeline (buildInvoicePDFPageHTML
+// → renderPreview → Download PDF) completely unmodified. The only shared-renderer
+// additions this feature makes are (a) the optional doc._quotationNotes block in
+// buildInvoicePDFPageHTML() and (b) the no-print buildQuoNotesPanelHTML() editor
+// below — both isolated, both no-ops when the field is empty.
+//
+// The Technical Proposal dashboard writes ONE payload into a dedicated IndexedDB
+// (`vista_quotation_handoff`, never touches vista_tpb), then opens this file at
+// `#tp-quo`. We read it, render, and delete it (single-use).
+
+// ── Optional Quotation Notes / Regulations — no-print editor (Quotation only) ──
+// Session-only, same storage pattern as the Delivery Timeline field: kept on
+// doc._quotationNotes and rendered into the PDF by buildInvoicePDFPageHTML().
+function buildQuoNotesPanelHTML(doc) {
+  const val = (doc._quotationNotes == null) ? '' : String(doc._quotationNotes);
+  return `
+    <div class="no-print quo-delivery-panel" style="align-items:flex-start;flex-direction:column;gap:6px;">
+      <label class="quo-delivery-label" for="quoNotesInput">Quotation Notes / Regulations <span style="font-weight:400;color:var(--mid);">(optional — printed as an extra block below the standard Terms)</span></label>
+      <textarea id="quoNotesInput" rows="3" placeholder="e.g. Client to provide site access and power. Municipality permit excluded."
+        onchange="onQuoNotesChanged(this)"
+        style="width:100%;box-sizing:border-box;padding:7px 9px;font-size:8.5px;font-family:inherit;line-height:1.5;border:1px solid var(--rule);background:var(--cream);color:var(--dark);resize:vertical;">${escapeHtml(val)}</textarea>
+    </div>`;
+}
+
+function onQuoNotesChanged(inputEl) {
+  const doc = currentDoc && currentDoc.doc;
+  if (!doc) return;
+  const v = String(inputEl.value == null ? '' : inputEl.value);
+  doc._quotationNotes = v.trim() ? v : '';
+  renderPreview();
+}
+
+// ── Dedicated single-use handoff store ────────────────────────────────────────
+const TP_QUO_DB = 'vista_quotation_handoff';
+const TP_QUO_STORE = 'payload';
+const TP_QUO_KEY = 'current';
+
+function _tpQuoOpenDB() {
+  return new Promise((resolve, reject) => {
+    let req;
+    try { req = indexedDB.open(TP_QUO_DB, 1); }
+    catch (e) { reject(e); return; }
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(TP_QUO_STORE)) db.createObjectStore(TP_QUO_STORE, { keyPath: 'id' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function _tpQuoReadPayload() {
+  return _tpQuoOpenDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(TP_QUO_STORE, 'readonly');
+    const r = tx.objectStore(TP_QUO_STORE).get(TP_QUO_KEY);
+    r.onsuccess = () => resolve(r.result || null);
+    r.onerror = () => reject(r.error);
+  }));
+}
+
+function _tpQuoClearPayload() {
+  return _tpQuoOpenDB().then(db => new Promise((resolve) => {
+    const tx = db.transaction(TP_QUO_STORE, 'readwrite');
+    tx.objectStore(TP_QUO_STORE).delete(TP_QUO_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();   // best-effort cleanup, never blocks the preview
+  }));
+}
+
+// Consume the handoff payload written by the Technical Proposal dashboard and
+// render it through the existing Vista quotation pipeline, unchanged.
+async function importVistaQuotationFromTP() {
+  let payload;
+  try { payload = await _tpQuoReadPayload(); }
+  catch (e) { console.error('[TP→Quotation] could not read handoff:', e); return; }
+
+  if (!payload || !payload.doc || !Array.isArray(payload.doc._items)) {
+    console.warn('[TP→Quotation] no valid handoff payload found.');
+    return;
+  }
+
+  // The dashboard builds the fully estimate-shaped doc (field names already match
+  // renderQuoRow() / buildInvoicePDFPageHTML()). We do not reshape it here — the
+  // one exception: never let a blank TP quotation number fall through to the
+  // generic "001" default. Show a visible placeholder instead.
+  const doc = payload.doc;
+  if (!doc.no || !String(doc.no).trim()) doc.no = '— to be assigned —';
+  currentTab = 'estimates';
+  currentDoc = { doc, type: 'estimates' };
+  renderPreview();
+  status('', 'clear');
+  console.log('[TP→Quotation] loaded', payload.doc._items.length, 'item(s) from Technical Proposal handoff.');
+
+  // Single-use: remove immediately so a refresh doesn't silently re-import.
+  _tpQuoClearPayload();
+}
+
+// Fire on initial load and on hash changes (a query cache-buster from the
+// dashboard makes the load path the normal one; the listener is a safety net).
+(function _tpQuoBootstrap() {
+  const check = () => { if (location.hash === '#tp-quo') importVistaQuotationFromTP(); };
+  window.addEventListener('hashchange', check);
+  check();
+})();
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PROPOSAL GENERATOR
