@@ -97,6 +97,12 @@
   .btn-sm{ padding:8px 12px; font-size:12.5px; border-radius:8px; }
   .btn.full{ width:100%; }
   .linkbtn{ background:none; border:0; color:var(--emerald); font-weight:600; font-size:13px; text-decoration:underline; padding:6px 2px; }
+  .pricetotal{ font-family:'Playfair Display',Georgia,serif; font-weight:700; font-size:19px; color:var(--emerald); padding:4px 0 2px; }
+  .pricetotal .muted{ font-family:'Inter',system-ui,sans-serif; font-size:14px; font-weight:400; }
+  .checkrow{ display:flex; align-items:flex-start; gap:9px; cursor:pointer; padding:2px 0; }
+  .checkrow input{ width:16px; height:16px; margin-top:1px; flex:0 0 auto; accent-color:var(--emerald); }
+  .checkrow .cr-tx{ font-size:13px; color:var(--ink); font-weight:500; }
+  .checkrow .cr-tx small{ display:block; font-weight:400; color:var(--grey-soft); font-size:11px; margin-top:2px; }
 
   .bottombar{
     position:fixed; left:0; right:0; bottom:0; z-index:30; background:var(--paper);
@@ -179,6 +185,28 @@
   .photoslot .ph-actions button.del{ color:var(--stop); }
   .photoslot .ph-size{ position:absolute; right:6px; bottom:6px; background:rgba(255,255,255,.9); color:var(--grey-soft);
     font-size:8.5px; padding:2px 5px; border-radius:4px; }
+  .exlabel{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--emerald); margin-bottom:7px; }
+  .exlabel .rt{ font-weight:500; letter-spacing:.02em; text-transform:none; color:var(--grey-soft); font-size:10.5px; margin-left:6px; }
+  .exgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:9px; }
+  .exphoto{ position:relative; border:1px solid var(--rule-strong); border-radius:9px; overflow:hidden; aspect-ratio:4/3; background:var(--cream); }
+  .exphoto img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; cursor:zoom-in; }
+  .exphoto .exnum{ position:absolute; left:6px; top:6px; background:var(--emerald); color:#fff; font-size:10px; font-weight:700;
+    width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .exphoto .exphoto-acts{ position:absolute; left:0; right:0; bottom:0; display:flex; gap:0; background:rgba(255,255,255,.94); border-top:1px solid var(--rule); }
+  .exphoto .exphoto-acts button{ flex:1; background:none; border:0; border-right:1px solid var(--rule); padding:6px 0; font-size:12px; font-weight:600; color:var(--forest); }
+  .exphoto .exphoto-acts button:last-child{ border-right:0; }
+  .exphoto .exphoto-acts button.del{ color:var(--stop); }
+  .exphoto .exphoto-acts button[disabled]{ opacity:.3; }
+  .exadd{ border:1.5px dashed var(--rule-strong); border-radius:9px; background:var(--cream); aspect-ratio:4/3;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--emerald);
+    font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; cursor:pointer; }
+  .exadd span{ font-size:22px; line-height:1; }
+  /* gallery lightbox nav */
+  .lightbox .nav{ position:absolute; top:50%; transform:translateY(-50%); background:#fff; border:0; width:42px; height:56px;
+    font-size:22px; font-weight:700; border-radius:8px; color:var(--forest); }
+  .lightbox .nav.prev{ left:14px; } .lightbox .nav.next{ right:14px; }
+  .lightbox .cnt{ position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#fff; border-radius:14px;
+    padding:5px 12px; font-size:12px; font-weight:600; color:var(--forest); }
 
   /* ---------- client inputs ---------- */
   .cirow{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-bottom:10px;
@@ -294,6 +322,7 @@ const PRESET_GROUPS = [
 ];
 
 const UNITS = ['no.','set','lot','panels','poles','units','m','m²'];
+const CURRENCIES = ['SAR','USD','EUR','AED','GBP'];
 
 const STATUS = {
   design:     [['pending','Pending'],['approved','Approved'],['revision_required','Revision Required'],['rejected','Rejected']],
@@ -414,6 +443,7 @@ function newProject(){
   const t=now();
   return { id:uid(), name:'Untitled Project', client:'', location:'', revision:'R1',
            descriptor:'', preparedBy:'', dateOfIssue:'', docRef:'',
+           showPricing:false,
            createdAt:t, updatedAt:t, items:[] };
 }
 function newItem(project){
@@ -423,8 +453,10 @@ function newItem(project){
     number: String(n).padStart(2,'0'),
     name:'', locationRef:'',
     qty:{ value:1, unit:'no.' },
+    unitPrice:'', currency:'SAR',
     dims:{ w:'', h:'', d:'', mountingHeight:'', projection:'' },
-    photoIds:{},                       // { existing, simulation, sample, after } -> photo id
+    existingPhotoIds:[],               // Existing Condition — ordered collection (1..n)
+    photoIds:{},                       // { simulation, sample, after } -> photo id
     presets:{},                        // presets[groupKey] = {values:[], other:''}; notes stored as presets[noteKey] = ''
     status:{ design:'pending', sample:'na', production:'not_started',
              designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
@@ -443,12 +475,26 @@ const RETIRED_PRESET_KEYS = ['installation'];
 function migrateProject(project){
   let changed = false;
   (project.items||[]).forEach(it=>{
+    // Existing Condition: single slot -> ordered collection (keeps the old id)
+    if(!Array.isArray(it.existingPhotoIds)) it.existingPhotoIds = [];
+    if(it.photoIds && it.photoIds.existing){
+      if(!it.existingPhotoIds.includes(it.photoIds.existing)) it.existingPhotoIds.unshift(it.photoIds.existing);
+      delete it.photoIds.existing; changed = true;
+    }
     if(!it.presets) return;
     for(const k of RETIRED_PRESET_KEYS){
       if(k in it.presets){ delete it.presets[k]; changed = true; }
     }
   });
   return changed;
+}
+function primaryExisting(it){
+  if(it.existingPhotoIds && it.existingPhotoIds.length) return it.existingPhotoIds[0];
+  return (it.photoIds && it.photoIds.existing) || null;   // pre-migration safety
+}
+function existingIds(it){
+  if(it.existingPhotoIds && it.existingPhotoIds.length) return it.existingPhotoIds;
+  return (it.photoIds && it.photoIds.existing) ? [it.photoIds.existing] : [];
 }
 
 async function deleteItemDeep(project, item){
@@ -466,6 +512,7 @@ function duplicateItem(project, item){
   const clone = JSON.parse(JSON.stringify(item));
   clone.id = uid();
   clone.photoIds = {};               // photos are re-shot, not copied
+  clone.existingPhotoIds = [];
   clone.name = (item.name || 'Item') + ' (copy)';
   clone.createdAt = clone.updatedAt = now();
   const idx = project.items.findIndex(x=>x.id===item.id);
@@ -509,6 +556,41 @@ async function removePhoto(project,item,slot){
   const id = item.photoIds && item.photoIds[slot];
   if(id){ await dbDel('photos', id); delete item.photoIds[slot]; await commitSave(); }
 }
+/* ---- Existing Condition: ordered multi-photo collection ---- */
+async function addExistingPhotos(project,item,files){
+  item.existingPhotoIds = item.existingPhotoIds || [];
+  for(const file of files){
+    const proc = await processImage(file);
+    const id = uid();
+    await dbPut('photos', { id, projectId:project.id, itemId:item.id, slot:'existing',
+      blob:proc.blob, mime:proc.mime, w:proc.w, h:proc.h, bytes:proc.bytes, createdAt:now() });
+    item.existingPhotoIds.push(id);
+  }
+  await commitSave();
+}
+async function replaceExistingPhoto(project,item,idx,file){
+  const arr = item.existingPhotoIds || [];
+  const old = arr[idx];
+  const proc = await processImage(file);
+  const id = uid();
+  await dbPut('photos', { id, projectId:project.id, itemId:item.id, slot:'existing',
+    blob:proc.blob, mime:proc.mime, w:proc.w, h:proc.h, bytes:proc.bytes, createdAt:now() });
+  arr[idx] = id;
+  if(old) await dbDel('photos', old);
+  await commitSave();
+}
+async function removeExistingPhoto(project,item,idx){
+  const arr = item.existingPhotoIds || [];
+  const [id] = arr.splice(idx,1);
+  if(id) await dbDel('photos', id);
+  await commitSave();
+}
+function moveExistingPhoto(item,idx,dir){
+  const a = item.existingPhotoIds || []; const j = idx + dir;
+  if(j<0 || j>=a.length) return false;
+  [a[idx],a[j]] = [a[j],a[idx]];
+  return true;
+}
 
 /* placeholder site imagery for the sample project (sync — no async encode) */
 function dataUrlToBlob(u){
@@ -517,22 +599,22 @@ function dataUrlToBlob(u){
   for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
   return new Blob([arr],{type:mime});
 }
-function makePlaceholder(title, kind){
+function makePlaceholder(title, kind, variant){
   const P = { existing:['#EDEBE6','#8C8B84'], simulation:['#EEF4F0','#1A5C46'],
               sample:['#FAF6EE','#8C7643'], after:['#FBF9F6','#B6B4AA'] }[kind];
   const W=1600,H=1000, c=document.createElement('canvas'); c.width=W; c.height=H;
-  const x=c.getContext('2d');
+  const x=c.getContext('2d'); const v = variant||0;
   x.fillStyle=P[0]; x.fillRect(0,0,W,H);
   x.strokeStyle=P[1]; x.lineWidth=3; x.strokeRect(46,46,W-92,H-92);
-  // light "gateway" line-art
-  x.globalAlpha=.5;
+  // light "gateway" line-art — shifted per variant so multiple photos look distinct
+  x.globalAlpha=.5; x.save(); x.translate(v*70 - 100, v*30);
   x.strokeRect(360,300,880,120); x.strokeRect(420,420,60,360); x.strokeRect(1120,420,60,360);
   x.beginPath(); x.moveTo(180,790); x.lineTo(W-180,790); x.stroke();
-  x.globalAlpha=1;
+  x.restore(); x.globalAlpha=1;
   x.fillStyle=P[1]; x.textAlign='center';
   x.font='700 52px Inter, Arial, sans-serif'; x.fillText(title.toUpperCase(), W/2, 560);
   x.fillStyle='#8A897F'; x.font='500 26px Inter, Arial, sans-serif';
-  x.fillText('PLACEHOLDER — REPLACE WITH REAL SITE PHOTO', W/2, 610);
+  x.fillText(v ? 'PLACEHOLDER — SITE VIEW '+(v+1) : 'PLACEHOLDER — REPLACE WITH REAL SITE PHOTO', W/2, 610);
   return dataUrlToBlob(c.toDataURL('image/jpeg', 0.85));
 }
 async function seedSampleProject(demo){
@@ -649,20 +731,25 @@ async function seedSampleProject(demo){
 
   await dbPut('projects', p);
 
-  async function ph(item, slot, title, kind){
-    const blob = await makePlaceholder(title, kind); const id = uid();
+  async function ph(item, slot, title, kind, variant){
+    const blob = await makePlaceholder(title, kind, variant); const id = uid();
     await dbPut('photos', { id, projectId:p.id, itemId:item.id, slot, blob, mime:'image/jpeg', w:1600, h:1000, bytes:blob.size, createdAt:now() });
-    item.photoIds[slot] = id;
+    if(slot==='existing'){ (item.existingPhotoIds = item.existingPhotoIds || []).push(id); }
+    else item.photoIds[slot] = id;
   }
-  // A — all four photos
-  await ph(a,'existing','Existing Condition','existing');
+  // A — 4 Existing Condition photos + simulation + sample + after
+  await ph(a,'existing','Existing Condition','existing',0);
+  await ph(a,'existing','Existing Condition','existing',1);
+  await ph(a,'existing','Existing Condition','existing',2);
+  await ph(a,'existing','Existing Condition','existing',3);
   await ph(a,'simulation','Proposed Simulation','simulation');
   await ph(a,'sample','Sample Photo','sample');
   await ph(a,'after','After Installation','after');
   // B — existing only (NO simulation -> pending layout + missing-sim test)
   await ph(b,'existing','Existing Condition','existing');
-  // C — existing + simulation (needed for CLEARED)
-  await ph(c,'existing','Existing Condition','existing');
+  // C — existing (2) + simulation (needed for CLEARED)
+  await ph(c,'existing','Existing Condition','existing',0);
+  await ph(c,'existing','Existing Condition','existing',1);
   await ph(c,'simulation','Proposed Simulation','simulation');
   // D — existing only
   await ph(d,'existing','Existing Condition','existing');
@@ -710,6 +797,14 @@ const app = ()=> $('#app');
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function setPath(o,p,v){ const k=p.split('.'), last=k.pop(); let t=o; for(const kk of k){ if(t[kk]==null) t[kk]={}; t=t[kk]; } t[last]=v; }
 function getPath(o,p){ return p.split('.').reduce((a,k)=> a==null?a:a[k], o); }
+
+/* ---- pricing (optional; identical shape in the Keep importer) ---- */
+function moneyNum(v){ if(v==null||String(v).trim()==='') return null; const n=parseFloat(String(v).replace(/[, ]/g,'')); return isFinite(n)?n:null; }
+function fmtMoney(n, cur){ return (cur||'SAR') + ' ' + Number(n).toLocaleString('en-US',{maximumFractionDigits:2}); }
+function lineTotal(it){
+  const u = moneyNum(it && it.unitPrice), q = moneyNum(it && it.qty && it.qty.value);
+  return (u==null || q==null) ? null : u*q;
+}
 function relTime(ts){
   const s = Math.floor((Date.now()-ts)/1000);
   if(s<60) return 'just now';
@@ -747,10 +842,21 @@ function sheetMenu(actions){
     document.body.appendChild(o);
   });
 }
-function lightbox(url){
+function lightbox(urls, start){
+  const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
+  if(!list.length) return;
+  let i = Math.max(0, Math.min(start||0, list.length-1));
   const o=document.createElement('div'); o.className='overlay lightbox';
-  o.innerHTML='<button class="x">Close</button><img src="'+url+'" alt="">';
-  o.addEventListener('click',e=>{ if(e.target===o || e.target.classList.contains('x')) o.remove(); });
+  const draw = ()=>{ o.innerHTML='<button class="x">Close</button>'
+    + (list.length>1 ? '<button class="nav prev">‹</button>' : '')
+    + '<img src="'+list[i]+'" alt="">'
+    + (list.length>1 ? '<button class="nav next">›</button><div class="cnt">'+(i+1)+' / '+list.length+'</div>' : ''); };
+  draw();
+  o.addEventListener('click',e=>{
+    if(e.target===o || e.target.classList.contains('x')){ o.remove(); return; }
+    if(e.target.classList.contains('prev')){ i=(i-1+list.length)%list.length; draw(); }
+    if(e.target.classList.contains('next')){ i=(i+1)%list.length; draw(); }
+  });
   document.body.appendChild(o);
 }
 
@@ -834,6 +940,11 @@ async function renderProjects(){
   app().innerHTML =
     '<div class="appbar"><span class="mark">'+MARK_SVG+'</span>'
     + '<span class="title">Technical Proposals</span>'
+    + '<a class="btn btn-ghost btn-sm" style="text-decoration:none" href="technical-proposal-keep-import.html"'
+    +   ' title="Import from Google Keep exports, site-note PDFs or survey images">'
+    +   '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">'
+    +     '<path d="M8 1.5v8M4.5 6 8 9.5 11.5 6M2.5 13.5h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+    +   '</svg>Import Site Notes</a>'
     + '<button class="btn btn-primary btn-sm" data-newproject>+ New</button></div>'
     + '<div class="wrap">'
     +   list
@@ -859,13 +970,14 @@ function renderOverview(p){
   const items = p.items.map((it,i)=>{
     const urg = (it.clientInputs||[]).some(c=>c.priority==='urgent');
     const smp = ['pending','rejected'].includes(it.status && it.status.sample);
-    const th = it.photoIds && it.photoIds.existing && photoUrl(it.photoIds.existing);
+    const th = photoUrl(primaryExisting(it));
     return '<div class="itemrow">'
       + '<div class="irtap" data-openitem="'+it.id+'">'
       +   (th ? '<img class="thumb" src="'+th+'" alt="">' : '<div class="thumb empty">◱</div>')
       +   '<div class="imain">'
       +     '<span class="inm"><span class="inum">'+esc(it.number)+'</span> '+esc(it.name||'Untitled item')+'</span>'
-      +     '<div class="isub">'+esc(it.locationRef||'—')+' · Qty '+esc(it.qty.value)+' '+esc(it.qty.unit)+'</div>'
+      +     '<div class="isub">'+esc(it.locationRef||'—')+' · Qty '+esc(it.qty.value)+' '+esc(it.qty.unit)
+      +       (lineTotal(it)!=null ? ' · '+esc(fmtMoney(lineTotal(it), it.currency)) : '')+'</div>'
       +   '</div>'
       + '</div>'
       + '<div class="ord">'
@@ -894,6 +1006,8 @@ function renderOverview(p){
     +    '<div class="field"><label>Client</label><input data-pf="client" value="'+esc(p.client)+'" placeholder="Client / division"></div>'
     +    '<div class="field"><label>Location</label><input data-pf="location" value="'+esc(p.location)+'" placeholder="Site / address"></div>'
     +    '<div class="field"><label>Revision</label><input data-pf="revision" value="'+esc(p.revision)+'" placeholder="R1" style="max-width:120px"></div>'
+    +    '<label class="checkrow"><input type="checkbox" data-pfbool="showPricing"'+(p.showPricing?' checked':'')+'>'
+    +      '<span class="cr-tx">Show pricing in Client Proposal<small>Unit prices and line totals appear in the client PDF and a project subtotal is added. Never shown in the Installer Pack. Default off.</small></span></label>'
     +  '</div></div>'
     +  '<div class="card'+(dcol?' collapsed':'')+'" id="card-projmeta"><div class="eyebrow tog" data-toggle="projmeta">Proposal details (PDF cover)</div><div class="body">'
     +    '<div class="field"><label>Project descriptor / scope</label><input data-pf="descriptor" value="'+esc(p.descriptor||'')+'" placeholder="e.g. Exterior Signage & Environmental Branding Package"></div>'
@@ -1042,9 +1156,28 @@ function photosCardHtml(project, item){
       + '<div class="ph-label"><span class="cam">📷</span><br>'+esc(label)+'<small>'+esc(hint)+'</small></div>'
       + '</button>';
   };
+  const exIds = existingIds(item).filter(id=> photoUrl(id));
+  const exThumbs = exIds.map((id,i)=>{
+    return '<div class="exphoto">'
+      + '<img src="'+photoUrl(id)+'" data-viewexisting="'+i+'" alt="">'
+      + '<div class="exnum">'+(i+1)+'</div>'
+      + '<div class="exphoto-acts">'
+      +   '<button data-moveexisting="'+i+'" data-dir="-1" title="Move left" '+(i===0?'disabled':'')+'>‹</button>'
+      +   '<button data-moveexisting="'+i+'" data-dir="1" title="Move right" '+(i===exIds.length-1?'disabled':'')+'>›</button>'
+      +   '<button data-replaceexisting="'+i+'" title="Replace">⟳</button>'
+      +   '<button class="del" data-removeexisting="'+i+'" title="Remove">✕</button>'
+      + '</div></div>';
+  }).join('');
+  const existingBlock = exIds.length
+    ? '<div class="exlabel">Existing Condition <span class="rt">'+exIds.length+' photo'+(exIds.length===1?'':'s')+' · drag order matters</span></div>'
+      + '<div class="exgrid">'+exThumbs
+      + '<button class="exadd" data-addexisting><span>＋</span>Add Existing Photo</button></div>'
+    : '<button class="photoslot primary" data-addexisting>'
+      + '<div class="ph-label"><span class="cam">📷</span><br>Existing Condition<small>Capture or upload the site photo(s) first — you can add several</small></div>'
+      + '</button>';
   return '<div class="card" id="card-photos"><div class="eyebrow">Photos</div><div class="body">'
-    + slot('existing','Existing Condition','Tap to capture or upload the site photo first', true)
-    + '<div class="photogrid">'
+    + existingBlock
+    + '<div class="photogrid" style="margin-top:9px">'
     +   slot('simulation','Proposed Simulation / Design','Approved visual')
     +   slot('sample','Sample Photo','If a physical sample exists')
     +   slot('after','After Installation','Added on completion')
@@ -1103,9 +1236,29 @@ function collapsedNotesCardHtml(item){
 function refreshCard(which, item){
   const map = { photos:()=>photosCardHtml(STATE.project,item), status:()=>statusCardHtml(item),
                 ci:()=>clientInputsCardHtml(item), notes:()=>collapsedNotesCardHtml(item),
-                presets:()=>presetsCardHtml(item) };
+                presets:()=>presetsCardHtml(item), pricing:()=>pricingCardHtml(item) };
   const el = document.getElementById('card-'+which);
   if(el && map[which]){ el.outerHTML = map[which](); }
+}
+function pricingCardHtml(item){
+  const t = lineTotal(item);
+  const cur = item.currency || 'SAR';
+  const showsInPdf = STATE.project && STATE.project.showPricing;
+  return '<div class="card" id="card-pricing"><div class="eyebrow">Pricing <span class="rt">optional</span></div><div class="body">'
+    + '<div class="row">'
+    +   '<div class="field"><label>Unit price</label><input data-p="unitPrice" value="'+esc(item.unitPrice||'')+'" inputmode="decimal" placeholder="e.g. 1250"></div>'
+    +   '<div class="field" style="flex:0 0 96px"><label>Currency</label><select data-p="currency">'
+    +      CURRENCIES.map(c=>'<option '+(cur===c?'selected':'')+'>'+esc(c)+'</option>').join('')
+    +   '</select></div>'
+    + '</div>'
+    + '<div class="field"><label>Line total — Qty × Unit price</label>'
+    +   '<div id="pricing-total" class="pricetotal">'+(t==null ? '<span class="muted">—</span>' : esc(fmtMoney(t, cur)))+'</div></div>'
+    + '<div class="hint">'
+    +   (showsInPdf
+        ? 'Shown in the Client Proposal (pricing is ON for this project).'
+        : 'Stored only. Turn on “Show pricing in Client Proposal” on the project screen to include it.')
+    +   ' Never shown in the Installer Pack.</div>'
+    + '</div></div>';
 }
 function presetsCardHtml(item){
   return '<div class="card" id="card-presets"><div class="eyebrow">Technical Presets <span class="rt">tap to select</span></div><div class="body">'
@@ -1150,6 +1303,7 @@ function renderItem(p, it){
     +   '</div>'
     + '</div></div>'
 
+    + pricingCardHtml(it)
     + photosCardHtml(p, it)
     + presetsCardHtml(it)
     + statusCardHtml(it)
@@ -1173,6 +1327,13 @@ function currentItem(){
   return STATE.project.items.find(x=>x.id===r.iid) || null;
 }
 
+function syncPricingTotal(it){
+  const el = document.getElementById('pricing-total');
+  if(!el) return;
+  const t = lineTotal(it);
+  el.innerHTML = (t==null) ? '<span class="muted">—</span>' : esc(fmtMoney(t, it.currency||'SAR'));
+}
+
 document.addEventListener('input', e=>{
   const t = e.target;
   // project fields
@@ -1183,12 +1344,24 @@ document.addEventListener('input', e=>{
   }
   const it = currentItem();
   if(!it) return;
-  if(t.dataset.p!=null){ setPath(it, t.dataset.p, t.value); scheduleSave(); return; }
+  if(t.dataset.p!=null){
+    setPath(it, t.dataset.p, t.value);
+    if(t.dataset.p==='unitPrice' || t.dataset.p==='qty.value') syncPricingTotal(it);
+    scheduleSave(); return;
+  }
   if(t.dataset.citext!=null){ it.clientInputs[+t.dataset.i].text = t.value; scheduleSave(); return; }
 });
 
 document.addEventListener('change', e=>{
   const t=e.target;
+
+  /* project-level boolean toggle (e.g. Show pricing in Client Proposal) */
+  if(t.dataset.pfbool!=null && STATE.project){
+    STATE.project[t.dataset.pfbool] = t.checked;
+    scheduleSave();
+    const it = currentItem(); if(it) refreshCard('pricing', it);
+    return;
+  }
 
   /* export item selection */
   if(t.dataset.expall!=null && STATE.project){
@@ -1203,7 +1376,11 @@ document.addEventListener('change', e=>{
   }
 
   const it=currentItem();
-  if(it && t.dataset.p!=null){ setPath(it, t.dataset.p, t.value); scheduleSave(); }
+  if(it && t.dataset.p!=null){
+    setPath(it, t.dataset.p, t.value);
+    if(t.dataset.p==='currency' || t.dataset.p==='qty.unit') syncPricingTotal(it);
+    scheduleSave();
+  }
 });
 
 document.addEventListener('click', async e=>{
@@ -1294,6 +1471,7 @@ document.addEventListener('click', async e=>{
     v = Math.max(0, v + (+qb.dataset.qty));
     it.qty.value = v;
     const inp = document.querySelector('[data-p="qty.value"]'); if(inp) inp.value = v;
+    syncPricingTotal(it);
     scheduleSave(); return;
   }
 
@@ -1354,13 +1532,13 @@ document.addEventListener('click', async e=>{
     return;
   }
 
-  /* ----- photos ----- */
+  /* ----- photos: single slots (simulation / sample / after) ----- */
   const addp = closest('[data-addphoto], [data-replacephoto]');
   if(addp && it){
     const fp = $('#filepick');
+    fp.dataset.mode = 'slot';
     fp.dataset.slot = addp.dataset.slot || addp.dataset.replacephoto || addp.dataset.addphoto;
-    fp.value = '';
-    fp.click();
+    fp.multiple = false; fp.value = ''; fp.click();
     return;
   }
   const rmp = closest('[data-removephoto]');
@@ -1375,6 +1553,42 @@ document.addEventListener('click', async e=>{
   const vp = closest('[data-viewphoto]');
   if(vp){ const u = photoUrl(vp.dataset.viewphoto); if(u) lightbox(u); return; }
 
+  /* ----- photos: Existing Condition collection ----- */
+  const exAdd = closest('[data-addexisting]');
+  if(exAdd && it){
+    const fp = $('#filepick');
+    fp.dataset.mode = 'existing-add'; fp.multiple = true; fp.value = ''; fp.click();
+    return;
+  }
+  const exRep = closest('[data-replaceexisting]');
+  if(exRep && it){
+    const fp = $('#filepick');
+    fp.dataset.mode = 'existing-replace'; fp.dataset.exidx = exRep.dataset.replaceexisting;
+    fp.multiple = false; fp.value = ''; fp.click();
+    return;
+  }
+  const exRm = closest('[data-removeexisting]');
+  if(exRm && it){
+    if(await confirmDialog('Remove this Existing photo?', 'The other Existing photos are kept.', true)){
+      await removeExistingPhoto(STATE.project, it, +exRm.dataset.removeexisting);
+      await loadProjectPhotos(STATE.project.id);
+      refreshCard('photos', it);
+    }
+    return;
+  }
+  const exMv = closest('[data-moveexisting]');
+  if(exMv && it){
+    if(moveExistingPhoto(it, +exMv.dataset.moveexisting, +exMv.dataset.dir)){
+      await commitSave(); refreshCard('photos', it);
+    }
+    return;
+  }
+  const exView = closest('[data-viewexisting]');
+  if(exView && it){
+    lightbox(existingIds(it).map(id=>photoUrl(id)), +exView.dataset.viewexisting);
+    return;
+  }
+
   const nx = closest('[data-nextitem]');
   if(nx && it){
     await commitSave();
@@ -1385,18 +1599,24 @@ document.addEventListener('click', async e=>{
 });
 
 $('#filepick').addEventListener('change', async e=>{
-  const file = e.target.files && e.target.files[0];
-  const slot = e.target.dataset.slot;
+  const files = [...(e.target.files||[])];
+  const mode = e.target.dataset.mode || 'slot';
   const it = currentItem();
-  if(!file || !it) return;
-  toast('Processing photo…');
+  if(!files.length || !it){ e.target.value=''; return; }
+  toast(files.length>1 ? 'Processing '+files.length+' photos…' : 'Processing photo…');
   try{
-    await setPhoto(STATE.project, it, slot, file);
+    if(mode==='existing-add'){
+      await addExistingPhotos(STATE.project, it, files);
+    } else if(mode==='existing-replace'){
+      await replaceExistingPhoto(STATE.project, it, +e.target.dataset.exidx, files[0]);
+    } else {
+      await setPhoto(STATE.project, it, e.target.dataset.slot, files[0]);
+    }
     await loadProjectPhotos(STATE.project.id);
     refreshCard('photos', it);
-    toast('Photo saved');
+    toast(files.length>1 ? files.length+' photos saved' : 'Photo saved');
   }catch(err){ console.error(err); toast('Could not read that image'); }
-  e.target.value='';
+  e.target.value=''; e.target.multiple=false;
 });
 
 /* ============================================================

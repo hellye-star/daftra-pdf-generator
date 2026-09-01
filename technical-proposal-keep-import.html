@@ -182,12 +182,34 @@
   .cirow{ display:flex; gap:6px; align-items:center; margin-bottom:6px; flex-wrap:wrap; }
   .cirow input[type=text],.cirow input:not([data-v]){ flex:1; min-width:160px; }
   .cirow .del{ background:none; border:0; color:var(--stop); font-size:15px; padding:0 4px; }
+
+  /* ---- save status + review-draft recovery ---- */
+  .save-status{ font-size:11px; font-weight:600; letter-spacing:.02em; margin-left:auto; flex:0 0 auto; padding:2px 8px; border-radius:5px; }
+  .save-status.dirty{ color:var(--amber); background:var(--amber-wash); }
+  .save-status.saving{ color:var(--grey); }
+  .save-status.saved{ color:var(--emerald); background:var(--emerald-wash); }
+  .save-status.err{ color:var(--stop); background:var(--stop-wash); }
+  .resume-card{ border:1px solid var(--emerald); background:var(--emerald-wash); border-radius:var(--r); padding:14px; margin-bottom:13px; }
+  .resume-card .eyebrow{ color:var(--emerald); }
+  .resume-card .rc-meta{ font-size:12px; color:var(--grey); margin:4px 0 12px; }
+  .resume-card .rc-meta b{ color:var(--forest); }
+  .resume-card .row{ gap:8px; }
+  /* approve-bar project target */
+  .apt{ display:flex; align-items:center; gap:8px 12px; flex-wrap:wrap; }
+  .apt label{ display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:var(--ink); cursor:pointer; white-space:nowrap; }
+  .apt label input[type=radio]{ width:15px; height:15px; accent-color:var(--emerald); }
+  .apt select, .apt input[type=text]{ width:auto; min-width:150px; font-size:12.5px; padding:6px 9px; }
+  .apt select[disabled], .apt input[disabled]{ opacity:.4; }
+  .apt-err{ font-size:11px; font-weight:600; color:var(--stop); }
+  .savedok{ border:1px solid var(--emerald); background:var(--emerald-wash); border-radius:var(--r); padding:16px; }
+  .savedok .big2{ font-family:'Playfair Display',serif; font-size:19px; color:var(--emerald); margin-bottom:4px; }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <input type="file" id="pick" accept="application/pdf" hidden>
 <input type="file" id="photopick" accept="image/*" capture="environment" hidden>
+<input type="file" id="jsonpick" accept="application/json,.json" hidden>
 <div id="lb-root"></div>
 <div class="toast" id="toast"></div>
 
@@ -377,7 +399,8 @@ async function extractDocument(arrayBuffer, fileName, onProgress){
     if(pg.renderFailed) errors.push({ page:i, error:'page render failed' });
   }
   const scanned = totalText < 200 || pagesWithText < Math.max(2, N*0.12);
-  return { fileName, pageCount:N, pages, totalText, pagesWithText, scanned, errors, totalExpectedImgs, totalGotImgs };
+  const titlesDetected = pages.reduce((a,p)=> a + (p.lines.some(l=>l.isTitle)?1:0), 0);
+  return { fileName, pageCount:N, pages, totalText, pagesWithText, scanned, errors, totalExpectedImgs, totalGotImgs, titlesDetected };
 }
 
 /* ============================================================
@@ -633,6 +656,7 @@ function groupToDraft(g, fileName, idx){
     dims,
     notesText,
     qty, qtyUnit:'no.', qtyStated:false,
+    unitPrice:'', currency:'SAR',
     selected: true,
     _unitTouched: false,
     flags,
@@ -701,6 +725,10 @@ const PRESET_GROUPS = [
       'Indoor','Outdoor','Weather Resistant','Waterproof','UV Resistant'] },
 ];
 const UNITS = ['no.','set','lot','panels','poles','units','m','m²'];
+const CURRENCIES = ['SAR','USD','EUR','AED','GBP'];
+function moneyNum(v){ if(v==null||String(v).trim()==='') return null; const n=parseFloat(String(v).replace(/[, ]/g,'')); return isFinite(n)?n:null; }
+function fmtMoney(n, cur){ return (cur||'SAR')+' '+Number(n).toLocaleString('en-US',{maximumFractionDigits:2}); }
+function draftLineTotal(d){ const u=moneyNum(d.unitPrice), q=moneyNum(d.qty); return (u==null||q==null)?null:u*q; }
 const STATUS = {
   design:     [['pending','Pending'],['approved','Approved'],['revision_required','Revision Required'],['rejected','Rejected']],
   sample:     [['na','N/A'],['pending','Pending'],['approved','Approved'],['rejected','Rejected']],
@@ -731,7 +759,7 @@ function pruneHidden(d, g){
 function presetsAnySet(d){
   return PRESET_GROUPS.some(g=> presetSummary(d,g)) ||
     d.status.design!=='pending' || d.status.sample!=='na' || d.status.production!=='not_started' ||
-    (d.clientInputs||[]).length>0;
+    (d.clientInputs||[]).length>0 || has(d.unitPrice);
 }
 
 /* ============================================================
@@ -740,24 +768,255 @@ function presetsAnySet(d){
 const STATE = { view:'upload', doc:null, drafts:[], projects:[], otherOpen:new Set(), lb:null };
 
 /* ============================================================
+   8b · Review-draft persistence  (separate IndexedDB — never touches vista_tpb)
+        Saves the unfinished review session + photo blobs so it can be resumed.
+   ============================================================ */
+const RDB_NAME = 'vista_review_drafts', RDB_VER = 1;
+let _rdbp = null;
+function reviewDB(){
+  if(_rdbp) return _rdbp;
+  _rdbp = new Promise((res,rej)=>{
+    const r = indexedDB.open(RDB_NAME, RDB_VER);
+    r.onupgradeneeded = e=>{
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains('session')) db.createObjectStore('session',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('photos'))  db.createObjectStore('photos',{keyPath:'pid'});
+    };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+  return _rdbp;
+}
+async function rGet(s,k){ const d=await reviewDB(); return rq(d.transaction(s).objectStore(s).get(k)); }
+async function rGetAll(s){ const d=await reviewDB(); return rq(d.transaction(s).objectStore(s).getAll()); }
+async function rGetAllKeys(s){ const d=await reviewDB(); return rq(d.transaction(s).objectStore(s).getAllKeys()); }
+async function rPut(s,v){ const d=await reviewDB(); return rq(d.transaction(s,'readwrite').objectStore(s).put(v)); }
+async function rDel(s,k){ const d=await reviewDB(); return rq(d.transaction(s,'readwrite').objectStore(s).delete(k)); }
+async function rClear(s){ const d=await reviewDB(); return rq(d.transaction(s,'readwrite').objectStore(s).clear()); }
+
+function dataUrlToBlob(u){
+  const [meta,b64] = String(u).split(',');
+  const mime = (meta.match(/:(.*?);/)||[])[1] || 'image/jpeg';
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type:mime });
+}
+function blobToDataUrl(b){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(b); }); }
+
+/* ---- serialize the live review (no blobs; photos carry a pid reference) ---- */
+function serializeReviewState(){
+  const drafts = STATE.drafts.map(d=>{
+    const c = {};
+    for(const k in d) if(k!=='photos') { try{ c[k] = JSON.parse(JSON.stringify(d[k])); }catch(_){ c[k] = d[k]; } }
+    c.photos = (d.photos||[]).map(p=>({ id:p.id, role:p.role, sourcePage:p.sourcePage==null?null:p.sourcePage,
+      order:p.order==null?null:p.order, keep:p.keep, w:p.w||null, h:p.h||null, pid:p._pid||null }));
+    return c;
+  });
+  const doc = STATE.doc ? {
+    fileName: STATE.doc.fileName, pageCount: STATE.doc.pageCount, scanned: STATE.doc.scanned,
+    totalText: STATE.doc.totalText, errors: STATE.doc.errors || [],
+    totalGotImgs: STATE.doc.totalGotImgs, totalExpectedImgs: STATE.doc.totalExpectedImgs,
+    titlesDetected: STATE.doc.titlesDetected != null ? STATE.doc.titlesDetected : null
+  } : null;
+  return {
+    id:'current', kind:'vista-review-session', version:1,
+    savedAt: Date.now(),
+    fileName: (STATE.doc && STATE.doc.fileName) || 'Manual review',
+    itemCount: STATE.drafts.length,
+    photoCount: STATE.drafts.reduce((n,d)=>n+(d.photos||[]).length,0),
+    doc, otherOpen:[...STATE.otherOpen], drafts,
+    approved: STATE._approved || null
+  };
+}
+
+/* ---- save: writes session + any new photo blobs, prunes orphans ---- */
+let _saving = false, _saveQueued = false;
+async function saveReviewDraft(silent){
+  if(_saving){ _saveQueued = true; return; }
+  _saving = true;
+  if(!silent) setSaveStatus('saving');
+  try{
+    // 1 · persist photo blobs that aren't stored yet (tag the live object with _pid)
+    for(const d of STATE.drafts){
+      for(const p of (d.photos||[])){
+        if(!p._pid && p.blob){
+          const pid = uid();
+          await rPut('photos', { pid, blob:p.blob, w:p.w||null, h:p.h||null });
+          p._pid = pid;
+        }
+      }
+    }
+    // 2 · write the session record
+    const sess = serializeReviewState();
+    await rPut('session', sess);
+    // 3 · prune photo blobs no longer referenced
+    const used = new Set();
+    STATE.drafts.forEach(d=> (d.photos||[]).forEach(p=> p._pid && used.add(p._pid)));
+    const keys = await rGetAllKeys('photos');
+    for(const k of keys) if(!used.has(k)) await rDel('photos', k);
+    SAVED_META = { fileName:sess.fileName, savedAt:sess.savedAt, itemCount:sess.itemCount, photoCount:sess.photoCount, approved:sess.approved };
+    setSaveStatus('saved');
+  }catch(e){
+    console.error('saveReviewDraft failed', e);
+    setSaveStatus('err');
+  }
+  _saving = false;
+  if(_saveQueued){ _saveQueued = false; saveReviewDraft(true); }
+}
+
+let _dirtyTimer = null;
+function markDirty(){
+  if(STATE.view !== 'review') return;
+  setSaveStatus('dirty');
+  clearTimeout(_dirtyTimer);
+  _dirtyTimer = setTimeout(()=> saveReviewDraft(true), 1500);
+}
+function setSaveStatus(s){
+  const el = document.getElementById('save-status');
+  _saveStatus = s;
+  paintSaveStatus();
+}
+let _saveStatus = '';
+function paintSaveStatus(){
+  const el = document.getElementById('save-status');
+  if(!el) return;
+  const map = { dirty:['dirty','Unsaved changes'], saving:['saving','Saving…'], saved:['saved','Saved'], err:['err','Save failed'] };
+  const m = map[_saveStatus];
+  el.className = 'save-status' + (m ? ' '+m[0] : '');
+  el.textContent = (STATE.view==='review' && m) ? m[1] : '';
+}
+
+/* ---- load / resume ---- */
+let SAVED_META = null;      // {fileName, savedAt, itemCount, photoCount, approved} | null
+async function refreshSavedMeta(){
+  try{
+    const s = await rGet('session','current');
+    SAVED_META = s ? { fileName:s.fileName, savedAt:s.savedAt, itemCount:s.itemCount, photoCount:s.photoCount, approved:s.approved||null } : null;
+  }catch(e){ SAVED_META = null; }
+  return SAVED_META;
+}
+async function hydrateFromSession(sess, photoBlobById){
+  // photoBlobById: (pid|id) -> Blob
+  STATE.doc = sess.doc || null;
+  STATE.otherOpen = new Set(sess.otherOpen || []);
+  STATE._approved = sess.approved || null;
+  STATE.drafts = (sess.drafts || []).map(d=>{
+    const nd = {};
+    for(const k in d) if(k!=='photos') nd[k] = d[k];
+    nd.photos = (d.photos || []).map(p=>{
+      const blob = photoBlobById[p.pid] || photoBlobById[p.id] || null;
+      return blob ? {
+        id: p.id || uid(), _pid: p.pid || null, blob, url: URL.createObjectURL(blob),
+        w: p.w || null, h: p.h || null, sourcePage: p.sourcePage, order: p.order, keep: p.keep, role: p.role || 'reference'
+      } : null;
+    }).filter(Boolean);
+    if(!Array.isArray(nd.flags)) nd.flags = [];
+    if(!nd.dims) nd.dims = { raw:'', w:null,h:null,d:null, unit:null, unitExplicit:false, unitInferred:false, needsUnitConfirmation:true, extra:[] };
+    if(!nd.status) nd.status = { design:'pending', sample:'na', production:'not_started', designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' };
+    if(!nd.presets) nd.presets = {};
+    if(!Array.isArray(nd.clientInputs)) nd.clientInputs = [];
+    return nd;
+  });
+  try{ STATE.projects = (await dbGetAll('projects')).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)); }catch(e){ STATE.projects = []; }
+  STATE.view = 'review';
+  renderReview();
+  _saveStatus = 'saved'; paintSaveStatus();
+  window.__keepImport = { doc: STATE.doc, drafts: STATE.drafts };
+}
+async function resumeReview(){
+  const sess = await rGet('session','current');
+  if(!sess){ toast('No saved review found'); return; }
+  const photos = await rGetAll('photos');
+  const byId = {};
+  photos.forEach(r=> byId[r.pid] = r.blob);
+  await hydrateFromSession(sess, byId);
+  toast('Review resumed');
+}
+async function deleteReviewDraft(){
+  try{ await rClear('session'); await rClear('photos'); }catch(e){ console.error(e); }
+  SAVED_META = null;
+  STATE._approved = null;
+}
+/* ---- restore an emergency backup JSON (the console-snippet format) ---- */
+async function restoreBackupJSON(obj){
+  if(!obj || obj.kind !== 'vista-technical-proposal-review-backup')
+    throw new Error('Not a Vista review backup file (kind mismatch).');
+  if(obj.version !== 1)
+    throw new Error('Unsupported backup version: ' + obj.version);
+  const byId = {};
+  for(const d of (obj.drafts || [])){
+    for(const p of (d.photos || [])){
+      if(p.dataUrl && String(p.dataUrl).startsWith('data:')){
+        try{ byId[p.id] = dataUrlToBlob(p.dataUrl); }catch(_){}
+      }
+    }
+  }
+  const sess = {
+    id:'current', kind:'vista-review-session', version:1, savedAt: Date.now(),
+    fileName: (obj.doc && obj.doc.fileName) || obj.fileName || 'Restored backup',
+    itemCount: (obj.drafts || []).length,
+    photoCount: (obj.drafts || []).reduce((n,d)=> n + (d.photos || []).length, 0),
+    doc: obj.doc || null,
+    otherOpen: obj.otherOpen || [],
+    drafts: (obj.drafts || []).map(d=>{
+      const c = {};
+      for(const k in d) if(k!=='photos') c[k] = d[k];
+      c.photos = (d.photos || []).map(p=>({ id:p.id, role:p.role, sourcePage:p.sourcePage, order:p.order, keep:p.keep, w:p.w||null, h:p.h||null, pid:null }));
+      return c;
+    }),
+    approved: null
+  };
+  await hydrateFromSession(sess, byId);
+  await saveReviewDraft(true);   // persist the restored session into the review DB
+  toast('Backup restored — ' + sess.itemCount + ' items, ' + Object.keys(byId).length + ' photos');
+}
+
+/* ============================================================
    9 · Views
    ============================================================ */
 function shell(inner){
   app().innerHTML =
     '<div class="appbar"><span class="mk">'+MARK_SVG+'</span>'
     + '<span class="title">Google Keep / Site Notes Import</span>'
-    + '<span class="sub">M-Keep-1 · drafts only — nothing is imported until you approve</span></div>'
+    + '<span class="sub">M-Keep-1 · drafts only — nothing is imported until you approve</span>'
+    + '<span class="save-status" id="save-status"></span></div>'
     + '<div class="wrap">'+inner+'</div>';
+  paintSaveStatus();
 }
 
+function fmtWhen(ts){
+  if(!ts) return '—';
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) + ' ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
 function renderUpload(){
+  STATE.view = 'upload';
+  let resumeHtml = '';
+  if(SAVED_META){
+    const m = SAVED_META;
+    resumeHtml = '<div class="resume-card">'
+      + '<div class="eyebrow">Saved review found</div>'
+      + '<div class="rc-meta"><b>'+esc(m.fileName||'Manual review')+'</b>'
+      +   ' · last saved '+esc(fmtWhen(m.savedAt))
+      +   ' · <b>'+m.itemCount+'</b> item'+(m.itemCount===1?'':'s')
+      +   ' · <b>'+m.photoCount+'</b> photo'+(m.photoCount===1?'':'s')
+      +   (m.approved ? ' · <span style="color:var(--emerald);font-weight:700">already approved into “'+esc(m.approved.projectName||'a project')+'”</span>' : '')
+      +   '</div>'
+      + '<div class="row">'
+      +   '<button class="btn btn-primary btn-sm" data-resume>Resume Saved Review</button>'
+      +   '<button class="btn btn-ghost btn-sm" data-deletedraft>Delete Saved Review</button>'
+      + '</div></div>';
+  }
   shell(
-    '<div class="card">'
+    resumeHtml
+    + '<div class="card">'
     + '<div class="eyebrow">Step 1 · Upload</div>'
     + '<div class="drop" id="drop">'
     +   '<div class="big2">Drop a Google Keep export PDF</div>'
     +   '<div class="hint" style="margin-bottom:14px">Native-text PDFs (Keep → Google Docs → Print to PDF) work best. Image-only / scanned PDFs are detected and flagged — OCR import is not enabled yet.</div>'
     +   '<button class="btn btn-primary" data-choose>Choose PDF…</button>'
+    + '</div>'
+    + '<div class="row mt14" style="justify-content:center">'
+    +   '<button class="btn btn-ghost btn-sm" data-restorejson>Restore Backup JSON…</button>'
     + '</div>'
     + '</div>'
   );
@@ -770,13 +1029,17 @@ function renderProcessing(msg){
 function statBox(n, l){ return '<div class="stat"><div class="n">'+n+'</div><div class="l">'+esc(l)+'</div></div>'; }
 
 function renderReview(){
-  const d = STATE.doc, drafts = STATE.drafts;
+  STATE.view = 'review';
+  const d = STATE.doc || { fileName:'Manual review', pageCount:0, scanned:false, totalText:0,
+    errors:[], totalGotImgs:0, totalExpectedImgs:0, titlesDetected:0 };
+  const drafts = STATE.drafts;
   const clean_hi = drafts.filter(x=>confBand(x.confidence)==='high').length;
   const needs = drafts.filter(x=>confBand(x.confidence)!=='high').length;
   const orphans = drafts.filter(x=> x.flags.includes('no title in source') || x.flags.includes('photos attached by proximity')).length;
   const totalPhotos = drafts.reduce((a,x)=>a+x.photos.length,0);
   const unitCases = drafts.filter(x=> x.flags.some(f=>f.startsWith('unit'))).length;
-  const titles = d.pages.reduce((a,p)=> a + (p.lines.some(l=>l.isTitle)?1:0), 0);
+  const titles = (d.titlesDetected != null) ? d.titlesDetected
+    : (d.pages ? d.pages.reduce((a,p)=> a + (p.lines.some(l=>l.isTitle)?1:0), 0) : 0);
 
   let html = '';
 
@@ -942,6 +1205,15 @@ function proposalDetailsHtml(x, i){
     +     '<select data-f="qtyUnit" data-d="'+i+'" style="max-width:160px">'
     +       UNITS.map(u=>'<option '+(u===x.qtyUnit?'selected':'')+'>'+esc(u)+'</option>').join('')
     +     '</select></div>'
+    +   '<div class="pgroup"><div class="pglabel">Pricing <span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none">optional — never guessed from notes</span></div>'
+    +     '<div class="dimrow">'
+    +       '<div class="fld axis"><label>Unit price</label><input data-f="unitPrice" data-d="'+i+'" value="'+esc(x.unitPrice||'')+'" inputmode="decimal" placeholder="e.g. 1250"></div>'
+    +       '<div class="fld unit"><label>Currency</label><select data-f="currency" data-d="'+i+'">'
+    +         CURRENCIES.map(c=>'<option '+((x.currency||'SAR')===c?'selected':'')+'>'+esc(c)+'</option>').join('')
+    +       '</select></div>'
+    +     '</div>'
+    +     (draftLineTotal(x)!=null ? '<div class="rawdim">line total: '+esc(fmtMoney(draftLineTotal(x), x.currency||'SAR'))+'  (qty '+esc(x.qty)+' × unit price)</div>' : '')
+    +   '</div>'
     +   '<div class="pgroup"><div class="pglabel">Design status</div>'+seg('design', STATUS.design, s.design, ['rejected'])+designDetail+'</div>'
     +   '<div class="pgroup"><div class="pglabel">Sample status</div>'+seg('sample', STATUS.sample, s.sample, ['rejected'])+sampleDetail+'</div>'
     +   '<div class="pgroup"><div class="pglabel">Production status</div>'+seg('production', STATUS.production, s.production)+'</div>'
@@ -977,17 +1249,24 @@ function presetGroupHtml(d, g, i){
     + '<div class="chips">'+chips+otherChip+'</div>'+otherField+subs+noteField+'</div>';
 }
 
+let APT_MODE = 'new', APT_NEWNAME = '', APT_EXISTING_ID = '';   // preserved across re-renders
 function renderApproveBar(){
   const sel = STATE.drafts.filter(x=>x.selected).length;
-  const projOpts = STATE.projects.map(p=>'<option value="'+p.id+'">'+esc(p.name||'Untitled')+' ('+((p.items||[]).length)+' items)</option>').join('');
+  const hasProjects = STATE.projects.length > 0;
+  if(APT_MODE==='existing' && !hasProjects) APT_MODE = 'new';
+  if(!APT_EXISTING_ID && hasProjects) APT_EXISTING_ID = STATE.projects[0].id;
+  const projOpts = STATE.projects.map(p=>'<option value="'+p.id+'" '+(p.id===APT_EXISTING_ID?'selected':'')+'>'+esc(p.name||'Untitled')+' ('+((p.items||[]).length)+' items)</option>').join('');
   return '<div class="approvebar"><div class="inner">'
     + '<span class="count"><b>'+sel+'</b> of '+STATE.drafts.length+' selected</span>'
-    + '<select id="approve-target">'
-    +   '<option value="__new">➕ New project…</option>'
-    +   projOpts
-    + '</select>'
-    + '<input id="approve-newname" placeholder="New project name" style="display:none">'
+    + '<div class="apt">'
+    +   '<label><input type="radio" name="apt" value="existing" '+(APT_MODE==='existing'?'checked':'')+' '+(hasProjects?'':'disabled')+'> Existing Project</label>'
+    +   '<select id="apt-existing" '+(APT_MODE==='existing'?'':'disabled')+'>'+(projOpts || '<option>— no projects yet —</option>')+'</select>'
+    +   '<label><input type="radio" name="apt" value="new" '+(APT_MODE==='new'?'checked':'')+'> Create New Project</label>'
+    +   '<input type="text" id="apt-newname" placeholder="Project name" value="'+esc(APT_NEWNAME)+'" '+(APT_MODE==='new'?'':'disabled')+'>'
+    +   '<span class="apt-err" id="apt-err"></span>'
+    + '</div>'
     + '<span class="grow"></span>'
+    + '<button class="btn btn-ghost btn-sm" data-savedraft>Save Review Draft</button>'
     + '<button class="btn btn-ghost btn-sm" data-back-upload>Start over</button>'
     + '<button class="btn btn-primary" data-approve '+(sel?'':'disabled')+'>Approve selected →</button>'
     + '</div></div>';
@@ -1002,6 +1281,7 @@ function reRender(){
   const y = window.scrollY;
   renderReview();
   window.scrollTo(0, y);
+  markDirty();
 }
 /* refresh just one card in place — keeps chip/status edits snappy and
    avoids scrolling on every tap. Falls back to a full re-render. */
@@ -1011,6 +1291,7 @@ function reRenderCard(i){
   const tmp = document.createElement('div');
   tmp.innerHTML = renderDraft(STATE.drafts[i], i);
   el.replaceWith(tmp.firstElementChild);
+  markDirty();
 }
 function draftAt(i){ return STATE.drafts[i]; }
 
@@ -1021,6 +1302,8 @@ function setField(i, f, v){
   else if(f==='notes') x.notesText = v;
   else if(f==='qty'){ x.qty = v; x.qtyStated = has(v) && String(v)!=='1'; }
   else if(f==='qtyUnit') x.qtyUnit = v;
+  else if(f==='unitPrice') x.unitPrice = v;
+  else if(f==='currency') x.currency = v;
   else if(f==='dw') x.dims.w = num(v);
   else if(f==='dh') x.dims.h = num(v);
   else if(f==='dd') x.dims.d = num(v);
@@ -1037,7 +1320,8 @@ function setPresetPath(i, path, v){
 }
 function setPhotoRole(di, pi, role){
   const x = draftAt(di); const ph = x.photos[pi]; if(!ph) return;
-  if(role==='existing' || role==='simulation' || role==='sample'){
+  // Existing Condition allows MANY photos; Simulation / Sample stay single-primary
+  if(role==='simulation' || role==='sample'){
     x.photos.forEach(p=>{ if(p.role===role) p.role='reference'; });
   }
   ph.role = role;
@@ -1064,7 +1348,7 @@ async function addPhotoToDraft(di, file, forcedRole){
       {label:'Existing', v:'existing'}, {label:'Simulation / Proposed', v:'simulation'},
       {label:'Sample', v:'sample'}, {label:'Reference', v:'reference'},
     ]) || {v:'reference'}).v;
-  if(role==='existing'||role==='simulation'||role==='sample') x.photos.forEach(q=>{ if(q.role===role) q.role='reference'; });
+  if(role==='simulation'||role==='sample') x.photos.forEach(q=>{ if(q.role===role) q.role='reference'; });
   x.photos.push({ id:uid(), blob:p.blob, url:URL.createObjectURL(p.blob), w:p.w, h:p.h,
     sourcePage:null, keep:false, order:x.photos.length, role });
   x.flags = x.flags.filter(f=>f!=='no photos');
@@ -1092,8 +1376,9 @@ function mergeDraft(i, dir){
   const j = i + dir;
   if(j < 0 || j >= STATE.drafts.length) return;
   const a = STATE.drafts[Math.min(i,j)], b = STATE.drafts[Math.max(i,j)];
-  // a keeps name/dims/presets/status; b folds in
-  b.photos.forEach(p=>{ p.role = (p.role==='existing'||p.role==='simulation'||p.role==='sample') ? 'reference' : p.role; });
+  // a keeps name/dims/presets/status; b folds in.
+  // Existing photos from b stay Existing (multi allowed); b's Simulation/Sample demote to reference.
+  b.photos.forEach(p=>{ if(p.role==='simulation'||p.role==='sample') p.role='reference'; });
   a.photos.push(...b.photos);
   a.notesText = [a.notesText, b.notesText].filter(has).join('\n');
   a.clientInputs = (a.clientInputs||[]).concat(b.clientInputs||[]);
@@ -1115,7 +1400,7 @@ function splitDraft(i, atPhoto){
     name: x.name + ' (2)', nameSource: 'split from previous',
     photos: moved,
     dims: { raw:'', w:null,h:null,d:null, unit:null, unitExplicit:false, unitInferred:false, needsUnitConfirmation:true, extra:[] },
-    notesText:'', qty:1, qtyUnit:'no.', qtyStated:false, selected:true, _unitTouched:false,
+    notesText:'', qty:1, qtyUnit:'no.', qtyStated:false, unitPrice:'', currency:'SAR', selected:true, _unitTouched:false,
     presets:{}, status:{ design:'pending', sample:'na', production:'not_started', designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
     clientInputs:[], detailsOpen:false,
     flags:['from split','quantity not stated','no dimensions found'],
@@ -1148,7 +1433,7 @@ function newManualDraft(atIndex){
     name:'', nameSource:'Manual item', manual:true,
     photos:[],
     dims:{ raw:'', w:null,h:null,d:null, unit:null, unitExplicit:false, unitInferred:false, needsUnitConfirmation:true, extra:[] },
-    notesText:'', qty:1, qtyUnit:'no.', qtyStated:false,
+    notesText:'', qty:1, qtyUnit:'no.', qtyStated:false, unitPrice:'', currency:'SAR',
     selected:true, _unitTouched:false,
     presets:{}, status:{ design:'pending', sample:'na', production:'not_started', designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
     clientInputs:[], detailsOpen:false,
@@ -1206,24 +1491,26 @@ function toMM(v, unit){
   return String(n);
 }
 function blankItem(){
-  return { presets:{}, clientInputs:[],
+  return { presets:{}, clientInputs:[], unitPrice:'', currency:'SAR', existingPhotoIds:[],
     status:{ design:'pending', sample:'na', production:'not_started', designComment:'', sampleRev:'', sampleDate:'', sampleBy:'', sampleComment:'' },
     ar:{ name:'', locationRef:'', scope:'', site:'', technical:'', criticalInstaller:'', clientInputs:{} } };
 }
-async function approveImport(targetId, newName){
+async function approveImport(mode, value){
   const chosen = STATE.drafts.filter(x=>x.selected);
   if(!chosen.length){ toast('Nothing selected'); return; }
 
-  let project;
-  if(targetId === '__new'){
+  let project, isNew = false;
+  if(mode === 'new'){
+    isNew = true;
     const t = now();
-    project = { id: uid(), name: newName || 'Imported from Keep', client:'', location:'', revision:'R1',
-      descriptor:'', preparedBy:'', dateOfIssue:'', docRef:'', createdAt:t, updatedAt:t, items:[] };
+    project = { id: uid(), name: value || 'Imported from Keep', client:'', location:'', revision:'R1',
+      descriptor:'', preparedBy:'', dateOfIssue:'', docRef:'', showPricing:false, createdAt:t, updatedAt:t, items:[] };
   } else {
-    project = await dbGet('projects', targetId);
+    project = await dbGet('projects', value);
     if(!project){ toast('Project not found'); return; }
   }
   if(!Array.isArray(project.items)) project.items = [];
+  const beforeCount = project.items.length;
 
   for(const x of chosen){
     // deep-clone presets so the stored item is independent of the review state
@@ -1234,9 +1521,12 @@ async function approveImport(targetId, newName){
       name: x.name || 'Untitled item',
       locationRef: '',
       qty: { value: (parseInt(x.qty,10) || 1), unit: x.qtyUnit || 'no.' },
+      unitPrice: (x.unitPrice==null ? '' : String(x.unitPrice).trim()),
+      currency: x.currency || 'SAR',
       dims: { w: toMM(x.dims.w, x.dims.unit), h: toMM(x.dims.h, x.dims.unit), d: toMM(x.dims.d, x.dims.unit),
               mountingHeight:'', projection:'' },
       photoIds: {},
+      existingPhotoIds: [],
       referencePhotoIds: [],
       presets,
       status: JSON.parse(JSON.stringify(x.status)),
@@ -1257,14 +1547,16 @@ async function approveImport(targetId, newName){
       createdAt: now(), updatedAt: now()
     });
 
-    for(const p of x.photos){
+    for(const p of x.photos){   // x.photos order is preserved -> Existing order preserved
       const pid = uid();
-      const primary = (p.role==='existing'||p.role==='simulation'||p.role==='sample');
+      const isExisting = p.role==='existing';
+      const isSingle = p.role==='simulation' || p.role==='sample';
       await dbPut('photos', { id: pid, projectId: project.id, itemId: it.id,
-        slot: primary ? p.role : 'reference',
+        slot: (isExisting || isSingle) ? p.role : 'reference',
         blob: p.blob, mime:'image/jpeg', w:p.w, h:p.h, bytes:p.blob.size, createdAt: now(),
         keepPage: p.sourcePage });
-      if(primary) it.photoIds[p.role] = pid;
+      if(isExisting) it.existingPhotoIds.push(pid);
+      else if(isSingle) it.photoIds[p.role] = pid;
       else it.referencePhotoIds.push(pid);
     }
     project.items.push(it);
@@ -1272,10 +1564,56 @@ async function approveImport(targetId, newName){
   project.updatedAt = now();
   await dbPut('projects', project);
 
-  shell('<div class="card"><div class="banner ok"><b>'+chosen.length+' item'+(chosen.length>1?'s':'')+' imported</b> into “'+esc(project.name)+'”. They are now editable in the Technical Proposal dashboard like any other draft item.</div>'
-    + '<div class="hint">keepSource (filename, page numbers, original raw text, photo/page references) is stored on every imported item. Reference photos are kept on the item and will surface in the dashboard later.</div>'
-    + '<div class="row mt14"><button class="btn btn-ghost" data-back-upload>Import another PDF</button></div></div>');
+  // mark (do NOT delete) the saved review as approved, so it stays resumable
+  STATE._approved = { at: now(), projectId: project.id, projectName: project.name, itemCount: chosen.length, isNew };
+  STATE.view = 'approved';
+  try{ await saveReviewDraft(true); }catch(e){}
+
   document.querySelectorAll('.approvebar').forEach(b=>b.remove());
+  shell(
+    '<div class="savedok">'
+    + '<div class="big2">Project saved successfully</div>'
+    + '<div class="hint" style="margin-bottom:14px"><b>'+chosen.length+'</b> item'+(chosen.length>1?'s':'')+' '
+    +   (isNew ? 'imported into the new project' : 'added to') + ' “<b>'+esc(project.name)+'</b>”'
+    +   (isNew ? '' : ' (now '+project.items.length+' items).')
+    +   ' Every item is fully editable in the dashboard. Reference photos and keepSource metadata are stored on each item.</div>'
+    + '<div class="row">'
+    +   '<button class="btn btn-primary btn-sm" data-open-dashboard="'+esc(project.id)+'">Open Technical Proposal</button>'
+    +   '<button class="btn btn-ghost btn-sm" data-backupjson>Keep Review Backup (download JSON)</button>'
+    +   '<button class="btn btn-ghost btn-sm" data-deletedraft-approved>Delete Saved Review</button>'
+    + '</div>'
+    + '<div class="hint mt10">Your review is still saved — you can <b>Resume Saved Review</b> from the start screen (e.g. to import remaining items into another project).</div>'
+    + '<div class="row mt14"><button class="btn btn-ghost btn-sm" data-back-upload>Import another PDF</button></div>'
+    + '</div>'
+  );
+}
+function downloadReviewBackupJSON(){
+  (async ()=>{
+    const drafts = [];
+    for(const d of STATE.drafts){
+      const photos = [];
+      for(const p of (d.photos||[])){
+        let dataUrl = null;
+        try{ if(p.blob) dataUrl = await blobToDataUrl(p.blob); }catch(_){}
+        photos.push({ id:p.id, role:p.role, sourcePage:p.sourcePage==null?null:p.sourcePage, order:p.order==null?null:p.order, keep:p.keep, w:p.w||null, h:p.h||null, dataUrl });
+      }
+      const c = {}; for(const k in d) if(k!=='photos'){ try{ c[k]=JSON.parse(JSON.stringify(d[k])); }catch(_){ c[k]=String(d[k]); } }
+      c.photos = photos; drafts.push(c);
+    }
+    const backup = {
+      kind:'vista-technical-proposal-review-backup', version:1, savedAt:new Date().toISOString(),
+      doc: STATE.doc ? { fileName:STATE.doc.fileName, pageCount:STATE.doc.pageCount, scanned:STATE.doc.scanned,
+        totalText:STATE.doc.totalText, errors:STATE.doc.errors, totalGotImgs:STATE.doc.totalGotImgs,
+        totalExpectedImgs:STATE.doc.totalExpectedImgs, titlesDetected:STATE.doc.titlesDetected } : null,
+      projects: (STATE.projects||[]).map(p=>({id:p.id,name:p.name})),
+      otherOpen: [...STATE.otherOpen],
+      approved: STATE._approved || null,
+      counts: { drafts:drafts.length, photos:drafts.reduce((n,d)=>n+d.photos.length,0) },
+      drafts
+    };
+    downloadBlob(new Blob([JSON.stringify(backup)],{type:'application/json'}), 'technical-proposal-review-emergency-backup.json');
+    toast('Backup JSON downloaded');
+  })();
 }
 
 /* ============================================================
@@ -1298,12 +1636,14 @@ async function runImport(file){
     .map((g,i)=> groupToDraft(g, doc.fileName, i));
   STATE.doc = doc;
   STATE.drafts = drafts;
+  STATE._approved = null;
   try{ STATE.projects = (await dbGetAll('projects')).sort((a,b)=>b.updatedAt-a.updatedAt); }catch(e){ STATE.projects = []; }
   STATE.view = 'review';
   renderReview();
   console.log('[keep-import] pages', doc.pageCount, 'drafts', drafts.length,
     'photos', drafts.reduce((a,x)=>a+x.photos.length,0), 'errors', doc.errors.length);
   window.__keepImport = { doc, drafts };
+  try{ await deleteReviewDraft(); await saveReviewDraft(true); }catch(e){}   // fresh import replaces any prior saved review
 }
 
 /* ============================================================
@@ -1373,10 +1713,13 @@ document.addEventListener('click', async e=>{
   const dla = t.closest('[data-dlall]');
   if(dla){ downloadAllItemPhotos(+dla.dataset.dlall); return; }
 
-  if(t.closest('[data-choose]') || t.closest('[data-back-upload]')){
-    if(t.closest('[data-back-upload]')){ document.querySelectorAll('.approvebar').forEach(b=>b.remove()); renderUpload(); }
-    $('#pick').value=''; $('#pick').click(); return;
+  if(t.closest('[data-back-upload]')){
+    document.querySelectorAll('.approvebar').forEach(b=>b.remove());
+    await refreshSavedMeta();
+    renderUpload();
+    return;
   }
+  if(t.closest('[data-choose]')){ $('#pick').value=''; $('#pick').click(); return; }
 
   // add photo (card button or sample-photo button)
   const ap = t.closest('[data-addphoto]');
@@ -1463,13 +1806,52 @@ document.addEventListener('click', async e=>{
     STATE.drafts[+box.dataset.d].clientInputs[+box.dataset.ri].priority = ciP.dataset.v; reRenderCard(+box.dataset.d); return; }
 
   if(t.closest('[data-approve]')){
-    const sel = $('#approve-target').value;
-    const nn = ($('#approve-newname')||{}).value || '';
-    if(sel==='__new' && !nn.trim()){ toast('Enter a project name'); $('#approve-newname').focus(); return; }
-    await approveImport(sel, nn.trim());
+    const errEl = $('#apt-err');
+    if(errEl) errEl.textContent = '';
+    const nameEl = $('#apt-newname');
+    if(APT_MODE === 'new'){
+      const name = ((nameEl && nameEl.value) || APT_NEWNAME || '').trim();
+      if(!name){ if(errEl) errEl.textContent = 'Enter a project name'; if(nameEl){ nameEl.focus(); nameEl.style.borderColor = 'var(--stop)'; } return; }
+      await approveImport('new', name);
+    } else {
+      const id = ($('#apt-existing') && $('#apt-existing').value) || APT_EXISTING_ID;
+      if(!id){ if(errEl) errEl.textContent = 'Pick a project'; return; }
+      await approveImport('existing', id);
+    }
     return;
   }
+
+  // --- review-draft recovery / persistence ---
+  if(t.closest('[data-savedraft]')){ await saveReviewDraft(false); toast('Review draft saved'); return; }
+  if(t.closest('[data-resume]')){ await resumeReview(); return; }
+  if(t.closest('[data-restorejson]')){ $('#jsonpick').value=''; $('#jsonpick').click(); return; }
+  if(t.closest('[data-deletedraft]') || t.closest('[data-deletedraft-approved]')){
+    if(await confirmSheet('Delete the saved review?', 'This permanently removes the saved review session and its photos from this browser. Imported projects are not affected.')){
+      await deleteReviewDraft();
+      document.querySelectorAll('.approvebar').forEach(b=>b.remove());
+      renderUpload();
+    }
+    return;
+  }
+  if(t.closest('[data-backupjson]')){ downloadReviewBackupJSON(); return; }
+  const od = t.closest('[data-open-dashboard]');
+  if(od){ location.href = 'technical-proposal-dashboard.html#/p/' + od.dataset.openDashboard; return; }
 });
+
+/* simple confirm using the existing sheetMenu look */
+function confirmSheet(title, body){
+  return new Promise(res=>{
+    const o = document.createElement('div'); o.className='sheetmenu';
+    o.innerHTML = '<div class="inner"><div class="mtitle">'+esc(title)+'</div>'
+      + '<div style="padding:10px 12px;font-size:12.5px;color:var(--grey);line-height:1.5">'+esc(body)+'</div>'
+      + '<button data-yes class="danger">Delete</button><button data-no>Cancel</button></div>';
+    o.addEventListener('click', e=>{
+      if(e.target===o || e.target.closest('[data-no]')){ o.remove(); res(false); }
+      else if(e.target.closest('[data-yes]')){ o.remove(); res(true); }
+    });
+    document.body.appendChild(o);
+  });
+}
 
 // remember Proposal Details open/closed per draft; build the body lazily on first open
 let _pdBusy = false;
@@ -1491,32 +1873,58 @@ document.addEventListener('keydown', e=>{
 
 document.addEventListener('input', e=>{
   const t = e.target;
-  if(t.dataset.pp != null && t.dataset.d != null){ setPresetPath(+t.dataset.d, t.dataset.pp, t.value); return; }
+  if(t.dataset.pp != null && t.dataset.d != null){ setPresetPath(+t.dataset.d, t.dataset.pp, t.value); markDirty(); return; }
   if(t.dataset.f != null && t.dataset.d != null){
     setField(+t.dataset.d, t.dataset.f, t.value);
     if(t.dataset.f==='unit') reRenderCard(+t.dataset.d);
+    else markDirty();
     return;
   }
   if(t.dataset.citext != null){
-    STATE.drafts[+t.dataset.d].clientInputs[+t.dataset.ri].text = t.value; return;
+    STATE.drafts[+t.dataset.d].clientInputs[+t.dataset.ri].text = t.value; markDirty(); return;
   }
+  if(t.id === 'apt-newname'){ APT_NEWNAME = t.value; const er=$('#apt-err'); if(er) er.textContent=''; t.style.borderColor=''; return; }
 });
 document.addEventListener('change', e=>{
   const t = e.target;
-  if(t.dataset.sel != null){ STATE.drafts[+t.dataset.sel].selected = t.checked;
-    const c = document.querySelector('.approvebar .count'); if(c) c.innerHTML = '<b>'+STATE.drafts.filter(x=>x.selected).length+'</b> of '+STATE.drafts.length+' selected';
-    return; }
-  if(t.dataset.f === 'unit'){ setField(+t.dataset.d, 'unit', t.value); reRenderCard(+t.dataset.d); return; }
-  if(t.dataset.f === 'qtyUnit'){ setField(+t.dataset.d, 'qtyUnit', t.value); return; }
-  if(t.id === 'approve-target'){
-    const nn = $('#approve-newname'); if(nn) nn.style.display = t.value==='__new' ? 'block' : 'none';
+  if(t.name === 'apt'){
+    APT_MODE = t.value;
+    const se = $('#apt-existing'), ne = $('#apt-newname'), er = $('#apt-err');
+    if(se) se.disabled = (APT_MODE!=='existing');
+    if(ne){ ne.disabled = (APT_MODE!=='new'); ne.style.borderColor=''; if(APT_MODE==='new') ne.focus(); }
+    if(er) er.textContent = '';
     return;
   }
+  if(t.id === 'apt-existing'){ APT_EXISTING_ID = t.value; return; }
+  if(t.dataset.sel != null){ STATE.drafts[+t.dataset.sel].selected = t.checked;
+    const c = document.querySelector('.approvebar .count'); if(c) c.innerHTML = '<b>'+STATE.drafts.filter(x=>x.selected).length+'</b> of '+STATE.drafts.length+' selected';
+    markDirty(); return; }
+  if(t.dataset.f === 'unit'){ setField(+t.dataset.d, 'unit', t.value); reRenderCard(+t.dataset.d); return; }
+  if(t.dataset.f === 'qtyUnit'){ setField(+t.dataset.d, 'qtyUnit', t.value); markDirty(); return; }
+  if(t.dataset.f === 'currency'){ setField(+t.dataset.d, 'currency', t.value); reRenderCard(+t.dataset.d); return; }
+  if(t.dataset.f === 'unitPrice'){ setField(+t.dataset.d, 'unitPrice', t.value);
+    const el = document.querySelector('.draft[data-draft="'+t.dataset.d+'"] .pdetails .rawdim');
+    const tot = draftLineTotal(STATE.drafts[+t.dataset.d]);
+    if(el && tot!=null) el.textContent = 'line total: '+fmtMoney(tot, STATE.drafts[+t.dataset.d].currency||'SAR')+'  (qty '+STATE.drafts[+t.dataset.d].qty+' × unit price)';
+    else reRenderCard(+t.dataset.d);
+    markDirty(); return; }
 });
 $('#photopick').addEventListener('change', async e=>{
   const f = e.target.files && e.target.files[0];
   if(f && PHOTO_TARGET){ await addPhotoToDraft(PHOTO_TARGET.di, f, PHOTO_TARGET.role); }
   PHOTO_TARGET = null; e.target.value='';
+});
+$('#jsonpick').addEventListener('change', async e=>{
+  const f = e.target.files && e.target.files[0]; e.target.value='';
+  if(!f) return;
+  try{
+    const obj = JSON.parse(await f.text());
+    await restoreBackupJSON(obj);
+  }catch(err){
+    console.error(err);
+    shell('<div class="card"><div class="banner stop"><b>Could not restore that file.</b> '+esc(String(err && err.message || err))+'</div>'
+      + '<button class="btn btn-ghost mt10" data-back-upload>Back</button></div>');
+  }
 });
 
 // drag & drop
@@ -1535,7 +1943,15 @@ $('#pick').addEventListener('change', e=>{
 /* ============================================================
    14 · Init
    ============================================================ */
-renderUpload();
+(async function init(){
+  renderUpload();                 // paint immediately
+  try{ await refreshSavedMeta(); }catch(e){}
+  if(STATE.view === 'upload') renderUpload();   // re-paint with the Resume card if a saved review exists
+})();
+
+// autosave on tab hide / close so nothing is lost
+window.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden' && STATE.view==='review') saveReviewDraft(true); });
+window.addEventListener('pagehide', ()=>{ if(STATE.view==='review') saveReviewDraft(true); });
 </script>
 </body>
 </html>

@@ -169,6 +169,7 @@
     padding:8px 8px 8px 0; border-bottom:0.5px solid var(--rule); vertical-align:top;
   }
   table.grid tbody tr:last-child td{ border-bottom:1px solid var(--rule-strong); }
+  table.grid tbody tr.subtotal td{ border-top:1px solid var(--emerald); border-bottom:none; color:var(--forest); padding-top:9px; }
   table.grid .loc{ font-weight:600; color:var(--forest); }
   table.grid .num{ white-space:nowrap; }
   table.grid td.tight, table.grid th.tight{ padding-right:6px; }
@@ -194,6 +195,13 @@
   /* ---------- PHOTO COMPARISON ---------- */
   .compare{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
   .compare.trio{ grid-template-columns:1fr 1fr 1fr; }
+  .exgallery{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; }
+  .exgallery.two{ grid-template-columns:repeat(2,1fr); }
+  .exgallery figure.photo .frame{ aspect-ratio:4/3; }
+  .exgallery-lbl{ font-size:6.8px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--grey); margin-top:11px; }
+  .ivis-side .exstrip{ display:flex; gap:4px; margin-top:4px; }
+  .ivis-side .exstrip .frame{ flex:1; aspect-ratio:1/1; border:0.75px solid var(--rule-strong); overflow:hidden; position:relative; }
+  .ivis-side .exstrip img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   figure.photo{ margin:0; }
   figure.photo .frame{
     width:100%; aspect-ratio:4/3; border:0.75px solid var(--rule-strong); overflow:hidden; background:var(--cream);
@@ -1301,10 +1309,24 @@ var DATA_MODE = false;
     s = String(s||'').split(/[—–\-,(]/)[0];               // take the part before a dash / comma
     return s.toUpperCase().replace(/[^A-Z0-9]+/g,'').slice(0,6) || 'PROJ';
   }
+  /* ---- pricing (optional; identical shape to the dashboard) ---- */
+  function moneyNum(v){ if(v==null||String(v).trim()==='') return null; const n=parseFloat(String(v).replace(/[, ]/g,'')); return isFinite(n)?n:null; }
+  function fmtMoney(n, cur){ return (cur||'SAR')+' '+Number(n).toLocaleString('en-US',{maximumFractionDigits:2}); }
 
   function buildModel(project, photoRecs, selIds){
     const byItem = {};
-    (photoRecs||[]).forEach(r=>{ (byItem[r.itemId]=byItem[r.itemId]||{})[r.slot] = URL.createObjectURL(r.blob); });
+    const recById = {};
+    (photoRecs||[]).forEach(r=>{
+      recById[r.id] = r;
+      const b = byItem[r.itemId] = byItem[r.itemId] || {};
+      if(r.slot !== 'existing' && r.slot !== 'reference') b[r.slot] = URL.createObjectURL(r.blob);
+    });
+    // Existing Condition — ordered list from item.existingPhotoIds (legacy: photoIds.existing)
+    const existingUrls = it => {
+      const ids = (it.existingPhotoIds && it.existingPhotoIds.length) ? it.existingPhotoIds
+                : (it.photoIds && it.photoIds.existing ? [it.photoIds.existing] : []);
+      return ids.map(id=> recById[id]).filter(Boolean).map(r=> URL.createObjectURL(r.blob));
+    };
 
     const rev = nn(project.revision) || 'R1';
     const docRef = nn(project.docRef) || ('VU-'+slug(project.client || project.name)+'-TP-'+rev);
@@ -1316,13 +1338,17 @@ var DATA_MODE = false;
       const s = it.status || {};
       const P = it.presets || {};
       const cin = (it.clientInputs||[]).filter(c=>has(c.text));
+      const exList = existingUrls(it);
       const m = {
         id: it.id, number: it.number || '',
         name: nn(it.name) || 'Untitled item',
         locationRef: nn(it.locationRef),
         qty: { value: (it.qty && it.qty.value!=null) ? it.qty.value : '', unit: (it.qty && it.qty.unit) || '' },
+        unitPrice: moneyNum(it.unitPrice),
+        currency: nn(it.currency) || 'SAR',
         dims: it.dims || {},
-        photos: { existing:photos.existing||null, simulation:photos.simulation||null, sample:photos.sample||null, after:photos.after||null },
+        photos: { existing: exList[0] || null, existingList: exList,
+                  simulation:photos.simulation||null, sample:photos.sample||null, after:photos.after||null },
         presets: P,
         scope: nn(it.notes && it.notes.scope),
         site: nn(it.notes && it.notes.site),
@@ -1337,10 +1363,18 @@ var DATA_MODE = false;
       };
       m.hasUrgent = cin.some(c=>c.priority==='urgent');
       m.layout = (!m.photos.simulation || m.status.design!=='approved') ? 'pending' : 'full';
+      const q = moneyNum(m.qty.value);
+      m.lineTotal = (m.unitPrice!=null && q!=null) ? m.unitPrice * q : null;
       return m;
     });
 
     const installerIds = selIds && selIds.length ? selIds : items.map(i=>i.id);
+
+    const showPricing = !!project.showPricing;
+    const priced = items.filter(i=> i.lineTotal!=null);
+    const pricingCurrency = (priced[0] && priced[0].currency) || 'SAR';
+    const subtotal = priced.filter(i=> i.currency===pricingCurrency).reduce((s,i)=> s + i.lineTotal, 0);
+    const mixedCurrency = priced.some(i=> i.currency!==pricingCurrency);
 
     return {
       project: {
@@ -1349,8 +1383,11 @@ var DATA_MODE = false;
         client: nn(project.client), location: nn(project.location),
         preparedBy: nn(project.preparedBy) || 'Vista United — Projects & Technical Department',
         revision: rev, dateOfIssue: dateOfIssue, docRef: docRef,
-        docRefInstaller: docRef.replace('-TP-','-IP-')
+        docRefInstaller: docRef.replace('-TP-','-IP-'),
+        showPricing: showPricing
       },
+      pricing: { show: showPricing, currency: pricingCurrency, subtotal: subtotal,
+                 anyPriced: priced.length>0, mixedCurrency: mixedCurrency },
       items: items,
       installerItems: items.filter(i=> installerIds.indexOf(i.id) !== -1)
     };
@@ -1393,6 +1430,19 @@ var DATA_MODE = false;
     return parts.join(' · ');
   }
   function qtyLine(q){ return (has(q.value)?q.value:'—') + (has(q.unit)?' '+q.unit:''); }
+
+  /* ---- additional Existing Condition views (client pages) ---- */
+  function existingExtraGallery(list, lang){
+    if(!list || list.length < 2) return '';
+    const extra = list.slice(1);
+    const two = extra.length <= 2 ? ' two' : '';
+    const lbl = lang==='ar' ? 'مناظر إضافية للوضع الحالي' : 'Additional Existing Site Views';
+    return '<div class="exgallery-lbl">'+lbl+'</div><div class="exgallery'+two+'">'
+      + extra.map((u,i)=> '<figure class="photo"><div class="frame" style="position:relative">'
+          + '<img src="'+u+'" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></div>'
+          + '<figcaption>'+(lang==='ar' ? ('منظر '+(i+2)) : ('Existing View '+(i+2)))+'</figcaption></figure>').join('')
+      + '</div>';
+  }
 
   /* ---- photo box: real <img> when present, else labelled placeholder ---- */
   function photoBox(url, label, extraStyle){
@@ -1452,6 +1502,10 @@ var DATA_MODE = false;
     else if(A.indexOf('Scissor Lift')!==-1) tags.push({t:'Scissor Lift'});
     else if(A.indexOf('Ladder')!==-1) tags.push({t:'Ladder Access'});
     else if(A.indexOf('Normal')!==-1) tags.push({t:'Normal Access'});
+    const EN = g('environment');
+    if(EN.indexOf('Waterproof')!==-1) tags.push({t:'Waterproof'});
+    else if(EN.indexOf('Weather Resistant')!==-1 || EN.indexOf('Outdoor')!==-1) tags.push({t:'Outdoor'});
+    else if(EN.indexOf('Indoor')!==-1) tags.push({t:'Indoor'});
     if(+it.qty.value > 1) tags.push({t:'Qty '+it.qty.value});
     return tags.slice(0,6).map(x=>'<span class="etag'+(x.warn?' warn':'')+'">'+esc(x.t)+'</span>').join('\n      ');
   }
@@ -1480,6 +1534,7 @@ var DATA_MODE = false;
 
   function scopePage(P, pageNo, total){
     const proj = P.project, n = P.items.length;
+    const showP = P.pricing.show;
     const rows = P.items.map(it=>{
       const ci = it.clientInputs.slice().sort((a,b)=>prioRank(a.priority)-prioRank(b.priority))[0];
       const inputCell = ci ? esc(ci.text) : '<span class="b-none">None outstanding</span>';
@@ -1488,23 +1543,33 @@ var DATA_MODE = false;
         + '<td>'+badge('design',it.status.design)+'</td>'
         + '<td>'+badge('sample',it.status.sample)+'</td>'
         + '<td>'+badge('production',it.status.production)+'</td>'
-        + '<td>'+inputCell+'</td></tr>';
+        + '<td>'+inputCell+'</td>'
+        + (showP ? '<td class="num">'+(it.lineTotal!=null ? esc(fmtMoney(it.lineTotal,it.currency)) : '<span class="b-none">—</span>')+'</td>' : '')
+        + '</tr>';
     }).join('\n        ');
+    const subtotalRow = showP
+      ? '<tr class="subtotal"><td colspan="7" style="text-align:right;font-weight:600">Project Subtotal'
+        + (P.pricing.mixedCurrency ? ' <span class="muted">(items priced in other currencies excluded)</span>' : '')
+        + '</td><td class="num" style="font-weight:700">'+esc(fmtMoney(P.pricing.subtotal, P.pricing.currency))+'</td></tr>'
+      : '';
     const held = P.items.filter(it=> it.status.design!=='approved' || (it.status.sample!=='approved' && it.status.sample!=='na'))
                         .map(it=>it.number);
+    const cols = showP
+      ? '<th class="tight" style="width:4%">#</th><th style="width:18%">Item / Location</th><th class="tight" style="width:7%">Qty</th>'
+        + '<th style="width:12%">Design Status</th><th style="width:12%">Sample Status</th><th style="width:14%">Production Status</th><th style="width:17%">Client Input</th><th class="num" style="width:16%">Line Total</th>'
+      : '<th class="tight" style="width:5%">#</th><th style="width:22%">Item / Location</th><th class="tight" style="width:9%">Qty</th>'
+        + '<th style="width:13%">Design Status</th><th style="width:13%">Sample Status</th><th style="width:16%">Production Status</th><th style="width:22%">Client Input</th>';
     return '<section class="page" data-title="Scope Overview">'+RH(proj)
       + '<div class="eyebrow">Section 01</div><div class="page-title">Scope Overview</div>'
       + '<p class="lead">'+n+' signage location'+(n===1?'':'s')+' in this proposal. The table below records the current design, sample and production position for each element, and the specific client input still required to release it.</p>'
       + '<div class="section-head"><span class="n">01</span><h3>Location Schedule</h3></div>'
-      + '<table class="grid"><thead><tr>'
-      +   '<th class="tight" style="width:5%">#</th><th style="width:22%">Item / Location</th><th class="tight" style="width:9%">Qty</th>'
-      +   '<th style="width:13%">Design Status</th><th style="width:13%">Sample Status</th><th style="width:16%">Production Status</th><th style="width:22%">Client Input</th>'
-      + '</tr></thead><tbody>'+rows+'</tbody></table>'
+      + '<table class="grid"><thead><tr>'+cols+'</tr></thead><tbody>'+rows+subtotalRow+'</tbody></table>'
       + '<div class="legend"><span class="grp"><b>Design:</b> Pending · Approved · Revision Required · Rejected</span>'
       +   '<span class="grp"><b>Sample:</b> N/A · Pending · Approved · Rejected</span>'
       +   '<span class="grp"><b>Production:</b> Not Started · Ready for Production · In Production · Ready for Installation · Installed</span></div>'
       + '<p class="fine mt14">Production is released per location only when Design Status = Approved and Sample Status = Approved (or N/A).'
       +   (held.length ? ' Item'+(held.length>1?'s':'')+' '+held.join(', ')+' '+(held.length>1?'are':'is')+' held pending the client input noted above.' : '')+'</p>'
+      + (showP ? '<p class="fine">Indicative pricing, exclusive of VAT. Subject to final design, approved samples and confirmed site measurements.</p>' : '')
       + RF('Technical Proposal · '+proj.revision, 'Page '+pageNo+' / '+total)
       + '</section>';
   }
@@ -1528,6 +1593,8 @@ var DATA_MODE = false;
     const kf = '<div class="keyfacts">'
       + '<div class="kf"><div class="k">Quantity</div><div class="v">'+esc(qtyLine(it.qty))+'</div></div>'
       + (has(dimsLine(it.dims)) ? '<div class="kf"><div class="k">Overall Dimensions</div><div class="v">'+esc(dimsLine(it.dims))+'</div></div>' : '')
+      + (P.project.showPricing && it.unitPrice!=null ? '<div class="kf"><div class="k">Unit Price</div><div class="v">'+esc(fmtMoney(it.unitPrice,it.currency))+'</div></div>' : '')
+      + (P.project.showPricing && it.lineTotal!=null ? '<div class="kf"><div class="k">Line Total</div><div class="v">'+esc(fmtMoney(it.lineTotal,it.currency))+'</div></div>' : '')
       + '</div>';
     const spec = [];
     if(has(it.scope)) spec.push('<div class="item"><div class="k">Description / Scope</div><div class="v">'+esc(it.scope)+'</div></div>');
@@ -1539,11 +1606,12 @@ var DATA_MODE = false;
       + '<div class="section-head"><span class="n">A</span><h3>Visual Comparison</h3></div>'
       + '<div class="compare">'
       +   '<figure class="photo big">'+photoBox(it.photos.existing,'Existing site photo — not yet on file')
-      +     '<figcaption>Existing Condition <span class="tag">'+(it.photos.existing?'Site photo':'Pending')+'</span></figcaption></figure>'
+      +     '<figcaption>Existing Condition <span class="tag">'+(it.photos.existingList.length>1 ? it.photos.existingList.length+' site photos' : (it.photos.existing?'Site photo':'Pending'))+'</span></figcaption></figure>'
       +   '<figure class="photo big proposed">'+photoBox(it.photos.simulation,'Proposed design — not yet on file')
       +     '<figcaption>Proposed Design <span class="tag">'+esc(SL[it.status.design])+'</span></figcaption></figure>'
       + '</div>'
-      + '<div class="section-head"><span class="n">B</span><h3>Specification</h3></div>'
+      + existingExtraGallery(it.photos.existingList)
+      + '<div class="section-head"><span class="n">B</span><h3>Technical Specifications</h3></div>'
       + kf
       + '<div class="presets">'+presetRows(it.presets)+'</div>'
       + specHtml
@@ -1598,32 +1666,41 @@ var DATA_MODE = false;
       ? it.clientInputs.map(c=>'<li>'+esc(c.text)+'</li>').join('\n        ')
       : '<li>Final <b>artwork</b> — approved graphic layout and content</li>'
         + '<li>Verified site <b>measurements</b></li><li><b>Material decision</b></li>';
+    const specRows = presetRows(it.presets);   // selected Technical Specifications (empty groups omitted)
     const params = [];
     params.push('<div class="item"><div class="k">Quantity</div><div class="v">'+esc(qtyLine(it.qty))+'</div></div>');
     if(has(dimsLine(it.dims))) params.push('<div class="item"><div class="k">Indicative Size</div><div class="v">'+esc(dimsLine(it.dims))+' <span class="muted">(to be confirmed with design)</span></div></div>');
+    if(P.project.showPricing && it.unitPrice!=null) params.push('<div class="item"><div class="k">Unit Price</div><div class="v">'+esc(fmtMoney(it.unitPrice,it.currency))+(it.lineTotal!=null?' · Line total '+esc(fmtMoney(it.lineTotal,it.currency)):'')+' <span class="muted">(indicative)</span></div></div>');
     if(has(it.site)) params.push('<div class="item"><div class="k">Site Notes</div><div class="v">'+esc(it.site)+'</div></div>');
-    const acc = presetRows(it.presets).indexOf('Access')!==-1;
-    if(gv(it.presets,'access').length) params.push('<div class="item"><div class="k">Access</div><div class="v">'+esc(gv(it.presets,'access').join(' · '))+(has(it.presets.accessNote)?' — '+esc(it.presets.accessNote):'')+'</div></div>');
     return '<section class="page" data-title="Item '+esc(it.number)+' — Pending Design">'+RH(proj)
       + '<div class="eyebrow">Technical Item</div><div class="page-title">'+esc(it.number)+' / '+esc(it.name)+'</div>'
       + '<div class="section-head"><span class="n">A</span><h3>Visual Comparison</h3></div>'
       + '<div class="compare">'
       +   '<figure class="photo big">'+photoBox(it.photos.existing,'Existing site photo — not yet on file')
-      +     '<figcaption>Existing Condition <span class="tag">'+(it.photos.existing?'Site photo':'Pending')+'</span></figcaption></figure>'
-      +   '<figure class="photo big"><div class="frame" data-scene="pending" data-variant="pending"></div>'
-      +     '<figcaption>Proposed Design <span class="tag">Not yet issued</span></figcaption></figure>'
+      +     '<figcaption>Existing Condition <span class="tag">'+(it.photos.existingList.length>1 ? it.photos.existingList.length+' site photos' : (it.photos.existing?'Site photo':'Pending'))+'</span></figcaption></figure>'
+      +   '<figure class="photo big'+(it.photos.simulation?' proposed':'')+'">'
+      +     (it.photos.simulation
+        ? photoBox(it.photos.simulation,'')
+        : '<div class="frame" data-scene="pending" data-variant="pending"></div>')
+      +     '<figcaption>Proposed Design <span class="tag">'
+      +       (it.photos.simulation ? esc(SL[it.status.design] || 'Pending')+' — shown for review' : 'Not yet issued')
+      +     '</span></figcaption></figure>'
       + '</div>'
+      + existingExtraGallery(it.photos.existingList)
+      + (has(specRows)
+          ? '<div class="section-head"><span class="n">B</span><h3>Technical Specifications</h3></div><div class="presets">'+specRows+'</div>'
+          : '')
       + '<div class="banner" style="border-color:var(--amber);background:var(--amber-wash);color:var(--amber)">'
       +   '<span class="mk" style="font-size:11px;letter-spacing:0.22em">Proposed Design Pending</span>'
       +   '<span style="font-size:8px;font-weight:300;letter-spacing:0.08em">'
       +     (it.status.design!=='approved' && it.photos.simulation ? 'Design status is '+esc(SL[it.status.design])+'.' : 'Design cannot be finalised until the items below are received from the client.')
       +   '</span></div>'
-      + '<div class="section-head"><span class="n">B</span><h3>Required Before Design</h3></div>'
+      + '<div class="section-head"><span class="n">C</span><h3>Required Before Design</h3></div>'
       + '<div class="callout pending"><div class="co-head"><span class="flag required">Required</span><span class="lbl">Outstanding from client</span></div>'
       +   '<ul class="ticks">'+reqList+'</ul></div>'
-      + '<div class="section-head"><span class="n">C</span><h3>Known Parameters (indicative only)</h3></div>'
+      + '<div class="section-head"><span class="n">D</span><h3>Known Parameters (indicative only)</h3></div>'
       + '<div class="spec">'+params.join('')+'</div>'
-      + '<div class="section-head"><span class="n">D</span><h3>Client Action</h3></div>'
+      + '<div class="section-head"><span class="n">E</span><h3>Client Action</h3></div>'
       + '<div class="signoff"><div class="opts">'
       +   '<label class="opt"><span class="box"></span>Inputs to follow by date:</label>'
       +   '<label class="opt"><span class="box"></span>Information Required</label>'
@@ -1706,12 +1783,15 @@ var DATA_MODE = false;
       + '<div class="eyebrow">بند فني</div><div class="page-title"><span class="pt-num">'+esc(it.number)+' /</span> '+esc(nm)+'</div>'
       + '<div class="section-head"><span class="n">أ</span><h3>مقارنة بصرية</h3></div>'
       + '<div class="compare">'
-      +   '<figure class="photo big">'+photoBox(it.photos.existing,'صورة الموقع غير متوفرة')+'<figcaption>الوضع الحالي</figcaption></figure>'
+      +   '<figure class="photo big">'+photoBox(it.photos.existing,'صورة الموقع غير متوفرة')+'<figcaption>الوضع الحالي'+(it.photos.existingList.length>1?' <span class="tag">'+it.photos.existingList.length+' صور</span>':'')+'</figcaption></figure>'
       +   '<figure class="photo big proposed">'+photoBox(it.photos.simulation,'التصميم المقترح غير متوفر')+'<figcaption>التصميم المقترح</figcaption></figure>'
       + '</div>'
+      + existingExtraGallery(it.photos.existingList,'ar')
       + '<div class="section-head"><span class="n">ب</span><h3>المواصفات الفنية</h3></div>'
       + '<div class="keyfacts"><div class="kf"><div class="k">الكمية</div><div class="v">'+esc(qtyLine(it.qty))+'</div></div>'
-      +   (has(dimsLine(it.dims))?'<div class="kf"><div class="k">الأبعاد الإجمالية</div><div class="v">'+esc(dimsLine(it.dims))+'</div></div>':'')+'</div>'
+      +   (has(dimsLine(it.dims))?'<div class="kf"><div class="k">الأبعاد الإجمالية</div><div class="v">'+esc(dimsLine(it.dims))+'</div></div>':'')
+      +   (P.project.showPricing && it.unitPrice!=null?'<div class="kf"><div class="k">سعر الوحدة</div><div class="v" style="direction:ltr">'+esc(fmtMoney(it.unitPrice,it.currency))+'</div></div>':'')
+      +   (P.project.showPricing && it.lineTotal!=null?'<div class="kf"><div class="k">الإجمالي</div><div class="v" style="direction:ltr">'+esc(fmtMoney(it.lineTotal,it.currency))+'</div></div>':'')+'</div>'
       + '<div class="presets">'+presetRows(it.presets,'ar')+'</div>'
       + ((has(ar.scope)||has(it.scope)) ? '<div class="spec" style="margin-top:9px"><div class="item"><div class="k">الوصف ونطاق العمل</div><div class="v">'+esc(has(ar.scope)?ar.scope:it.scope)+'</div></div></div>' : '')
       + '<div class="section-head"><span class="n">ج</span><h3>مدخلات مطلوبة من العميل</h3></div>'
@@ -1738,7 +1818,14 @@ var DATA_MODE = false;
       +   '<div class="iref">Ref '+esc(it.locationRef||'—')+'<br>'+esc((proj.client||proj.name||'').split(/[—–,(]/)[0].trim())+'<br>Sheet 1 of 2</div></div>'
       + '<div class="igostatus '+gg.cls+'"><span class="mk">'+esc(gg.mk)+'</span><span class="sub">'+gg.sub+'</span></div>'
       + '<div class="ivis-side">'
-      +   '<figure>'+photoBox(it.photos.existing,'Current site photo — not on file')+'<div class="vcap"><span>Current Site</span><span>'+(it.photos.existing?'On file':'Pending')+'</span></div></figure>'
+      +   '<figure>'+photoBox(it.photos.existing,'Current site photo — not on file')
+      +     '<div class="vcap"><span>Current Site'+(it.photos.existingList.length>1?' · '+it.photos.existingList.length+' views':'')+'</span><span>'+(it.photos.existing?'On file':'Pending')+'</span></div>'
+      +     (it.photos.existingList.length>1
+        ? '<div class="exstrip">'+it.photos.existingList.slice(1,4).map(u=>'<div class="frame"><img src="'+u+'" alt=""></div>').join('')
+          + (it.photos.existingList.length>4 ? '<div class="frame" style="display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--grey-soft)">+'+(it.photos.existingList.length-4)+'</div>' : '')
+          + '</div>'
+        : '')
+      +   '</figure>'
       +   sampleCell
       + '</div>'
       + '<div class="ivis-main"><div class="vlabel">Approved Final Simulation — build to match exactly</div>'
