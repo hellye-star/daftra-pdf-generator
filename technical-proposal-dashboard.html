@@ -285,10 +285,257 @@
   .qc-row:hover{ border-color:var(--emerald); }
   .qc-nm{ font-size:13px; font-weight:600; color:var(--ink); }
   .qc-meta{ font-size:11px; color:var(--grey-soft); }
+
+  /* ---------- Execution Roadmap (M-Exec-1) ---------- */
+  .rm-wrap{ max-width:1100px; }
+  .rm-crumbs{ display:flex; align-items:center; flex-wrap:wrap; gap:6px;
+    font-size:12px; color:var(--grey-soft); margin:2px 0 12px; }
+  .rm-crumbs .rm-cr-lnk{ color:var(--emerald); font-weight:600; cursor:pointer; }
+  .rm-crumbs .rm-cr-lnk:hover{ text-decoration:underline; }
+  .rm-crumbs .rm-cr-sep{ color:var(--rule-strong); }
+  .rm-crumbs .rm-cr-cur{ color:var(--grey); font-weight:600; }
+  .rm-toolbar{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .rm-horizon{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--grey); }
+  .rm-horizon input{ width:56px; text-align:center; padding:6px; }
+  .rm-step{ width:30px; height:32px; border:1px solid var(--rule-strong); background:var(--paper); border-radius:7px; font-size:15px; color:var(--grey); cursor:pointer; }
+  .rm-scroll{ overflow-x:auto; border:1px solid var(--rule); border-radius:var(--r); background:var(--paper); -webkit-overflow-scrolling:touch; }
+  .rm-grid{ --rm-col:34px; --rm-name:212px; min-width:100%; width:max-content; }
+  .rm-row{ display:flex; align-items:stretch; border-top:1px solid var(--rule); }
+  .rm-row.head{ border-top:0; position:sticky; top:0; z-index:3; background:var(--cream-2); }
+  .rm-name{ position:sticky; left:0; z-index:2; flex:0 0 var(--rm-name); width:var(--rm-name); box-sizing:border-box;
+            background:var(--paper); border-right:1px solid var(--rule-strong); padding:8px 9px; display:flex; flex-direction:column; gap:4px; }
+  .rm-row.head .rm-name{ background:var(--cream-2); font-size:10px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--gold-ink); justify-content:center; }
+  .rm-nm-top{ display:flex; align-items:center; gap:6px; }
+  .rm-mover{ display:flex; flex-direction:column; flex:0 0 auto; }
+  .rm-mover button{ width:20px; height:15px; line-height:12px; font-size:10px; border:1px solid var(--rule); background:var(--paper); color:var(--grey-soft); cursor:pointer; padding:0; }
+  .rm-mover button:disabled{ opacity:.3; cursor:default; }
+  .rm-label{ flex:1; min-width:0; font-size:12.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+  .rm-badges{ display:flex; gap:4px; align-items:center; flex-wrap:wrap; font-size:11px; }
+  .rm-badge{ font-size:9.5px; font-weight:700; letter-spacing:.04em; padding:1px 5px; border-radius:5px; }
+  .rm-badge.day{ background:var(--cream); color:var(--grey); }
+  .rm-badge.par{ background:var(--gold-wash); color:var(--gold-ink); }
+  .rm-badge.wait{ background:#EEF0F1; color:#5C6B72; }
+  .rm-dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; border:2px solid var(--faint); box-sizing:border-box; }
+  .rm-dot.in_progress{ border-color:var(--amber); background:linear-gradient(90deg,var(--amber) 50%,transparent 50%); }
+  .rm-dot.done{ border-color:var(--emerald); background:var(--emerald); }
+  .rm-nm-sub{ font-size:10px; color:var(--grey-soft); }
+  .rm-nm-dep{ font-size:10px; color:var(--emerald-soft); line-height:1.4; }
+  .rm-nm-dep .rm-req{ color:var(--stop); font-weight:700; }
+  .rm-nm-warn{ font-size:10px; color:var(--stop); font-weight:600; background:var(--stop-wash); border-radius:5px; padding:2px 5px; margin-top:2px; }
+  .rm-deprow{ display:flex; gap:5px; align-items:center; margin-bottom:5px; flex-wrap:wrap; }
+  .rm-deprow select, .rm-deprow input{ padding:5px 6px; font-size:11px; }
+  .rm-deprow select:first-child{ flex:1 1 120px; min-width:0; }
+  .rm-depdel{ background:none; border:1px solid var(--rule); border-radius:6px; color:var(--stop); width:26px; height:28px; cursor:pointer; flex:0 0 auto; }
+  .rm-req{ font-size:9px; font-weight:700; color:var(--stop); }
+  .rm-track{ flex:1 1 auto; display:grid; grid-template-columns:repeat(var(--rm-cols),var(--rm-col)); align-items:center; min-height:44px; position:relative;
+             background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(var(--rm-col) - 1px),var(--rule) calc(var(--rm-col) - 1px),var(--rule) var(--rm-col)); }
+  .rm-row.head .rm-track{ min-height:34px; background-image:none; }
+  .rm-daynum{ text-align:center; font-size:10px; font-weight:600; color:var(--grey-soft); }
+  .rm-bar{ grid-row:1; height:22px; border-radius:6px; display:flex; align-items:center; gap:5px; padding:0 7px; font-size:10px; font-weight:600;
+           color:#fff; white-space:nowrap; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .rm-bar .rm-bar-x{ font-size:10px; opacity:.85; }
+  .rm-bar.ph-plan{ background:#5C6B72; } .rm-bar.ph-design{ background:var(--gold-ink); }
+  .rm-bar.ph-site{ background:var(--amber); } .rm-bar.ph-prod{ background:var(--emerald); }
+  .rm-bar.ph-dispatch{ background:var(--emerald-soft); } .rm-bar.ph-install{ background:var(--forest); }
+  .rm-bar.ph-close{ background:var(--grey-soft); } .rm-bar.ph-custom{ background:#7A6E52; }
+  .rm-bar.par{ background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 5px,transparent 5px 10px); }
+  .rm-bar.wait{ background:transparent !important; border:1.5px dashed var(--rule-strong); color:var(--grey); box-shadow:none; }
+  .rm-drawer{ position:sticky; left:0; z-index:2; width:min(560px,calc(100vw - 40px)); box-sizing:border-box; background:var(--cream); border-top:1px solid var(--rule); padding:11px 12px; }
+  .rm-drawer .row{ gap:9px; }
+  .rm-drawer .field{ margin-bottom:9px; }
+  .rm-seg{ display:flex; border:1px solid var(--rule-strong); border-radius:7px; overflow:hidden; }
+  .rm-seg button{ flex:1; min-height:32px; background:var(--paper); border:0; border-right:1px solid var(--rule); font-size:11px; color:var(--grey); cursor:pointer; }
+  .rm-seg button:last-child{ border-right:0; }
+  .rm-seg button.on{ background:var(--emerald); color:#fff; font-weight:700; }
+  .rm-checks{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .rm-check{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink); cursor:pointer; }
+  .rm-check input{ width:15px; height:15px; }
+  .rm-drawer-del{ background:none; border:0; color:var(--stop); font-size:12px; font-weight:600; cursor:pointer; padding:4px 0; }
+  .rm-empty{ padding:24px 14px; text-align:center; color:var(--grey-soft); font-size:12.5px; }
+  .rm-sumline{ font-size:12.5px; color:var(--ink); margin-bottom:8px; }
+  .rm-sumline b{ color:var(--emerald); }
+  /* suggestion preview overlay */
+  .rm-pv{ background:var(--paper); border-radius:12px; padding:18px; width:min(560px,calc(100vw - 28px)); max-height:calc(100vh - 60px); overflow:auto; }
+  .rm-pv h3{ margin:0 0 4px; font-family:'Playfair Display',serif; font-size:19px; color:var(--ink); }
+  .rm-pv-sub{ font-size:12px; color:var(--grey-soft); margin:0 0 12px; }
+  .rm-pv-sec{ margin-bottom:12px; }
+  .rm-pv-h{ font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin-bottom:5px; }
+  .rm-pv-h.add{ color:var(--emerald); } .rm-pv-h.upd{ color:var(--gold-ink); }
+  .rm-pv-h.keep{ color:var(--grey-soft); } .rm-pv-h.dep{ color:var(--emerald-soft); }
+  .rm-pv-row{ display:flex; align-items:center; gap:7px; font-size:12.5px; padding:3px 0; flex-wrap:wrap; }
+  .rm-pv-row.muted{ color:var(--grey-soft); }
+  .rm-pv-nm{ font-weight:600; color:var(--ink); }
+  .rm-pv-row.muted .rm-pv-nm{ font-weight:500; color:var(--grey); }
+  .rm-pv-day{ font-size:11px; font-weight:700; color:var(--emerald); background:var(--emerald-wash); border-radius:5px; padding:1px 6px; }
+  .rm-pv-day.was{ color:var(--grey-soft); background:var(--cream); text-decoration:line-through; }
+  .rm-pv-arrow{ color:var(--faint); }
+  .rm-pv-why{ font-size:11px; color:var(--faint); }
+  .rm-pv-dep{ font-size:11.5px; color:var(--grey); padding:2px 0; }
+  .rm-pv-acts{ display:flex; gap:9px; justify-content:flex-end; margin-top:14px; }
+  .rm-pv-acts .btn{ flex:0 0 auto; }
+  .rm-pv-risk{ font-size:12.5px; color:var(--ink); padding:5px 0; line-height:1.45; }
+  .rm-pv-aff{ font-size:11px; color:var(--grey-soft); margin-top:1px; }
+  .rm-sevtag{ font-size:9px; font-weight:800; letter-spacing:.06em; padding:1px 5px; border-radius:4px; }
+  .rm-sevtag.sev-block, .rm-risk.sev-block .rm-risk-top select{ color:var(--stop); }
+  .sev-block{ background:var(--stop-wash); color:var(--stop); }
+  .sev-warn{ background:var(--amber-wash); color:var(--amber); }
+  .sev-info{ background:var(--emerald-wash); color:var(--emerald); }
+  /* Risks + Client Inputs sections under the roadmap */
+  .rm-sec{ margin-top:16px; }
+  .rm-sec-head{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .rm-sec-t{ font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--gold-ink); }
+  .rm-sec-btns{ margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  .rm-sec-empty{ font-size:12px; color:var(--grey-soft); padding:8px 0; }
+  .rm-linkbtn{ background:none; border:0; color:var(--emerald); font-size:11.5px; cursor:pointer; padding:6px 0 0; text-decoration:underline; }
+  .rm-risk{ border:1px solid var(--rule); border-left:3px solid var(--rule-strong); border-radius:8px; padding:8px 9px; margin-bottom:7px; background:var(--paper); }
+  .rm-risk.sev-block{ border-left-color:var(--stop); }
+  .rm-risk.sev-warn{ border-left-color:var(--amber); }
+  .rm-risk.sev-info{ border-left-color:var(--emerald-soft); }
+  .rm-risk-top{ display:flex; align-items:center; gap:7px; margin-bottom:5px; }
+  .rm-risk-top select{ font-size:10px; font-weight:700; letter-spacing:.04em; padding:3px 5px; width:auto; }
+  .rm-risk-src{ font-size:10px; color:var(--faint); }
+  .rm-risk textarea{ min-height:38px; font-size:12px; padding:6px 8px; }
+  .rm-risk-aff{ font-size:10.5px; color:var(--grey-soft); margin-top:4px; }
+  .rm-x{ margin-left:auto; background:none; border:1px solid var(--rule); border-radius:6px; color:var(--stop); width:24px; height:24px; cursor:pointer; flex:0 0 auto; font-size:11px; }
+  .rm-ci{ border:1px solid var(--rule); border-radius:8px; padding:8px 9px; margin-bottom:7px; background:var(--paper); }
+  .rm-ci-r1{ display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+  .rm-ci-r1 input{ flex:1; min-width:0; font-size:12.5px; padding:7px 8px; }
+  .rm-ci-r2{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  .rm-ci-r2 select{ width:auto; font-size:11.5px; padding:5px 7px; }
+  .rm-ci-day{ font-size:11px; color:var(--grey-soft); display:flex; align-items:center; gap:5px; }
+  .rm-ci-day input{ width:52px; text-align:center; padding:5px; font-size:12px; }
+  .rm-ci-impact{ width:100%; box-sizing:border-box; font-size:11.5px; padding:6px 8px; color:var(--grey); }
+  /* project-wide roadmap (M-Exec-4) */
+  .pr-metrics{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:14px; }
+  .pr-metric{ flex:1 1 84px; border:1px solid var(--rule); border-radius:9px; padding:8px 6px; text-align:center; background:var(--paper); }
+  .pr-m-n{ font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:var(--emerald); line-height:1; }
+  .pr-m-l{ font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey-soft); margin-top:4px; }
+  .pr-tbl{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .pr-tbl th{ text-align:left; font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gold-ink); padding:4px 8px; border-bottom:1px solid var(--rule); }
+  .pr-tbl td{ padding:7px 8px; border-bottom:1px solid var(--rule); }
+  .pr-clk{ cursor:pointer; }
+  .pr-clk:hover{ background:var(--emerald-wash); }
+  .pr-block{ border:1px solid var(--rule); border-left:3px solid var(--stop); border-radius:8px; padding:8px 10px; margin-bottom:7px; background:var(--paper); cursor:pointer; }
+  .pr-block:hover{ background:var(--stop-wash); }
+  .pr-block-h{ font-size:12.5px; font-weight:700; color:var(--ink); margin-bottom:4px; }
+  .pr-block-r{ font-size:11.5px; color:var(--stop); line-height:1.5; }
+  .pr-seg{ width:auto; }
+  .pr-seg button{ min-height:30px; padding:0 12px; font-size:11.5px; }
+  .pr-filters{ display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-bottom:9px; }
+  .pr-filters button{ font-size:10.5px; padding:5px 9px; border:1px solid var(--rule-strong); border-radius:14px; background:var(--paper); color:var(--grey); cursor:pointer; }
+  .pr-filters button.on{ background:var(--emerald); color:#fff; border-color:var(--emerald); font-weight:700; }
+  .pr-fl-sp{ flex:1; }
+  .pr-mini{ font-size:10px !important; padding:4px 7px !important; border-radius:6px !important; }
+  .pr-lane{ background:var(--cream-2); border-top:2px solid var(--rule-strong); }
+  .pr-lane-nm{ background:var(--cream-2) !important; flex-direction:row !important; align-items:center; gap:6px; }
+  .pr-chev{ width:20px; height:20px; border:0; background:none; color:var(--grey); font-size:11px; cursor:pointer; flex:0 0 auto; padding:0; }
+  .pr-lane-open{ font-size:12.5px; font-weight:800; color:var(--ink); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pr-lane-open:hover{ color:var(--emerald); text-decoration:underline; }
+  .pr-lane-track{ background-image:none !important; }
+  .pr-lane-meta{ align-self:center; font-size:10px; color:var(--grey-soft); padding-left:8px; white-space:nowrap; }
+  .pr-actrow .rm-name{ padding-left:16px; }
+  .pr-act-nm{ gap:5px; }
+  .pr-act-label{ font-size:11.5px; font-weight:600; color:var(--ink); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pr-act-label:hover{ color:var(--emerald); }
+  .pr-days{ display:flex; flex-direction:column; gap:9px; }
+  .pr-day{ border:1px solid var(--rule); border-radius:8px; padding:8px 10px; background:var(--paper); }
+  .pr-day-n{ font-size:11px; font-weight:800; letter-spacing:.04em; color:var(--gold-ink); margin-bottom:5px; }
+  .pr-day-c{ font-weight:600; color:var(--grey-soft); margin-left:7px; letter-spacing:0; }
+  .pr-day-e{ font-size:12px; color:var(--ink); padding:2px 0; cursor:pointer; }
+  .pr-day-e:hover{ color:var(--emerald); }
+  .pr-day-e b{ font-weight:700; }
+  .pr-risk-item{ font-size:11px; font-weight:700; color:var(--emerald); }
+  .pr-risk-txt{ font-size:12px; color:var(--ink); line-height:1.4; }
+  .pr-ci-list{ display:flex; flex-direction:column; gap:7px; }
+  .pr-ci{ border:1px solid var(--rule); border-radius:8px; padding:8px 9px; background:var(--paper); }
+  .pr-ci-top{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  .pr-ci-item{ font-size:11px; font-weight:700; color:var(--emerald); cursor:pointer; }
+  .pr-ci-item:hover{ text-decoration:underline; }
+  .pr-ci-top select{ width:auto; font-size:11px; padding:4px 6px; }
+  .pr-ci-q{ width:100%; box-sizing:border-box; font-size:12.5px; padding:7px 8px; margin-bottom:6px; }
+  /* Installation Waves (M-Exec-5) */
+  .pr-wave{ border:1px solid var(--rule); border-left:3px solid var(--emerald); border-radius:9px; padding:9px 10px; margin-bottom:9px; background:var(--paper); }
+  .pr-wave-r1{ display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  .pr-wave-nm{ flex:1 1 140px; min-width:120px; font-size:12.5px; font-weight:700; padding:5px 7px; }
+  .pr-wave-day{ display:flex; align-items:center; gap:4px; font-size:11px; color:var(--grey-soft); }
+  .pr-wave-day input{ width:52px; text-align:center; padding:5px; font-size:12px; font-weight:700; }
+  .pr-wave-src{ font-size:9px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); }
+  .pr-wave-mv{ display:flex; flex-direction:column; flex:0 0 auto; }
+  .pr-wave-mv button{ width:20px; height:15px; line-height:12px; font-size:10px; border:1px solid var(--rule); background:var(--paper); color:var(--grey-soft); cursor:pointer; padding:0; }
+  .pr-wave-mv button:disabled{ opacity:.3; cursor:default; }
+  .pr-wave-note{ width:100%; box-sizing:border-box; font-size:11.5px; padding:5px 7px; margin-bottom:7px; color:var(--grey); }
+  .pr-wave-chips{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
+  .pr-wave-chip{ display:inline-flex; align-items:center; gap:5px; font-size:11px; background:var(--emerald-wash); color:var(--emerald); border-radius:12px; padding:3px 5px 3px 9px; }
+  .pr-wave-chip button{ border:0; background:none; color:var(--stop); font-size:12px; line-height:1; cursor:pointer; padding:0 2px; }
+  .pr-wave-assign{ width:auto; max-width:100%; font-size:11px; padding:4px 6px; margin-bottom:6px; }
+  .pr-wave-sum{ font-size:11px; color:var(--grey); line-height:1.55; border-top:1px dashed var(--rule); padding-top:6px; }
+  .pr-wave-sum b{ color:var(--ink); }
+  .pr-wave-blk{ font-size:11px; color:var(--stop); line-height:1.5; margin-top:4px; }
+  .pr-wave-none{ font-size:11.5px; color:var(--grey-soft); padding:6px 0; }
+  .pr-day-wave{ font-size:11px; font-weight:800; letter-spacing:.04em; color:var(--emerald); margin:6px 0 2px; }
+  .pr-day-wave-i{ font-size:12px; color:var(--ink); padding:1px 0 1px 14px; }
+
   /* full-height capture mode (?screens=1) */
   body.capture .bottombar{ position:static; }
   body.capture .wrap{ padding-bottom:20px; }
   body.capture .appbar{ position:static; }
+
+  /* ---- Roadmap → print / Save as PDF (true A4 landscape) ---- */
+  .print-head{ display:none; }
+  .rm-print-hint{ font-size:10.5px; color:var(--grey-soft); align-self:center; }
+  @media print{
+    /* explicit physical landscape page — 297mm × 210mm, no keyword, no rotation */
+    @page{ size:297mm 210mm; margin:8mm; }
+    html{ background:#fff !important; }
+    /* usable landscape width = 297 − 2×8 = 281mm; pin it so nothing shrinks to portrait */
+    body{ background:#fff !important; width:281mm !important; min-width:281mm !important;
+      margin:0 !important; padding:0 !important; }
+    *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    /* chrome / editing / navigation — hidden on paper */
+    .appbar, .bottombar, .rm-crumbs, .rm-toolbar, .rm-horizon, .rm-sec-btns, .pr-seg,
+    .pr-filters, .pr-mini, .rm-drawer, .rm-mover, .rm-x, .rm-linkbtn, .pr-chev,
+    .rm-step, .rm-print-hint, [data-rmsuggest], [data-rmadd], [data-rmprint], [data-rmriskadd],
+    [data-rmciadd2], [data-rmcisuggest], [data-rmrisksuggest], .overlay, .hint,
+    .rm-drawer-del{ display:none !important; }
+    .print-head{ display:flex !important; align-items:baseline; gap:10px; flex-wrap:wrap;
+      border-bottom:2px solid #0E1A14; padding-bottom:6px; margin-bottom:12px; }
+    .print-head .ph-brand{ font-family:'Playfair Display',serif; font-weight:700; font-size:15px; letter-spacing:.06em; color:#0E1A14; }
+    .print-head .ph-proj{ font-size:13px; font-weight:700; color:#1c4634; }
+    .print-head .ph-sep{ font-size:12px; color:#5a6b62; }
+    .wrap, .rm-wrap{ width:100% !important; max-width:none !important; padding:0 !important; margin:0 !important; box-sizing:border-box; }
+    /* timeline flows left → right; day column shrinks to fit the landscape width */
+    .rm-scroll{ overflow:visible !important; border:0 !important; }
+    /* block (not inline-block) so rows paginate instead of the whole grid jumping to page 2 */
+    .rm-grid{ --rm-name:38mm !important; display:block !important; width:max-content !important;
+      min-width:0 !important; max-width:100% !important; break-inside:auto !important; }
+    .rm-track{ --rm-col:min(10mm, calc((281mm - 38mm) / var(--rm-cols))) !important; flex:0 0 auto !important; }
+    .rm-name{ flex:0 0 38mm !important; width:38mm !important; position:static !important; padding:5px 7px !important; }
+    .rm-row{ display:flex !important; break-inside:avoid !important; page-break-inside:avoid !important; }
+    .rm-row.head{ position:static !important; break-after:avoid !important; }
+    .rm-label, .pr-act-label, .pr-lane-open{ white-space:normal !important; overflow:visible !important; font-size:10px !important; }
+    .rm-bar{ box-shadow:none !important; }
+    .rm-nm-dep, .rm-nm-warn, .rm-nm-sub{ white-space:normal !important; }
+    /* section cards — never split one in half */
+    .rm-sec{ break-inside:auto; margin-top:14px; }
+    .rm-sec-head{ break-after:avoid; }
+    .rm-risk, .rm-ci, .pr-block, .pr-day, .pr-metric, .pr-ci{ break-inside:avoid; page-break-inside:avoid; }
+    .pr-metrics{ break-inside:avoid; }
+    /* repeat table headers across pages */
+    .pr-tbl thead{ display:table-header-group; }
+    .pr-tbl tr{ break-inside:avoid; }
+    /* risk + client-input fields → flat readable text on paper */
+    .pr-ci-q, .rm-ci-impact, .rm-ci-r1 input, .rm-ci-day input, .rm-ci-r2 select,
+    .pr-ci-top select, .pr-ci-top input, .rm-risk textarea, .rm-risk-top select{
+      border:0 !important; background:transparent !important; padding:1px 0 !important;
+      color:#0E1A14 !important; -webkit-appearance:none; appearance:none;
+      resize:none !important; font-size:11px !important; }
+    .pr-ci-q, .rm-ci-impact, .rm-ci-r1 input{ width:100% !important; display:block; }
+    .rm-ci-day input, .rm-ci-r2 select, .pr-ci-top select, .pr-ci-top input,
+    .rm-risk-top select{ width:auto !important; }
+    .rm-risk textarea{ field-sizing:content; height:auto !important; min-height:2.8em !important;
+      overflow:visible !important; white-space:pre-wrap !important; display:block; width:100% !important; }
+    .rm-ci-impact:placeholder-shown, .pr-ci-q:placeholder-shown{ display:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -437,29 +684,112 @@ function memOut(store,v){
 }
 function memIn(store,v){ return store==='photos' ? v : JSON.parse(JSON.stringify(v)); }
 
-async function dbGet(store,key){
-  if(MEM.on) return memOut(store, MEM[store].get(key)) || undefined;
-  const d=await openDB(); return reqP(d.transaction(store).objectStore(store).get(key));
-}
-async function dbGetAll(store){
-  if(MEM.on) return [...MEM[store].values()].map(v=>memOut(store,v));
-  const d=await openDB(); return reqP(d.transaction(store).objectStore(store).getAll());
-}
-async function dbPut(store,val){
-  if(MEM.on){ MEM[store].set(val.id, memIn(store,val)); return val.id; }
-  const d=await openDB(); return reqP(d.transaction(store,'readwrite').objectStore(store).put(val));
-}
-async function dbDel(store,key){
-  if(MEM.on){ MEM[store].delete(key); return; }
-  const d=await openDB(); return reqP(d.transaction(store,'readwrite').objectStore(store).delete(key));
-}
-async function dbIndexAll(store,index,key){
-  if(MEM.on){
-    const f = index==='by_project' ? 'projectId' : 'itemId';
-    return [...MEM[store].values()].filter(r=>r[f]===key).map(v=>memOut(store,v));
+/* ============================================================
+   3b · Storage backend switch  (Phase 1 — central DB)
+   ------------------------------------------------------------
+   STORE_MODE: 'idb'     → browser IndexedDB (default, unchanged)
+               'central' → proxy.py → ~/.vista-platform/technical-proposals/*.db
+   The 5 db* helpers below dispatch on STORE_MODE. Every call site
+   in the app is unchanged. Migration COPIES idb → central, VERIFIES,
+   then flips the localStorage flag — it never writes/moves/clears idb.
+   ============================================================ */
+let STORE_MODE = 'idb';
+const TP_API_BASE = '/api/tp';
+
+/* raw IndexedDB implementation (also honours the ?screens=1 MEM shim) */
+const IDB = {
+  async get(store,key){
+    if(MEM.on) return memOut(store, MEM[store].get(key)) || undefined;
+    const d=await openDB(); return reqP(d.transaction(store).objectStore(store).get(key));
+  },
+  async getAll(store){
+    if(MEM.on) return [...MEM[store].values()].map(v=>memOut(store,v));
+    const d=await openDB(); return reqP(d.transaction(store).objectStore(store).getAll());
+  },
+  async put(store,val){
+    if(MEM.on){ MEM[store].set(val.id, memIn(store,val)); return val.id; }
+    const d=await openDB(); return reqP(d.transaction(store,'readwrite').objectStore(store).put(val));
+  },
+  async del(store,key){
+    if(MEM.on){ MEM[store].delete(key); return; }
+    const d=await openDB(); return reqP(d.transaction(store,'readwrite').objectStore(store).delete(key));
+  },
+  async indexAll(store,index,key){
+    if(MEM.on){
+      const f = index==='by_project' ? 'projectId' : 'itemId';
+      return [...MEM[store].values()].filter(r=>r[f]===key).map(v=>memOut(store,v));
+    }
+    const d=await openDB(); return reqP(d.transaction(store).objectStore(store).index(index).getAll(key));
   }
-  const d=await openDB(); return reqP(d.transaction(store).objectStore(store).index(index).getAll(key));
+};
+
+async function tpFetch(path, opts){
+  const r = await fetch(TP_API_BASE + path, opts);
+  let j = null; try{ j = await r.json(); }catch(_){}
+  if(!r.ok || !j || j.ok === false){
+    const err = new Error((j && j.error) || ('HTTP ' + r.status));
+    err.httpStatus = r.status;
+    throw err;
+  }
+  return j.data;
 }
+async function blobToB64(blob){
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let s = '';
+  for(let i=0;i<bytes.length;i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
+  return btoa(s);
+}
+
+/* central implementation — talks to proxy.py /api/tp/* */
+const TP_API = {
+  async get(store,key){
+    try{
+      if(store==='projects') return await tpFetch('/projects/'+encodeURIComponent(key));
+      if(store==='photos')   return await tpFetch('/photos/'+encodeURIComponent(key)+'/meta');
+    }catch(e){ if(e.httpStatus===404) return undefined; throw e; }
+  },
+  async getAll(store){
+    if(store==='projects') return await tpFetch('/projects');
+    if(store==='photos')   return await tpFetch('/photos');
+    return [];
+  },
+  async put(store,val){
+    if(store==='projects'){
+      await tpFetch('/projects/'+encodeURIComponent(val.id),
+        { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(val) });
+      return val.id;
+    }
+    if(store==='photos'){
+      const dataBase64 = val.blob ? await blobToB64(val.blob) : (val.dataBase64 || '');
+      await tpFetch('/photos?overwrite=1', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id:val.id, projectId:val.projectId, itemId:val.itemId, slot:val.slot,
+          mime:val.mime, w:val.w, h:val.h, keepPage:(val.keepPage!=null?val.keepPage:null), dataBase64 }) });
+      return val.id;
+    }
+  },
+  async del(store,key){
+    const path = (store==='projects' ? '/projects/' : '/photos/') + encodeURIComponent(key);
+    try{ await tpFetch(path, {method:'DELETE'}); }
+    catch(e){ if(e.httpStatus !== 404) throw e; }   // deletion is idempotent
+  },
+  async indexAll(store,index,key){
+    if(store==='photos'){
+      if(index==='by_item'){
+        const all = await tpFetch('/photos');
+        return all.filter(p=> p.itemId===key);
+      }
+      return await tpFetch('/photos?projectId='+encodeURIComponent(key));
+    }
+    return [];
+  }
+};
+
+function _store(){ return STORE_MODE==='central' ? TP_API : IDB; }
+async function dbGet(store,key){          return _store().get(store,key); }
+async function dbGetAll(store){           return _store().getAll(store); }
+async function dbPut(store,val){          return _store().put(store,val); }
+async function dbDel(store,key){          return _store().del(store,key); }
+async function dbIndexAll(store,index,key){ return _store().indexAll(store,index,key); }
 
 /* ============================================================
    4 · Model helpers
@@ -496,6 +826,535 @@ function newItem(project){
 }
 function pg(item,key){ if(!item.presets[key]) item.presets[key]={values:[],other:''}; return item.presets[key]; }
 function renumber(project){ project.items.forEach((it,i)=> it.number=String(i+1).padStart(2,'0')); }
+
+/* ============================================================
+   4b · Execution Roadmap — model (M-Exec-1: manual only)
+   ------------------------------------------------------------
+   item.execution = { horizon:15, activities:[ {activity} ] }
+   Created LAZILY — only when the user first edits the roadmap.
+   No auto-planning, no dependencies yet (structure is forward-
+   compatible so M-Exec-2 can add dependsOn without migration).
+   ============================================================ */
+const RM_HORIZON_MIN = 5, RM_HORIZON_MAX = 60, RM_HORIZON_DEFAULT = 15;
+const EXECUTION_ACTIVITY_CATALOGUE = [
+  ['site-verification','Site Verification'],
+  ['client-artwork','Await Client Artwork'],
+  ['design-adaptation','Design / Adaptation'],
+  ['client-approval','Client Approval'],
+  ['sample-mockup','Sample / Mockup'],
+  ['remove-existing','Remove Existing'],
+  ['surface-prep','Surface Preparation'],
+  ['material-procurement','Material Procurement'],
+  ['fabrication','Fabrication'],
+  ['printing-branding','Printing / Branding'],
+  ['painting-finishing','Painting / Finishing'],
+  ['electrical-led','Electrical / LED'],
+  ['assembly','Assembly'],
+  ['qc','QC'],
+  ['packing','Packing'],
+  ['transportation','Transportation'],
+  ['site-access-prep','Site Access Preparation'],
+  ['installation','Installation'],
+  ['testing','Testing'],
+  ['snag-handover','Snag / Final Handover'],
+];
+const RM_PHASE = {
+  'site-verification':'plan', 'client-artwork':'plan',
+  'design-adaptation':'design', 'client-approval':'design', 'sample-mockup':'design',
+  'remove-existing':'site', 'surface-prep':'site', 'site-access-prep':'site',
+  'material-procurement':'prod', 'fabrication':'prod', 'printing-branding':'prod',
+  'painting-finishing':'prod', 'electrical-led':'prod', 'assembly':'prod',
+  'qc':'dispatch', 'packing':'dispatch', 'transportation':'dispatch',
+  'installation':'install', 'testing':'install', 'snag-handover':'close',
+};
+function rmPhase(a){ return (a && a.isWait) ? 'wait' : (RM_PHASE[a && a.key] || 'custom'); }
+const RM_PROGRESS = [['not_started','Not started'],['in_progress','In progress'],['done','Done']];
+
+function rmClampHorizon(n){
+  n = parseInt(n,10);
+  if(!isFinite(n)) return RM_HORIZON_DEFAULT;
+  return Math.max(RM_HORIZON_MIN, Math.min(RM_HORIZON_MAX, n));
+}
+// Lazily create the execution object the first time it is actually needed.
+function rmEnsureExecution(item){
+  if(!item.execution || typeof item.execution !== 'object') item.execution = { activities: [] };
+  if(!Array.isArray(item.execution.activities)) item.execution.activities = [];
+  if(item.execution.horizon == null) item.execution.horizon = RM_HORIZON_DEFAULT;
+  if(!Array.isArray(item.execution.risks)) item.execution.risks = [];
+  if(!Array.isArray(item.execution.dismissedRuleKeys)) item.execution.dismissedRuleKeys = [];
+  if(!Array.isArray(item.clientInputs)) item.clientInputs = [];
+  return item.execution;
+}
+function rmHorizonOf(item){
+  const ex = item.execution;
+  const base = ex && ex.horizon != null ? rmClampHorizon(ex.horizon) : RM_HORIZON_DEFAULT;
+  const maxEnd = (ex && ex.activities || []).reduce((m,a)=> Math.max(m, +a.endDay||0, +a.startDay||0), 0);
+  return Math.min(RM_HORIZON_MAX, Math.max(base, maxEnd));   // grow to fit bars, never shrink below them
+}
+function rmNewActivity(key, label){
+  const isCustom = key === 'custom';
+  return {
+    id: uid(),
+    key: isCustom ? 'custom' : key,
+    label: label || (EXECUTION_ACTIVITY_CATALOGUE.find(c=>c[0]===key) || [,'Custom activity'])[1],
+    startDay: 1,
+    endDay: 2,
+    parallel: false,
+    isWait: key === 'client-artwork',   // the one catalogue entry that IS a wait by name
+    progress: 'not_started',
+    note: '',
+    dependsOn: [],       // M-Exec-2: [{on, kind:'FS'|'SS', lagDays, hard}]
+    source: 'manual',    // 'manual' | 'suggested'
+  };
+}
+function rmSanitizeDay(v, fallback){
+  let n = parseInt(v,10);
+  if(!isFinite(n)) n = fallback;
+  return Math.max(1, Math.min(RM_HORIZON_MAX, n));
+}
+function rmSanitizeLag(v){ let n = parseInt(v,10); return isFinite(n) ? Math.max(-30, Math.min(30, n)) : 0; }
+
+/* ============================================================
+   4c · Execution Roadmap — SUGGESTION ENGINE (M-Exec-2)
+   ------------------------------------------------------------
+   Reads the item's REAL Technical Proposal data (presets / status
+   / photos / notes) to propose a relevant, partly-parallel plan
+   with soft/hard dependencies. Everything it produces is a plain
+   activity object — fully editable afterwards. Nothing is applied
+   without an explicit Apply in the preview.
+   ============================================================ */
+const RM_MILESTONES = [
+  ['final-artwork','Final Artwork'],
+  ['design-approval','Design Approval'],
+  ['sample-approval','Sample Approval'],
+  ['material-ready','Material Ready'],
+  ['fabrication-complete','Fabrication Complete'],
+  ['site-access-approved','Site Access Approved'],
+  ['power-confirmed','Power Confirmed'],
+];
+const RM_MS_LABEL = {}; RM_MILESTONES.forEach(m=> RM_MS_LABEL[m[0]] = m[1]);
+
+// dependency tuples: [on, kind, lagDays, hard]   (on = catalogue key or milestone key)
+const RM_ACT_DEFAULTS = {
+  'site-verification':    { dur:2, dep:[], parallelKey:true },
+  'client-artwork':       { dur:4, dep:[], wait:true },
+  'design-adaptation':    { dur:3, dep:[['final-artwork','FS',0,false]] },
+  'client-approval':      { dur:2, dep:[['design-adaptation','FS',0,true]] },
+  'sample-mockup':        { dur:3, dep:[['client-approval','FS',0,false]] },
+  'remove-existing':      { dur:2, dep:[], parallelKey:true },
+  'surface-prep':         { dur:1, dep:[['remove-existing','FS',0,false]], parallelKey:true },
+  'material-procurement': { dur:5, dep:[], parallelKey:true },
+  'fabrication':          { dur:6, dep:[['material-ready','SS',0,false],['design-approval','FS',0,false]] },
+  'printing-branding':    { dur:2, dep:[['final-artwork','FS',0,true]] },
+  'painting-finishing':   { dur:2, dep:[['fabrication','SS',2,false]] },
+  'electrical-led':       { dur:2, dep:[['fabrication','SS',2,false]] },
+  'assembly':             { dur:2, dep:[['fabrication','FS',0,false]] },
+  'qc':                   { dur:1, dep:[['fabrication-complete','FS',0,true]] },
+  'packing':              { dur:1, dep:[['qc','FS',0,true]] },
+  'transportation':       { dur:1, dep:[['packing','FS',0,true]] },
+  'site-access-prep':     { dur:2, dep:[], parallelKey:true },
+  'installation':         { dur:1, dep:[['transportation','FS',0,true],['site-access-approved','FS',0,true],['remove-existing','FS',0,false]] },
+  'testing':              { dur:1, dep:[['installation','FS',0,true]] },
+  'snag-handover':        { dur:1, dep:[['installation','FS',0,true]] },
+};
+const RM_SOFT_FS_OVERLAP = 1;   // a soft finish-to-start dep may overlap its predecessor by this many days
+
+// ---- activity relevance from the real item data (never invents scope) ----
+function rmSuggestKeys(item){
+  const P = item.presets || {};
+  const S = item.status || {};
+  const gv = k => (P[k] && Array.isArray(P[k].values)) ? P[k].values : [];
+  const someIn = (a,b) => a.some(x=> b.indexOf(x) !== -1);
+
+  const branding = gv('branding'), fabrication = gv('fabrication'), material = gv('material'),
+        finish = gv('finish'), existingWork = gv('existingWork'),
+        lighting = gv('lighting').filter(x=> x && x !== 'None'), access = gv('access');
+
+  const designApproved = S.design === 'approved';
+  const fabRelevant   = fabrication.length > 0 || (material.length > 0 && !(material.length === 1 && material[0] === 'Existing Surface'));
+  const needArtwork   = branding.length > 0 || fabrication.indexOf('3D Letters') !== -1;
+  const printRelevant = someIn(branding, ['UV Print','Screen Print','Sticker / Vinyl Branding','Cut Vinyl','Paint Branding'])
+                        || (branding.length > 0 && !fabRelevant);
+  const paintRelevant = finish.some(f => ['Sticker / Wrapped','Laminated'].indexOf(f) === -1) && finish.length > 0;
+  const removeExisting = someIn(existingWork, ['Remove Existing','Modify Existing','Replace Branding Only']);
+  const surfacePrep   = someIn(existingWork, ['Surface Preparation','Repaint']) || material.indexOf('Existing Surface') !== -1;
+  const matProc       = material.length > 0 && !(material.length === 1 && material[0] === 'Existing Surface');
+  const elec          = lighting.length > 0;
+  const accessPrep    = someIn(access, ['Scaffold','Scissor Lift','Boom Lift','Crane']);
+  const assembly      = someIn(fabrication, ['Box-Up','3D Letters','Welded Structure','Custom Fabrication']) || branding.indexOf('3D Letters') !== -1;
+  const sampleRelevant = S.sample && S.sample !== 'na';
+  const anyProduction = fabRelevant || printRelevant || paintRelevant || elec || assembly;
+
+  const want = new Set();
+  const add = (k, on) => { if(on) want.add(k); };
+  add('site-verification', true);
+  add('client-artwork',    needArtwork && !designApproved);
+  add('design-adaptation', needArtwork && !designApproved);
+  add('client-approval',   !designApproved);
+  add('sample-mockup',     sampleRelevant);
+  add('remove-existing',   removeExisting);
+  add('surface-prep',      surfacePrep);
+  add('material-procurement', matProc);
+  add('fabrication',       fabRelevant);
+  add('printing-branding', printRelevant);
+  add('painting-finishing', paintRelevant);
+  add('electrical-led',    elec);
+  add('assembly',          assembly);
+  add('qc',                anyProduction);
+  add('packing',           anyProduction);
+  add('transportation',    true);
+  add('site-access-prep',  accessPrep);
+  add('installation',      true);
+  add('testing',           elec);
+  add('snag-handover',     true);
+  return EXECUTION_ACTIVITY_CATALOGUE.map(c => c[0]).filter(k => want.has(k));
+}
+
+// ---- forward-pass scheduler over activity stubs / real activities ----
+function rmSchedule(acts){
+  const byKey = {}; acts.forEach(a=>{ if(a.key && a.key !== 'custom') byKey[a.key] = a; });
+  const sched = new Map();
+  const ms = {};
+  const dur = a => Math.max(1, (+a.dur || ((+a.endDay||1) - (+a.startDay||1) + 1)) || 1);
+
+  const refreshMs = () => {
+    const endOf = k => { const t = byKey[k]; return (t && sched.has(t)) ? sched.get(t).end : 0; };
+    ms['final-artwork']        = endOf('client-artwork');
+    ms['design-approval']      = endOf('client-approval') || endOf('design-adaptation');
+    ms['sample-approval']      = endOf('sample-mockup');
+    ms['material-ready']       = endOf('material-procurement');
+    ms['fabrication-complete'] = endOf('fabrication');
+    ms['site-access-approved'] = endOf('site-access-prep');
+    ms['power-confirmed']      = 0;
+  };
+
+  for(let iter = 0; iter < acts.length + 5; iter++){
+    let changed = false;
+    for(const a of acts){
+      let est = 1;
+      for(const d of (a.dependsOn || [])){
+        let ds = null, de = null;
+        if(RM_MS_LABEL[d.on] != null){ const md = ms[d.on] || 0; ds = md; de = md; }
+        else { const t = byKey[d.on] || acts.find(x=>x.id===d.on); if(t && sched.has(t)){ ds = sched.get(t).start; de = sched.get(t).end; } }
+        if(ds == null) continue;
+        const lag = +d.lagDays || 0;
+        let need = (d.kind === 'SS') ? (ds + lag) : (de + lag + 1);
+        if(d.hard){ est = Math.max(est, need); }
+        else if(d.kind === 'SS'){ est = Math.max(est, ds); }
+        else { est = Math.max(est, need - RM_SOFT_FS_OVERLAP); }
+      }
+      est = Math.max(1, est);
+      const end = est + dur(a) - 1;
+      const cur = sched.get(a);
+      if(!cur || cur.start !== est || cur.end !== end){ sched.set(a, { start: est, end }); changed = true; }
+    }
+    refreshMs();
+    if(!changed && iter > 1) break;
+  }
+  return { sched, ms };
+}
+
+// ---- build a full suggested plan (list of plain activity objects + milestone days) ----
+function rmSuggestPlan(item){
+  const keys = rmSuggestKeys(item);
+  const stubs = keys.map(k=>{
+    const def = RM_ACT_DEFAULTS[k] || { dur:2, dep:[] };
+    const deps = (def.dep || [])
+      .filter(t => RM_MS_LABEL[t[0]] != null || keys.indexOf(t[0]) !== -1)
+      .map(t => ({ on:t[0], kind:t[1], lagDays:t[2], hard:t[3] }));
+    return { key:k, id:'sug-'+k, dur:def.dur, dependsOn:deps, isWait:!!def.wait,
+             label:(EXECUTION_ACTIVITY_CATALOGUE.find(c=>c[0]===k)||[,''])[1] };
+  });
+  const { sched, ms } = rmSchedule(stubs);
+  const activities = stubs.map(s=>{
+    const sc = sched.get(s) || { start:1, end:s.dur };
+    const overlaps = stubs.some(o => o !== s && sched.has(o)
+                      && sc.start <= sched.get(o).end && sched.get(o).start <= sc.end);
+    return {
+      key: s.key, label: s.label,
+      startDay: sc.start, endDay: sc.end,
+      parallel: !!(RM_ACT_DEFAULTS[s.key] && RM_ACT_DEFAULTS[s.key].parallelKey && overlaps),
+      isWait: s.isWait,
+      dependsOn: s.dependsOn.slice(),
+    };
+  });
+  return { activities, milestones: ms };
+}
+
+// ---- signature to detect whether a suggested activity was later hand-edited ----
+function rmActSig(a){
+  return JSON.stringify({
+    s:+a.startDay||0, e:+a.endDay||0, p:!!a.parallel, w:!!a.isWait, l:a.label||'',
+    d:(a.dependsOn||[]).map(x=>[x.on, x.kind, +x.lagDays||0, !!x.hard]),
+  });
+}
+function rmWasEdited(a){ return a && a.source === 'suggested' && a._genSig != null && rmActSig(a) !== a._genSig; }
+
+// ---- resolve a milestone to a day from an item's CURRENT activities (for warnings/labels) ----
+function rmMsDayFromActs(acts, key){
+  const find = k => acts.find(a => a.key === k);
+  const endOf = a => a ? (+a.endDay || +a.startDay || 0) : 0;
+  switch(key){
+    case 'final-artwork':        return endOf(find('client-artwork'));
+    case 'design-approval':      return endOf(find('client-approval')) || endOf(find('design-adaptation'));
+    case 'sample-approval':      return endOf(find('sample-mockup'));
+    case 'material-ready':       return endOf(find('material-procurement'));
+    case 'fabrication-complete': return endOf(find('fabrication'));
+    case 'site-access-approved': return endOf(find('site-access-prep'));
+    default: return 0;   // power-confirmed etc.
+  }
+}
+// dep target label for the "↳ after X" line
+function rmDepLabel(item, d){
+  if(!d.on) return '(unset)';
+  if(RM_MS_LABEL[d.on] != null) return RM_MS_LABEL[d.on];
+  const t = (item.execution.activities || []).find(x => x.id === d.on || x.key === d.on);
+  return t ? (t.label || 'activity') : '(removed)';
+}
+// hard-dependency violations for one activity, checked against the current manual days
+function rmHardViolations(item, a){
+  const acts = item.execution.activities || [];
+  const out = [];
+  for(const d of (a.dependsOn || [])){
+    if(!d.hard || !d.on) continue;
+    let ds, de, label;
+    if(RM_MS_LABEL[d.on] != null){ const day = rmMsDayFromActs(acts, d.on); ds = day; de = day; label = RM_MS_LABEL[d.on]; }
+    else { const t = acts.find(x => x.id === d.on || x.key === d.on); if(!t || t === a) continue; ds = +t.startDay||0; de = +t.endDay||ds; label = t.label; }
+    if(!ds && !de) continue;
+    const lag = +d.lagDays || 0;
+    const start = +a.startDay || 1;
+    if(d.kind === 'SS'){ if(start < ds + lag) out.push('starts before ' + label + ' begins (required dependency)'); }
+    else { if(start < de + lag + 1) out.push('starts before ' + label + (RM_MS_LABEL[d.on] != null ? '' : ' completes') + ' (required dependency)'); }
+  }
+  return out;
+}
+
+/* ============================================================
+   4d · Execution Roadmap — RISKS + CLIENT INPUTS engine (M-Exec-3)
+   ------------------------------------------------------------
+   Suggestions are read from the item's real presets/status/notes
+   AND the current roadmap schedule. Nothing writes without an
+   explicit Apply in the preview. Edited-from-auto and dismissed
+   risks survive regeneration. Manual risks/inputs are never touched.
+   ============================================================ */
+const RM_STOP = new Set(['the','and','for','with','are','was','has','been','this','that','from','into','not','all','any',
+  'must','need','needs','before','after','confirm','provide','approve','approved','item','items','client','required','final',
+  'per','each','site','day','days','date','stays','total','still','yet','tbc']);
+function rmNormWords(s){
+  return String(s||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(w=> w.length>2 && !RM_STOP.has(w));
+}
+function rmStemSet(s){
+  const set = new Set();
+  rmNormWords(s).forEach(w=>{ set.add(w); set.add(w.replace(/(ies|es|s)$/,'')); });
+  return set;
+}
+// fuzzy: does candidate text look like an existing input? (distinct-word overlap)
+function rmTextLooksLike(candidate, existing){
+  const A = new Set(rmNormWords(candidate)), B = new Set(rmNormWords(existing));
+  if(!A.size || !B.size) return false;
+  let shared = 0; B.forEach(w=>{ if(A.has(w)) shared++; });
+  return shared >= 3 || (shared >= 2 && shared / Math.min(A.size, B.size) >= 0.4);
+}
+// duplicate check for a suggested client input vs an existing one:
+// a strong keyword match OR a fuzzy text match
+function rmInputDupe(sugg, existingText){
+  const E = rmStemSet(existingText);
+  if((sugg.dupeWords || []).some(w => E.has(w) || E.has(w.replace(/(ies|es|s)$/,'')))) return true;
+  return rmTextLooksLike(sugg.text, existingText);
+}
+
+// current (or would-be) schedule days for risk / required-by calculations
+function rmPlanDays(item){
+  const acts = (item.execution && Array.isArray(item.execution.activities)) ? item.execution.activities : [];
+  const msKeys = ['final-artwork','design-approval','sample-approval','material-ready','fabrication-complete','site-access-approved','power-confirmed'];
+  if(acts.length){
+    const byKey = {};
+    acts.forEach(a=>{ if(a.key && a.key !== 'custom') byKey[a.key] = { start:+a.startDay||1, end:+a.endDay||(+a.startDay||1) }; });
+    const ms = {}; msKeys.forEach(k=> ms[k] = rmMsDayFromActs(acts, k));
+    return { byKey, ms, hasPlan:true };
+  }
+  const plan = rmSuggestPlan(item);
+  const byKey = {}; plan.activities.forEach(a=> byKey[a.key] = { start:a.startDay, end:a.endDay });
+  return { byKey, ms:plan.milestones, hasPlan:false };
+}
+// earliest "must be ready by" day = day before the first present dependent activity starts
+function rmNeededBy(days, keys, buffer){
+  let m = null;
+  keys.forEach(k=>{ const d = days.byKey[k]; if(d && (m == null || d.start < m)) m = d.start; });
+  return m == null ? null : Math.max(1, m - 1 - (buffer || 0));
+}
+// "must be ready by completion of X" — end day of the first present key
+function rmNeededByEnd(days, keys){
+  let m = null;
+  keys.forEach(k=>{ const d = days.byKey[k]; if(d && (m == null || d.end < m)) m = d.end; });
+  return m == null ? null : Math.max(1, m);
+}
+function rmActLabel(key){ return (EXECUTION_ACTIVITY_CATALOGUE.find(c=>c[0]===key)||[,key])[1]; }
+function rmPresentLabels(days, keys){ return keys.filter(k=> days.byKey[k]).map(rmActLabel); }
+
+// ---- risk rules — only from actual item data + roadmap ----
+function rmSuggestRisks(item){
+  const P = item.presets || {}, S = item.status || {};
+  const gv = k => (P[k] && Array.isArray(P[k].values)) ? P[k].values : [];
+  const someIn = (a,b) => a.some(x=> b.indexOf(x) !== -1);
+  const days = rmPlanDays(item);
+  const acts = (item.execution && item.execution.activities) || [];
+
+  const branding = gv('branding'), fabrication = gv('fabrication'), material = gv('material'),
+        finish = gv('finish'), existingWork = gv('existingWork'),
+        lighting = gv('lighting').filter(x=> x && x !== 'None'), power = gv('power'), access = gv('access');
+  const designApproved = S.design === 'approved';
+  const hasSim = !!(item.photoIds && item.photoIds.simulation);
+  const instDay = days.byKey['installation'] ? days.byKey['installation'].start : null;
+  const instTxt = instDay ? (' Installation Day ' + instDay + '.') : '';
+
+  const out = [];
+  const push = (ruleKey, severity, text, affectKeys) => out.push({ ruleKey, severity, text, affects: rmPresentLabels(days, affectKeys||[]) });
+
+  if(branding.length && !designApproved){
+    const by = rmNeededBy(days, ['printing-branding']) || rmNeededBy(days, ['design-adaptation']) || days.ms['final-artwork'] || null;
+    push('artwork-approval', 'block',
+      'Final artwork / approved design required' + (by ? ' by Day ' + by : '') + '.' +
+      ' A later delivery pushes production and' + (instTxt || ' installation.'),
+      ['printing-branding','design-adaptation','fabrication','installation']);
+  }
+  if(S.sample === 'pending' || S.sample === 'rejected'){
+    const by = rmNeededBy(days, ['fabrication']) || rmNeededBy(days, ['assembly']);
+    push('sample-approval', 'warn',
+      'Client sample / mock-up approval outstanding — required before production release' + (by ? ' (by Day ' + by + ')' : '') + '.',
+      ['sample-mockup','fabrication','installation']);
+  }
+  if(lighting.length && (!power.length || someIn(power, ['New Power Required','Cabling Required','Driver / Access Required']))){
+    const by = rmNeededBy(days, ['electrical-led']);
+    push('power-confirm', 'block',
+      'Power availability / electrical point must be confirmed' + (by ? ' before Electrical / LED (Day ' + by + ')' : ' before illuminated-sign installation') + '.',
+      ['electrical-led','testing','installation']);
+  }
+  const accEquip = access.filter(x=> ['Scaffold','Scissor Lift','Boom Lift','Crane'].indexOf(x) !== -1);
+  if(accEquip.length){
+    const by = (instDay ? Math.max(1, instDay - 2) : null) || rmNeededBy(days, ['site-access-prep']);
+    push('access-booking', 'warn',
+      accEquip.join(' / ') + ' access — approval, permit and booking required' + (by ? ' by Day ' + by : '') + '.' + instTxt,
+      ['site-access-prep','installation']);
+  }
+  if(someIn(existingWork, ['Remove Existing','Modify Existing','Replace Branding Only'])){
+    push('existing-work', 'warn',
+      'Confirm removal scope, disposal responsibility and site readiness for the existing work before mobilising.',
+      ['remove-existing','installation']);
+  }
+  const qtyN = parseInt(item.qty && item.qty.value, 10);
+  if(qtyN > 1 && !(item.locationRef && String(item.locationRef).trim())){
+    const by = rmNeededByEnd(days, ['site-verification']);
+    push('qty-locations', 'warn',
+      qtyN + ' ' + ((item.qty && item.qty.unit) || 'units') + ' — individual locations / positions are not recorded'
+      + (by ? ' (confirm by Day ' + by + ', when Site Verification closes)' : '')
+      + '. Installation sequencing and access planning need them. (Quantity is unaffected.)',
+      ['site-verification','installation']);
+  }
+  const dW = item.dims && String(item.dims.w).trim(), dH = item.dims && String(item.dims.h).trim();
+  if(!dW || !dH){
+    push('dimensions', 'warn',
+      'Overall dimensions (W / H) are not recorded — fabrication estimate and material take-off are at risk.',
+      ['material-procurement','fabrication']);
+  }
+  if(!hasSim){
+    const by = rmNeededBy(days, ['client-approval']) || rmNeededByEnd(days, ['design-adaptation']);
+    push('simulation', 'info',
+      'No approved final simulation on file — obtain the client visual approval' + (by ? ' before Day ' + by : ' before design sign-off') + '.',
+      ['client-approval','design-adaptation']);
+  }
+  const tr = days.byKey['transportation'], ins = days.byKey['installation'];
+  if(tr && ins && tr.end >= ins.start){
+    push('no-buffer', 'info',
+      'No buffer between delivery (Day ' + tr.end + ') and installation (Day ' + ins.start + ') — a transport delay moves the install date.',
+      ['transportation','installation']);
+  }
+  // hard-dependency problems on the current plan
+  acts.forEach(a=>{
+    (a.dependsOn || []).forEach(d=>{
+      if(!d.hard) return;
+      if(!d.on || (RM_MS_LABEL[d.on] == null && !acts.some(x=> x.id === d.on || x.key === d.on))){
+        push('hard-unresolved-' + a.id, 'block', '"' + (a.label || 'Activity') + '" has an unresolved required dependency — set or remove it.', [a.key]);
+      }
+    });
+    if(rmHardViolations(item, a).length){
+      push('hard-violated-' + a.id, 'block', '"' + (a.label || 'Activity') + '" is scheduled before a required predecessor — the dates will not hold as sequenced.', [a.key]);
+    }
+  });
+  return out;
+}
+
+// ---- client-input suggestions (extend item.clientInputs, never a 2nd model) ----
+function rmSuggestClientInputs(item){
+  const P = item.presets || {}, S = item.status || {};
+  const gv = k => (P[k] && Array.isArray(P[k].values)) ? P[k].values : [];
+  const someIn = (a,b) => a.some(x=> b.indexOf(x) !== -1);
+  const days = rmPlanDays(item);
+  const branding = gv('branding'), finish = gv('finish'), lighting = gv('lighting').filter(x=> x && x!=='None'), access = gv('access');
+  const designApproved = S.design === 'approved';
+  const hasSim = !!(item.photoIds && item.photoIds.simulation);
+  const qtyN = parseInt(item.qty && item.qty.value, 10);
+  const unit = (item.qty && item.qty.unit) || 'units';
+  const nm = (item.name && item.name.trim()) || 'this item';
+
+  const instDay = days.byKey['installation'] ? days.byKey['installation'].start : null;
+  const out = [];
+  const add = (ruleKey, on, priority, text, requiredByDay, impactIfLate, dupeWords) => {
+    if(on) out.push({ ruleKey, priority, text, requiredByDay, impactIfLate, dupeWords });
+  };
+
+  add('ci-artwork', branding.length && !designApproved, 'required',
+    'Provide final artwork / vector files for ' + nm + ' (outlined, latest brand version).',
+    rmNeededBy(days, ['printing-branding']) || rmNeededBy(days, ['design-adaptation']),
+    'Printing / branding and fabrication cannot proceed; the installation date is at risk.',
+    ['artwork','vector']);
+  add('ci-design-approval', !designApproved, 'required',
+    'Approve the adapted design / layout for ' + nm + ' in writing.',
+    rmNeededBy(days, ['client-approval']) || rmNeededByEnd(days, ['design-adaptation']),
+    'Fabrication and sampling cannot be released.',
+    ['adapted','layout']);
+  add('ci-sample', S.sample === 'pending' || S.sample === 'rejected', 'required',
+    'Approve the physical sample / mock-up.',
+    rmNeededBy(days, ['fabrication']),
+    'Production cannot be released to fabrication.',
+    ['sample','mockup','mock']);
+  add('ci-qty-split', qtyN > 1, 'required',
+    'Confirm the split / individual allocation of the ' + qtyN + ' ' + unit + ' (quantity stays ' + qtyN + ').',
+    rmNeededBy(days, ['printing-branding']) || rmNeededBy(days, ['design-adaptation']),
+    'Wrong artwork quantity, print run or packing — likely rework.',
+    ['split','allocation']);
+  add('ci-locations', qtyN > 1 && !(item.locationRef && String(item.locationRef).trim()), 'required',
+    'Confirm exact locations / positions for the ' + qtyN + ' ' + unit + ' (site marking or drawing).',
+    rmNeededByEnd(days, ['site-verification']),
+    'Installation sequencing and access planning cannot be finalised.',
+    ['location','position','pole']);
+  add('ci-ral', finish.some(f=> ['Painted','Powder Coated','Metallic','Brushed','Polished'].indexOf(f) !== -1), 'required',
+    'Confirm the RAL / colour reference for the ' + finish.join(' / ').toLowerCase() + ' finish.',
+    rmNeededBy(days, ['painting-finishing']),
+    'Painting / finishing cannot start.',
+    ['ral','colour','color']);
+  add('ci-power', lighting.length, 'urgent',
+    'Confirm the power source / switched fused-spur location for the illuminated element.',
+    rmNeededBy(days, ['electrical-led']),
+    'Electrical / LED work cannot start.',
+    ['power','spur','electrical']);
+  add('ci-simulation', !hasSim, 'required',
+    'Approve the final simulation / visual for ' + nm + '.',
+    rmNeededBy(days, ['client-approval']) || rmNeededByEnd(days, ['design-adaptation']),
+    'Design approval and everything downstream slips.',
+    ['simulation','visual']);
+  add('ci-access-permission', someIn(access, ['Scaffold','Scissor Lift','Boom Lift','Crane']), 'required',
+    'Confirm site permission for ' + access.filter(x=>['Scaffold','Scissor Lift','Boom Lift','Crane'].indexOf(x)!==-1).join(' / ') + ' and the lifting-equipment method.',
+    (instDay ? Math.max(1, instDay - 2) : null) || rmNeededBy(days, ['site-access-prep']),
+    'Installation day cannot be confirmed.',
+    ['scissor','crane','scaffold','lifting','permit']);
+  add('ci-install-window', true, 'optional',
+    'Confirm the installation access window / permitted working hours on site.',
+    rmNeededBy(days, ['installation']),
+    'Installation may need to be re-scheduled or split.',
+    ['window','working','hours']);
+  return out;
+}
 
 /* forward migration — drop retired preset groups from older stored projects.
    Non-destructive to everything else; persisted on the next save. */
@@ -547,6 +1406,95 @@ function duplicateItem(project, item){
   project.items.splice(idx+1, 0, clone);
   renumber(project);
   return clone;
+}
+
+/* ============================================================
+   4c · Duplicate Technical Proposal — true independent copy
+   ------------------------------------------------------------
+   Central mode: server-side clone (project JSON + photo FILES,
+   new project/item/photo IDs, all references rewritten, source
+   only read). IndexedDB mode: same clone done client-side.
+   ============================================================ */
+function projDuplicateDialog(p){
+  return new Promise(res=>{
+    const o = document.createElement('div'); o.className = 'overlay';
+    const defName = (p.name || 'Project') + ' — Copy';
+    o.innerHTML =
+      '<div class="dialog"><h3>Duplicate Technical Proposal</h3>'
+      + '<p class="hint" style="margin-bottom:10px">Original: <b>'+esc(p.name||'Untitled')+'</b>'
+      + '<br>Copied with new IDs and its own photo files. The original stays exactly as it is.</p>'
+      + '<div class="field"><label>New project name</label>'
+      +   '<input id="dup-name" value="'+esc(defName)+'"></div>'
+      + '<div class="field"><label>Revision (optional)</label>'
+      +   '<input id="dup-rev" value="'+esc(p.revision||'R1')+'" style="max-width:150px"></div>'
+      + '<div class="acts"><button class="btn btn-ghost" data-x="0">Cancel</button>'
+      +   '<button class="btn btn-primary" data-x="1">Create Duplicate</button></div></div>';
+    o.addEventListener('click', e=>{
+      if(e.target === o){ o.remove(); res(null); return; }
+      const x = e.target.closest('[data-x]'); if(!x) return;
+      if(x.dataset.x === '1'){
+        const name = (o.querySelector('#dup-name').value || '').trim();
+        const rev  = (o.querySelector('#dup-rev').value  || '').trim();
+        o.remove(); res({ name: name || defName, revision: rev || null });
+      } else { o.remove(); res(null); }
+    });
+    document.body.appendChild(o);
+    setTimeout(()=>{ const el = o.querySelector('#dup-name'); if(el){ el.focus(); el.select(); } }, 0);
+  });
+}
+
+async function duplicateProject(p){
+  const choice = await projDuplicateDialog(p);
+  if(!choice) return;
+  toast('Duplicating…');
+  try{
+    let dup;
+    if(STORE_MODE === 'central'){
+      dup = await tpFetch('/projects/' + encodeURIComponent(p.id) + '/duplicate', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name: choice.name, revision: choice.revision }) });
+    } else {
+      dup = await duplicateProjectIdb(p, choice);
+    }
+    toast('Duplicate created');
+    go('#/p/' + dup.id);
+  }catch(e){
+    toast('Duplicate failed: ' + e.message);
+    console.error('[duplicate project]', e);
+  }
+}
+
+/* IndexedDB-mode fallback — same guarantees, client-side */
+async function duplicateProjectIdb(p, choice){
+  const src    = await IDB.get('projects', p.id);
+  const photos = await IDB.indexAll('photos', 'by_project', p.id);
+  const newPid = uid();
+  const doc = JSON.parse(JSON.stringify(src));
+  doc.id = newPid;
+  doc.name = choice.name;
+  if(choice.revision) doc.revision = choice.revision;
+  doc.createdAt = doc.updatedAt = now();
+  doc.duplicatedFrom = p.id;
+
+  const itemMap = {}, photoMap = {};
+  const remap = old => { if(!old) return old; if(!photoMap[old]) photoMap[old] = uid(); return photoMap[old]; };
+
+  (doc.items || []).forEach(it=>{
+    const nid = uid(); itemMap[it.id] = nid; it.id = nid; it.createdAt = it.updatedAt = now();
+    it.existingPhotoIds = (it.existingPhotoIds || []).map(remap);
+    it.photoIds = Object.fromEntries(Object.entries(it.photoIds || {}).filter(([,v])=>v).map(([k,v])=>[k, remap(v)]));
+    if(Array.isArray(it.referencePhotoIds)) it.referencePhotoIds = it.referencePhotoIds.map(remap);
+  });
+  photos.forEach(ph=> remap(ph.id));
+
+  for(const ph of photos){
+    const np = photoMap[ph.id]; if(!np) continue;
+    const freshBlob = ph.blob ? ph.blob.slice(0, ph.blob.size, ph.blob.type) : ph.blob;
+    await IDB.put('photos', { ...ph, id: np, projectId: newPid,
+      itemId: itemMap[ph.itemId] || ph.itemId, createdAt: now(), blob: freshBlob });
+  }
+  await IDB.put('projects', doc);
+  return doc;
 }
 
 /* ============================================================
@@ -897,7 +1845,14 @@ function clearPhotoCache(){
 async function loadProjectPhotos(projectId){
   clearPhotoCache();
   const recs = await dbIndexAll('photos','by_project', projectId);
-  for(const r of recs) STATE.photoCache.set(r.id, { rec:r, url:URL.createObjectURL(r.blob) });
+  for(const r of recs){
+    let blob = r.blob || null;
+    if(!blob && STORE_MODE==='central'){
+      try{ const resp = await fetch(TP_API_BASE+'/photos/'+encodeURIComponent(r.id)); if(resp.ok) blob = await resp.blob(); }catch(_){}
+    }
+    if(blob) STATE.photoCache.set(r.id, { rec:{ ...r, blob, bytes:(r.bytes||blob.size) }, url:URL.createObjectURL(blob) });
+    else     STATE.photoCache.set(r.id, { rec:r, url:TP_API_BASE+'/photos/'+encodeURIComponent(r.id) });
+  }
 }
 function photoUrl(id){ const v=STATE.photoCache.get(id); return v?v.url:null; }
 function photoRec(id){ const v=STATE.photoCache.get(id); return v?v.rec:null; }
@@ -907,9 +1862,12 @@ function photoRec(id){ const v=STATE.photoCache.get(id); return v?v.rec:null; }
    ============================================================ */
 function parseHash(){
   const parts = location.hash.replace(/^#\/?/,'').split('/').filter(Boolean);
+  if(parts[0]==='p' && parts[2]==='i' && parts[4]==='roadmap') return { view:'roadmap', pid:parts[1], iid:parts[3] };
+  if(parts[0]==='p' && parts[2]==='roadmap') return { view:'projroadmap', pid:parts[1] };
   if(parts[0]==='p' && parts[2]==='i') return { view:'item', pid:parts[1], iid:parts[3] };
   if(parts[0]==='p' && parts[2]==='export') return { view:'export', pid:parts[1] };
   if(parts[0]==='p' && parts[2]==='quote') return { view:'quote', pid:parts[1] };
+  if(parts[0]==='storage') return { view:'storage' };
   if(parts[0]==='p') return { view:'overview', pid:parts[1] };
   return { view:'projects' };
 }
@@ -920,6 +1878,7 @@ async function render(){
   const r = parseHash();
 
   if(r.view==='projects'){ STATE.project=null; clearPhotoCache(); return renderProjects(); }
+  if(r.view==='storage'){ STATE.project=null; clearPhotoCache(); return renderStorage(); }
 
   const p = await dbGet('projects', r.pid);
   if(!p){ go('#/'); return; }
@@ -930,6 +1889,12 @@ async function render(){
   if(r.view==='overview'){ STATE.otherOpen.clear(); return renderOverview(p); }
   if(r.view==='export'){ return renderExport(p); }
   if(r.view==='quote'){ return renderQuote(p); }
+  if(r.view==='projroadmap'){ return renderProjectRoadmap(p); }
+  if(r.view==='roadmap'){
+    const it = p.items.find(x=>x.id===r.iid);
+    if(!it){ go('#/p/'+p.id); return; }
+    return renderItemRoadmap(p, it);
+  }
   if(r.view==='item'){
     const it = p.items.find(x=>x.id===r.iid);
     if(!it){ go('#/p/'+p.id); return; }
@@ -976,8 +1941,22 @@ async function renderProjects(){
     +   '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">'
     +     '<path d="M8 1.5v8M4.5 6 8 9.5 11.5 6M2.5 13.5h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
     +   '</svg>Import Site Notes</a>'
+    + '<button class="btn btn-ghost btn-sm" data-storage title="Storage / backup / migration">'
+    +   (STORE_MODE==='central' ? 'Central DB' : 'Storage') + '</button>'
     + '<button class="btn btn-primary btn-sm" data-newproject>+ New</button></div>'
     + '<div class="wrap">'
+    +   ((STORE_MODE==='idb' && TP_API_UP && TP_PLATFORM_CENTRAL && TP_UNMIGRATED > 0)
+        ? '<div class="banner" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">'
+          + '<span style="flex:1;min-width:180px;font-size:12.5px"><b>Vista Local Database is active on this PC.</b> '
+          + 'This browser has '+TP_UNMIGRATED+' local project'+(TP_UNMIGRATED===1?'':'s')+' not in it — migrate to join.</span>'
+          + '<button class="btn btn-primary btn-sm" data-storage>Open Storage</button></div>'
+        : (STORE_MODE==='idb' && TP_API_UP && projects.length)
+        ? '<div class="banner" style="background:var(--gold-wash);border-color:var(--cream-edge);color:var(--gold-ink);'
+          + 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">'
+          + '<span style="flex:1;min-width:180px;font-size:12.5px">These projects live only in <b>this browser</b>. '
+          + 'Set up the Vista Local Database so every browser sees them.</span>'
+          + '<button class="btn btn-ghost btn-sm" data-storage>Open Storage</button></div>'
+        : '')
     +   list
     +   '<div style="text-align:center;margin-top:18px">'
     +     '<button class="linkbtn" data-loadsample>Load sample project (Main Gate demo)</button>'
@@ -1054,7 +2033,8 @@ function renderOverview(p){
     +    '<button class="btn btn-ghost btn-sm full mt6" data-additem>+ Add Item</button>'
     +  '</div></div>'
     +  (p.items.length
-        ? '<button class="btn btn-primary full mt10" data-export>Export / Preview PDF →</button>'
+        ? '<button class="btn btn-ghost full mt10" data-projroadmap>Execution Roadmap →</button>'
+          + '<button class="btn btn-primary full mt10" data-export>Export / Preview PDF →</button>'
           + '<button class="btn btn-ghost full mt10" data-quote>Create Vista Quotation →</button>'
         : '')
     + '</div>';
@@ -1268,7 +2248,8 @@ function collapsedNotesCardHtml(item){
 function refreshCard(which, item){
   const map = { photos:()=>photosCardHtml(STATE.project,item), status:()=>statusCardHtml(item),
                 ci:()=>clientInputsCardHtml(item), notes:()=>collapsedNotesCardHtml(item),
-                presets:()=>presetsCardHtml(item), pricing:()=>pricingCardHtml(item) };
+                presets:()=>presetsCardHtml(item), pricing:()=>pricingCardHtml(item),
+                roadmap:()=>roadmapCardHtml(item) };
   const el = document.getElementById('card-'+which);
   if(el && map[which]){ el.outerHTML = map[which](); }
 }
@@ -1295,6 +2276,27 @@ function pricingCardHtml(item){
 function presetsCardHtml(item){
   return '<div class="card" id="card-presets"><div class="eyebrow">Technical Presets <span class="rt">tap to select</span></div><div class="body">'
     + PRESET_GROUPS.map(g=> presetGroupHtml(item,g)).join('')
+    + '</div></div>';
+}
+
+/* small Execution Roadmap summary card in the Item Editor (no Gantt here) */
+function roadmapCardHtml(item){
+  const acts = (item.execution && Array.isArray(item.execution.activities)) ? item.execution.activities : [];
+  let body;
+  if(!acts.length){
+    body = '<div class="hint" style="margin-bottom:9px">No execution plan created yet.</div>';
+  } else {
+    const minStart = Math.min.apply(null, acts.map(a=> +a.startDay || 1));
+    const maxEnd   = Math.max.apply(null, acts.map(a=> +a.endDay || +a.startDay || 1));
+    const inst     = acts.find(a=> a.key === 'installation');
+    body = '<div class="rm-sumline"><b>'+acts.length+'</b> activit'+(acts.length===1?'y':'ies')
+         + ' &nbsp;·&nbsp; Day <b>'+minStart+'</b> → Day <b>'+maxEnd+'</b>'
+         + (inst ? ' &nbsp;·&nbsp; Installation: Day <b>'+(+inst.startDay||maxEnd)+'</b>' : '')
+         + '</div>';
+  }
+  return '<div class="card" id="card-roadmap"><div class="eyebrow">Execution Roadmap</div><div class="body">'
+    + body
+    + '<button class="btn btn-ghost btn-sm" data-openroadmap>Open Roadmap →</button>'
     + '</div></div>';
 }
 
@@ -1340,6 +2342,7 @@ function renderItem(p, it){
     + presetsCardHtml(it)
     + statusCardHtml(it)
     + clientInputsCardHtml(it)
+    + roadmapCardHtml(it)
     + collapsedNotesCardHtml(it)
 
     + '</div>'
@@ -1348,6 +2351,921 @@ function renderItem(p, it){
     +   '<button class="btn btn-ghost" data-back="#/p/'+p.id+'">Done</button>'
     +   '<button class="btn btn-primary" data-nextitem>Save &amp; Next Item →</button>'
     + '</div>';
+}
+
+/* ============================================================
+   11b · View — Item Execution Roadmap (M-Exec-1: manual only)
+   ============================================================ */
+let RM_OPEN = new Set();   // activity ids whose inline editor drawer is expanded
+let RM_CTX  = null;        // last item id rendered — resets RM_OPEN on item switch
+
+function rmCurrentItem(){
+  const r = parseHash();
+  if(r.view !== 'roadmap' || !STATE.project) return null;
+  return STATE.project.items.find(x=>x.id===r.iid) || null;
+}
+function rmFind(id){
+  const it = rmCurrentItem(); if(!it) return null;
+  const ex = it.execution; if(!ex || !Array.isArray(ex.activities)) return null;
+  const a = ex.activities.find(x=>x.id===id);
+  return a ? { it, ex, a } : null;
+}
+function rmRerender(){
+  const it = rmCurrentItem();
+  if(it) renderItemRoadmap(STATE.project, it);
+}
+
+// dependency target key: catalogue activities are referenced by their catalogue
+// key (survives renames + regenerate), custom activities by their id.
+function rmDepKey(a){ return (a.key && a.key !== 'custom') ? a.key : a.id; }
+function rmDepOptionsHtml(item, current, selfId){
+  const acts = (item.execution.activities || []).filter(x => x.id !== selfId);
+  let s = '<option value=""'+(current?'':' selected')+'>— choose —</option>';
+  s += '<optgroup label="Activities">'
+     + acts.map(x=>{ const v = rmDepKey(x); return '<option value="'+esc(v)+'"'+(current===v?' selected':'')+'>'+esc(x.label||'Activity')+'</option>'; }).join('')
+     + '</optgroup>';
+  s += '<optgroup label="Milestones">'
+     + RM_MILESTONES.map(m=>'<option value="'+m[0]+'"'+(current===m[0]?' selected':'')+'>'+esc(m[1])+'</option>').join('')
+     + '</optgroup>';
+  return s;
+}
+function rmDrawerHtml(a){
+  const it = rmCurrentItem();
+  const prog = a.progress || 'not_started';
+  const deps = Array.isArray(a.dependsOn) ? a.dependsOn : [];
+  const depRows = deps.map((d,di)=>
+    '<div class="rm-deprow" data-rmid="'+a.id+'" data-di="'+di+'">'
+    + '<select data-rmdep="on">'+rmDepOptionsHtml(it, d.on, a.id)+'</select>'
+    + '<select data-rmdep="kind" title="Finish-to-Start / Start-to-Start">'
+    +   '<option value="FS"'+(d.kind!=='SS'?' selected':'')+'>after (FS)</option>'
+    +   '<option value="SS"'+(d.kind==='SS'?' selected':'')+'>with (SS)</option>'
+    + '</select>'
+    + '<input data-rmdep="lagDays" value="'+(+d.lagDays||0)+'" inputmode="numeric" title="Lag days" style="width:46px;text-align:center">'
+    + '<select data-rmdep="hard">'
+    +   '<option value="soft"'+(d.hard?'':' selected')+'>Soft</option>'
+    +   '<option value="hard"'+(d.hard?' selected':'')+'>Hard</option>'
+    + '</select>'
+    + '<button class="rm-depdel" data-rmdepdel="'+a.id+'" data-di="'+di+'" title="Remove">✕</button>'
+    + '</div>'
+  ).join('');
+  return '<div class="rm-drawer">'
+    + '<div class="field"><label>Activity name</label>'
+    +   '<input data-rmf="label" data-rmid="'+a.id+'" value="'+esc(a.label||'')+'" placeholder="Activity name"></div>'
+    + '<div class="row">'
+    +   '<div class="field"><label>Start day</label><input data-rmf="startDay" data-rmid="'+a.id+'" value="'+(+a.startDay||1)+'" inputmode="numeric"></div>'
+    +   '<div class="field"><label>End day</label><input data-rmf="endDay" data-rmid="'+a.id+'" value="'+(+a.endDay||(+a.startDay||1))+'" inputmode="numeric"></div>'
+    + '</div>'
+    + '<div class="field"><label>Progress</label><div class="rm-seg" data-rmprogseg data-rmid="'+a.id+'">'
+    +   RM_PROGRESS.map(x=>'<button data-v="'+x[0]+'" class="'+(prog===x[0]?'on':'')+'">'+esc(x[1])+'</button>').join('')
+    + '</div></div>'
+    + '<div class="field"><div class="rm-checks">'
+    +   '<label class="rm-check"><input type="checkbox" data-rmf="parallel" data-rmid="'+a.id+'"'+(a.parallel?' checked':'')+'> ⇄ Parallel</label>'
+    +   '<label class="rm-check"><input type="checkbox" data-rmf="isWait" data-rmid="'+a.id+'"'+(a.isWait?' checked':'')+'> ⏳ Waiting</label>'
+    + '</div></div>'
+    + '<div class="field"><label>Dependencies</label>'
+    +   (depRows || '<div class="hint" style="margin:0 0 6px">None — this activity can start whenever you place it.</div>')
+    +   '<button class="btn btn-ghost btn-sm" data-rmdepadd="'+a.id+'">+ Add dependency</button></div>'
+    + '<div class="field" style="margin-bottom:6px"><label>Note</label>'
+    +   '<textarea data-rmf="note" data-rmid="'+a.id+'" placeholder="Optional">'+esc(a.note||'')+'</textarea></div>'
+    + '<button class="rm-drawer-del" data-rmdel="'+a.id+'">Delete activity</button>'
+    + '</div>';
+}
+
+function renderItemRoadmap(p, it){
+  if(RM_CTX !== it.id){ RM_OPEN = new Set(); RM_CTX = it.id; }
+  const acts = (it.execution && Array.isArray(it.execution.activities)) ? it.execution.activities : [];
+  const horizon = rmHorizonOf(it);
+
+  let days = '';
+  for(let d=1; d<=horizon; d++) days += '<div class="rm-daynum">'+d+'</div>';
+  const headRow = '<div class="rm-row head"><div class="rm-name">Day</div>'
+    + '<div class="rm-track" style="--rm-cols:'+horizon+'">'+days+'</div></div>';
+
+  const rows = acts.map((a,idx)=>{
+    const s = Math.max(1, Math.min(horizon, +a.startDay||1));
+    const e = Math.max(s, Math.min(horizon, +a.endDay||s));
+    const dur = e - s + 1;
+    const barCls = 'rm-bar ' + (a.isWait ? 'wait' : ('ph-'+rmPhase(a))) + (a.parallel ? ' par' : '');
+    const barLead = a.isWait ? '⏳' : (a.parallel ? '⇄' : '');
+    const barTxt = dur >= 4 ? (barLead ? barLead+' ' : '') + dur + 'd' : barLead;
+    const bar = '<div class="'+barCls+'" style="grid-column:'+s+' / '+(e+1)+'" data-rmedit="'+a.id+'"'
+      + ' title="'+esc(a.label)+' — Day '+s+' to '+e+' ('+dur+'d)">'
+      + (barTxt ? '<span class="rm-bar-x">'+esc(barTxt)+'</span>' : '') + '</div>';
+    const dayLbl = (s===e ? 'D'+s : 'D'+s+'–'+e) + ' · ' + dur + 'd';
+    const badges = '<span class="rm-badge day">'+dayLbl+'</span>'
+                 + (a.parallel ? '<span class="rm-badge par">⇄ Parallel</span>' : '')
+                 + (a.isWait   ? '<span class="rm-badge wait">⏳ Waiting</span>' : '');
+    const depLine = (Array.isArray(a.dependsOn) && a.dependsOn.length)
+      ? '<div class="rm-nm-dep">' + a.dependsOn.map(d=>{
+          const lag = +d.lagDays || 0;
+          return '↳ ' + (d.kind==='SS' ? 'with ' : 'after ') + esc(rmDepLabel(it, d))
+            + (lag ? (lag>0 ? ' +'+lag+'d' : ' '+lag+'d') : '')
+            + (d.hard ? ' <span class="rm-req">required</span>' : '');
+        }).join('<br>') + '</div>'
+      : '';
+    const viol = rmHardViolations(it, a);
+    const violLine = viol.length ? '<div class="rm-nm-warn">⚠ ' + esc(viol[0]) + '</div>' : '';
+    const nameCell = '<div class="rm-name">'
+      + '<div class="rm-nm-top">'
+      +   '<span class="rm-mover">'
+      +     '<button data-rmmove="'+a.id+'" data-dir="-1"'+(idx===0?' disabled':'')+'>▲</button>'
+      +     '<button data-rmmove="'+a.id+'" data-dir="1"'+(idx===acts.length-1?' disabled':'')+'>▼</button>'
+      +   '</span>'
+      +   '<span class="rm-dot '+esc(a.progress||'not_started')+'"></span>'
+      +   '<span class="rm-label" data-rmedit="'+a.id+'">'+esc(a.label||'Activity')+'</span>'
+      + '</div>'
+      + '<div class="rm-badges">'+badges+'</div>'
+      + depLine + violLine
+      + (a.note ? '<div class="rm-nm-sub">'+esc(a.note)+'</div>' : '')
+      + '</div>';
+    return '<div class="rm-row">'+nameCell
+      + '<div class="rm-track" style="--rm-cols:'+horizon+'">'+bar+'</div></div>'
+      + (RM_OPEN.has(a.id) ? rmDrawerHtml(a) : '');
+  }).join('');
+
+  const grid = '<div class="rm-scroll"><div class="rm-grid">'+headRow+rows+'</div></div>'
+    + (acts.length ? '' : '<div class="rm-empty">No activities yet — add the first one.</div>');
+
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'/roadmap">‹ Project Roadmap</button>'
+    + '<span class="title">Roadmap · '+esc(it.name || ('Item '+it.number))+'</span>'
+    + '<span class="save on">Saved ✓</span></div>'
+    + '<div class="wrap rm-wrap">'
+    +  '<nav class="rm-crumbs">'
+    +    '<span class="rm-cr-lnk" data-back="#/p/'+p.id+'">Technical Proposal</span>'
+    +    '<span class="rm-cr-sep">/</span>'
+    +    '<span class="rm-cr-lnk" data-back="#/p/'+p.id+'/roadmap">Execution Roadmap</span>'
+    +    '<span class="rm-cr-sep">/</span>'
+    +    '<span class="rm-cr-cur">'+esc(it.name || ('Item '+it.number))+'</span></nav>'
+    +  '<div class="print-head"><span class="ph-brand">VISTA&nbsp;UNITED</span>'
+    +    '<span class="ph-proj">'+esc(p.name||'Project')+'</span>'
+    +    '<span class="ph-sep">Execution Roadmap · '+esc(it.name || ('Item '+it.number))+'</span></div>'
+    +  '<div class="rm-toolbar">'
+    +    '<button class="btn '+(acts.length?'btn-ghost':'btn-primary')+' btn-sm" data-rmsuggest>'
+    +      (acts.length ? '↻ Regenerate Suggestions' : '✨ Generate Suggested Plan')+'</button>'
+    +    '<button class="btn btn-ghost btn-sm" data-rmadd>+ Add Activity</button>'
+    +    '<button class="btn btn-primary btn-sm" data-rmpdf title="Generate a true A4 landscape PDF">Download Roadmap PDF</button>'
+    +    '<button class="btn btn-ghost btn-sm" data-rmprint title="Browser print (secondary)">Print</button>'
+    +    '<div class="rm-horizon"><span>Horizon</span>'
+    +      '<button class="rm-step" data-rmhz="-1">−</button>'
+    +      '<input data-rmhzval value="'+horizon+'" inputmode="numeric">'
+    +      '<button class="rm-step" data-rmhz="1">+</button>'
+    +      '<span>working days</span></div>'
+    +  '</div>'
+    +  grid
+    +  '<div class="hint mt10">Bars span Start Day → End Day inclusive. '
+    +    '<b>⇄</b> parallel &nbsp;·&nbsp; <b>⏳</b> waiting &nbsp;·&nbsp; ↳ dependency &nbsp;·&nbsp; dot = progress. '
+    +    'Tap a bar or an activity name to edit. Suggestions read this item&rsquo;s presets, status and notes — everything stays editable.</div>'
+    +  rmRisksSectionHtml(it)
+    +  rmClientInputsSectionHtml(it)
+    + '</div>';
+}
+
+/* ============================================================
+   11e · View — Project-wide Execution Roadmap (M-Exec-4)
+   ------------------------------------------------------------
+   Combined READ view over every item.execution.activities.
+   No second schedule model. Editing activities happens in the
+   item roadmap (a click jumps there); only client-input fields
+   are editable here. The horizon is a viewing width only.
+   ============================================================ */
+let PR = { pid:null, view:'byitem', filter:'all', horizon:null, collapsed:new Set() };
+function prReset(p){ if(PR.pid !== p.id) PR = { pid:p.id, view:'byitem', filter:'all', horizon:null, collapsed:new Set() }; }
+function prItemActs(it){ return (it.execution && Array.isArray(it.execution.activities)) ? it.execution.activities : []; }
+function prMaxEnd(p){ let m=0; p.items.forEach(it=> prItemActs(it).forEach(a=>{ m=Math.max(m,+a.endDay||0,+a.startDay||0); })); return m; }
+function prHorizon(p){
+  const floor = Math.max(15, prMaxEnd(p));
+  const h = PR.horizon != null ? PR.horizon : floor;
+  return Math.max(RM_HORIZON_MIN, Math.min(RM_HORIZON_MAX, Math.max(h, prMaxEnd(p))));
+}
+function prInstallDay(it){ const a = prItemActs(it).find(x=> x.key==='installation'); return a ? (+a.startDay||null) : null; }
+function prActiveRisks(it){
+  const ex = it.execution || {}; const dis = new Set(ex.dismissedRuleKeys||[]);
+  return (ex.risks||[]).filter(r=> !dis.has(r.ruleKey));
+}
+function prBlockers(it){
+  const out = [], seen = [];
+  const add = txt => { if(!txt) return; if(seen.some(s=> rmTextLooksLike(s, txt))) return; seen.push(txt); out.push(txt); };
+  const S = it.status || {};
+  if(S.design !== 'approved') add('Client design approval pending');
+  if(S.sample === 'pending' || S.sample === 'rejected') add('Physical sample approval pending');
+  prActiveRisks(it).forEach(r=>{ if(r.severity === 'block') add(r.text); });
+  (it.clientInputs||[]).forEach(c=>{
+    if((c.priority === 'urgent' || c.priority === 'required') && c.text)
+      add(c.text.replace(/\.\s*$/,'') + (c.requiredByDay != null ? ' — required by Day ' + c.requiredByDay : ''));
+  });
+  prItemActs(it).forEach(a=> rmHardViolations(it, a).forEach(v=> add('"' + (a.label||'Activity') + '" ' + v)));
+  return out;
+}
+function prCounters(p){
+  let acts=0, done=0, inProg=0, waiting=0, instPlanned=0, blockRisks=0;
+  p.items.forEach(it=>{
+    const A = prItemActs(it); acts += A.length;
+    A.forEach(a=>{ if(a.progress==='done') done++; else if(a.progress==='in_progress') inProg++; if(a.isWait) waiting++; });
+    if(A.some(a=> a.key==='installation')) instPlanned++;
+    blockRisks += prActiveRisks(it).filter(r=> r.severity==='block').length;
+  });
+  return { items:p.items.length, acts, done, inProg, waiting, instPlanned, blockRisks };
+}
+const PR_FILTERS = [['all','All Items'],['install','Installation Only'],['waiting','Waiting / Client Inputs'],['inprog','In Progress'],['blocked','Blocked']];
+function prActivityPasses(it, a){
+  if(PR.filter === 'all') return true;
+  if(PR.filter === 'install') return a.key === 'installation';
+  if(PR.filter === 'waiting') return !!a.isWait;
+  if(PR.filter === 'inprog') return a.progress === 'in_progress';
+  if(PR.filter === 'blocked') return a.key === 'installation' ? prBlockers(it).length > 0 : rmHardViolations(it, a).length > 0;
+  return true;
+}
+function prBarHtml(a, horizon){
+  const s = Math.max(1, Math.min(horizon, +a.startDay||1));
+  const e = Math.max(s, Math.min(horizon, +a.endDay||s));
+  const dur = e - s + 1;
+  const cls = 'rm-bar ' + (a.isWait ? 'wait' : ('ph-'+rmPhase(a))) + (a.parallel ? ' par' : '');
+  const lead = a.isWait ? '⏳' : (a.parallel ? '⇄' : '');
+  const txt = dur >= 4 ? ((lead?lead+' ':'') + dur + 'd') : lead;
+  return '<div class="'+cls+'" style="grid-column:'+s+' / '+(e+1)+'" title="'+esc(a.label)+' — Day '+s+'–'+e+'">'
+    + (txt ? '<span class="rm-bar-x">'+esc(txt)+'</span>' : '') + '</div>';
+}
+function prByItemHtml(p, horizon){
+  let days = ''; for(let d=1; d<=horizon; d++) days += '<div class="rm-daynum">'+d+'</div>';
+  let out = '<div class="rm-scroll"><div class="rm-grid" style="--rm-name:232px">'
+    + '<div class="rm-row head"><div class="rm-name">Item / Day</div>'
+    + '<div class="rm-track" style="--rm-cols:'+horizon+'">'+days+'</div></div>';
+  let shown = 0;
+  p.items.forEach(it=>{
+    const acts = prItemActs(it).filter(a=> prActivityPasses(it,a)).slice().sort((x,y)=> (+x.startDay||0)-(+y.startDay||0));
+    if(PR.filter !== 'all' && !acts.length) return;
+    shown++;
+    const collapsed = PR.collapsed.has(it.id);
+    const inst = prInstallDay(it);
+    out += '<div class="rm-row pr-lane">'
+      + '<div class="rm-name pr-lane-nm">'
+      +   '<button class="pr-chev" data-prcollapse="'+it.id+'">'+(collapsed?'▸':'▾')+'</button>'
+      +   '<span class="pr-lane-open" data-pritem="'+it.id+'">'+esc((it.number?it.number+' ':'')+(it.name||'Untitled item'))+'</span>'
+      + '</div>'
+      + '<div class="rm-track pr-lane-track" style="--rm-cols:'+horizon+'"><span class="pr-lane-meta">'
+      +   (inst!=null?('install Day '+inst):'no install activity')+' · '+prItemActs(it).length+' activities</span></div>'
+      + '</div>';
+    if(collapsed) return;
+    acts.forEach(a=>{
+      const badges = '<span class="rm-badge day">D'+(+a.startDay||1)+(((+a.startDay||1)===(+a.endDay||1))?'':'–'+(+a.endDay||1))+'</span>'
+        + (a.parallel?'<span class="rm-badge par">⇄</span>':'') + (a.isWait?'<span class="rm-badge wait">⏳</span>':'');
+      const dep = (a.dependsOn && a.dependsOn.length)
+        ? '<div class="rm-nm-dep">↳ '+a.dependsOn.map(d=> (d.kind==='SS'?'with ':'after ')+esc(rmDepLabel(it,d))).join(', ')+'</div>' : '';
+      out += '<div class="rm-row pr-actrow">'
+        + '<div class="rm-name pr-act-nm">'
+        +   '<span class="rm-dot '+esc(a.progress||'not_started')+'"></span>'
+        +   '<span class="pr-act-label" data-prgo="'+it.id+'">'+esc(a.label||'Activity')+'</span>'
+        +   '<div class="rm-badges">'+badges+'</div>'+dep
+        + '</div>'
+        + '<div class="rm-track" style="--rm-cols:'+horizon+'" data-prgo="'+it.id+'">'+prBarHtml(a, horizon)+'</div>'
+        + '</div>';
+    });
+  });
+  out += '</div></div>';
+  if(!shown) out += '<div class="rm-sec-empty">No items match this filter.</div>';
+  return out;
+}
+function prByDayHtml(p, horizon){
+  const rows = [];
+  const wavesSorted = prWavesSorted(p);
+  for(let d=1; d<=horizon; d++){
+    // wave installation blocks for this day (installation activities in these waves are shown here, not in the list below)
+    const dayWaves = wavesSorted.filter(w=> (+w.day||0) === d);
+    const coveredInst = new Set();   // "<itemId>|installation" already shown via a wave block
+    let waveHtml = '';
+    dayWaves.forEach((w,wi)=>{
+      const its = prWaveItems(p, w.id);
+      its.forEach(it=> coveredInst.add(it.id + '|installation'));
+      waveHtml += '<div class="pr-day-wave">◆ '+esc((w.name||('Wave '+(wi+1))).toUpperCase())+' — INSTALLATION</div>'
+        + (its.length ? its.map(it=> '<div class="pr-day-wave-i pr-day-e" data-prgo="'+it.id+'">– '+esc(it.name||('Item '+it.number))+'</div>').join('')
+                      : '<div class="pr-day-wave-i muted">no items assigned</div>');
+    });
+    const entries = [];
+    p.items.forEach(it=> prItemActs(it).forEach(a=>{
+      const s = +a.startDay||1, e = +a.endDay||s;
+      if(d < s || d > e) return;
+      if(a.key === 'installation' && coveredInst.has(it.id + '|installation')) return;
+      const isStart = d === s && e > s;
+      entries.push('<div class="pr-day-e" data-prgo="'+it.id+'">'
+        + (a.isWait?'⏳ ':(a.parallel?'⇄ ':''))
+        + '<b>'+esc(it.name||('Item '+it.number))+'</b> — '+esc(a.label||'Activity')
+        + (a.isWait?' <span class="muted">(pending)</span>':(isStart?' <span class="muted">(starts)</span>':''))
+        + '</div>');
+    }));
+    const count = entries.length + dayWaves.reduce((n,w)=> n + prWaveItems(p,w.id).length, 0);
+    if(waveHtml || entries.length) rows.push('<div class="pr-day"><div class="pr-day-n">Day '+d
+      + '<span class="pr-day-c">'+count+(count>1?' concurrent':'')+'</span></div>'+waveHtml+entries.join('')+'</div>');
+  }
+  return rows.length ? '<div class="pr-days">'+rows.join('')+'</div>' : '<div class="rm-sec-empty">No activities scheduled on any item.</div>';
+}
+function prInstallSummaryHtml(p){
+  const rows = p.items.map(it=> ({ it, day: prInstallDay(it) })).sort((a,b)=>{
+    if(a.day == null && b.day == null) return 0;
+    if(a.day == null) return 1; if(b.day == null) return -1; return a.day - b.day;
+  });
+  return '<table class="pr-tbl"><thead><tr><th>Item</th><th>Install Day</th><th>Wave</th></tr></thead><tbody>'
+    + rows.map(r=>{
+        const wn = prWaveNameOf(p, r.it);
+        return '<tr class="pr-clk" data-pritem="'+r.it.id+'"><td>'+esc(r.it.name||('Item '+r.it.number))+'</td>'
+        + '<td>'+(r.day!=null ? ('<b>Day '+r.day+'</b>') : '<span class="muted">Not planned</span>')+'</td>'
+        + '<td>'+(wn ? esc(wn) : '<span class="muted">'+(r.day!=null?'—':'')+'</span>')+'</td></tr>';
+      }).join('')
+    + '</tbody></table>';
+}
+function prBlockingHtml(p){
+  const blocks = p.items.map(it=> ({ it, day: prInstallDay(it), b: prBlockers(it) }))
+    .filter(x=> x.day != null && x.b.length).sort((a,b)=> a.day - b.day);
+  if(!blocks.length) return '<div class="rm-sec-empty">No installation blockers detected — all planned installs are clear.</div>';
+  return blocks.map(x=> '<div class="pr-block pr-clk" data-pritem="'+x.it.id+'">'
+    + '<div class="pr-block-h">'+esc(x.it.name||('Item '+x.it.number))+' · Installation Day '+x.day+'</div>'
+    + x.b.map(t=> '<div class="pr-block-r">⚠ '+esc(t)+'</div>').join('')
+    + '</div>').join('');
+}
+function prRiskRollupHtml(p){
+  const all = [];
+  p.items.forEach(it=> prActiveRisks(it).forEach(r=> all.push({ it, r })));
+  const rank = { block:0, warn:1, info:2 };
+  all.sort((a,b)=> (rank[a.r.severity] ?? 3) - (rank[b.r.severity] ?? 3));
+  if(!all.length) return '<div class="rm-sec-empty">No risks recorded on any item.</div>';
+  return all.map(x=>{
+    const dm = (x.r.text||'').match(/Day (\d+)/);
+    return '<div class="rm-risk sev-'+(x.r.severity||'warn')+' pr-clk" data-pritem="'+x.it.id+'">'
+      + '<div class="rm-risk-top"><span class="rm-sevtag sev-'+(x.r.severity||'warn')+'">'+(RM_SEV_LABEL[x.r.severity]||'WARN')+'</span>'
+      +   '<span class="pr-risk-item">'+esc(x.it.name||('Item '+x.it.number))+'</span>'
+      +   (dm ? '<span class="rm-risk-src">by Day '+dm[1]+'</span>' : '') + '</div>'
+      + '<div class="pr-risk-txt">'+esc(x.r.text||'')+'</div>'
+      + ((x.r.affects && x.r.affects.length) ? '<div class="rm-risk-aff">Affects: '+esc(x.r.affects.join(' · '))+'</div>' : '')
+      + '</div>';
+  }).join('');
+}
+function prInputsRollupHtml(p){
+  const all = [];
+  p.items.forEach(it=> (it.clientInputs||[]).forEach((c,idx)=> all.push({ it, c, idx })));
+  const rank = { urgent:0, required:1, optional:2 };
+  all.sort((a,b)=>{
+    const r = (rank[a.c.priority] ?? 3) - (rank[b.c.priority] ?? 3); if(r) return r;
+    const ad = a.c.requiredByDay == null ? 9999 : a.c.requiredByDay;
+    const bd = b.c.requiredByDay == null ? 9999 : b.c.requiredByDay;
+    return ad - bd;
+  });
+  if(!all.length) return '<div class="rm-sec-empty">No client inputs recorded on any item.</div>';
+  return '<div class="pr-ci-list">' + all.map(x=>{
+    const pr = ['urgent','required','optional'].indexOf(x.c.priority) !== -1 ? x.c.priority : 'required';
+    return '<div class="pr-ci">'
+      + '<div class="pr-ci-top">'
+      +   '<span class="pr-ci-item" data-pritem="'+x.it.id+'">'+esc(x.it.name||('Item '+x.it.number))+'</span>'
+      +   '<select data-pciprio data-pid="'+x.it.id+'" data-i="'+x.idx+'">'+PRIORITY.map(([v,l])=>'<option value="'+v+'"'+(pr===v?' selected':'')+'>'+esc(l)+'</option>').join('')+'</select>'
+      +   '<label class="rm-ci-day">by Day <input data-pciday data-pid="'+x.it.id+'" data-i="'+x.idx+'" value="'+(x.c.requiredByDay!=null?x.c.requiredByDay:'')+'" inputmode="numeric" placeholder="—"></label>'
+      + '</div>'
+      + '<input class="pr-ci-q" data-pcitext data-pid="'+x.it.id+'" data-i="'+x.idx+'" value="'+esc(x.c.text||'')+'" placeholder="Question…">'
+      + '<input class="rm-ci-impact" data-pciimpact data-pid="'+x.it.id+'" data-i="'+x.idx+'" value="'+esc(x.c.impactIfLate||'')+'" placeholder="Impact if late…">'
+      + '</div>';
+  }).join('') + '</div>';
+}
+function prSec(title, inner, btns){
+  return '<div class="rm-sec"><div class="rm-sec-head"><span class="rm-sec-t">'+title+'</span>'+(btns||'')+'</div>'+inner+'</div>';
+}
+function renderProjectRoadmap(p){
+  prReset(p);
+  prEnsureWaves(p);
+  const horizon = prHorizon(p);
+  const c = prCounters(p);
+  const metrics = [['Items',c.items],['Activities',c.acts],['Done',c.done],['In progress',c.inProg],
+    ['Waiting',c.waiting],['Install planned',c.instPlanned],['Blocking risks',c.blockRisks]]
+    .map(m=>'<div class="pr-metric"><div class="pr-m-n">'+m[1]+'</div><div class="pr-m-l">'+esc(m[0])+'</div></div>').join('');
+
+  const roadBtns = '<span class="rm-sec-btns">'
+    + '<div class="rm-seg pr-seg" data-prview>'
+    +   '<button data-v="byitem" class="'+(PR.view==='byitem'?'on':'')+'">By Item</button>'
+    +   '<button data-v="byday" class="'+(PR.view==='byday'?'on':'')+'">By Day</button>'
+    + '</div>'
+    + '<div class="rm-horizon"><span>Horizon</span><button class="rm-step" data-prhz="-1">−</button>'
+    +   '<input data-prhzval value="'+horizon+'" inputmode="numeric"><button class="rm-step" data-prhz="1">+</button></div>'
+    + '</span>';
+  const roadBody = (PR.view === 'byitem')
+    ? '<div class="pr-filters" data-prfilter>'
+      + PR_FILTERS.map(f=>'<button data-v="'+f[0]+'" class="'+(PR.filter===f[0]?'on':'')+'">'+f[1]+'</button>').join('')
+      + '<span class="pr-fl-sp"></span>'
+      + '<button class="pr-mini" data-prexpand="1">Show all</button><button class="pr-mini" data-prexpand="0">Collapse all</button>'
+      + '</div>' + prByItemHtml(p, horizon)
+    : prByDayHtml(p, horizon);
+
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'">‹ '+esc(p.name||'Project')+'</button>'
+    + '<span class="title">Execution Roadmap</span>'
+    + '<span class="save on">Read view</span></div>'
+    + '<div class="wrap rm-wrap">'
+    + '<nav class="rm-crumbs">'
+    +   '<span class="rm-cr-lnk" data-back="#/p/'+p.id+'">Technical Proposal</span>'
+    +   '<span class="rm-cr-sep">/</span>'
+    +   '<span class="rm-cr-cur">Execution Roadmap</span></nav>'
+    + '<div class="print-head"><span class="ph-brand">VISTA&nbsp;UNITED</span>'
+    +   '<span class="ph-proj">'+esc(p.name||'Project')+'</span>'
+    +   '<span class="ph-sep">Project Execution Roadmap</span></div>'
+    + '<div class="rm-toolbar">'
+    +   '<button class="btn btn-primary btn-sm" data-rmpdf title="Generate a true A4 landscape PDF">Download Roadmap PDF</button>'
+    +   '<button class="btn btn-ghost btn-sm" data-rmprint title="Browser print (secondary)">Print</button></div>'
+    + '<div class="pr-metrics">'+metrics+'</div>'
+    + prSec('Installation Plan', prInstallSummaryHtml(p))
+    + prSec('Installation Waves', prWavesHtml(p),
+        (prInstItems(p).length
+          ? '<span class="rm-sec-btns">'
+            + '<button class="btn btn-ghost btn-sm" data-prwsuggest>✨ Suggest Waves</button>'
+            + '<button class="btn btn-ghost btn-sm" data-prwadd>+ Add Wave</button></span>'
+          : ''))
+    + prSec('Blocking Installation', prBlockingHtml(p))
+    + prSec('Roadmap', roadBody, roadBtns)
+    + prSec('Project Risks', prRiskRollupHtml(p))
+    + prSec('Client Inputs Required', prInputsRollupHtml(p))
+    + '<div class="hint mt10">Read view — edit activities in each item&rsquo;s roadmap (click any bar or activity name). '
+    +   'Client-input fields are editable here and write to the same item. Horizon is a viewing width only — it never changes stored activity days.</div>'
+    + '</div>';
+}
+
+/* ============================================================
+   11f · Project Roadmap — INSTALLATION WAVES (M-Exec-5)
+   ------------------------------------------------------------
+   project.execution.waves[] = { id, name, day, note, source }
+   Installation activity gets .waveId. Read/derived everywhere
+   else. Manual wave name/day/assignments survive regeneration.
+   ============================================================ */
+const PR_ACCESS_EQUIP = ['Scissor Lift','Boom Lift','Crane','Scaffold'];
+function prEnsureWaves(p){
+  if(!p.execution || typeof p.execution !== 'object') p.execution = {};
+  if(!Array.isArray(p.execution.waves)) p.execution.waves = [];
+  return p.execution.waves;
+}
+function prWaves(p){ return (p.execution && Array.isArray(p.execution.waves)) ? p.execution.waves : []; }
+function prWavesSorted(p){
+  const w = prWaves(p);
+  return w.slice().sort((a,b)=> ((+a.day||0)-(+b.day||0)) || (w.indexOf(a)-w.indexOf(b)));
+}
+function prInstAct(it){ return prItemActs(it).find(a=> a.key === 'installation') || null; }
+function prInstItems(p){ return p.items.filter(it=> !!prInstAct(it)); }
+function prWaveOf(it){ const a = prInstAct(it); return a && a.waveId ? a.waveId : null; }
+function prWaveObjOf(p, it){ const id = prWaveOf(it); return id ? prWaves(p).find(w=> w.id === id) || null : null; }
+function prWaveNameOf(p, it){ const w = prWaveObjOf(p, it); return w ? (w.name || 'Wave') : null; }
+function prWaveItems(p, waveId){ return prInstItems(p).filter(it=> prWaveOf(it) === waveId); }
+function prUnassignedInst(p){
+  const ids = new Set(prWaves(p).map(w=> w.id));
+  return prInstItems(p).filter(it=>{ const w = prWaveOf(it); return !w || !ids.has(w); });
+}
+function prItemAccessEquip(it){
+  const v = (it.presets && it.presets.access && Array.isArray(it.presets.access.values)) ? it.presets.access.values : [];
+  return v.filter(x=> PR_ACCESS_EQUIP.indexOf(x) !== -1);
+}
+function prWaveEquip(p, waveId){
+  const set = [];
+  prWaveItems(p, waveId).forEach(it=> prItemAccessEquip(it).forEach(x=>{ if(set.indexOf(x) === -1) set.push(x); }));
+  return set;
+}
+function prWaveBlockers(p, waveId){
+  const out = [];
+  prWaveItems(p, waveId).forEach(it=>{
+    const nm = it.name || ('Item ' + it.number);
+    const seen = [];
+    const add = raw => { if(!raw) return; if(seen.some(s=> rmTextLooksLike(s, raw))) return; seen.push(raw); out.push(nm + ': ' + raw); };
+    prBlockers(it).forEach(add);
+    const a = prInstAct(it);
+    if(a) rmHardViolations(it, a).forEach(v=> add('Installation ' + v));
+  });
+  return out;
+}
+/* ---- Suggest: cluster unassigned installation items by day (±1) + shared lift ---- */
+function prClusterWaves(items){
+  const list = items.map(it=> ({ it, day: prInstallDay(it), equip: prItemAccessEquip(it) }))
+    .filter(x=> x.day != null).sort((a,b)=> a.day - b.day);
+  const groups = [];
+  list.forEach(x=>{
+    let g = groups.find(gr=> (x.equip.length && gr.equip.some(e=> x.equip.indexOf(e) !== -1) && (x.day - gr.anchor) <= 1))
+         || groups.find(gr=> (x.day - gr.anchor) <= 1);
+    if(g){
+      g.items.push(x.it);
+      g.day = Math.min(g.day, x.day);
+      x.equip.forEach(e=>{ if(g.equip.indexOf(e) === -1) g.equip.push(e); });
+    } else {
+      groups.push({ anchor: x.day, day: x.day, items:[x.it], equip:[...x.equip] });
+    }
+  });
+  return groups;
+}
+function prShowWavePreview(p){
+  prEnsureWaves(p);
+  const groups = prClusterWaves(prUnassignedInst(p));
+  const keptWaves = prWaves(p).length;
+  let html = '<div class="rm-pv"><h3>Suggested Installation Waves</h3>'
+    + '<p class="rm-pv-sub">Clusters installation items by install day (same day or &plusmn;1) and shared access equipment. '
+    + 'Existing waves and already-assigned items are left untouched. Review, then Apply.</p>';
+  if(!groups.length){
+    html += '<p class="rm-pv-sub">'
+      + (prInstItems(p).length ? 'Every installation item is already in a wave — nothing to suggest.'
+                               : 'No items have an Installation activity yet.')
+      + '</p>';
+  } else {
+    const nAssign = groups.reduce((n,g)=> n+g.items.length,0);
+    html += '<div class="rm-pv-sec"><div class="rm-pv-h add">Will create '+groups.length+' wave'+(groups.length>1?'s':'')
+      + ' &amp; assign '+nAssign+' installation item'+(nAssign>1?'s':'')+'</div>'
+      + groups.map((g,i)=> '<div class="rm-pv-row"><span class="rm-pv-nm">Wave '+(keptWaves+i+1)+'</span>'
+          + '<span class="rm-pv-day">Day '+g.day+'</span>'
+          + '<span class="rm-pv-why">'+esc(g.items.map(it=> it.name||('Item '+it.number)).join(', '))
+          + (g.equip.length ? '  ·  '+esc(g.equip.join(', ')) : '')+'</span></div>').join('')
+      + '</div>';
+  }
+  if(keptWaves) html += '<div class="rm-pv-sec"><div class="rm-pv-h keep">Kept unchanged ('+keptWaves+')</div>'
+    + '<div class="rm-pv-row muted"><span class="rm-pv-why">existing waves and their assignments are not modified</span></div></div>';
+  html += '<div class="rm-pv-acts"><button class="btn btn-ghost" data-prwpvcancel>Cancel</button>'
+    + (groups.length ? '<button class="btn btn-primary" data-prwpvapply>Apply</button>' : '')
+    + '</div></div>';
+  const o = document.createElement('div');
+  o.className = 'overlay'; o.id = 'pr-wave-pv';
+  o.innerHTML = html; o._groups = groups;
+  o.addEventListener('click', ev=>{
+    if(ev.target === o || ev.target.closest('[data-prwpvcancel]')){ o.remove(); return; }
+    if(ev.target.closest('[data-prwpvapply]')){ prApplyWaveSuggestion(p, o._groups); o.remove(); }
+  });
+  document.body.appendChild(o);
+}
+function prApplyWaveSuggestion(p, groups){
+  const waves = prEnsureWaves(p);
+  const base = waves.length;
+  groups.forEach((g,i)=>{
+    const w = { id: uid(), name: 'Wave ' + (base + i + 1), day: g.day,
+      note: g.equip.length ? ((g.items.length > 1 ? 'Shared access: ' : 'Access: ') + g.equip.join(', ')) : '',
+      source: 'auto' };
+    waves.push(w);
+    g.items.forEach(it=>{ const a = prInstAct(it); if(a) a.waveId = w.id; });
+  });
+  scheduleSave();
+  renderProjectRoadmap(STATE.project);
+  toast('Created ' + groups.length + ' wave' + (groups.length>1?'s':''));
+}
+/* ---- 3-option dialog (Cancel / Keep / Move) ---- */
+function prChoiceDialog(title, msg, opts){
+  return new Promise(res=>{
+    const o = document.createElement('div'); o.className = 'overlay';
+    o.innerHTML = '<div class="dialog"><h3>'+esc(title)+'</h3>'
+      + '<p>'+String(msg).split('\n').map(esc).join('<br>')+'</p>'
+      + '<div class="acts" style="flex-wrap:wrap">'
+      + opts.map(x=> '<button class="btn '+(x.danger?'btn-danger':(x.primary?'btn-primary':'btn-ghost'))
+          +'" data-v="'+esc(x.v)+'">'+esc(x.label)+'</button>').join('')
+      + '</div></div>';
+    o.addEventListener('click', e=>{
+      if(e.target === o){ o.remove(); res(null); return; }
+      const b = e.target.closest('[data-v]'); if(b){ o.remove(); res(b.dataset.v); }
+    });
+    document.body.appendChild(o);
+  });
+}
+async function prSetWaveDay(p, w, newDay){
+  const old = +w.day || 0, oldSrc = w.source;
+  newDay = Math.max(1, Math.min(RM_HORIZON_MAX, parseInt(newDay,10) || old || 1));
+  if(newDay === old){ w.day = newDay; renderProjectRoadmap(STATE.project); return; }
+  w.day = newDay; w.source = 'user';
+  const its = prWaveItems(p, w.id);
+  if(its.length){
+    const choice = await prChoiceDialog(
+      'Move assigned Installation activities to Day ' + newDay + '?',
+      its.length + ' installation activit' + (its.length>1?'ies are':'y is') + ' assigned to this wave.',
+      [ { v:'move',  label:'Move installations', primary:true },
+        { v:'keep',  label:'Keep existing days' },
+        { v:'cancel',label:'Cancel' } ]);
+    if(choice === 'cancel' || choice == null){ w.day = old; w.source = oldSrc; scheduleSave(); renderProjectRoadmap(STATE.project); return; }
+    if(choice === 'move'){
+      its.forEach(it=>{
+        const a = prInstAct(it); if(!a) return;
+        const span = Math.max(0, (+a.endDay||+a.startDay||1) - (+a.startDay||1));
+        a.startDay = newDay; a.endDay = newDay + span;
+      });
+      const viol = [];
+      its.forEach(it=>{ const a = prInstAct(it); if(a) rmHardViolations(it, a).forEach(v=> viol.push((it.name||'Item') + ': ' + v)); });
+      scheduleSave(); renderProjectRoadmap(STATE.project);
+      if(viol.length) prChoiceDialog('Dependency warning',
+        'Moving to Day ' + newDay + ' breaks a required dependency:\n\n' + viol.join('\n')
+        + '\n\nThe installation days were still moved — adjust the upstream activities in each item roadmap.',
+        [ { v:'ok', label:'Got it', primary:true } ]);
+      return;
+    }
+  }
+  scheduleSave(); renderProjectRoadmap(STATE.project);
+}
+/* ---- Waves section render ---- */
+function prWavesHtml(p){
+  const instItems = prInstItems(p);
+  if(!instItems.length) return '<div class="pr-wave-none">No item has an Installation activity yet — add one in an item roadmap, then group installs into waves here.</div>';
+  const waves = prWavesSorted(p);
+  const all = prWaves(p);
+  let html = '';
+  if(!waves.length) html += '<div class="pr-wave-none">No waves yet. <b>Suggest Waves</b> clusters installs by day &amp; shared equipment, or add one manually.</div>';
+  html += waves.map((w,i)=>{
+    const its = prWaveItems(p, w.id);
+    const equip = prWaveEquip(p, w.id);
+    const blk = prWaveBlockers(p, w.id);
+    const idx = all.indexOf(w);
+    const others = instItems.filter(it=> prWaveOf(it) !== w.id);
+    const assignOpts = others.length
+      ? '<select class="pr-wave-assign" data-prwassign="'+w.id+'"><option value="">＋ assign installation item…</option>'
+        + others.map(it=>{ const inW = prWaveNameOf(p, it);
+            return '<option value="'+it.id+'">'+esc(it.name||('Item '+it.number))+(inW?(' (in '+esc(inW)+')'):'')+'</option>'; }).join('')
+        + '</select>'
+      : '';
+    return '<div class="pr-wave">'
+      + '<div class="pr-wave-r1">'
+      +   '<span class="pr-wave-mv">'
+      +     '<button data-prwmove="'+w.id+'" data-dir="-1"'+(i===0?' disabled':'')+'>▲</button>'
+      +     '<button data-prwmove="'+w.id+'" data-dir="1"'+(i===waves.length-1?' disabled':'')+'>▼</button>'
+      +   '</span>'
+      +   '<input class="pr-wave-nm" data-prwname="'+w.id+'" value="'+esc(w.name||('Wave '+(i+1)))+'">'
+      +   '<span class="pr-wave-day">Day <input data-prwday="'+w.id+'" value="'+(w.day!=null?w.day:'')+'" inputmode="numeric"></span>'
+      +   '<span class="pr-wave-src">'+(w.source==='user'?'manual':'auto')+'</span>'
+      +   '<button class="rm-x" data-prwdel="'+w.id+'" title="Delete wave">✕</button>'
+      + '</div>'
+      + '<input class="pr-wave-note" data-prwnote="'+w.id+'" value="'+esc(w.note||'')+'" placeholder="Note (access, crew, logistics)…">'
+      + (its.length
+          ? '<div class="pr-wave-chips">'
+            + its.map(it=> '<span class="pr-wave-chip" data-pritem="'+it.id+'">'+esc(it.name||('Item '+it.number))
+                + '<button data-prwunassign="'+w.id+'" data-item="'+it.id+'" title="Remove from wave">✕</button></span>').join('')
+            + '</div>'
+          : '<div class="pr-wave-none">No installation items assigned.</div>')
+      + assignOpts
+      + '<div class="pr-wave-sum"><b>'+esc(w.name||('Wave '+(i+1)))+' · Day '+(w.day!=null?w.day:'—')+'</b><br>'
+      +   'Items: '+(its.length ? esc(its.map(it=> it.name||('Item '+it.number)).join(', ')) : '—')+'<br>'
+      +   'Access / Equipment: '+(equip.length ? esc(equip.join(', ')) : 'none recorded')
+      +   (blk.length ? '<div class="pr-wave-blk">'+blk.map(b=> '⚠ '+esc(b)).join('<br>')+'</div>' : '')
+      + '</div>'
+      + '</div>';
+  }).join('');
+  const un = prUnassignedInst(p);
+  if(un.length) html += '<div class="pr-wave-none">Not in a wave: <b>'
+    + esc(un.map(it=> (it.name||('Item '+it.number)) + (prInstallDay(it)!=null?(' (Day '+prInstallDay(it)+')'):'')).join(', ')) + '</b></div>';
+  return html;
+}
+
+/* ============================================================
+   11c · Execution Roadmap — suggestion preview + apply (M-Exec-2)
+   ============================================================ */
+function rmSuggestBadges(a){
+  return (a.isWait ? '<span class="rm-badge wait">⏳ Waiting</span>' : '')
+       + (a.parallel ? '<span class="rm-badge par">⇄ Parallel</span>' : '');
+}
+function rmShowSuggestionPreview(item){
+  const plan = rmSuggestPlan(item);
+  const existing = (item.execution && Array.isArray(item.execution.activities)) ? item.execution.activities : [];
+  const byKey = {}; existing.forEach(a=>{ if(a.key && a.key!=='custom' && !byKey[a.key]) byKey[a.key] = a; });
+
+  const toAdd = [], toUpdate = [], kept = [];
+  plan.activities.forEach(sp=>{
+    const cur = byKey[sp.key];
+    if(!cur){ toAdd.push(sp); return; }
+    if(cur.source === 'suggested' && !rmWasEdited(cur)){
+      const changed = (+cur.startDay!==sp.startDay) || (+cur.endDay!==sp.endDay)
+        || (!!cur.parallel!==sp.parallel) || (!!cur.isWait!==sp.isWait)
+        || rmActSig({dependsOn:cur.dependsOn}) !== rmActSig({dependsOn:sp.dependsOn});
+      if(changed) toUpdate.push({ sp, cur });
+    } else {
+      kept.push({ cur, sp, why: cur.source!=='suggested' ? 'manual' : 'you edited it' });
+    }
+  });
+  existing.forEach(a=>{
+    if(a.key === 'custom' || !plan.activities.some(sp=> sp.key === a.key)){
+      kept.push({ cur:a, sp:null, why: a.key==='custom' ? 'custom activity' : 'not suggested for this item' });
+    }
+  });
+
+  const line = (label, sp) => '<div class="rm-pv-row"><span class="rm-pv-nm">'+esc(label)+'</span>'
+    + '<span class="rm-pv-day">D'+sp.startDay+(sp.startDay===sp.endDay?'':'–'+sp.endDay)+'</span>'
+    + rmSuggestBadges(sp) + '</div>';
+  const depSummary = plan.activities.flatMap(sp=> (sp.dependsOn||[]).map(d=>{
+    const onLbl = RM_MS_LABEL[d.on] || (plan.activities.find(x=>'sug-'+x.key===d.on || x.key===d.on)||{}).label || d.on;
+    return '<div class="rm-pv-dep">'+esc(sp.label)+' ↳ '+(d.kind==='SS'?'with ':'after ')+esc(onLbl)
+      + (d.hard?' <span class="rm-req">required</span>':'')+(+d.lagDays? (' '+(+d.lagDays>0?'+':'')+d.lagDays+'d'):'')+'</div>';
+  })).join('');
+
+  let html = '<div class="rm-pv">'
+    + '<h3>Suggested Plan</h3>'
+    + '<p class="rm-pv-sub">Built from this item&rsquo;s presets, status and notes. Review, then Apply — or Cancel and nothing changes.</p>';
+  if(toAdd.length){
+    html += '<div class="rm-pv-sec"><div class="rm-pv-h add">Will add ('+toAdd.length+')</div>'
+      + toAdd.map(sp=> line('+ '+sp.label, sp)).join('') + '</div>';
+  }
+  if(toUpdate.length){
+    html += '<div class="rm-pv-sec"><div class="rm-pv-h upd">Will update ('+toUpdate.length+')</div>'
+      + toUpdate.map(u=> '<div class="rm-pv-row"><span class="rm-pv-nm">'+esc(u.sp.label)+'</span>'
+          + '<span class="rm-pv-day was">D'+(+u.cur.startDay)+(+u.cur.startDay===+u.cur.endDay?'':'–'+(+u.cur.endDay))+'</span>'
+          + '<span class="rm-pv-arrow">→</span>'
+          + '<span class="rm-pv-day">D'+u.sp.startDay+(u.sp.startDay===u.sp.endDay?'':'–'+u.sp.endDay)+'</span>'
+          + rmSuggestBadges(u.sp) + '</div>').join('')
+      + '<div class="hint" style="margin-top:4px">Only suggestion-created activities you haven&rsquo;t hand-edited.</div></div>';
+  }
+  if(kept.length){
+    html += '<div class="rm-pv-sec"><div class="rm-pv-h keep">Kept unchanged ('+kept.length+')</div>'
+      + kept.map(k=> '<div class="rm-pv-row muted"><span class="rm-pv-nm">'+esc(k.cur.label||'Activity')+'</span>'
+          + '<span class="rm-pv-why">'+esc(k.why)+'</span></div>').join('') + '</div>';
+  }
+  if(depSummary) html += '<div class="rm-pv-sec"><div class="rm-pv-h dep">Dependencies</div>'+depSummary+'</div>';
+  if(!toAdd.length && !toUpdate.length){
+    html += '<p class="rm-pv-sub">Nothing to add or update — the current plan already matches the suggestion (or you&rsquo;ve customised it).</p>';
+  }
+  html += '<div class="rm-pv-acts">'
+    + '<button class="btn btn-ghost" data-rmpvcancel>Cancel</button>'
+    + ((toAdd.length||toUpdate.length) ? '<button class="btn btn-primary" data-rmpvapply>Apply Suggested Plan</button>' : '')
+    + '</div></div>';
+
+  const o = document.createElement('div');
+  o.className = 'overlay';
+  o.id = 'rm-pv-overlay';
+  o.innerHTML = html;
+  o._plan = plan; o._toAdd = toAdd; o._toUpdate = toUpdate;
+  o.addEventListener('click', ev=>{
+    if(ev.target === o || ev.target.closest('[data-rmpvcancel]')){ o.remove(); return; }
+    if(ev.target.closest('[data-rmpvapply]')){ rmApplySuggestion(item, o._toAdd, o._toUpdate); o.remove(); }
+  });
+  document.body.appendChild(o);
+}
+function rmApplySuggestion(item, toAdd, toUpdate){
+  const ex = rmEnsureExecution(item);
+  toUpdate.forEach(u=>{
+    u.cur.startDay = u.sp.startDay;
+    u.cur.endDay   = u.sp.endDay;
+    u.cur.parallel = u.sp.parallel;
+    u.cur.isWait   = u.sp.isWait;
+    u.cur.dependsOn = u.sp.dependsOn.map(d=> ({...d}));
+    u.cur._genSig = rmActSig(u.cur);
+  });
+  toAdd.forEach(sp=>{
+    const a = {
+      id: uid(), key: sp.key, label: sp.label,
+      startDay: sp.startDay, endDay: sp.endDay,
+      parallel: sp.parallel, isWait: sp.isWait,
+      progress: 'not_started', note: '',
+      dependsOn: sp.dependsOn.map(d=> ({...d})),
+      source: 'suggested',
+    };
+    a._genSig = rmActSig(a);
+    ex.activities.push(a);
+  });
+  // re-order into catalogue order for readability, custom/unknown keys keep their relative position at the end
+  const order = EXECUTION_ACTIVITY_CATALOGUE.map(c=>c[0]);
+  ex.activities.sort((x,y)=>{
+    const ix = order.indexOf(x.key), iy = order.indexOf(y.key);
+    if(ix === -1 && iy === -1) return 0;
+    if(ix === -1) return 1;
+    if(iy === -1) return -1;
+    return ix - iy;
+  });
+  const maxEnd = ex.activities.reduce((m,a)=> Math.max(m, +a.endDay||0), 0);
+  ex.horizon = Math.max(rmClampHorizon(ex.horizon), maxEnd);
+  scheduleSave();
+  rmRerender();
+  toast('Suggested plan applied — adjust anything freely');
+}
+
+/* ============================================================
+   11d · Execution Roadmap — Risks + Client Inputs UI (M-Exec-3)
+   ============================================================ */
+const RM_SEV = [['block','BLOCK'],['warn','WARN'],['info','INFO']];
+const RM_SEV_LABEL = {}; RM_SEV.forEach(s=> RM_SEV_LABEL[s[0]] = s[1]);
+
+function rmRisksSectionHtml(item){
+  const risks = (item.execution && Array.isArray(item.execution.risks)) ? item.execution.risks : [];
+  const dismissedN = (item.execution && item.execution.dismissedRuleKeys || []).length;
+  const rows = risks.map(r=>{
+    const sev = RM_SEV.some(s=>s[0]===r.severity) ? r.severity : 'warn';
+    const tag = r.source === 'auto' ? (r.editedFromAuto ? 'auto · edited' : 'auto') : 'manual';
+    return '<div class="rm-risk sev-'+sev+'">'
+      + '<div class="rm-risk-top">'
+      +   '<select data-rmrisksev data-rid="'+r.id+'">'
+      +     RM_SEV.map(s=>'<option value="'+s[0]+'"'+(sev===s[0]?' selected':'')+'>'+s[1]+'</option>').join('')
+      +   '</select>'
+      +   '<span class="rm-risk-src">'+tag+'</span>'
+      +   '<button class="rm-x" data-rmriskdel data-rid="'+r.id+'" data-src="'+(r.source||'user')+'" title="'+(r.source==='auto'?'Dismiss':'Delete')+'">✕</button>'
+      + '</div>'
+      + '<textarea data-rmrisktext data-rid="'+r.id+'" rows="2" placeholder="Describe the risk…">'+esc(r.text||'')+'</textarea>'
+      + ((r.affects && r.affects.length) ? '<div class="rm-risk-aff">Affects: '+esc(r.affects.join(' · '))+'</div>' : '')
+      + '</div>';
+  }).join('');
+  return '<div class="rm-sec"><div class="rm-sec-head"><span class="rm-sec-t">Risks</span>'
+    + '<span class="rm-sec-btns">'
+    +   '<button class="btn btn-ghost btn-sm" data-rmrisksuggest>'+(risks.some(r=>r.source==='auto')?'↻ Regenerate Risks':'✨ Suggest Risks')+'</button>'
+    +   '<button class="btn btn-ghost btn-sm" data-rmriskadd>+ Add Risk</button>'
+    + '</span></div>'
+    + (rows || '<div class="rm-sec-empty">No risks yet. Suggest Risks reads this item&rsquo;s data and the roadmap.</div>')
+    + (dismissedN ? '<button class="rm-linkbtn" data-rmriskreset>Reset '+dismissedN+' dismissed suggestion'+(dismissedN>1?'s':'')+'</button>' : '')
+    + '</div>';
+}
+
+function rmClientInputsSectionHtml(item){
+  const inputs = Array.isArray(item.clientInputs) ? item.clientInputs : [];
+  const rows = inputs.map((c,idx)=>{
+    const pr = ['urgent','required','optional'].indexOf(c.priority) !== -1 ? c.priority : 'required';
+    return '<div class="rm-ci">'
+      + '<div class="rm-ci-r1">'
+      +   '<input data-rmcitext data-i="'+idx+'" value="'+esc(c.text||'')+'" placeholder="Required input from the client…">'
+      +   '<button class="rm-x" data-rmcidel data-i="'+idx+'" title="Delete">✕</button>'
+      + '</div>'
+      + '<div class="rm-ci-r2">'
+      +   '<select data-rmciprio data-i="'+idx+'">'
+      +     PRIORITY.map(([v,lab])=>'<option value="'+v+'"'+(pr===v?' selected':'')+'>'+esc(lab)+'</option>').join('')
+      +   '</select>'
+      +   '<label class="rm-ci-day">Req. by day <input data-rmciday data-i="'+idx+'" value="'+(c.requiredByDay!=null?c.requiredByDay:'')+'" inputmode="numeric" placeholder="—"></label>'
+      + '</div>'
+      + '<input class="rm-ci-impact" data-rmciimpact data-i="'+idx+'" value="'+esc(c.impactIfLate||'')+'" placeholder="Impact if late (optional)…">'
+      + '</div>';
+  }).join('');
+  return '<div class="rm-sec"><div class="rm-sec-head"><span class="rm-sec-t">Client Inputs Required</span>'
+    + '<span class="rm-sec-btns">'
+    +   '<button class="btn btn-ghost btn-sm" data-rmcisuggest>✨ Suggest Inputs</button>'
+    +   '<button class="btn btn-ghost btn-sm" data-rmciadd2>+ Add Input</button>'
+    + '</span></div>'
+    + (rows || '<div class="rm-sec-empty">None yet. These feed the normal Technical Proposal client‑inputs list too.</div>')
+    + '</div>';
+}
+
+/* ---- risk suggestion preview + apply ---- */
+function rmShowRiskPreview(item){
+  const ex = rmEnsureExecution(item);
+  const suggested = rmSuggestRisks(item);
+  const dismissed = new Set(ex.dismissedRuleKeys || []);
+  const current = ex.risks || [];
+  const toAdd = [], toUpdate = [], skipped = [];
+  suggested.forEach(s=>{
+    if(dismissed.has(s.ruleKey)){ skipped.push({ s, why:'dismissed' }); return; }
+    const cur = current.find(r=> r.ruleKey === s.ruleKey && r.source === 'auto');
+    if(!cur){ toAdd.push(s); return; }
+    if(cur.editedFromAuto){ skipped.push({ s, why:'you edited it' }); return; }
+    if(cur.text !== s.text || cur.severity !== s.severity || (cur.affects||[]).join('|') !== (s.affects||[]).join('|')) toUpdate.push({ s, cur });
+    else skipped.push({ s, why:'already listed' });
+  });
+  const sevTag = sv => '<span class="rm-sevtag sev-'+sv+'">'+RM_SEV_LABEL[sv]+'</span>';
+  let html = '<div class="rm-pv"><h3>Suggested Risks</h3>'
+    + '<p class="rm-pv-sub">From this item&rsquo;s data and the current roadmap. Review, then Apply — or Cancel.</p>';
+  if(toAdd.length) html += '<div class="rm-pv-sec"><div class="rm-pv-h add">Will add ('+toAdd.length+')</div>'
+    + toAdd.map(s=>'<div class="rm-pv-risk">'+sevTag(s.severity)+' '+esc(s.text)
+      + ((s.affects&&s.affects.length)?'<div class="rm-pv-aff">Affects: '+esc(s.affects.join(' · '))+'</div>':'')+'</div>').join('') + '</div>';
+  if(toUpdate.length) html += '<div class="rm-pv-sec"><div class="rm-pv-h upd">Will update ('+toUpdate.length+')</div>'
+    + toUpdate.map(u=>'<div class="rm-pv-risk">'+sevTag(u.s.severity)+' '+esc(u.s.text)+'</div>').join('')
+    + '<div class="hint" style="margin-top:4px">Only auto risks you haven&rsquo;t edited.</div></div>';
+  if(skipped.length) html += '<div class="rm-pv-sec"><div class="rm-pv-h keep">Not changed ('+skipped.length+')</div>'
+    + skipped.map(k=>'<div class="rm-pv-row muted"><span class="rm-pv-nm">'+esc((k.s.text||'').slice(0,54))+'…</span><span class="rm-pv-why">'+esc(k.why)+'</span></div>').join('') + '</div>';
+  if(!toAdd.length && !toUpdate.length) html += '<p class="rm-pv-sub">Nothing to add or update.</p>';
+  html += '<div class="rm-pv-acts"><button class="btn btn-ghost" data-rmpvcancel>Cancel</button>'
+    + ((toAdd.length||toUpdate.length)?'<button class="btn btn-primary" data-rmpvapply>Apply</button>':'') + '</div></div>';
+  const o = document.createElement('div'); o.className = 'overlay'; o.id = 'rm-pv-overlay'; o.innerHTML = html;
+  o.addEventListener('click', ev=>{
+    if(ev.target === o || ev.target.closest('[data-rmpvcancel]')){ o.remove(); return; }
+    if(ev.target.closest('[data-rmpvapply]')){ rmApplyRisks(item, toAdd, toUpdate); o.remove(); }
+  });
+  document.body.appendChild(o);
+}
+function rmApplyRisks(item, toAdd, toUpdate){
+  const ex = rmEnsureExecution(item);
+  toUpdate.forEach(u=>{ u.cur.text = u.s.text; u.cur.severity = u.s.severity; u.cur.affects = u.s.affects; });
+  toAdd.forEach(s=> ex.risks.push({
+    id: uid(), text: s.text, severity: s.severity, source: 'auto',
+    ruleKey: s.ruleKey, dismissed: false, editedFromAuto: false, affects: s.affects || [],
+  }));
+  scheduleSave(); rmRerender();
+  toast('Risks updated — edit or dismiss any of them');
+}
+
+/* ---- client-input suggestion preview + apply ---- */
+function rmShowClientInputPreview(item){
+  rmEnsureExecution(item);
+  const suggested = rmSuggestClientInputs(item);
+  const existing = item.clientInputs || [];
+  const toAdd = [], skipped = [];
+  suggested.forEach(s=>{
+    const dupe = existing.some(c=> (c.ruleKey && c.ruleKey === s.ruleKey) || rmInputDupe(s, c.text));
+    if(dupe) skipped.push(s); else toAdd.push(s);
+  });
+  const prLbl = p => (PRIORITY.find(x=>x[0]===p)||[,p])[1];
+  let html = '<div class="rm-pv"><h3>Suggested Client Inputs</h3>'
+    + '<p class="rm-pv-sub">Only questions justified by this item. Duplicates of your existing inputs are skipped. Nothing is deleted.</p>';
+  if(toAdd.length) html += '<div class="rm-pv-sec"><div class="rm-pv-h add">Will add ('+toAdd.length+')</div>'
+    + toAdd.map(s=>'<div class="rm-pv-risk"><b>'+esc(prLbl(s.priority))+'</b> — '+esc(s.text)
+      + '<div class="rm-pv-aff">'+(s.requiredByDay!=null?('Required by Day '+s.requiredByDay+' · '):'')+esc(s.impactIfLate||'')+'</div></div>').join('') + '</div>';
+  if(skipped.length) html += '<div class="rm-pv-sec"><div class="rm-pv-h keep">Skipped — similar to an existing input ('+skipped.length+')</div>'
+    + skipped.map(s=>'<div class="rm-pv-row muted"><span class="rm-pv-nm">'+esc(s.text.slice(0,60))+'…</span></div>').join('') + '</div>';
+  if(!toAdd.length) html += '<p class="rm-pv-sub">Nothing new to add — your client-inputs list already covers the suggestions.</p>';
+  html += '<div class="rm-pv-acts"><button class="btn btn-ghost" data-rmpvcancel>Cancel</button>'
+    + (toAdd.length?'<button class="btn btn-primary" data-rmpvapply>Apply</button>':'') + '</div></div>';
+  const o = document.createElement('div'); o.className = 'overlay'; o.id = 'rm-pv-overlay'; o.innerHTML = html;
+  o.addEventListener('click', ev=>{
+    if(ev.target === o || ev.target.closest('[data-rmpvcancel]')){ o.remove(); return; }
+    if(ev.target.closest('[data-rmpvapply]')){ rmApplyClientInputs(item, toAdd); o.remove(); }
+  });
+  document.body.appendChild(o);
+}
+function rmApplyClientInputs(item, toAdd){
+  rmEnsureExecution(item);
+  toAdd.forEach(s=> item.clientInputs.push({
+    priority: s.priority, text: s.text, requiredByDay: s.requiredByDay, impactIfLate: s.impactIfLate || '',
+    source: 'auto', ruleKey: s.ruleKey,
+  }));
+  scheduleSave(); rmRerender();
+  toast('Client inputs added — they also show in the Item editor');
 }
 
 /* ============================================================
@@ -1373,6 +3291,51 @@ document.addEventListener('input', e=>{
     STATE.project[t.dataset.pf] = t.value;
     if(t.dataset.pf==='name'){ const ti=document.querySelector('.appbar .title'); if(ti) ti.textContent = t.value||'Untitled Project'; }
     scheduleSave(); return;
+  }
+  // execution roadmap — text fields: mutate + save, never re-render (keep focus)
+  if(t.dataset.rmf === 'label' || t.dataset.rmf === 'note'){
+    const f = rmFind(t.dataset.rmid);
+    if(f){ f.a[t.dataset.rmf] = t.value; scheduleSave(); }
+    return;
+  }
+  if(t.dataset.rmrisktext != null){
+    const rit = rmCurrentItem();
+    const r = rit && (rit.execution.risks || []).find(x=> x.id === t.dataset.rid);
+    if(r){ if(r.source === 'auto' && r.text !== t.value) r.editedFromAuto = true; r.text = t.value; scheduleSave(); }
+    return;
+  }
+  if(t.dataset.rmcitext != null || t.dataset.rmciimpact != null || t.dataset.rmciday != null){
+    const rit = rmCurrentItem();
+    const c = rit && (rit.clientInputs || [])[+ (t.dataset.i)];
+    if(c){
+      if(t.dataset.rmcitext != null) c.text = t.value;
+      else if(t.dataset.rmciimpact != null) c.impactIfLate = t.value;
+      else { const n = parseInt(t.value, 10); c.requiredByDay = isFinite(n) ? Math.max(1, n) : null; }
+      scheduleSave();
+    }
+    return;
+  }
+  if(t.dataset.pcitext != null || t.dataset.pciimpact != null || t.dataset.pciday != null){
+    const pit = STATE.project && STATE.project.items.find(x=> x.id === t.dataset.pid);
+    const c = pit && (pit.clientInputs || [])[+ (t.dataset.i)];
+    if(c){
+      if(t.dataset.pcitext != null) c.text = t.value;
+      else if(t.dataset.pciimpact != null) c.impactIfLate = t.value;
+      else { const n = parseInt(t.value, 10); c.requiredByDay = isFinite(n) ? Math.max(1, n) : null; }
+      scheduleSave();
+    }
+    return;
+  }
+  // installation waves — name / note text (mutate + save, keep focus)
+  if(t.dataset.prwname != null || t.dataset.prwnote != null){
+    const wid = t.dataset.prwname != null ? t.dataset.prwname : t.dataset.prwnote;
+    const w = STATE.project && prWaves(STATE.project).find(x=> x.id === wid);
+    if(w){
+      if(t.dataset.prwname != null){ w.name = t.value; w.source = 'user'; }
+      else w.note = t.value;
+      scheduleSave();
+    }
+    return;
   }
   const it = currentItem();
   if(!it) return;
@@ -1411,6 +3374,72 @@ document.addEventListener('change', e=>{
   if(t.dataset.qinc!=null && STATE.quote){ quoteToggleInclude(t.dataset.qinc, t.checked); return; }
   if(t.dataset.qf!=null && STATE.quote){ quoteSetField(t.dataset.qf, t.value, t.dataset.qitem || null); return; }
 
+  /* execution roadmap — horizon + day/flag fields (re-render to reposition bars) */
+  if(t.dataset.rmhzval != null){
+    const rit = rmCurrentItem();
+    if(rit){ rmEnsureExecution(rit); rit.execution.horizon = rmClampHorizon(t.value); scheduleSave(); rmRerender(); }
+    return;
+  }
+  if(t.dataset.prhzval != null){
+    PR.horizon = rmClampHorizon(t.value);
+    if(STATE.project) renderProjectRoadmap(STATE.project);
+    return;
+  }
+  if(t.dataset.pciprio != null){
+    const pit = STATE.project && STATE.project.items.find(x=> x.id === t.dataset.pid);
+    const c = pit && (pit.clientInputs || [])[+ (t.dataset.i)];
+    if(c){ c.priority = t.value; scheduleSave(); renderProjectRoadmap(STATE.project); }
+    return;
+  }
+  // installation waves — change day (asks about moving installs) / assign an item
+  if(t.dataset.prwday != null && STATE.project){
+    const w = prWaves(STATE.project).find(x=> x.id === t.dataset.prwday);
+    if(w) prSetWaveDay(STATE.project, w, t.value);
+    return;
+  }
+  if(t.dataset.prwassign != null && STATE.project){
+    const iid = t.value; const wid = t.dataset.prwassign;
+    const it = iid && STATE.project.items.find(x=> x.id === iid);
+    const a = it && prInstAct(it);
+    if(a){ a.waveId = wid; scheduleSave(); }
+    renderProjectRoadmap(STATE.project);
+    return;
+  }
+  if(t.dataset.rmf != null){
+    const f = rmFind(t.dataset.rmid);
+    if(f){
+      const k = t.dataset.rmf;
+      if(k === 'startDay'){ f.a.startDay = rmSanitizeDay(t.value, 1); if((+f.a.endDay||0) < f.a.startDay) f.a.endDay = f.a.startDay; }
+      else if(k === 'endDay'){ f.a.endDay = rmSanitizeDay(t.value, +f.a.startDay||1); if(f.a.endDay < (+f.a.startDay||1)) f.a.endDay = +f.a.startDay||1; }
+      else if(k === 'parallel' || k === 'isWait'){ f.a[k] = !!t.checked; }
+      scheduleSave(); rmRerender();
+    }
+    return;
+  }
+  if(t.dataset.rmdep != null){
+    const row = t.closest('.rm-deprow'); if(!row) return;
+    const f = rmFind(row.dataset.rmid); if(!f) return;
+    const d = (f.a.dependsOn || [])[+row.dataset.di]; if(!d) return;
+    const k = t.dataset.rmdep;
+    if(k === 'hard') d.hard = (t.value === 'hard');
+    else if(k === 'lagDays') d.lagDays = rmSanitizeLag(t.value);
+    else d[k] = t.value;          // 'on' | 'kind'
+    scheduleSave(); rmRerender();
+    return;
+  }
+  if(t.dataset.rmrisksev != null){
+    const rit = rmCurrentItem();
+    const r = rit && (rit.execution.risks || []).find(x=> x.id === t.dataset.rid);
+    if(r){ if(r.source === 'auto' && r.severity !== t.value) r.editedFromAuto = true; r.severity = t.value; scheduleSave(); rmRerender(); }
+    return;
+  }
+  if(t.dataset.rmciprio != null){
+    const rit = rmCurrentItem();
+    const c = rit && (rit.clientInputs || [])[+ (t.dataset.i)];
+    if(c){ c.priority = t.value; scheduleSave(); }
+    return;
+  }
+
   const it=currentItem();
   if(it && t.dataset.p!=null){
     setPath(it, t.dataset.p, t.value);
@@ -1431,6 +3460,16 @@ document.addEventListener('click', async e=>{
   /* ----- navigation ----- */
   const back = closest('[data-back]'); if(back){ go(back.dataset.back); return; }
 
+  /* ----- storage / migration ----- */
+  if(closest('[data-storage]')){ go('#/storage'); return; }
+  if(closest('[data-usebrowser]')){ localStorage.removeItem('vista_tp_storage'); location.hash='#/'; location.reload(); return; }
+  const dlbb = closest('[data-dlbrowserbackup]'); if(dlbb){ downloadBrowserBackup(dlbb); return; }
+  const cbk  = closest('[data-centralbackup]'); if(cbk){ centralBackup(cbk); return; }
+  if(closest('[data-migpreview]')){ migPreview(); return; }
+  if(closest('[data-migcopy]')){ migCopy(); return; }
+  if(closest('[data-migverify]')){ migVerify(); return; }
+  if(closest('[data-migswitch]')){ migSwitch(); return; }
+
   if(closest('[data-newproject]')){
     const p = newProject(); await dbPut('projects', p); go('#/p/'+p.id); return;
   }
@@ -1438,15 +3477,224 @@ document.addEventListener('click', async e=>{
     toast('Building sample…');
     const id = await seedSampleProject(); go('#/p/'+id); return;
   }
-  const openP = closest('[data-open]'); if(openP){ go('#/p/'+openP.dataset.open); return; }
+  const openP = closest('[data-open]'); if(openP && !closest('[data-pmenu]')){ go('#/p/'+openP.dataset.open); return; }
   const openI = closest('[data-openitem]'); if(openI){ go('#/p/'+STATE.project.id+'/i/'+openI.dataset.openitem); return; }
+
+  /* ----- roadmap → direct PDF download (primary) / browser print (secondary) ----- */
+  const rmpdfBtn = closest('[data-rmpdf]');
+  if(rmpdfBtn){
+    if(!STATE.project) return;
+    const label = rmpdfBtn.textContent; rmpdfBtn.disabled = true; rmpdfBtn.textContent = 'Generating…';
+    try{
+      const r = parseHash();
+      if(r.view === 'roadmap'){
+        const it = STATE.project.items.find(x=> x.id === r.iid);
+        if(it) await downloadItemRoadmapPdf(STATE.project, it);
+      } else {
+        await downloadProjectRoadmapPdf(STATE.project);
+      }
+    }catch(e){ toast('PDF failed: ' + e.message); console.error('[roadmap pdf]', e); }
+    rmpdfBtn.disabled = false; rmpdfBtn.textContent = label;
+    return;
+  }
+  if(closest('[data-rmprint]')){ window.print(); return; }
+
+  /* ----- execution roadmap ----- */
+  if(closest('[data-openroadmap]')){
+    const cit = currentItem();
+    if(cit) go('#/p/'+STATE.project.id+'/i/'+cit.id+'/roadmap');
+    return;
+  }
+  /* ----- project-wide roadmap (M-Exec-4) ----- */
+  if(closest('[data-projroadmap]')){ if(STATE.project) go('#/p/'+STATE.project.id+'/roadmap'); return; }
+  const prGo = closest('[data-prgo], [data-pritem]');
+  if(prGo && !closest('input, select, textarea, button')){
+    const iid = prGo.dataset.prgo || prGo.dataset.pritem;
+    if(iid && STATE.project) go('#/p/'+STATE.project.id+'/i/'+iid+'/roadmap');
+    return;
+  }
+  const prv = closest('[data-prview] button');
+  if(prv){ PR.view = prv.dataset.v; renderProjectRoadmap(STATE.project); return; }
+  const prf = closest('[data-prfilter] button[data-v]');
+  if(prf){ PR.filter = prf.dataset.v; renderProjectRoadmap(STATE.project); return; }
+  const prc = closest('[data-prcollapse]');
+  if(prc){
+    const id = prc.dataset.prcollapse;
+    if(PR.collapsed.has(id)) PR.collapsed.delete(id); else PR.collapsed.add(id);
+    renderProjectRoadmap(STATE.project); return;
+  }
+  const prx = closest('[data-prexpand]');
+  if(prx){
+    if(prx.dataset.prexpand === '0') STATE.project.items.forEach(x=> PR.collapsed.add(x.id));
+    else PR.collapsed.clear();
+    renderProjectRoadmap(STATE.project); return;
+  }
+  const prhz = closest('[data-prhz]');
+  if(prhz){
+    PR.horizon = rmClampHorizon(prHorizon(STATE.project) + (+prhz.dataset.prhz));
+    renderProjectRoadmap(STATE.project); return;
+  }
+  /* ----- installation waves (M-Exec-5) ----- */
+  if(closest('[data-prwsuggest]')){ if(STATE.project) prShowWavePreview(STATE.project); return; }
+  if(closest('[data-prwadd]')){
+    if(!STATE.project) return;
+    const waves = prEnsureWaves(STATE.project);
+    const day = (prInstItems(STATE.project).map(prInstallDay).filter(d=> d!=null).sort((a,b)=>a-b)[0]) || 1;
+    waves.push({ id: uid(), name: 'Wave ' + (waves.length + 1), day, note:'', source:'user' });
+    scheduleSave(); renderProjectRoadmap(STATE.project); return;
+  }
+  const prwdel = closest('[data-prwdel]');
+  if(prwdel && STATE.project){
+    const w = prWaves(STATE.project).find(x=> x.id === prwdel.dataset.prwdel);
+    if(w && await confirmDialog('Delete wave?', '"'+(w.name||'Wave')+'" will be removed. Assigned installation days are not changed; the items just become unassigned.', true)){
+      STATE.project.items.forEach(it=>{ const a = prInstAct(it); if(a && a.waveId === w.id) delete a.waveId; });
+      STATE.project.execution.waves = prWaves(STATE.project).filter(x=> x !== w);
+      scheduleSave(); renderProjectRoadmap(STATE.project);
+    }
+    return;
+  }
+  const prwmv = closest('[data-prwmove]');
+  if(prwmv && STATE.project){
+    const arr = prWaves(STATE.project);
+    const i = arr.findIndex(x=> x.id === prwmv.dataset.prwmove);
+    const j = i + (+prwmv.dataset.dir);
+    if(i>=0 && j>=0 && j<arr.length){ const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp; scheduleSave(); renderProjectRoadmap(STATE.project); }
+    return;
+  }
+  const prwun = closest('[data-prwunassign]');
+  if(prwun && STATE.project){
+    const it = STATE.project.items.find(x=> x.id === prwun.dataset.item);
+    const a = it && prInstAct(it);
+    if(a && a.waveId === prwun.dataset.prwunassign){ delete a.waveId; scheduleSave(); renderProjectRoadmap(STATE.project); }
+    return;
+  }
+  if(closest('[data-rmsuggest]')){
+    const rit = rmCurrentItem(); if(rit) rmShowSuggestionPreview(rit);
+    return;
+  }
+  const rmdepadd = closest('[data-rmdepadd]');
+  if(rmdepadd){
+    const f = rmFind(rmdepadd.dataset.rmdepadd); if(!f) return;
+    if(!Array.isArray(f.a.dependsOn)) f.a.dependsOn = [];
+    f.a.dependsOn.push({ on:'', kind:'FS', lagDays:0, hard:false });
+    scheduleSave(); rmRerender(); return;
+  }
+  const rmdepdel = closest('[data-rmdepdel]');
+  if(rmdepdel){
+    const f = rmFind(rmdepdel.dataset.rmdepdel); if(!f) return;
+    (f.a.dependsOn || []).splice(+rmdepdel.dataset.di, 1);
+    scheduleSave(); rmRerender(); return;
+  }
+  if(closest('[data-rmadd]')){
+    const rit = rmCurrentItem(); if(!rit) return;
+    const opts = EXECUTION_ACTIVITY_CATALOGUE.map(c=>({ label:c[1], v:c[0] }));
+    opts.push({ label:'Custom Activity…', v:'custom' });
+    const pick = await sheetMenu(opts);
+    if(!pick) return;
+    rmEnsureExecution(rit);
+    const act = rmNewActivity(pick.v, pick.v==='custom' ? 'Custom activity' : pick.label);
+    const arr = rit.execution.activities;
+    if(arr.length){
+      const maxEnd = arr.reduce((m,x)=> Math.max(m, +x.endDay||0, +x.startDay||0), 0);
+      act.startDay = Math.max(1, maxEnd + 1);
+      act.endDay   = act.startDay + 1;
+    }
+    arr.push(act);
+    RM_OPEN.add(act.id);
+    scheduleSave(); rmRerender();
+    setTimeout(()=>{ const el = document.querySelector('[data-rmf="label"][data-rmid="'+act.id+'"]'); if(el){ el.focus(); el.select(); } }, 0);
+    return;
+  }
+  const rmhz = closest('[data-rmhz]');
+  if(rmhz){
+    const rit = rmCurrentItem(); if(!rit) return;
+    rmEnsureExecution(rit);
+    rit.execution.horizon = rmClampHorizon(rmHorizonOf(rit) + (+rmhz.dataset.rmhz));
+    scheduleSave(); rmRerender(); return;
+  }
+  const rmmv = closest('[data-rmmove]');
+  if(rmmv){
+    const f = rmFind(rmmv.dataset.rmmove); if(!f) return;
+    const arr = f.ex.activities, i = arr.indexOf(f.a), j = i + (+rmmv.dataset.dir);
+    if(j>=0 && j<arr.length){ const tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp; scheduleSave(); rmRerender(); }
+    return;
+  }
+  const rmed = closest('[data-rmedit]');
+  if(rmed){
+    const id = rmed.dataset.rmedit;
+    if(RM_OPEN.has(id)) RM_OPEN.delete(id); else RM_OPEN.add(id);
+    rmRerender(); return;
+  }
+  const rmdel = closest('[data-rmdel]');
+  if(rmdel){
+    const f = rmFind(rmdel.dataset.rmdel); if(!f) return;
+    if(await confirmDialog('Delete activity?', '"'+(f.a.label||'Activity')+'" will be removed from the roadmap.', true)){
+      f.ex.activities = f.ex.activities.filter(x=>x!==f.a);
+      RM_OPEN.delete(rmdel.dataset.rmdel);
+      scheduleSave(); rmRerender();
+    }
+    return;
+  }
+  const rmpr = closest('[data-rmprogseg] button');
+  if(rmpr){
+    const f = rmFind(rmpr.parentElement.dataset.rmid); if(!f) return;
+    f.a.progress = rmpr.dataset.v;
+    scheduleSave(); rmRerender(); return;
+  }
+  /* ----- roadmap: risks ----- */
+  if(closest('[data-rmrisksuggest]')){ const rit = rmCurrentItem(); if(rit) rmShowRiskPreview(rit); return; }
+  if(closest('[data-rmriskadd]')){
+    const rit = rmCurrentItem(); if(!rit) return;
+    const ex = rmEnsureExecution(rit);
+    const r = { id: uid(), text:'', severity:'warn', source:'user', ruleKey:'', dismissed:false, editedFromAuto:false, affects:[] };
+    ex.risks.push(r); scheduleSave(); rmRerender();
+    setTimeout(()=>{ const el = document.querySelector('[data-rmrisktext][data-rid="'+r.id+'"]'); if(el) el.focus(); }, 0);
+    return;
+  }
+  const rrdel = closest('[data-rmriskdel]');
+  if(rrdel){
+    const rit = rmCurrentItem(); if(!rit) return;
+    const ex = rmEnsureExecution(rit);
+    const r = ex.risks.find(x=> x.id === rrdel.dataset.rid);
+    if(r){
+      if(r.source === 'auto' && r.ruleKey && ex.dismissedRuleKeys.indexOf(r.ruleKey) === -1) ex.dismissedRuleKeys.push(r.ruleKey);
+      ex.risks = ex.risks.filter(x=> x !== r);
+      scheduleSave(); rmRerender();
+    }
+    return;
+  }
+  if(closest('[data-rmriskreset]')){
+    const rit = rmCurrentItem(); if(!rit) return;
+    rmEnsureExecution(rit).dismissedRuleKeys = [];
+    scheduleSave(); rmRerender();
+    toast('Dismissed risk suggestions reset — Suggest Risks will offer them again');
+    return;
+  }
+  /* ----- roadmap: client inputs ----- */
+  if(closest('[data-rmcisuggest]')){ const rit = rmCurrentItem(); if(rit) rmShowClientInputPreview(rit); return; }
+  if(closest('[data-rmciadd2]')){
+    const rit = rmCurrentItem(); if(!rit) return;
+    rmEnsureExecution(rit);
+    rit.clientInputs.push({ priority:'required', text:'', requiredByDay:null, impactIfLate:'' });
+    scheduleSave(); rmRerender();
+    setTimeout(()=>{ const els = document.querySelectorAll('[data-rmcitext]'); if(els.length) els[els.length-1].focus(); }, 0);
+    return;
+  }
+  const rcidel = closest('[data-rmcidel]');
+  if(rcidel){
+    const rit = rmCurrentItem(); if(!rit) return;
+    (rit.clientInputs || []).splice(+rcidel.dataset.i, 1);
+    scheduleSave(); rmRerender();
+    return;
+  }
 
   /* ----- projects list menu ----- */
   const pm = closest('[data-pmenu]');
   if(pm){
     const p = await dbGet('projects', pm.dataset.pmenu);
-    const a = await sheetMenu([{label:'Open',v:'open'},{label:'Delete project',v:'del',danger:true}]);
+    const a = await sheetMenu([{label:'Open',v:'open'},{label:'Duplicate',v:'dup'},{label:'Delete project',v:'del',danger:true}]);
     if(a && a.v==='open') go('#/p/'+p.id);
+    if(a && a.v==='dup') await duplicateProject(p);
     if(a && a.v==='del'){
       if(await confirmDialog('Delete project?', '"'+ (p.name||'Untitled') +'" and all its items and photos will be removed.', true)){
         await deleteProjectDeep(p.id); render();
@@ -1458,7 +3706,8 @@ document.addEventListener('click', async e=>{
   /* ----- overview: project menu ----- */
   if(closest('[data-projmenu]')){
     const p = STATE.project;
-    const a = await sheetMenu([{label:'Delete project',v:'del',danger:true}]);
+    const a = await sheetMenu([{label:'Duplicate',v:'dup'},{label:'Delete project',v:'del',danger:true}]);
+    if(a && a.v==='dup') await duplicateProject(p);
     if(a && a.v==='del' && await confirmDialog('Delete project?', 'This removes all items and photos.', true)){
       await deleteProjectDeep(p.id); go('#/');
     }
@@ -2240,8 +4489,712 @@ function renderQuote(p){
 }
 
 /* ============================================================
+   14 · Roadmap PDF — deterministic true A4 landscape (jsPDF)
+   ------------------------------------------------------------
+   Vector text via jsPDF (the PDF engine Vista already bundles
+   through html2pdf in daftra-pdf-generator). NO window.print(),
+   NO @page, NO browser orientation. jsPDF writes the MediaBox:
+   every page is exactly 297 x 210 mm landscape, deterministic
+   on any machine. Blocks (Gantt rows, cards, table rows) never
+   split across a page break — they flow whole to the next page,
+   so there are no half-rows and no forced blank areas.
+   ============================================================ */
+const RMPDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+let _rmpdfLibP = null;
+function rmpdfLib(){
+  if(_rmpdfLibP) return _rmpdfLibP;
+  _rmpdfLibP = new Promise((res,rej)=>{
+    if(window.jspdf && window.jspdf.jsPDF) return res(window.jspdf.jsPDF);
+    const s = document.createElement('script'); s.src = RMPDF_SRC;
+    s.onload = ()=> (window.jspdf && window.jspdf.jsPDF) ? res(window.jspdf.jsPDF) : rej(new Error('PDF engine did not initialise'));
+    s.onerror = ()=> rej(new Error('Could not load the PDF engine (offline?)'));
+    document.head.appendChild(s);
+  });
+  return _rmpdfLibP;
+}
+/* jsPDF standard fonts are Latin-1 only — fold the few glyphs the roadmap uses */
+function rmA(s){
+  return String(s==null?'':s)
+    .replace(/[–—‑]/g,'-').replace(/→/g,'->').replace(/↳/g,'>')
+    .replace(/⇄/g,'<>').replace(/[⏳⌛]/g,'(wait)').replace(/◆/g,'*')
+    .replace(/[⚠️]/g,'!').replace(/✓/g,'v')
+    .replace(/[‘’]/g,"'").replace(/[“”]/g,'"')
+    .replace(/[^\x00-\xFF]/g,'');
+}
+const RMPDF_C = {
+  ink:[30,30,27], grey:[90,90,84], faint:[150,148,140], rule:[214,212,204],
+  emerald:[26,92,70], forest:[14,61,46], gold:[140,118,67], amber:[138,94,30], stop:[156,58,52],
+  cream:[247,244,238], wash:[238,244,240],
+  ph:{ plan:[92,107,114], design:[140,118,67], site:[138,94,30], prod:[26,92,70],
+       dispatch:[58,122,98], install:[14,61,46], close:[138,137,127], custom:[122,110,82], wait:[150,148,140] },
+  sev:{ block:[156,58,52], warn:[138,94,30], info:[58,122,98] }
+};
+
+/* flow-layout wrapper around one landscape jsPDF doc */
+function rmpdfNew(jsPDF, brand, sub){
+  const doc = new jsPDF({ unit:'mm', format:'a4', orientation:'landscape', compress:true });
+  const S = { doc, W:297, H:210, M:10, X0:10, X1:287, CW:277, y:0, page:0, brand, sub };
+  S.header = ()=>{
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor.apply(doc, RMPDF_C.forest);
+    doc.text('VISTA UNITED', S.X0, S.M+3.5);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, RMPDF_C.grey);
+    doc.text(rmA(S.brand||''), S.X0+33, S.M+3.5, { maxWidth:S.CW-33 });
+    if(S.sub){ doc.setFontSize(8); doc.setTextColor.apply(doc, RMPDF_C.faint);
+      doc.text(rmA(S.sub), S.X0, S.M+8); }
+    doc.setDrawColor.apply(doc, RMPDF_C.forest); doc.setLineWidth(0.5);
+    doc.line(S.X0, S.M+10.5, S.X1, S.M+10.5);
+    S.y = S.M + 15;
+  };
+  S.addPage = ()=>{ if(S.page>0) doc.addPage([S.W,S.H],'landscape'); S.page++; S.header(); };
+  S.ensure = (h)=>{ if(S.y + h > S.H - S.M) S.addPage(); };
+  S.rule = ()=>{ doc.setDrawColor.apply(doc, RMPDF_C.rule); doc.setLineWidth(0.2); doc.line(S.X0, S.y, S.X1, S.y); };
+  S.gap = (h)=>{ S.y += (h==null?3:h); };
+  S.sectionTitle = (t)=>{
+    S.ensure(8);
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, RMPDF_C.gold);
+    doc.text(rmA(String(t).toUpperCase()), S.X0, S.y); S.y += 5;
+  };
+  S.addPage();
+  return S;
+}
+function rmpdfSetFill(doc, rgb){ doc.setFillColor(rgb[0],rgb[1],rgb[2]); }
+function rmpdfSetText(doc, rgb){ doc.setTextColor(rgb[0],rgb[1],rgb[2]); }
+function rmpdfSetDraw(doc, rgb){ doc.setDrawColor(rgb[0],rgb[1],rgb[2]); }
+
+/* one Gantt block: activities as bars over a shared working-day axis */
+function rmpdfGantt(S, item, acts, horizon, nameW){
+  const doc = S.doc;
+  nameW = nameW || 62;
+  const tlX = S.X0 + nameW + 2;
+  const tlW = S.X1 - tlX;
+  const colW = Math.max(2.2, Math.min(7, tlW / Math.max(1,horizon)));
+  const usedW = colW * horizon;
+  const step = colW < 4 ? 5 : (colW < 6 ? 2 : 1);
+
+  const axis = ()=>{
+    S.ensure(6);
+    doc.setFont('helvetica','normal'); doc.setFontSize(6); rmpdfSetText(doc, RMPDF_C.faint);
+    for(let d=1; d<=horizon; d++){
+      if(d===1 || d===horizon || d % step === 0)
+        doc.text(String(d), tlX + (d-0.5)*colW, S.y, { align:'center' });
+    }
+    doc.setFontSize(6.5); rmpdfSetText(doc, RMPDF_C.gold);
+    doc.text('DAY', S.X0, S.y);
+    S.y += 2.4;
+    rmpdfSetDraw(doc, RMPDF_C.rule); doc.setLineWidth(0.15);
+    doc.line(tlX, S.y, tlX + usedW, S.y);
+    S.y += 1.5;
+  };
+  axis();
+
+  acts.forEach(a=>{
+    const s = Math.max(1, Math.min(horizon, +a.startDay||1));
+    const e = Math.max(s, Math.min(horizon, +a.endDay||s));
+    const dur = e - s + 1;
+    const deps = (Array.isArray(a.dependsOn) && a.dependsOn.length)
+      ? a.dependsOn.map(d=> (d.kind==='SS'?'with ':'after ') + rmA(rmDepLabel(item, d)) + (d.hard?' (required)':'')) : [];
+    let viol = [];
+    try{ viol = rmHardViolations(item, a) || []; }catch(_){}
+    const badgeTxt = [ a.parallel?'PARALLEL':'', a.isWait?'WAITING':'' ].filter(Boolean).join('  ');
+    const nameLines = doc.splitTextToSize(rmA(a.label||'Activity'), nameW - 1);
+    const depLines = deps.length ? doc.splitTextToSize(deps.map(d=>'> '+d).join('\n'), nameW - 1) : [];
+    const violLines = viol.length ? doc.splitTextToSize('! '+rmA(viol[0]), nameW - 1) : [];
+    const rowH = Math.max(7,
+      nameLines.length*3.1 + 2.6 + (badgeTxt?2.8:0) + depLines.length*2.7 + violLines.length*2.7 + 2);
+    S.ensure(rowH + 1);
+    const top = S.y;
+
+    // gridlines for this row
+    rmpdfSetDraw(doc, [235,233,226]); doc.setLineWidth(0.1);
+    for(let d=0; d<=horizon; d+=step) doc.line(tlX + d*colW, top-1, tlX + d*colW, top + rowH - 2);
+
+    // bar
+    const bx = tlX + (s-1)*colW, bw = dur*colW, by = top + 0.4, bh = 3.4;
+    const col = RMPDF_C.ph[rmPhase(a)] || RMPDF_C.ph.custom;
+    if(a.isWait){
+      rmpdfSetDraw(doc, RMPDF_C.faint); doc.setLineWidth(0.3); doc.setLineDashPattern([0.7,0.7],0);
+      doc.roundedRect(bx, by, bw, bh, 0.6, 0.6, 'S'); doc.setLineDashPattern([],0);
+    } else {
+      rmpdfSetFill(doc, col); doc.roundedRect(bx, by, bw, bh, 0.6, 0.6, 'F');
+      if(a.parallel){
+        rmpdfSetDraw(doc, [255,255,255]); doc.setLineWidth(0.25);
+        for(let hx = bx - bh; hx < bx + bw; hx += 1.4) doc.line(Math.max(bx,hx), by+bh, Math.min(bx+bw, hx+bh), by);
+      }
+      if(bw > 9){
+        doc.setFont('helvetica','bold'); doc.setFontSize(5.6); rmpdfSetText(doc, [255,255,255]);
+        doc.text(dur+'d', bx + 1.4, by + bh - 0.9);
+      }
+    }
+    if(a.progress==='done' || a.progress==='in_progress'){
+      rmpdfSetFill(doc, a.progress==='done' ? RMPDF_C.emerald : RMPDF_C.amber);
+      doc.circle(tlX - 1.6, by + bh/2, 0.9, 'F');
+    }
+
+    // name column
+    let ny = top + 1.2;
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.4); rmpdfSetText(doc, RMPDF_C.ink);
+    doc.text(nameLines, S.X0, ny); ny += nameLines.length*3.1;
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.4); rmpdfSetText(doc, RMPDF_C.grey);
+    doc.text((s===e?('D'+s):('D'+s+'-'+e)) + '  ' + dur + 'd', S.X0, ny); ny += 2.6;
+    if(badgeTxt){ doc.setFontSize(6); rmpdfSetText(doc, RMPDF_C.gold); doc.text(badgeTxt, S.X0, ny); ny += 2.8; }
+    if(depLines.length){ doc.setFontSize(6); rmpdfSetText(doc, RMPDF_C.emerald); doc.text(depLines, S.X0, ny); ny += depLines.length*2.7; }
+    if(violLines.length){ doc.setFontSize(6); rmpdfSetText(doc, RMPDF_C.stop); doc.text(violLines, S.X0, ny); ny += violLines.length*2.7; }
+
+    S.y = top + rowH;
+    rmpdfSetDraw(doc, RMPDF_C.rule); doc.setLineWidth(0.12); doc.line(S.X0, S.y - 0.5, S.X1, S.y - 0.5);
+  });
+  S.gap(3.5);
+}
+
+function rmpdfRiskList(S, rows){
+  const doc = S.doc;
+  if(!rows.length){ S.ensure(5); doc.setFont('helvetica','italic'); doc.setFontSize(7.5); rmpdfSetText(doc, RMPDF_C.faint);
+    doc.text('None recorded.', S.X0, S.y); doc.setFont('helvetica','normal'); S.y += 5; return; }
+  rows.forEach(r=>{
+    const sev = ['block','warn','info'].indexOf(r.severity)!==-1 ? r.severity : 'warn';
+    const dm = (r.text||'').match(/Day (\d+)/);
+    const head = (RM_SEV_LABEL[sev]||'WARN') + (r._item?('   '+rmA(r._item)):'') + (dm?('    by Day '+dm[1]):'');
+    const body = doc.splitTextToSize(rmA(r.text||''), S.CW - 6);
+    const aff  = (r.affects && r.affects.length) ? doc.splitTextToSize('Affects: '+rmA(r.affects.join(', ')), S.CW - 6) : [];
+    const h = 3.6 + body.length*3.2 + (aff.length? aff.length*2.8 + 0.8 : 0) + 2.6;
+    S.ensure(h);
+    rmpdfSetFill(doc, RMPDF_C.sev[sev]); doc.rect(S.X0, S.y - 2.6, 1.3, h - 1.6, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(6.6); rmpdfSetText(doc, RMPDF_C.sev[sev]);
+    doc.text(head, S.X0 + 3.5, S.y); S.y += 3.4;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.6); rmpdfSetText(doc, RMPDF_C.ink);
+    doc.text(body, S.X0 + 3.5, S.y); S.y += body.length*3.2;
+    if(aff.length){ doc.setFontSize(6.4); rmpdfSetText(doc, RMPDF_C.faint); doc.text(aff, S.X0 + 3.5, S.y); S.y += aff.length*2.8 + 0.8; }
+    S.y += 2.6;
+  });
+}
+function rmpdfInputList(S, rows){
+  const doc = S.doc;
+  if(!rows.length){ S.ensure(5); doc.setFont('helvetica','italic'); doc.setFontSize(7.5); rmpdfSetText(doc, RMPDF_C.faint);
+    doc.text('None recorded.', S.X0, S.y); doc.setFont('helvetica','normal'); S.y += 5; return; }
+  rows.forEach(c=>{
+    const pr = ['urgent','required','optional'].indexOf(c.priority)!==-1 ? c.priority : 'required';
+    const head = pr.toUpperCase() + (c._item?('   '+rmA(c._item)):'')
+      + (c.requiredByDay!=null ? ('    Required by Day '+c.requiredByDay) : '');
+    const q = doc.splitTextToSize(rmA(c.text||''), S.CW - 6);
+    const imp = c.impactIfLate ? doc.splitTextToSize('Impact if late: '+rmA(c.impactIfLate), S.CW - 6) : [];
+    const h = 3.6 + q.length*3.2 + (imp.length? imp.length*2.9 + 0.6 : 0) + 2.6;
+    S.ensure(h);
+    rmpdfSetFill(doc, pr==='urgent' ? RMPDF_C.stop : (pr==='required' ? RMPDF_C.gold : RMPDF_C.faint));
+    doc.rect(S.X0, S.y - 2.6, 1.3, h - 1.6, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(6.6);
+    rmpdfSetText(doc, pr==='urgent' ? RMPDF_C.stop : RMPDF_C.gold);
+    doc.text(head, S.X0 + 3.5, S.y); S.y += 3.4;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.6); rmpdfSetText(doc, RMPDF_C.ink);
+    doc.text(q, S.X0 + 3.5, S.y); S.y += q.length*3.2;
+    if(imp.length){ doc.setFontSize(6.6); rmpdfSetText(doc, RMPDF_C.grey); doc.text(imp, S.X0 + 3.5, S.y); S.y += imp.length*2.9 + 0.6; }
+    S.y += 2.6;
+  });
+}
+
+async function buildItemRoadmapPdf(p, it){
+  const jsPDF = await rmpdfLib();
+  const acts = ((it.execution && it.execution.activities) || []).slice().sort((a,b)=> (+a.startDay||0)-(+b.startDay||0));
+  const horizon = Math.max(5, Math.min(RM_HORIZON_MAX, rmHorizonOf(it)));
+  const S = rmpdfNew(jsPDF, (p.name||'Project') + '  —  Execution Roadmap',
+                     'Item ' + rmA(it.number||'') + '  ·  ' + rmA(it.name || ('Item '+it.number)));
+  S.sectionTitle('Activity road');
+  if(acts.length) rmpdfGantt(S, it, acts, horizon, 62);
+  else { S.doc.setFont('helvetica','italic'); S.doc.setFontSize(8); rmpdfSetText(S.doc, RMPDF_C.faint);
+         S.doc.text('No activities planned yet.', S.X0, S.y); S.doc.setFont('helvetica','normal'); S.y += 6; }
+  S.sectionTitle('Risks');
+  rmpdfRiskList(S, (it.execution && it.execution.risks || []).filter(r=> !((it.execution.dismissedRuleKeys||[]).indexOf(r.ruleKey)>-1)));
+  S.sectionTitle('Client inputs required');
+  rmpdfInputList(S, (it.clientInputs || []).slice().sort((a,b)=>{
+    const rk={urgent:0,required:1,optional:2}; const r=(rk[a.priority]??3)-(rk[b.priority]??3); if(r) return r;
+    return (a.requiredByDay==null?9999:a.requiredByDay) - (b.requiredByDay==null?9999:b.requiredByDay); }));
+  rmpdfFooter(S);
+  return S.doc;
+}
+
+async function buildProjectRoadmapPdf(p){
+  const jsPDF = await rmpdfLib();
+  prEnsureWaves(p);
+  const horizon = Math.max(5, Math.min(RM_HORIZON_MAX, prHorizon(p)));
+  const c = prCounters(p);
+  const S = rmpdfNew(jsPDF, (p.name||'Project') + '  —  Project Execution Roadmap',
+                     rmA([p.client, p.location].filter(Boolean).join('  ·  ')));
+  const doc = S.doc;
+
+  // metrics
+  S.ensure(15);
+  const mets = [['Items',c.items],['Activities',c.acts],['Done',c.done],['In progress',c.inProg],
+    ['Waiting',c.waiting],['Install planned',c.instPlanned],['Blocking risks',c.blockRisks]];
+  const bw = S.CW / mets.length;
+  mets.forEach((m,i)=>{
+    const x = S.X0 + i*bw;
+    rmpdfSetDraw(doc, RMPDF_C.rule); doc.setLineWidth(0.2); doc.roundedRect(x, S.y, bw-2, 12, 1, 1, 'S');
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); rmpdfSetText(doc, RMPDF_C.emerald);
+    doc.text(String(m[1]), x + (bw-2)/2, S.y + 5.6, { align:'center' });
+    doc.setFont('helvetica','normal'); doc.setFontSize(5.6); rmpdfSetText(doc, RMPDF_C.grey);
+    doc.text(String(m[0]).toUpperCase(), x + (bw-2)/2, S.y + 9.6, { align:'center' });
+  });
+  S.y += 16;
+
+  // installation plan
+  S.sectionTitle('Installation plan');
+  const rows = p.items.map(it=> ({ it, day: prInstallDay(it) })).sort((a,b)=>{
+    if(a.day==null && b.day==null) return 0; if(a.day==null) return 1; if(b.day==null) return -1; return a.day-b.day; });
+  S.ensure(6);
+  doc.setFont('helvetica','bold'); doc.setFontSize(6.4); rmpdfSetText(doc, RMPDF_C.gold);
+  doc.text('ITEM', S.X0, S.y); doc.text('INSTALL DAY', S.X0+150, S.y); doc.text('WAVE', S.X0+195, S.y);
+  S.y += 1.5; S.rule(); S.y += 3.2;
+  rows.forEach(r=>{
+    S.ensure(5.5);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.6); rmpdfSetText(doc, RMPDF_C.ink);
+    doc.text(rmA(r.it.name || ('Item '+r.it.number)), S.X0, S.y, { maxWidth:145 });
+    doc.setFont('helvetica','bold');
+    doc.text(r.day!=null ? ('Day '+r.day) : 'Not planned', S.X0+150, S.y);
+    doc.setFont('helvetica','normal'); rmpdfSetText(doc, RMPDF_C.grey);
+    doc.text(rmA(prWaveNameOf(p, r.it) || '-'), S.X0+195, S.y);
+    S.y += 3.4; S.rule(); S.y += 2.1;
+  });
+  S.gap(3);
+
+  // installation waves
+  S.sectionTitle('Installation waves');
+  const waves = prWavesSorted(p);
+  if(!waves.length){ S.ensure(5); doc.setFont('helvetica','italic'); doc.setFontSize(7.5); rmpdfSetText(doc, RMPDF_C.faint);
+    doc.text('No waves defined.', S.X0, S.y); doc.setFont('helvetica','normal'); S.y += 5; }
+  waves.forEach(w=>{
+    const its = prWaveItems(p, w.id).map(x=> rmA(x.name||('Item '+x.number)));
+    const eq = prWaveEquip(p, w.id);
+    const blk = prWaveBlockers(p, w.id);
+    const itemLines = doc.splitTextToSize('Items: ' + (its.length? its.join(', ') : '-'), S.CW - 6);
+    const blkLines = blk.length ? doc.splitTextToSize(blk.map(b=>'! '+rmA(b)).join('\n'), S.CW - 6) : [];
+    const h = 3.4 + itemLines.length*3 + 3 + blkLines.length*2.8 + 3;
+    S.ensure(h);
+    rmpdfSetFill(doc, RMPDF_C.emerald); doc.rect(S.X0, S.y - 2.6, 1.3, h - 1.6, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.6); rmpdfSetText(doc, RMPDF_C.ink);
+    doc.text(rmA(w.name||'Wave') + '   ·   Day ' + (w.day!=null?w.day:'-'), S.X0 + 3.5, S.y); S.y += 3.6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.2); rmpdfSetText(doc, RMPDF_C.grey);
+    doc.text(itemLines, S.X0 + 3.5, S.y); S.y += itemLines.length*3;
+    doc.setFontSize(6.8);
+    doc.text('Access / Equipment: ' + (eq.length? rmA(eq.join(', ')) : 'none recorded'), S.X0 + 3.5, S.y); S.y += 3;
+    if(blkLines.length){ rmpdfSetText(doc, RMPDF_C.stop); doc.setFontSize(6.6); doc.text(blkLines, S.X0 + 3.5, S.y); S.y += blkLines.length*2.8; }
+    S.y += 3;
+  });
+  S.gap(2);
+
+  // blocking installation
+  S.sectionTitle('Blocking installation');
+  const blocks = p.items.map(it=> ({ it, day: prInstallDay(it), b: prBlockers(it) }))
+    .filter(x=> x.day!=null && x.b.length).sort((a,b)=> a.day-b.day);
+  if(!blocks.length){ S.ensure(5); doc.setFont('helvetica','italic'); doc.setFontSize(7.5); rmpdfSetText(doc, RMPDF_C.faint);
+    doc.text('No installation blockers detected.', S.X0, S.y); doc.setFont('helvetica','normal'); S.y += 5; }
+  blocks.forEach(x=>{
+    const lines = doc.splitTextToSize(x.b.map(t=>'! '+rmA(t)).join('\n'), S.CW - 6);
+    const h = 3.4 + lines.length*2.9 + 2.6;
+    S.ensure(h);
+    rmpdfSetFill(doc, RMPDF_C.stop); doc.rect(S.X0, S.y - 2.6, 1.3, h - 1.6, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.4); rmpdfSetText(doc, RMPDF_C.ink);
+    doc.text(rmA(x.it.name||('Item '+x.it.number)) + '   ·   Installation Day ' + x.day, S.X0 + 3.5, S.y); S.y += 3.4;
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.8); rmpdfSetText(doc, RMPDF_C.stop);
+    doc.text(lines, S.X0 + 3.5, S.y); S.y += lines.length*2.9 + 2.6;
+  });
+  S.gap(2);
+
+  // roadmap — by item swimlanes
+  S.sectionTitle('Roadmap — by item  (shared Day 1 to ' + horizon + ')');
+  p.items.forEach(it=>{
+    const acts = prItemActs(it).slice().sort((a,b)=> (+a.startDay||0)-(+b.startDay||0));
+    const inst = prInstallDay(it);
+    S.ensure(7);
+    rmpdfSetFill(doc, RMPDF_C.wash); doc.rect(S.X0, S.y - 3, S.CW, 5, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.6); rmpdfSetText(doc, RMPDF_C.forest);
+    doc.text(rmA((it.number?it.number+' ':'') + (it.name||'Untitled item')), S.X0 + 1, S.y);
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.4); rmpdfSetText(doc, RMPDF_C.grey);
+    doc.text((inst!=null?('install Day '+inst):'no install activity') + '  ·  ' + acts.length + ' activities', S.X0 + 90, S.y);
+    S.y += 4;
+    if(acts.length) rmpdfGantt(S, it, acts, horizon, 55);
+    else { doc.setFont('helvetica','italic'); doc.setFontSize(6.8); rmpdfSetText(doc, RMPDF_C.faint);
+           doc.text('no activities', S.X0 + 2, S.y); doc.setFont('helvetica','normal'); S.y += 5; }
+  });
+
+  // project risks roll-up
+  S.sectionTitle('Project risks');
+  const allRisks = [];
+  p.items.forEach(it=> prActiveRisks(it).forEach(r=> allRisks.push({ ...r, _item: it.name||('Item '+it.number) })));
+  const rk = { block:0, warn:1, info:2 };
+  allRisks.sort((a,b)=> (rk[a.severity]??3)-(rk[b.severity]??3));
+  rmpdfRiskList(S, allRisks);
+
+  // client inputs roll-up
+  S.sectionTitle('Client inputs required');
+  const allCI = [];
+  p.items.forEach(it=> (it.clientInputs||[]).forEach(c=> allCI.push({ ...c, _item: it.name||('Item '+it.number) })));
+  const rkp = { urgent:0, required:1, optional:2 };
+  allCI.sort((a,b)=>{ const r=(rkp[a.priority]??3)-(rkp[b.priority]??3); if(r) return r;
+    return (a.requiredByDay==null?9999:a.requiredByDay)-(b.requiredByDay==null?9999:b.requiredByDay); });
+  rmpdfInputList(S, allCI);
+
+  rmpdfFooter(S);
+  return S.doc;
+}
+
+function rmpdfFooter(S){
+  const doc = S.doc;
+  const n = doc.getNumberOfPages();
+  const stamp = 'Vista United  ·  generated ' + new Date().toISOString().slice(0,16).replace('T',' ');
+  for(let i=1;i<=n;i++){
+    doc.setPage(i);
+    doc.setFont('helvetica','normal'); doc.setFontSize(6); rmpdfSetText(doc, RMPDF_C.faint);
+    doc.text(stamp, S.X0, S.H - 4);
+    doc.text('Page ' + i + ' / ' + n, S.X1, S.H - 4, { align:'right' });
+  }
+}
+function rmpdfFilename(p, it){
+  const clean = s => String(s||'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50) || 'roadmap';
+  const d = new Date().toISOString().slice(0,10);
+  return 'Roadmap-' + clean(p && p.name) + (it ? ('-'+clean(it.name||('item-'+it.number))) : '') + '-' + d + '.pdf';
+}
+async function downloadItemRoadmapPdf(p, it){ const doc = await buildItemRoadmapPdf(p, it); doc.save(rmpdfFilename(p, it)); }
+async function downloadProjectRoadmapPdf(p){ const doc = await buildProjectRoadmapPdf(p); doc.save(rmpdfFilename(p, null)); }
+
+/* ============================================================
    13 · Init
    ============================================================ */
+/* ============================================================
+   13 · Storage settings + safe browser → central migration
+   ------------------------------------------------------------
+   COPY → VERIFY → SWITCH. Browser IndexedDB is only ever READ.
+   Nothing is moved, deleted, overwritten or cleared on the
+   browser side, before or after migration.
+   ============================================================ */
+let TP_API_UP = false;
+let TP_PLATFORM_CENTRAL = false;   // the central DB has been adopted as this PC's store
+let TP_UNMIGRATED = 0;             // projects in THIS browser's IndexedDB not yet in central
+let MIG = null;
+
+async function tpApiStatus(){
+  try{
+    const r = await fetch(TP_API_BASE+'/status', { cache:'no-store' });
+    if(!r.ok) return null;
+    const j = await r.json();
+    return (j && j.ok) ? j.data : null;
+  }catch(_){ return null; }
+}
+
+async function resolveStorageMode(){
+  const want = localStorage.getItem('vista_tp_storage');   // 'central' | null
+  const status = await tpApiStatus();
+  TP_API_UP = !!status;
+  TP_PLATFORM_CENTRAL = !!(status && status.platformStorage === 'central');
+
+  // this browser was explicitly switched to central
+  if(want === 'central'){
+    if(status){ STORE_MODE = 'central'; return 'central'; }
+    renderCentralUnavailable();                 // never silently fall back
+    return 'blocked';
+  }
+
+  // not explicitly switched — we may still be able to open IndexedDB to inspect it
+  let idbOK = true;
+  try{ await openDB(); }
+  catch(e){ idbOK = false; }
+
+  // count this browser's local projects that aren't in the central DB yet
+  if(status && idbOK){
+    try{
+      const local = await IDB.getAll('projects');
+      const cenIds = new Set((await TP_API.getAll('projects')).map(p=>p.id));
+      TP_UNMIGRATED = local.filter(p=> !cenIds.has(p.id)).length;
+    }catch(_){ TP_UNMIGRATED = -1; }
+  }
+
+  // the platform has been adopted as central AND this browser has nothing un-migrated
+  // → follow automatically (the data it would show is all present centrally)
+  if(TP_PLATFORM_CENTRAL && status && TP_UNMIGRATED === 0){
+    localStorage.setItem('vista_tp_storage','central');
+    STORE_MODE = 'central';
+    return 'central';
+  }
+
+  if(!idbOK){
+    app().innerHTML = '<div class="wrap"><div class="banner">This browser is blocking local storage (IndexedDB). '
+      + 'Open the file directly (not in a private window) to use the builder.</div></div>';
+    return 'blocked';
+  }
+  STORE_MODE = 'idb';
+  return 'idb';
+}
+
+function renderCentralUnavailable(){
+  document.body.classList.remove('capture');
+  app().innerHTML =
+    '<div class="appbar"><span class="mark">'+MARK_SVG+'</span><span class="title">Technical Proposals</span></div>'
+    + '<div class="wrap"><div class="banner" style="font-size:13px;line-height:1.7">'
+    +   '<b>Vista Local Database unavailable.</b><br>'
+    +   'This browser is set to use the central Vista database, but the local server '
+    +   '(<code>proxy.py</code>) is not responding on <code>'+esc(location.origin)+'</code>.<br><br>'
+    +   'Start <code>proxy.py</code> and reload.'
+    + '</div>'
+    + '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">'
+    +   '<button class="btn btn-primary btn-sm" onclick="location.reload()">Reload</button>'
+    +   '<button class="btn btn-ghost btn-sm" data-usebrowser>Use browser storage on this browser instead</button>'
+    + '</div></div>';
+}
+
+function fmtMB(b){ return (Number(b||0)/1048576).toFixed(1)+' MB'; }
+function canonJSON(v){
+  return JSON.stringify(v, (k,val)=>{
+    if(val && typeof val==='object' && !Array.isArray(val)){
+      const o={}; Object.keys(val).sort().forEach(kk=> o[kk]=val[kk]); return o;
+    }
+    return val;
+  });
+}
+async function sha256Hex(blob){
+  const h = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function downloadBlob(blob, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1200);
+}
+function tsName(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes());
+}
+
+/* ---- emergency: export the CURRENT browser vista_tpb into one JSON file ---- */
+async function downloadBrowserBackup(btn){
+  if(btn) btn.disabled = true;
+  toast('Reading browser data…');
+  try{
+    const projects = await IDB.getAll('projects');
+    const photos   = await IDB.getAll('photos');
+    const photosOut = [];
+    for(const ph of photos){
+      let dataBase64 = '';
+      try{ dataBase64 = ph.blob ? await blobToB64(ph.blob) : (ph.dataBase64 || ''); }catch(_){}
+      photosOut.push({ id:ph.id, projectId:ph.projectId, itemId:ph.itemId, slot:ph.slot, mime:ph.mime,
+        w:ph.w, h:ph.h, bytes:(ph.bytes || (ph.blob&&ph.blob.size) || 0),
+        keepPage:(ph.keepPage!=null?ph.keepPage:null), createdAt:ph.createdAt, dataBase64 });
+    }
+    const bundle = { kind:'vista-tpb-browser-backup', version:1, exportedAt:new Date().toISOString(),
+      origin:location.origin, projects, photos:photosOut };
+    downloadBlob(new Blob([JSON.stringify(bundle)], {type:'application/json'}),
+      'vista-tpb-browser-backup-'+tsName()+'.json');
+    toast('Downloaded — '+projects.length+' projects, '+photos.length+' photos');
+  }catch(e){ toast('Backup failed: '+e.message); }
+  if(btn) btn.disabled = false;
+}
+
+/* ---- central DB backup ZIP ---- */
+async function centralBackup(btn){
+  if(btn) btn.disabled = true;
+  toast('Building ZIP…');
+  try{
+    const r = await fetch(TP_API_BASE+'/backup');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const blob = await r.blob();
+    const cd = r.headers.get('Content-Disposition')||'';
+    const m = cd.match(/filename="([^"]+)"/);
+    downloadBlob(blob, m ? m[1] : ('vista-tp-backup-'+tsName()+'.zip'));
+    toast('Backup ZIP downloaded ('+fmtMB(blob.size)+')');
+  }catch(e){ toast('Backup failed: '+e.message); }
+  if(btn) btn.disabled = false;
+  storageRefresh();
+}
+
+/* ---- Storage screen ---- */
+function renderStorage(){
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/">‹ Projects</button>'
+    + '<span class="title">Storage</span></div>'
+    + '<div class="wrap"><div id="storage-body"><div class="hint">Loading…</div></div></div>';
+  storageRefresh();
+}
+async function storageRefresh(){
+  const box = document.getElementById('storage-body'); if(!box) return;
+  const central = STORE_MODE === 'central';
+  const status  = await tpApiStatus();
+  TP_API_UP = !!status;
+  let h = '';
+
+  h += '<div class="card"><div class="eyebrow">Current storage</div>'
+    + '<div style="font-size:15px;font-weight:600;color:var(--emerald);margin-bottom:2px">'
+    +   (central ? 'Vista Local Database (central)' : 'This browser only — IndexedDB') + '</div>'
+    + '<div class="hint">Origin: <code>'+esc(location.origin)+'</code></div>'
+    + (status
+        ? '<div class="hint">Central DB: <b>'+status.counts.projects+'</b> projects · <b>'+status.counts.items+'</b> items · <b>'
+          + status.counts.photos+'</b> photos · '+fmtMB(status.counts.photoBytes)+'<br><code style="font-size:10px">'+esc(status.dbPath)+'</code></div>'
+        : '<div class="hint" style="color:var(--stop)">Central server (proxy.py) is not responding on this origin.</div>')
+    + '</div>';
+
+  if(!central){
+    h += '<div class="card"><div class="eyebrow">Emergency backup (browser)</div>'
+      + '<p class="hint" style="margin-bottom:8px">Exports every project, item, roadmap, spec, status, price and photo '
+      + 'from <b>this browser</b> into one portable JSON file. Works with no server. Run this before migrating.</p>'
+      + '<button class="btn btn-ghost full" data-dlbrowserbackup>Download Browser Backup</button></div>';
+  }
+
+  if(!central && status){
+    h += '<div class="card" id="mig-card"><div class="eyebrow">Migrate to Vista Local Database</div>'
+      + '<p class="hint" style="margin-bottom:8px">Copies this browser&rsquo;s projects into the central database so every browser '
+      + 'on this PC (Edge, Chrome, <code>localhost</code>, <code>127.0.0.1</code>) sees the same projects. '
+      + 'Your browser data is only <b>read</b> — never moved, changed or deleted.</p>'
+      + '<div id="mig-steps"><button class="btn btn-primary full" data-migpreview>Migrate Browser Projects to Vista Local Database</button></div>'
+      + '</div>';
+  }
+
+  if(central && status){
+    h += '<div class="card"><div class="eyebrow">Central database backup</div>'
+      + '<p class="hint" style="margin-bottom:8px">One ZIP: the SQLite database + every uploaded photo. Name <code>vista-tp-backup-YYYY-MM-DD-HHMM.zip</code>.</p>'
+      + '<button class="btn btn-ghost full" data-centralbackup>Backup Vista Database</button>'
+      + (status.lastBackup ? '<div class="hint">Last backup: '+esc(status.lastBackup)+'</div>' : '') + '</div>';
+  }
+
+  if(central){
+    h += '<div class="card"><div class="eyebrow">Switch back</div>'
+      + '<p class="hint" style="margin-bottom:8px">Return <b>this browser</b> to its own IndexedDB. The central database is left untouched.</p>'
+      + '<button class="btn btn-ghost full" data-usebrowser>Use browser storage on this browser</button></div>';
+  }
+
+  box.innerHTML = h;
+}
+
+/* ---- migration: Step 1 Preview ---- */
+async function migPreview(){
+  const box = document.getElementById('mig-steps'); if(!box) return;
+  box.innerHTML = '<div class="hint">Reading browser data…</div>';
+  const projects = await IDB.getAll('projects');
+  const photos   = await IDB.getAll('photos');
+  const items = projects.reduce((n,p)=> n + ((p.items && p.items.length) || 0), 0);
+  const bytes = photos.reduce((n,p)=> n + (p.bytes || (p.blob && p.blob.size) || 0), 0);
+  let cenIds = new Set();
+  try{ cenIds = new Set((await TP_API.getAll('projects')).map(p=>p.id)); }catch(_){}
+  MIG = { projects, photos, items, bytes };
+  box.innerHTML =
+    '<div class="hint">Current origin: <code>'+esc(location.origin)+'</code></div>'
+    + '<table class="pr-tbl" style="margin:8px 0"><tbody>'
+    +   '<tr><td>Projects</td><td><b>'+projects.length+'</b></td></tr>'
+    +   '<tr><td>Items</td><td><b>'+items+'</b></td></tr>'
+    +   '<tr><td>Photos</td><td><b>'+photos.length+'</b></td></tr>'
+    +   '<tr><td>Photo size</td><td><b>'+fmtMB(bytes)+'</b></td></tr>'
+    + '</tbody></table>'
+    + '<div class="hint" style="margin-bottom:4px">Projects that will be copied:</div>'
+    + '<ul style="margin:0 0 10px 18px;font-size:13px;line-height:1.6">'
+    +   (projects.length ? projects.map(p=>{ const ni=(p.items&&p.items.length)||0;
+          return '<li>'+esc(p.name||'Untitled')+' — '+ni+' item'+(ni===1?'':'s')
+          + (cenIds.has(p.id) ? ' <span class="muted">(already in central — skipped)</span>' : '') + '</li>'; }).join('')
+        : '<li class="muted">none</li>')
+    + '</ul>'
+    + (projects.length
+        ? '<button class="btn btn-primary full" data-migcopy>Copy '+projects.length+' project'+(projects.length>1?'s':'')
+          + ' + '+photos.length+' photo'+(photos.length===1?'':'s')+'</button>'
+        : '<div class="hint">Nothing to migrate from this browser.</div>')
+    + '<div class="hint" style="margin-top:6px">Migration only reads your browser. Nothing is written to it.</div>';
+}
+
+/* ---- migration: Step 2 Copy (idempotent / resumable) ---- */
+async function migCopy(){
+  const box = document.getElementById('mig-steps'); if(!box) return;
+  if(!MIG){ await migPreview(); return; }
+  const { projects, photos } = MIG;
+  const total = projects.length + photos.length;
+  let done = 0;
+  box.innerHTML = '<div class="hint">Copying… safe to close and re-run — anything already copied is skipped.</div>'
+    + '<div style="height:9px;background:var(--cream);border-radius:5px;overflow:hidden;margin:8px 0">'
+    +   '<div id="mig-bar" style="height:100%;width:0;background:var(--emerald);transition:width .15s"></div></div>'
+    + '<div class="hint" id="mig-txt">0 / '+total+'</div>';
+  const tick = (label)=>{
+    done++;
+    const bar=document.getElementById('mig-bar'); if(bar) bar.style.width = Math.round(done/total*100)+'%';
+    const txt=document.getElementById('mig-txt'); if(txt) txt.textContent = done+' / '+total+(label?('  ·  '+label):'');
+  };
+  try{
+    for(const p of projects){
+      await tpFetch('/projects/'+encodeURIComponent(p.id)+'?mode=skip-existing',
+        { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
+      tick(esc(p.name||p.id));
+    }
+    for(const ph of photos){
+      const dataBase64 = ph.blob ? await blobToB64(ph.blob) : (ph.dataBase64 || '');
+      await tpFetch('/photos', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id:ph.id, projectId:ph.projectId, itemId:ph.itemId, slot:ph.slot,
+          mime:ph.mime, w:ph.w, h:ph.h, keepPage:(ph.keepPage!=null?ph.keepPage:null), dataBase64 }) });
+      tick('photo');
+    }
+    box.insertAdjacentHTML('beforeend',
+      '<div class="hint" style="margin-top:8px;color:var(--emerald)">Copy complete — now verify.</div>'
+      + '<button class="btn btn-primary full" data-migverify>Verify</button>');
+  }catch(e){
+    box.insertAdjacentHTML('beforeend',
+      '<div class="banner" style="margin-top:8px">Copy interrupted: '+esc(e.message)+'</div>'
+      + '<button class="btn btn-ghost full" data-migcopy>Resume copy</button>');
+  }
+}
+
+/* ---- migration: Step 3 Verify (counts + JSON equality + byte size + SHA-256) ---- */
+async function migVerify(){
+  const box = document.getElementById('mig-steps'); if(!box) return;
+  box.innerHTML = '<div class="hint">Verifying counts, JSON equality, photo bytes and SHA-256…</div>';
+  const idbProjects = await IDB.getAll('projects');
+  const idbPhotos   = await IDB.getAll('photos');
+  let cen = [];
+  try{ cen = await TP_API.getAll('projects'); }catch(_){}
+  const cenById = new Map(cen.map(p=>[p.id,p]));
+  let pOK=0, iOK=0, iTotal=0, phOK=0, intOK=0;
+  const bad = [];
+  for(const p of idbProjects){
+    const n = (p.items && p.items.length) || 0; iTotal += n;
+    const c = cenById.get(p.id);
+    if(!c){ bad.push('Project not in central DB: '+(p.name||p.id)); continue; }
+    if(canonJSON(p) === canonJSON(c)){ pOK++; iOK += n; }
+    else bad.push('Project JSON differs: '+(p.name||p.id));
+  }
+  for(const ph of idbPhotos){
+    let meta = null;
+    try{ meta = await tpFetch('/photos/'+encodeURIComponent(ph.id)+'/meta'); }catch(_){}
+    if(!meta){ bad.push('Photo not in central DB: '+ph.id); continue; }
+    phOK++;
+    const localSize = ph.bytes || (ph.blob && ph.blob.size) || 0;
+    let shaOK = true;
+    if(ph.blob){ shaOK = (meta.sha256 === await sha256Hex(ph.blob)); }
+    if(meta.bytes === localSize && shaOK) intOK++;
+    else bad.push('Photo integrity mismatch: '+ph.id);
+  }
+  const green = bad.length===0
+    && pOK===idbProjects.length && iOK===iTotal
+    && phOK===idbPhotos.length && intOK===idbPhotos.length;
+  const row = (label,ok,tot)=> '<div style="font-size:14px;padding:3px 0;font-weight:600;color:'
+    + (ok===tot ? 'var(--emerald)' : 'var(--stop)')+'">'+(ok===tot?'✓':'✗')+' '+esc(label)+' '+ok+'/'+tot+'</div>';
+  box.innerHTML =
+    row('Projects', pOK, idbProjects.length)
+    + row('Items', iOK, iTotal)
+    + row('Photos', phOK, idbPhotos.length)
+    + row('Photo integrity', intOK, idbPhotos.length)
+    + (bad.length ? '<div class="banner" style="margin-top:8px;font-size:12px">'+bad.map(esc).join('<br>')+'</div>' : '')
+    + (green
+        ? '<div class="hint" style="margin:10px 0 6px;color:var(--emerald)"><b>All checks passed.</b> You can switch this browser to the central database.</div>'
+          + '<button class="btn btn-primary full" data-migswitch>Use Vista Local Database</button>'
+        : '<div class="hint" style="margin:10px 0;color:var(--stop)"><b>Verification did not fully pass.</b> This browser stays on IndexedDB. Re-run the copy, then verify again.</div>'
+          + '<button class="btn btn-ghost full" data-migcopy>Re-run copy</button>')
+    + '<button class="btn btn-ghost full mt10" data-migverify>Re-verify</button>';
+}
+
+/* ---- migration: Step 4 Switch (only reachable when verify is fully green) ---- */
+async function migSwitch(){
+  const ok = await confirmDialog('Switch to Vista Local Database?',
+    'This browser will read and write the central database from now on. '
+    + 'Your browser IndexedDB is kept exactly as it is (not deleted). '
+    + 'Other browsers on this PC will follow automatically once their own local projects are migrated.');
+  if(!ok) return;
+  try{ await tpFetch('/settings/platformStorage', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify('central') }); }catch(_){}
+  localStorage.setItem('vista_tp_storage','central');
+  location.hash = '#/';
+  location.reload();
+}
+
 (async function init(){
   const qs = new URLSearchParams(location.search);
   const screens = qs.get('screens')==='1';       // volatile in-memory mode (review captures only)
@@ -2249,12 +5202,8 @@ function renderQuote(p){
 
   if(screens){ MEM.on = true; document.body.classList.add('capture'); }
   else{
-    try{ await openDB(); }
-    catch(e){
-      app().innerHTML = '<div class="wrap"><div class="banner">This browser is blocking local storage (IndexedDB). '
-        + 'Open the file directly (not in a private window) to use the builder.</div></div>';
-      return;
-    }
+    const decided = await resolveStorageMode();
+    if(decided === 'blocked') return;    // an explanatory screen is already shown
   }
 
   if(demo){

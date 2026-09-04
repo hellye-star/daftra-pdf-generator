@@ -108,6 +108,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith('/api/sqi/'):
             import sqi_storage_api
             sqi_storage_api.handle_get(self)
+        elif self.path.startswith('/api/tp/'):
+            import tp_storage_api
+            tp_storage_api.handle_get(self)
         elif self.path.startswith('/daftra/'):
             self._proxy_daftra()
         else:
@@ -146,6 +149,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith('/api/sqi/'):
             import sqi_storage_api
             sqi_storage_api.handle_post(self)
+        elif self.path.startswith('/api/tp/'):
+            import tp_storage_api
+            tp_storage_api.handle_post(self)
         elif self.path.startswith('/daftra/'):
             self._block_daftra_write()
         else:
@@ -161,12 +167,18 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         if self.path.startswith('/api/sqi/'):
             import sqi_storage_api
             sqi_storage_api.handle_delete(self)
+        elif self.path.startswith('/api/tp/'):
+            import tp_storage_api
+            tp_storage_api.handle_delete(self)
         else:
             self._block_daftra_write()
     def do_PUT(self):
         if self.path.startswith('/api/sqi/'):
             import sqi_storage_api
             sqi_storage_api.handle_put(self)
+        elif self.path.startswith('/api/tp/'):
+            import tp_storage_api
+            tp_storage_api.handle_put(self)
         else:
             self._block_daftra_write()
     def do_PATCH(self):
@@ -2108,6 +2120,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [meta]   {self.command} {self.path}  ->  {fmt % args}')
         elif '/api/setup/' in self.path:
             print(f'  [setup]  {self.command} {self.path}  ->  {fmt % args}')
+        elif '/api/tp/' in self.path:
+            print(f'  [tp]     {self.command} {self.path}  ->  {fmt % args}')
 
 
 # ── SQI AI proxy auto-start ──────────────────────────────────────────────────

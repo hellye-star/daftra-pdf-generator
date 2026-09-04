@@ -1245,9 +1245,12 @@ function injectScenes(root){
 /* =====================================================================
    MILESTONE 2 · DATA-DRIVEN RENDER
    ?project=<id> [&items=<id,id>] [&mode=client|clientar|installer]
-   Reads the dashboard's IndexedDB (vista_tpb) and renders the approved
-   pages from real project data. No layout redesign — every page
-   reproduces the same markup / classes as the static demo above.
+   Renders the approved pages from real project data — either the
+   browser's IndexedDB (vista_tpb, legacy/browser-storage mode) or the
+   Vista Central Database via proxy.py's /api/tp/* (central mode), using
+   the SAME storage-mode signal the dashboard sets (localStorage
+   'vista_tp_storage'). No layout redesign — every page reproduces the
+   same markup / classes as the static demo above.
    ===================================================================== */
 var DATA_MODE = false;
 (function(){
@@ -1260,6 +1263,36 @@ var DATA_MODE = false;
   const rq = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
   async function dGet(store,key){ const d=await openDB(); return rq(d.transaction(store).objectStore(store).get(key)); }
   async function dIdxAll(store,idx,key){ const d=await openDB(); return rq(d.transaction(store).objectStore(store).index(idx).getAll(key)); }
+
+  /* ---- Vista Central Database read client (mirrors the dashboard's
+     TP_API — read-only here, no second storage model) ---- */
+  const TP_API_BASE = '/api/tp';
+  async function tpFetch(path){
+    let r; try{ r = await fetch(TP_API_BASE + path); }
+    catch(e){ const err = new Error('Vista Central Database unreachable — start proxy.py and reload.'); err.central = true; throw err; }
+    let j = null; try{ j = await r.json(); }catch(_){}
+    if(!r.ok || !j || j.ok === false){
+      const err = new Error((j && j.error) || ('HTTP ' + r.status));
+      err.httpStatus = r.status;
+      throw err;
+    }
+    return j.data;
+  }
+  async function centralStatus(){ try{ return await tpFetch('/status'); }catch(_){ return null; } }
+  async function centralGetProject(pid){
+    try{ return await tpFetch('/projects/'+encodeURIComponent(pid)); }
+    catch(e){ if(e.httpStatus===404) return null; throw e; }
+  }
+  async function centralGetPhotoRecs(pid){
+    const metas = await tpFetch('/photos?projectId='+encodeURIComponent(pid));
+    const out = [];
+    for(const m of metas){
+      let blob = null;
+      try{ const resp = await fetch(TP_API_BASE+'/photos/'+encodeURIComponent(m.id)); if(resp.ok) blob = await resp.blob(); }catch(_){}
+      if(blob) out.push({ id:m.id, itemId:m.itemId, slot:m.slot, blob });
+    }
+    return out;
+  }
 
   const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const has = s => s!=null && String(s).trim()!=='';
@@ -1881,10 +1914,38 @@ var DATA_MODE = false;
   }
 
   /* ---- boot ---- */
+  async function loadProjectData(pid){
+    const want = localStorage.getItem('vista_tp_storage');   // set by the dashboard: 'central' | null
+
+    // this browser was explicitly switched to the Vista Central Database —
+    // load from there only; never silently fall back to (possibly stale
+    // or unrelated) local IndexedDB data.
+    if(want === 'central'){
+      const status = await centralStatus();
+      if(!status) throw new Error('Vista Central Database unavailable. Start proxy.py and reload.');
+      const project = await centralGetProject(pid);
+      if(!project) throw new Error('project "'+pid+'" not found in the Vista Central Database');
+      return { project, photoRecs: await centralGetPhotoRecs(pid) };
+    }
+
+    // not explicitly central — try this browser's IndexedDB first (legacy /
+    // browser-storage mode keeps working exactly as before).
+    let project = null;
+    try{ project = await dGet('projects', pid); }catch(_){ project = null; }
+    if(project) return { project, photoRecs: await dIdxAll('photos','by_project', pid) };
+
+    // not found locally — the project may live only in the Vista Central
+    // Database (e.g. created/duplicated on another browser or origin).
+    const status = await centralStatus();
+    if(status){
+      project = await centralGetProject(pid);
+      if(project) return { project, photoRecs: await centralGetPhotoRecs(pid) };
+    }
+    throw new Error('project "'+pid+'" not found in local storage or the Vista Central Database');
+  }
+
   async function renderFromData(pid, itemsCsv){
-    const project = await dGet('projects', pid);
-    if(!project) throw new Error('project "'+pid+'" not found in local storage');
-    const photoRecs = await dIdxAll('photos','by_project', pid);
+    const { project, photoRecs } = await loadProjectData(pid);
     const selIds = itemsCsv ? itemsCsv.split(',').map(s=>s.trim()).filter(Boolean) : null;
     const P = buildModel(project, photoRecs, selIds);
     if(!P.items.length) throw new Error('this project has no items yet');

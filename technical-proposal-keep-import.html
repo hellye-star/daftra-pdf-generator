@@ -225,10 +225,15 @@ const MARK_SVG = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
  + '</svg>';
 
 /* ============================================================
-   1 · Shared IndexedDB  (vista_tpb — identical schema to the dashboard)
-      Written to ONLY on Approve.
+   1 · Shared storage — vista_tpb IndexedDB (browser-storage mode)
+      or the Vista Central Database via proxy.py's /api/tp/* (central
+      mode). Mode is the SAME signal the dashboard sets:
+      localStorage['vista_tp_storage'] === 'central'. Written to ONLY
+      on Approve. (Review drafts — section 8b below — are a separate,
+      always-local recovery DB and never go through this.)
    ============================================================ */
 const DB_NAME='vista_tpb', DB_VER=1;
+const STORE_MODE = (localStorage.getItem('vista_tp_storage') === 'central') ? 'central' : 'idb';
 let _dbp=null;
 function openDB(){
   if(_dbp) return _dbp;
@@ -247,9 +252,64 @@ function openDB(){
   return _dbp;
 }
 const rq = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
-async function dbGet(s,k){ const d=await openDB(); return rq(d.transaction(s).objectStore(s).get(k)); }
-async function dbGetAll(s){ const d=await openDB(); return rq(d.transaction(s).objectStore(s).getAll()); }
-async function dbPut(s,v){ const d=await openDB(); return rq(d.transaction(s,'readwrite').objectStore(s).put(v)); }
+async function idbGet(s,k){ const d=await openDB(); return rq(d.transaction(s).objectStore(s).get(k)); }
+async function idbGetAll(s){ const d=await openDB(); return rq(d.transaction(s).objectStore(s).getAll()); }
+async function idbPut(s,v){ const d=await openDB(); return rq(d.transaction(s,'readwrite').objectStore(s).put(v)); }
+
+/* ---- Vista Central Database client (mirrors the dashboard's own
+   TP_API — same envelope, same endpoints, no second storage model).
+   Any unreachable-proxy failure throws the exact hard-stop message;
+   this mode never silently falls through to idb*(). ---- */
+const TP_API_BASE = '/api/tp';
+async function tpFetch(path, opts){
+  let r;
+  try{ r = await fetch(TP_API_BASE + path, opts); }
+  catch(e){ throw new Error('Vista Central Database unavailable. Start proxy.py and reload.'); }
+  let j = null; try{ j = await r.json(); }catch(_){}
+  if(!r.ok || !j || j.ok === false){
+    const err = new Error((j && j.error) || ('HTTP ' + r.status));
+    err.httpStatus = r.status;
+    throw err;
+  }
+  return j.data;
+}
+async function blobToB64(blob){
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let s = '';
+  for(let i=0;i<bytes.length;i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
+  return btoa(s);
+}
+async function centralGet(store,key){
+  try{
+    if(store==='projects') return await tpFetch('/projects/'+encodeURIComponent(key));
+    if(store==='photos')   return await tpFetch('/photos/'+encodeURIComponent(key)+'/meta');
+  }catch(e){ if(e.httpStatus===404) return undefined; throw e; }
+}
+async function centralGetAll(store){
+  if(store==='projects') return await tpFetch('/projects');
+  if(store==='photos')   return await tpFetch('/photos');
+  return [];
+}
+async function centralPut(store,val){
+  if(store==='projects'){
+    await tpFetch('/projects/'+encodeURIComponent(val.id),
+      { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(val) });
+    return val.id;
+  }
+  if(store==='photos'){
+    const dataBase64 = val.blob ? await blobToB64(val.blob) : (val.dataBase64 || '');
+    await tpFetch('/photos?overwrite=1', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id:val.id, projectId:val.projectId, itemId:val.itemId, slot:val.slot,
+        mime:val.mime, w:val.w, h:val.h, keepPage:(val.keepPage!=null?val.keepPage:null), dataBase64 }) });
+    return val.id;
+  }
+}
+
+/* ---- dispatcher — every existing call site (dbGet/dbGetAll/dbPut)
+   keeps working unchanged; only the backend behind it switches. ---- */
+async function dbGet(s,k){    return STORE_MODE==='central' ? centralGet(s,k)    : idbGet(s,k); }
+async function dbGetAll(s){   return STORE_MODE==='central' ? centralGetAll(s)   : idbGetAll(s); }
+async function dbPut(s,v){    return STORE_MODE==='central' ? centralPut(s,v)    : idbPut(s,v); }
 
 /* ============================================================
    2 · pdf.js worker
@@ -1500,6 +1560,8 @@ async function approveImport(mode, value){
   if(!chosen.length){ toast('Nothing selected'); return; }
 
   let project, isNew = false;
+  try{
+
   if(mode === 'new'){
     isNew = true;
     const t = now();
@@ -1563,6 +1625,14 @@ async function approveImport(mode, value){
   }
   project.updatedAt = now();
   await dbPut('projects', project);
+
+  }catch(e){
+    const errEl = $('#apt-err');
+    const msg = e && e.message ? e.message : 'Save failed.';
+    if(errEl) errEl.textContent = msg;
+    toast('Approve failed: ' + msg);
+    return;
+  }
 
   // mark (do NOT delete) the saved review as approved, so it stays resumable
   STATE._approved = { at: now(), projectId: project.id, projectName: project.name, itemCount: chosen.length, isNew };
