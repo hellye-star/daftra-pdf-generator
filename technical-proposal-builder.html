@@ -122,7 +122,7 @@
   .rf .rf-mk{ height:9px; width:auto; opacity:0.9; }
 
   /* ---------- TYPOGRAPHY ---------- */
-  .eyebrow{ font-size:8px; font-weight:600; letter-spacing:0.28em; text-transform:uppercase; color:var(--gold-ink); }
+  .eyebrow{ font-size:8px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--gold-ink); }
   .page-title{
     font-family:'Playfair Display',Georgia,serif; font-weight:600;
     font-size:23px; line-height:1.1; color:var(--emerald); letter-spacing:0.002em;
@@ -132,11 +132,11 @@
     display:flex; align-items:baseline; gap:11px;
     margin:16px 0 9px;
   }
-  .section-head .n{ font-size:8px; font-weight:700; letter-spacing:0.2em; color:var(--gold-ink); }
-  .section-head h3{ font-size:8.5px; font-weight:600; letter-spacing:0.2em; text-transform:uppercase; color:var(--forest); }
+  .section-head .n{ font-size:8px; font-weight:700; letter-spacing:0.12em; color:var(--gold-ink); }
+  .section-head h3{ font-size:9px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--forest); }
   .section-head::after{ content:""; flex:1; height:0.5px; background:var(--rule); }
-  p.lead{ font-size:9.5px; font-weight:400; color:var(--grey); line-height:1.7; max-width:150mm; }
-  .fine{ font-size:8px; font-weight:400; color:var(--grey-soft); line-height:1.6; }
+  p.lead{ font-size:9.8px; font-weight:400; color:var(--grey); line-height:1.75; max-width:150mm; }
+  .fine{ font-size:8.2px; font-weight:400; color:var(--grey-soft); line-height:1.65; }
 
   /* ---------- COVER ---------- */
   .cover{ padding:0; }
@@ -264,6 +264,44 @@
   .signoff .opt .box{ width:11px; height:11px; border:0.75px solid var(--emerald-soft); flex-shrink:0; }
   .signoff .lines{ display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:22px; margin-top:6px; }
   .signoff .lines .l{ border-top:0.75px solid var(--forest); padding-top:5px; font-size:6.8px; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--grey-soft); }
+
+  /* ---------- CLIENT ACTION & APPROVAL (per item) ---------- */
+  .ca-block{ padding:14px 16px; margin-top:9px; break-inside:avoid; page-break-inside:avoid; }
+  .ca-block .ca-h{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; margin-bottom:9px; }
+  .ca-block .ca-h .ca-hl{ font-size:9.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; }
+  .ca-block .ca-h .ca-warn{ font-size:11px; line-height:1; }
+  .ca-block .ca-ar{ font-family:'Almarai','Segoe UI','Noto Sans Arabic','Inter',sans-serif; font-weight:600;
+    letter-spacing:0; text-transform:none; unicode-bidi:isolate; }
+  .ca-block .ca-h .ca-ar{ font-size:10.5px; font-weight:700; margin-left:15px; align-self:flex-start; line-height:1.5; }
+  .ca-block .ca-list{ margin:0 0 5px; padding-left:18px; }
+  .ca-block .ca-list li{ margin-bottom:7px; }
+  .ca-block .ca-li-en{ display:block; font-size:10px; color:var(--ink); line-height:1.55; letter-spacing:0.005em; }
+  .ca-block .ca-li-ar{ display:block; font-family:'Almarai','Segoe UI','Noto Sans Arabic','Inter',sans-serif;
+    font-size:10.5px; font-weight:400; color:#4A4A45; line-height:1.7; letter-spacing:0;
+    direction:rtl; text-align:left; unicode-bidi:isolate; margin-top:1px; }
+  .ca-block .ca-li-more{ font-size:8.5px; color:var(--grey-soft); font-style:italic; margin:2px 0 0 3px; }
+  .ca-block .ca-sub-h{ font-size:9px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase;
+    color:var(--forest); margin:0 0 10px; display:flex; gap:9px; align-items:baseline; flex-wrap:wrap; }
+  .ca-block .ca-sub-h .ca-ar{ font-size:9.5px; font-weight:700; color:var(--forest); }
+  .ca-block .ca-comments{ display:flex; flex-direction:column; gap:21px; margin:3px 0 16px;
+    break-inside:avoid; page-break-inside:avoid; }
+  .ca-block .ca-comments .ca-cl{ border-bottom:0.9px solid #C6A9A5; height:0; }
+  .ca-block .ca-sign{ display:flex; flex-direction:column; gap:15px; break-inside:avoid; page-break-inside:avoid; }
+  .ca-block .ca-sign .ca-fr{ display:flex; align-items:flex-end; gap:14px; }
+  .ca-block .ca-sign .ca-fl{ flex:0 0 66px; font-size:8px; font-weight:700; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--grey); padding-bottom:3px; }
+  .ca-block .ca-sign .ca-fline{ flex:1; border-bottom:0.9px solid var(--forest); height:15px; }
+  /* approval REQUIRED — prominent warning card */
+  .ca-block.ca-req{ border:1px solid #DBB6B2; border-left:4px solid var(--stop); background:var(--stop-wash); }
+  .ca-block.ca-req .ca-h .ca-hl, .ca-block.ca-req .ca-h .ca-ar{ color:var(--stop); }
+  .ca-block.ca-req .ca-req-lbl{ display:inline-flex; align-items:baseline; gap:8px; margin:1px 0 11px;
+    font-size:9.5px; font-weight:800; letter-spacing:0.09em; color:var(--stop);
+    background:#fff; border:1px solid #DBB6B2; padding:4px 10px; }
+  .ca-block.ca-req .ca-req-lbl .ca-ar{ font-size:9.5px; font-weight:700; letter-spacing:0; color:var(--stop); }
+  .ca-block.ca-req .ca-div{ border:0; border-top:2px solid var(--stop); margin:10px 0 11px; }
+  /* nothing required — quiet neutral card */
+  .ca-block.ca-none{ border:1px solid var(--rule); border-left:3px solid var(--rule-strong); background:var(--cream); }
+  .ca-block.ca-none .ca-h .ca-hl, .ca-block.ca-none .ca-h .ca-ar{ color:var(--grey-soft); }
 
   /* ---------- BANNERS ---------- */
   .banner{
@@ -424,8 +462,14 @@
     }
     .mode > .page:last-child{ page-break-after:auto; break-after:auto; }
     figure.photo .frame, .after-frame, .ivis-main .frame, .ivis-side .frame{ break-inside:avoid; }
-    .callout, .signoff, .statusstrip, .banner, .danger-list, table.grid tbody tr,
+    .callout, .signoff, .ca-block, .ca-block .ca-comments, .ca-block .ca-sign,
+    .statusstrip, .banner, .danger-list, table.grid tbody tr,
     .presets .prow, .ifacts, .igostatus, .etags, .icrit{ break-inside:avoid; }
+    /* whole approval block moves to the next page rather than splitting awkwardly */
+    .ca-block{ page-break-inside:avoid; }
+    /* the client-approval card must read as a warning even without "Background graphics" */
+    .ca-block.ca-req, .ca-block.ca-req .ca-req-lbl{
+      -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   }
 </style>
 </head>
@@ -1621,6 +1665,62 @@ var DATA_MODE = false;
   }
   function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
 
+  /* Client-facing approval actions for one item — DISPLAY only, underlying
+     Client Inputs never modified. Up to 3 INDIVIDUAL actions (highest priority
+     first), each an exact English/Arabic pair, so Arabic always maps to the
+     right English. No combined wording (a merged English line has no faithful
+     single Arabic equivalent). */
+  function caActions(it){
+    const cis = (it.clientInputs||[]).filter(c=> has(c.clientAction) || has(c.text));
+    const rank = { urgent:0, required:1, optional:2 };
+    const sorted = cis.slice().sort((a,b)=>{
+      const r = (rank[a.priority]!=null?rank[a.priority]:3) - (rank[b.priority]!=null?rank[b.priority]:3);
+      if(r) return r;
+      const ad = (a.requiredByDay==null?9999:+a.requiredByDay), bd = (b.requiredByDay==null?9999:+b.requiredByDay);
+      return ad - bd;
+    });
+    const items = sorted.slice(0,3).map(c=>({
+      en: nn(has(c.clientAction) ? c.clientAction : c.text).replace(/[\s.,،؛;:]+$/, ''),
+      ar: has(c.clientActionAr) ? nn(c.clientActionAr).replace(/[\s.,،؛؟:]+$/, '') : ''
+    }));
+    return { items: items, extra: Math.max(0, sorted.length - items.length) };
+  }
+  function clientActionBlock(it){
+    const a = caActions(it);
+    const AR_TITLE   = '&#1573;&#1580;&#1585;&#1575;&#1569; &#1608;&#1575;&#1593;&#1578;&#1605;&#1575;&#1583; &#1575;&#1604;&#1593;&#1605;&#1610;&#1604;';   // إجراء واعتماد العميل
+    const AR_REQ     = '&#1610;&#1604;&#1586;&#1605; &#1575;&#1593;&#1578;&#1605;&#1575;&#1583; &#1575;&#1604;&#1593;&#1605;&#1610;&#1604;';                 // يلزم اعتماد العميل
+    const AR_COMMENT = '&#1605;&#1604;&#1575;&#1581;&#1592;&#1575;&#1578; &#1575;&#1604;&#1593;&#1605;&#1610;&#1604;';                                       // ملاحظات العميل
+    const AR_APPROVE = '&#1575;&#1593;&#1578;&#1605;&#1575;&#1583; &#1575;&#1604;&#1593;&#1605;&#1610;&#1604;';                                             // اعتماد العميل
+    if(!a.items.length){
+      return '<div class="ca-block ca-none">'
+        + '<div class="ca-h"><span class="ca-hl">Client Action &amp; Approval</span>'
+        +   '<span class="ca-ar">'+AR_TITLE+'</span></div>'
+        + '<p class="fine" style="margin:0">No client approval required for this item.</p>'
+        + '</div>';
+    }
+    const body = '<ol class="ca-list">'
+      + a.items.map(x=> '<li><span class="ca-li-en">'+esc(x.en)+'</span>'
+          + (x.ar ? '<span class="ca-li-ar" dir="rtl">'+esc(x.ar)+'</span>' : '') + '</li>').join('')
+      + '</ol>'
+      + (a.extra ? '<p class="ca-li-more">'+a.extra+' further item'+(a.extra>1?'s':'')
+          + ' — see the full Client Inputs list above.</p>' : '');
+    return '<div class="ca-block ca-req">'
+      + '<div class="ca-h"><span class="ca-hl"><span class="ca-warn">&#9888;</span> Client Action &amp; Approval</span>'
+      +   '<span class="ca-ar">'+AR_TITLE+'</span></div>'
+      + '<div class="ca-req-lbl">Client Approval Required <span class="ca-ar">'+AR_REQ+'</span></div>'
+      + body
+      + '<div class="ca-div"></div>'
+      + '<div class="ca-sub-h">Client Comments <span class="ca-ar">'+AR_COMMENT+'</span></div>'
+      + '<div class="ca-comments"><span class="ca-cl"></span><span class="ca-cl"></span><span class="ca-cl"></span></div>'
+      + '<div class="ca-sub-h">Approved by Client <span class="ca-ar">'+AR_APPROVE+'</span></div>'
+      + '<div class="ca-sign">'
+      +   '<div class="ca-fr"><span class="ca-fl">Name</span><span class="ca-fline"></span></div>'
+      +   '<div class="ca-fr"><span class="ca-fl">Signature</span><span class="ca-fline"></span></div>'
+      +   '<div class="ca-fr"><span class="ca-fl">Date</span><span class="ca-fline"></span></div>'
+      + '</div>'
+      + '</div>';
+  }
+
   function itemFullP1(P, it, pageNo, total){
     const proj = P.project;
     const kf = '<div class="keyfacts">'
@@ -1682,13 +1782,8 @@ var DATA_MODE = false;
       +   '<div class="cell"><div class="k">Sample</div><div class="v">'+badge('sample',s.sample)+'</div></div>'
       +   '<div class="cell"><div class="k">Blocked By</div><div class="v" style="font-size:8px;color:var(--mid)">'+esc(blockedBy)+'</div></div>'
       + '</div>'
-      + '<div class="section-head"><span class="n">F</span><h3>Client Action</h3></div>'
-      + '<div class="signoff"><div class="opts">'
-      +   '<label class="opt"><span class="box"></span>Approved</label>'
-      +   '<label class="opt"><span class="box"></span>Approved with Comments</label>'
-      +   '<label class="opt"><span class="box"></span>Information Required</label>'
-      +   '<label class="opt"><span class="box"></span>Hold</label></div>'
-      +   '<div class="lines"><div class="l">Name</div><div class="l">Initial</div><div class="l">Date</div></div></div>'
+      + '<div class="section-head"><span class="n">F</span><h3>Client Action &amp; Approval</h3></div>'
+      + clientActionBlock(it)
       + RF(proj.revision+' · Item '+esc(it.number)+' '+esc(it.name), 'Page '+pageNo+' / '+total)
       + '</section>';
   }
@@ -1733,12 +1828,8 @@ var DATA_MODE = false;
       +   '<ul class="ticks">'+reqList+'</ul></div>'
       + '<div class="section-head"><span class="n">D</span><h3>Known Parameters (indicative only)</h3></div>'
       + '<div class="spec">'+params.join('')+'</div>'
-      + '<div class="section-head"><span class="n">E</span><h3>Client Action</h3></div>'
-      + '<div class="signoff"><div class="opts">'
-      +   '<label class="opt"><span class="box"></span>Inputs to follow by date:</label>'
-      +   '<label class="opt"><span class="box"></span>Information Required</label>'
-      +   '<label class="opt"><span class="box"></span>Hold</label></div>'
-      +   '<div class="lines"><div class="l">Name</div><div class="l">Initial</div><div class="l">Date</div></div></div>'
+      + '<div class="section-head"><span class="n">E</span><h3>Client Action &amp; Approval</h3></div>'
+      + clientActionBlock(it)
       + RF(proj.revision+' · Item '+esc(it.number)+' '+esc(it.name), 'Page '+pageNo+' / '+total)
       + '</section>';
   }
@@ -1780,6 +1871,59 @@ var DATA_MODE = false;
       + '</section>';
   }
 
+  /* ---- Client Action Plan — simple, client-facing, signable (CLIENT PDF only) ----
+     One plain-language row per client input (clientAction, or the internal text as
+     fallback), ordered by Required By Day. No internal risk / impact language. */
+  function clientActionPlanPage(P, pageNo, total){
+    const proj = P.project;
+    const arFont = "font-family:'Almarai','Inter',sans-serif;";
+    // one row per distinct client-facing action; identical wording across items is
+    // collapsed, keeping the earliest Required By Day.
+    const byKey = new Map();
+    P.items.forEach(it=> (it.clientInputs||[]).forEach(c=>{
+      const raw = has(c.clientAction) ? c.clientAction : c.text;   // fallback to the internal input text
+      if(!has(raw)) return;
+      const txt = nn(raw).replace(/[\s.,،؛;]+$/, '');
+      const key = txt.toLowerCase().replace(/\s+/g, ' ');
+      const d = (c.requiredByDay != null && isFinite(+c.requiredByDay)) ? +c.requiredByDay : null;
+      const prev = byKey.get(key);
+      if(!prev){ byKey.set(key, { txt: txt, day: d, prio: c.priority }); }
+      else {
+        if(d != null && (prev.day == null || d < prev.day)) prev.day = d;
+        if(prioRank(c.priority) < prioRank(prev.prio)) prev.prio = c.priority;
+      }
+    }));
+    const acts = [...byKey.values()].sort((a,b)=>{
+      const ad = a.day==null ? 9999 : a.day, bd = b.day==null ? 9999 : b.day;
+      return ad !== bd ? ad - bd : prioRank(a.prio) - prioRank(b.prio);
+    });
+    const rows = acts.length
+      ? acts.map((a,i)=> '<tr><td class="num">'+(i+1)+'</td><td>'+esc(a.txt)+'</td>'
+          + '<td class="loc">'+(a.day != null ? 'Day '+a.day : 'To be confirmed')+'</td></tr>').join('\n        ')
+      : '<tr><td colspan="3" class="muted" style="padding:10px 0">No client actions outstanding — the package can proceed to production.</td></tr>';
+    return '<section class="page" data-title="Client Action Plan">'+RH(proj)
+      + '<div class="eyebrow">Section 03</div>'
+      + '<div class="page-title">Client Action Plan'
+      +   '<span style="display:block;'+arFont+'font-weight:700;font-size:15px;color:var(--forest);margin-top:3px">خطة عمل العميل</span></div>'
+      + '<p class="lead">Everything Vista United needs the client to confirm or approve for the project to proceed on schedule. '
+      +   'Please complete the confirmations below and sign to approve.</p>'
+      + '<div class="section-head"><span class="n">01</span><h3>Actions Required from Client</h3></div>'
+      + '<table class="grid"><thead><tr><th style="width:8%">#</th>'
+      +   '<th style="width:60%">Action Required from Client</th><th style="width:32%">Required By</th></tr></thead>'
+      +   '<tbody>'+rows+'</tbody></table>'
+      + '<div class="section-head"><span class="n">02</span><h3>Client Approval'
+      +   ' <span style="'+arFont+'letter-spacing:0;font-weight:700">· اعتماد العميل</span></h3></div>'
+      + '<p class="fine">By signing below, the client confirms and approves the above required actions and information.'
+      +   '<span style="display:block;'+arFont+'direction:rtl;margin-top:3px">بالتوقيع أدناه، يؤكد العميل موافقته على الإجراءات والمعلومات المطلوبة أعلاه.</span></p>'
+      + '<div class="signoff">'
+      +   '<div class="opts"><label class="opt"><span class="box"></span>Approved</label></div>'
+      +   '<div class="lines" style="grid-template-columns:1fr 1fr;gap:22px 30px"><div class="l">Name</div><div class="l">Company</div></div>'
+      +   '<div class="lines" style="grid-template-columns:1fr 1fr;gap:22px 30px;margin-top:24px"><div class="l">Signature</div><div class="l">Date</div></div>'
+      + '</div>'
+      + RF('Client Action Plan · '+proj.revision, 'Page '+pageNo+' / '+total)
+      + '</section>';
+  }
+
   function clientPages(P){
     // build page plan first (for numbering + cross-refs)
     const plan = [{t:'cover'},{t:'scope'}];
@@ -1790,15 +1934,17 @@ var DATA_MODE = false;
       else plan.push({t:'pending', it:it});
     });
     plan.push({t:'summary'});
+    plan.push({t:'actionplan'});
     const total = plan.length;
     return plan.map((pg,i)=>{
       const no = i+1;
-      if(pg.t==='cover')   return coverPage(P);
-      if(pg.t==='scope')   return scopePage(P, no, total);
-      if(pg.t==='full1')   return itemFullP1(P, pg.it, no, total);
-      if(pg.t==='full2')   return itemFullP2(P, pg.it, no, total);
-      if(pg.t==='pending') return itemPending(P, pg.it, no, total);
-      if(pg.t==='summary') return summaryPage(P, no, total, pageMap);
+      if(pg.t==='cover')      return coverPage(P);
+      if(pg.t==='scope')      return scopePage(P, no, total);
+      if(pg.t==='full1')      return itemFullP1(P, pg.it, no, total);
+      if(pg.t==='full2')      return itemFullP2(P, pg.it, no, total);
+      if(pg.t==='pending')    return itemPending(P, pg.it, no, total);
+      if(pg.t==='summary')    return summaryPage(P, no, total, pageMap);
+      if(pg.t==='actionplan') return clientActionPlanPage(P, no, total);
     }).join('\n\n');
   }
 
