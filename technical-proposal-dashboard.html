@@ -294,6 +294,48 @@
   .qc-nm{ font-size:13px; font-weight:600; color:var(--ink); }
   .qc-meta{ font-size:11px; color:var(--grey-soft); }
 
+  /* ---------- Saved Quotation Revisions ---------- */
+  .quo-row{ border:1px solid var(--rule); border-radius:10px; padding:11px 12px; margin-bottom:10px; background:var(--paper); }
+  .quo-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:9px; }
+  .quo-id{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .quo-no{ font-family:'Playfair Display',Georgia,serif; font-size:16px; font-weight:600; color:var(--emerald); }
+  .quo-rev{ font-size:10px; font-weight:700; letter-spacing:.05em; color:var(--gold-ink); background:var(--gold-wash); border-radius:5px; padding:2px 7px; }
+  .quo-fig{ text-align:right; }
+  .quo-fig b{ display:block; font-size:14px; color:var(--ink); }
+  .quo-fig span{ font-size:10.5px; color:var(--grey-soft); }
+  .quo-acts{ display:flex; gap:7px; }
+  .quo-acts .btn{ flex:1; }
+  .quo-hist{ margin-top:9px; }
+  .quo-hist > summary{ cursor:pointer; list-style:none; font-size:11.5px; color:var(--emerald-soft); font-weight:600; padding:3px 0; }
+  .quo-hist > summary::-webkit-details-marker{ display:none; }
+  .quo-hist > summary::before{ content:"▸ "; }
+  .quo-hist[open] > summary::before{ content:"▾ "; }
+  .quo-hlist{ margin-top:5px; display:flex; flex-direction:column; gap:5px; }
+  .quo-hrow{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:11px; color:var(--grey);
+    border:1px solid var(--rule); border-radius:7px; padding:6px 8px; background:var(--cream-2); }
+  .quo-hno{ font-weight:700; color:var(--emerald); flex:0 0 auto; }
+  .quo-hlabel{ color:var(--ink); flex:1 1 120px; min-width:0; }
+  .quo-hfig{ flex:1 1 100%; color:var(--grey-soft); }
+  .quo-hfig b{ color:var(--ink); }
+  .quo-hdate{ font-size:10px; color:var(--faint); }
+  .quo-hacts{ display:flex; gap:5px; flex:0 0 auto; }
+
+  /* ---------- Quotation Revision editor ---------- */
+  .qr-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -4px; }
+  .qr-tbl{ width:100%; border-collapse:collapse; font-size:12px; min-width:640px; }
+  .qr-tbl th{ text-align:left; font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--gold-ink); padding:4px 6px; border-bottom:1px solid var(--rule-strong); }
+  .qr-tbl td{ padding:5px 6px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  .qr-tbl input, .qr-tbl textarea, .qr-tbl select{ font-size:12px; padding:6px 7px; }
+  .qr-tbl textarea{ min-height:34px; resize:vertical; line-height:1.4; }
+  .qr-tbl td:nth-child(1){ width:16%; } .qr-tbl td:nth-child(2){ width:38%; }
+  .qr-num{ width:74px !important; text-align:right; }
+  .qr-tbl td.qr-total{ font-weight:700; color:var(--ink); white-space:nowrap; text-align:right; padding-top:11px; }
+  .qr-totals{ display:flex; gap:18px; flex-wrap:wrap; justify-content:flex-end; align-items:baseline;
+    margin-top:12px; padding-top:10px; border-top:1px solid var(--rule-strong); font-size:12px; color:var(--grey); }
+  .qr-totals b{ color:var(--ink); }
+  .qr-totals .qr-grand b{ font-size:15px; color:var(--emerald); }
+
   /* ---------- Execution Roadmap (M-Exec-1) ---------- */
   .rm-wrap{ max-width:1100px; }
   .rm-crumbs{ display:flex; align-items:center; flex-wrap:wrap; gap:6px;
@@ -1825,6 +1867,7 @@ const STATE = {
   exportPack:'client',
   exportItems:null,   // null = all; else Set of item ids
   quote:null,         // Create Vista Quotation — prep-screen working state
+  quorev:null,        // Saved Quotation Revision editor — working copy
 };
 let saveTimer=null;
 function scheduleSave(){
@@ -1946,6 +1989,7 @@ function parseHash(){
   if(parts[0]==='p' && parts[2]==='roadmap') return { view:'projroadmap', pid:parts[1] };
   if(parts[0]==='p' && parts[2]==='i') return { view:'item', pid:parts[1], iid:parts[3] };
   if(parts[0]==='p' && parts[2]==='export') return { view:'export', pid:parts[1] };
+  if(parts[0]==='p' && parts[2]==='quote' && parts[3]) return { view:'quorev', pid:parts[1], sid:parts[3], rev: (parts[4]==='rev' && parts[5]!=null) ? +parts[5] : null };
   if(parts[0]==='p' && parts[2]==='quote') return { view:'quote', pid:parts[1] };
   if(parts[0]==='storage') return { view:'storage' };
   if(parts[0]==='p') return { view:'overview', pid:parts[1] };
@@ -1964,11 +2008,13 @@ async function render(){
   if(!p){ go('#/'); return; }
   STATE.project = p;
   if(migrateProject(p)){ try{ await dbPut('projects', p); }catch(_){} }
+  if(r.view !== 'quorev') STATE.quorev = null;   // drop unsaved revision edits on leave
   await loadProjectPhotos(p.id);
 
   if(r.view==='overview'){ STATE.otherOpen.clear(); return renderOverview(p); }
   if(r.view==='export'){ return renderExport(p); }
   if(r.view==='quote'){ return renderQuote(p); }
+  if(r.view==='quorev'){ return renderQuoRev(p); }
   if(r.view==='projroadmap'){ return renderProjectRoadmap(p); }
   if(r.view==='roadmap'){
     const it = p.items.find(x=>x.id===r.iid);
@@ -2112,6 +2158,7 @@ function renderOverview(p){
     +    (items || '<div class="hint" style="margin-bottom:10px">No items yet — add the first one.</div>')
     +    '<button class="btn btn-ghost btn-sm full mt6" data-additem>+ Add Item</button>'
     +  '</div></div>'
+    +  ((p.items.length || quoEnsure(p).length) ? quotationsCardHtml(p) : '')
     +  (p.items.length
         ? '<button class="btn btn-ghost full mt10" data-projroadmap>Execution Roadmap →</button>'
           + '<button class="btn btn-primary full mt10" data-export>Export / Preview PDF →</button>'
@@ -3682,6 +3729,12 @@ document.addEventListener('change', e=>{
   if(t.dataset.qinc!=null && STATE.quote){ quoteToggleInclude(t.dataset.qinc, t.checked); return; }
   if(t.dataset.qf!=null && STATE.quote){ quoteSetField(t.dataset.qf, t.value, t.dataset.qitem || null); return; }
 
+  /* quotation revision editor — <select> unit (change, not input) */
+  if(t.dataset.qri === 'unit' && STATE.quorev){
+    const it = STATE.quorev.w.items[+t.dataset.i]; if(it) it.unit = t.value;
+    return;
+  }
+
   /* execution roadmap — horizon + day/flag fields (re-render to reposition bars) */
   if(t.dataset.rmhzval != null){
     const rit = rmCurrentItem();
@@ -3766,7 +3819,31 @@ document.addEventListener('change', e=>{
 
 /* live client-search filter — repaints only the results list, never the screen */
 document.addEventListener('input', e=>{
-  if(e.target.dataset.qcsearch != null){ QCLIENT.query = e.target.value; quotePaintClientResults(); }
+  const t = e.target;
+  if(t.dataset.qcsearch != null){ QCLIENT.query = t.value; quotePaintClientResults(); return; }
+
+  /* quotation revision editor — mutate the working copy; patch totals in place */
+  if(STATE.quorev && (t.dataset.qri != null || t.dataset.qrc != null || t.dataset.qrf != null)){
+    const w = STATE.quorev.w;
+    if(t.dataset.qri != null){
+      const it = w.items[+t.dataset.i]; if(!it) return;
+      it[t.dataset.qri] = t.value;
+      if(t.dataset.qri === 'qty' || t.dataset.qri === 'unitPrice'){
+        const cell = document.querySelector('[data-qrline="'+t.dataset.i+'"]');
+        if(cell) cell.textContent = fmtSar(quoLineTotal(it));
+        const tot = quoRevTotals(w.items);
+        const box = document.getElementById('qr-totals');
+        if(box) box.innerHTML = '<span>Subtotal <b>'+fmtSar(tot.subtotal)+'</b></span>'
+          + '<span>VAT 15% <b>'+fmtSar(tot.vat)+'</b></span>'
+          + '<span class="qr-grand">Total <b>'+fmtSar(tot.total)+'</b></span>';
+      }
+    } else if(t.dataset.qrc != null){
+      w.client = w.client || {}; w.client[t.dataset.qrc] = t.value;
+    } else {
+      w[t.dataset.qrf] = t.value;
+    }
+    return;
+  }
 });
 
 document.addEventListener('click', async e=>{
@@ -4045,6 +4122,43 @@ document.addEventListener('click', async e=>{
   if(closest('[data-qcclose]')){ quoteCloseClientPicker(); return; }
   const qcpick = closest('[data-qcpick]');
   if(qcpick){ quoteSelectDaftraClient(qcpick.dataset.qcpick); return; }
+
+  /* ----- saved quotation revisions ----- */
+  {
+    const qOpen   = closest('[data-quoopen]');
+    const qRevise = closest('[data-quorevise]');
+    const qPdf    = closest('[data-quopdf]');
+    if(qRevise){ go('#/p/'+STATE.project.id+'/quote/'+qRevise.dataset.quorevise); return; }
+    if((qOpen || qPdf) && STATE.project){
+      const id = (qOpen || qPdf).dataset[qOpen ? 'quoopen' : 'quopdf'];
+      const s = quoEnsure(STATE.project).find(x=> x.id === id);
+      if(s) await quoExportRevision(STATE.project, s, (s.revisions[s.revisions.length-1]||{}).rev);
+      return;
+    }
+    const qOpenRev = closest('[data-quoopenrev]');
+    if(qOpenRev){ const [sid, rv] = qOpenRev.dataset.quoopenrev.split('|');
+      go('#/p/'+STATE.project.id+'/quote/'+sid+'/rev/'+rv); return; }
+    const qPdfRev = closest('[data-quopdfrev]');
+    if(qPdfRev && STATE.project){ const [sid, rv] = qPdfRev.dataset.quopdfrev.split('|');
+      const s = quoEnsure(STATE.project).find(x=> x.id === sid);
+      if(s) await quoExportRevision(STATE.project, s, +rv);
+      return;
+    }
+  }
+  /* ----- revision editor ----- */
+  if(closest('[data-qradd]') && STATE.quorev){
+    STATE.quorev.w.items.push({ itemId:null, name:'', description:'', qty:'1', unit:'no.', unitPrice:'', currency:'SAR', photoPrimary:null, photoSecondary:null });
+    if(STATE.project) renderQuoRev(STATE.project);
+    return;
+  }
+  const qrDel = closest('[data-qrdel]');
+  if(qrDel && STATE.quorev){
+    STATE.quorev.w.items.splice(+qrDel.dataset.qrdel, 1);
+    if(STATE.project) renderQuoRev(STATE.project);
+    return;
+  }
+  if(closest('[data-qrsave]') && STATE.project){ await quoSaveRevision(STATE.project, false); return; }
+  if(closest('[data-qrsaveopen]') && STATE.project){ await quoSaveRevision(STATE.project, true); return; }
 
   /* ----- export / preview ----- */
   if(closest('[data-export]')){ go('#/p/'+STATE.project.id+'/export'); return; }
@@ -4609,17 +4723,76 @@ function quoteOpenHandoffDB(){
     r.onerror   = ()=>rej(r.error);
   });
 }
-async function quoteWriteHandoff(doc){
+async function quoteWriteHandoff(doc, pid){
   const db = await quoteOpenHandoffDB();
   await new Promise((res,rej)=>{
     const tx = db.transaction('payload','readwrite');
     tx.objectStore('payload').put({
       id:'current', createdAt:Date.now(), source:'technical-proposal',
-      pid: STATE.quote.pid, doc,
+      pid: pid || (STATE.quote && STATE.quote.pid) || (STATE.project && STATE.project.id) || null, doc,
     });
     tx.oncomplete = ()=>res();
     tx.onerror    = ()=>rej(tx.error);
   });
+}
+
+/* ---- shared quotation-doc builders (used by both the Create flow and the
+   Saved-Revision editor). Photo IDs are composed to data URLs here, fresh,
+   from whatever photos currently exist on the project item. ---- */
+async function quoComposeItems(rows){
+  const round2 = n => Math.round((Number(n)+Number.EPSILON)*100)/100;
+  let subtotal = 0; const _items = [];
+  for(const x of rows){
+    const price = moneyNum(x.unitPrice), qty = moneyNum(x.qty);
+    const before = round2((price!=null && qty!=null) ? price*qty : 0);
+    subtotal += before;
+    let desc = String(x.description || '').trim();
+    const unit = String(x.unit || '').trim();
+    if(unit && unit.toLowerCase() !== 'no.'){
+      const tag = '(per ' + unit + ')';
+      desc = desc ? (/[.]\s*$/.test(desc) ? desc.replace(/\s*\.\s*$/, '') + ' ' + tag + '.' : desc + ' ' + tag) : tag;
+    }
+    const pP = x.photoPrimary, pS = x.photoSecondary;
+    const variants = {};
+    if(pP && photoUrl(pP))                        variants.primary   = await composeQuotePhoto(pP, null);
+    if(pS && photoUrl(pS))                        variants.secondary = await composeQuotePhoto(pS, null);
+    if(pP && pS && photoUrl(pP) && photoUrl(pS))  variants.both      = await composeQuotePhoto(pP, pS);
+    const defKey = variants.both ? 'both' : (variants.primary ? 'primary' : (variants.secondary ? 'secondary' : null));
+    _items.push({
+      item: x.name || '—',
+      description: desc,
+      unit_price: (x.unitPrice==='' || price==null) ? '' : price,
+      quantity:   (x.qty==='' || qty==null) ? '' : qty,
+      item_subtotal: before,
+      tax1_percent: '15%',
+      tax1_value: round2(before * QUOTE_VAT_RATE),
+      subtotal:   round2(before * (1 + QUOTE_VAT_RATE)),
+      _photoDataUrl: defKey ? variants[defKey] : '',
+      _photoSize: (defKey === 'both') ? 'large' : 'medium',
+      ...(Object.keys(variants).length > 1 ? { _tpPhotoVariants: variants, _tpPhotoActive: defKey } : {}),
+    });
+  }
+  return { _items, subtotal: round2(subtotal) };
+}
+function quoWrapDoc(no, client, deliveryDays, notes, composed){
+  const round2 = n => Math.round((Number(n)+Number.EPSILON)*100)/100;
+  const subtotal = composed.subtotal;
+  return {
+    no: String(no || '').trim(),
+    date: quoteToday(),
+    client_business_name: client.name || '',
+    _clientVat: client.vat || '',
+    _clientCr:  client.cr || '',
+    client_address1:    String(client.address1 || '').trim(),
+    client_city:        String(client.city || '').trim(),
+    client_postal_code: String(client.postal || '').trim(),
+    summary_subtotal: subtotal,
+    summary_tax:      round2(subtotal * QUOTE_VAT_RATE),
+    total_amount:     round2(subtotal * (1 + QUOTE_VAT_RATE)),
+    _deliveryDays:    quoteSanitizeDays(deliveryDays),
+    _quotationNotes:  String(notes || '').trim(),
+    _items: composed._items,
+  };
 }
 
 async function openInVistaQuotation(){
@@ -4636,12 +4809,13 @@ async function openInVistaQuotation(){
     return;
   }
 
-  // Blank quotation number — never auto-fill 001 silently; make the user choose.
-  if(!String(q.quoteNo || '').trim()){
-    const ok = await quoteConfirm2('Quotation number is blank',
-      'No Quotation No. was entered. The quotation will open without a number for you to fill in. Continue?',
-      'Continue Anyway', 'Go Back');
-    if(!ok) return;
+  const p = STATE.project;
+
+  // Blank quotation number — auto-assign a series number so the quotation can be
+  // saved & revised later (the whole point of this feature).
+  if(!String(q.quoteNo || '').trim() && p){
+    q.quoteNo = quoNextNo(p);
+    const el = document.querySelector('[data-qf="quoteNo"]'); if(el) el.value = q.quoteNo;
   }
 
   // Missing Unit Price — warn, never guess.
@@ -4655,73 +4829,264 @@ async function openInVistaQuotation(){
   }
 
   toast('Preparing quotation…');
-  const round2 = n => Math.round((Number(n)+Number.EPSILON)*100)/100;
-  let subtotal = 0;
-  const _items = [];
-  for(const x of inc){
-    const price = moneyNum(x.unitPrice);
-    const qty   = moneyNum(x.qty);
-    const before = round2((price!=null && qty!=null) ? price*qty : 0);
-    subtotal += before;
+  const composed = await quoComposeItems(inc.map(x=>({
+    name:x.name, description:x.description, qty:x.qty, unit:x.unit, unitPrice:x.unitPrice,
+    photoPrimary:x.photoPrimary, photoSecondary:x.photoSecondary,
+  })));
+  const client = { name:q.client, vat:q.clientVat, cr:q.clientCr,
+    address1:q.clientAddress1, city:q.clientCity, postal:q.clientPostal };
+  const doc = quoWrapDoc(q.quoteNo, client, q.deliveryDays, q.notes, composed);
 
-    let desc = String(x.description || '').trim();
-    const unit = String(x.unit || '').trim();
-    // The quotation row has a numeric Qty column but no Unit column — note a
-    // non-trivial unit of measure in the description so it still prints. This
-    // is a factual unit tag, not commercial scope.
-    if(unit && unit.toLowerCase() !== 'no.'){
-      const tag = '(per ' + unit + ')';
-      desc = desc ? (/[.]\s*$/.test(desc) ? desc.replace(/\s*\.\s*$/, '') + ' ' + tag + '.' : desc + ' ' + tag)
-                  : tag;
-    }
-
-    // Pre-compose every photo variant the user might want in the quotation
-    // editor: photo 1 alone, photo 2 alone, and both side-by-side. The generator
-    // switches between them with no re-compositing (setQuoItemPhotoVariant).
-    const pP = x.photoPrimary, pS = x.photoSecondary;
-    const variants = {};
-    if(pP)        variants.primary   = await composeQuotePhoto(pP, null);
-    if(pS)        variants.secondary = await composeQuotePhoto(pS, null);
-    if(pP && pS)  variants.both      = await composeQuotePhoto(pP, pS);
-    const defKey = (pP && pS) ? 'both' : (pP ? 'primary' : (pS ? 'secondary' : null));
-
-    _items.push({
-      item: x.name || '—',
-      description: desc,
-      unit_price: (x.unitPrice==='' || price==null) ? '' : price,
-      quantity:   (x.qty==='' || qty==null) ? '' : qty,
-      item_subtotal: before,
-      tax1_percent: '15%',
-      tax1_value: round2(before * QUOTE_VAT_RATE),
-      subtotal:   round2(before * (1 + QUOTE_VAT_RATE)),
-      _photoDataUrl: defKey ? variants[defKey] : '',
-      _photoSize: (defKey === 'both') ? 'large' : 'medium',
-      ...(Object.keys(variants).length > 1
-          ? { _tpPhotoVariants: variants, _tpPhotoActive: defKey }
-          : {}),
-    });
+  // Save this as a reopenable / revisable quotation series (Rev 0) in the central DB.
+  if(p){
+    try{
+      const now = Date.now();
+      quoAttach(p).push({
+        id: uid(),
+        no: String(q.quoteNo || '').trim() || quoNextNo(p),
+        createdAt: now,
+        revisions: [ quoRevisionFromQuoteState(q, 0, 'Original') ],
+      });
+      await dbPut('projects', p);
+    }catch(e){ console.error('[quotations] save failed', e); }
   }
 
-  const doc = {
-    no: String(q.quoteNo || '').trim(),
-    date: quoteToday(),
-    client_business_name: q.client || '',
-    _clientVat: q.clientVat || '',
-    _clientCr:  q.clientCr || '',
-    client_address1:     String(q.clientAddress1 || '').trim(),
-    client_city:         String(q.clientCity || '').trim(),
-    client_postal_code:  String(q.clientPostal || '').trim(),
-    summary_subtotal: round2(subtotal),
-    summary_tax:      round2(subtotal * QUOTE_VAT_RATE),
-    total_amount:     round2(subtotal * (1 + QUOTE_VAT_RATE)),
-    _deliveryDays:    quoteSanitizeDays(q.deliveryDays),
-    _quotationNotes:  String(q.notes || '').trim(),
-    _items,
-  };
-
-  try { await quoteWriteHandoff(doc); }
+  try { await quoteWriteHandoff(doc, p && p.id); }
   catch(e){ console.error(e); toast('Could not prepare the handoff'); return; }
 
+  window.open(QUOTE_GENERATOR_FILE + '?tpquo=' + Date.now() + '#tp-quo', '_blank');
+}
+
+/* ============================================================
+   10d · Saved Quotation Revisions  (Central DB — project.quotations[])
+   ------------------------------------------------------------
+   project.quotations = [ { id, no, createdAt, revisions:[ {
+     rev, label, createdAt, revisedAt,
+     client:{name,vat,cr,address1,city,postal,daftraClientId},
+     deliveryDays, notes,
+     items:[ {itemId,name,description,qty,unit,unitPrice,currency,photoPrimary,photoSecondary} ],
+     subtotal, vat, total } ] } ]
+   Never overwrites a revision — Revise always appends. Stored in the same
+   verbatim project JSON blob that already persists to the Vista Central DB,
+   so no new endpoint / schema is needed and a second browser sees the history.
+   The existing daftra quotation editor still produces the final PDF.
+   ============================================================ */
+/* read-only: never mutates the project (so merely viewing an overview can't
+   add a `quotations` key and trigger a needless central-DB write). The array
+   is created lazily only when a quotation is actually saved — see quoAttach(). */
+function quoEnsure(p){ return Array.isArray(p.quotations) ? p.quotations : []; }
+function quoAttach(p){ if(!Array.isArray(p.quotations)) p.quotations = []; return p.quotations; }
+function quoNextNo(p){
+  const nums = quoEnsure(p).map(s=>{ const m = /Q-(\d+)/i.exec(String(s.no||'')); return m ? +m[1] : 0; });
+  const max = nums.length ? Math.max.apply(null, nums) : 1000;
+  return 'Q-' + (Math.max(1000, max) + 1);
+}
+function quoRound2(n){ return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
+function quoRevTotals(items){
+  let sub = 0;
+  (items || []).forEach(it=>{
+    const pr = moneyNum(it.unitPrice), qt = moneyNum(it.qty);
+    sub += quoRound2((pr != null && qt != null) ? pr * qt : 0);
+  });
+  sub = quoRound2(sub);
+  const vat = quoRound2(sub * QUOTE_VAT_RATE);
+  return { subtotal: sub, vat: vat, total: quoRound2(sub + vat) };
+}
+function quoLineTotal(it){
+  const pr = moneyNum(it.unitPrice), qt = moneyNum(it.qty);
+  return (pr != null && qt != null) ? quoRound2(pr * qt) : 0;
+}
+function fmtSar(n){
+  const v = Number(n);
+  return 'SAR ' + (isFinite(v) ? v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}) : '0.00');
+}
+function fmtQuoDate(ms){
+  if(!ms) return '—';
+  const d = new Date(ms);
+  return isNaN(d) ? '—' : d.toLocaleDateString('en-GB',{day:'2-digit', month:'short', year:'numeric'});
+}
+/* snapshot the Create-Quotation prep state into a revision object */
+function quoRevisionFromQuoteState(q, rev, label){
+  const items = q.items.filter(x=>x.include).map(x=>({
+    itemId: x.id, name: x.name || '', description: x.description || '',
+    qty: String(x.qty == null ? '' : x.qty), unit: x.unit || 'no.',
+    unitPrice: String(x.unitPrice == null ? '' : x.unitPrice), currency: x.currency || 'SAR',
+    photoPrimary: x.photoPrimary || null, photoSecondary: x.photoSecondary || null,
+  }));
+  const t = quoRevTotals(items);
+  const now = Date.now();
+  return {
+    rev: rev,
+    label: label || (rev === 0 ? 'Original' : 'Revision ' + rev),
+    createdAt: now, revisedAt: now,
+    client: { name:q.client||'', vat:q.clientVat||'', cr:q.clientCr||'',
+      address1:q.clientAddress1||'', city:q.clientCity||'', postal:q.clientPostal||'',
+      daftraClientId:q.daftraClientId||'' },
+    deliveryDays: q.deliveryDays || '', notes: q.notes || '',
+    items: items, subtotal: t.subtotal, vat: t.vat, total: t.total,
+  };
+}
+
+/* ---- Quotations card on the project overview ---- */
+function quotationsCardHtml(p){
+  const list = quoEnsure(p).slice().sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  const rows = list.map(s=>{
+    const revs = (s.revisions || []).slice();
+    const latest = revs[revs.length - 1] || {};
+    const hist = revs.slice().reverse().map(r=>
+      '<div class="quo-hrow">'
+      + '<span class="quo-hno">Rev '+r.rev+'</span>'
+      + '<span class="quo-hlabel">'+esc(r.label || '')+'</span>'
+      + '<span class="quo-hfig">Sub '+fmtSar(r.subtotal)+' · VAT '+fmtSar(r.vat)+' · <b>'+fmtSar(r.total)+'</b></span>'
+      + '<span class="quo-hdate">created '+fmtQuoDate(r.createdAt)+'</span>'
+      + '<span class="quo-hacts">'
+      +   '<button class="btn btn-ghost btn-xs" data-quoopenrev="'+esc(s.id)+'|'+r.rev+'">Open</button>'
+      +   '<button class="btn btn-ghost btn-xs" data-quopdfrev="'+esc(s.id)+'|'+r.rev+'">PDF</button>'
+      + '</span>'
+      + '</div>').join('');
+    return '<div class="quo-row">'
+      + '<div class="quo-top">'
+      +   '<div class="quo-id"><span class="quo-no">'+esc(s.no || 'Quotation')+'</span>'
+      +     '<span class="quo-rev">Rev '+(latest.rev != null ? latest.rev : 0)+'</span></div>'
+      +   '<div class="quo-fig"><b>'+fmtSar(latest.total)+'</b><span>'+fmtQuoDate(latest.revisedAt || latest.createdAt || s.createdAt)+'</span></div>'
+      + '</div>'
+      + '<div class="quo-acts">'
+      +   '<button class="btn btn-ghost btn-sm" data-quoopen="'+esc(s.id)+'">Open</button>'
+      +   '<button class="btn btn-primary btn-sm" data-quorevise="'+esc(s.id)+'">Revise</button>'
+      +   '<button class="btn btn-ghost btn-sm" data-quopdf="'+esc(s.id)+'">PDF</button>'
+      + '</div>'
+      + '<details class="quo-hist"><summary>'+revs.length+' revision'+(revs.length===1?'':'s')+' — history</summary>'
+      +   '<div class="quo-hlist">'+hist+'</div>'
+      + '</details>'
+      + '</div>';
+  }).join('');
+  return '<div class="card"><div class="eyebrow">Quotations</div><div class="body">'
+    + (rows || '<div class="hint" style="margin:0">No saved quotations yet. Use “Create Vista Quotation” below — it now saves the commercial data so you can reopen and revise it.</div>')
+    + '</div></div>';
+}
+
+/* ---- Revision editor: simple table, no full Technical Proposal ---- */
+function quoUnitOpts(u){
+  return UNITS.map(k=>'<option'+(k===u?' selected':'')+'>'+esc(k)+'</option>').join('')
+    + (UNITS.includes(u) ? '' : '<option selected>'+esc(u||'')+'</option>');
+}
+function renderQuoRev(p){
+  const r = parseHash();
+  const series = quoEnsure(p).find(s=> s.id === r.sid);
+  if(!series || !(series.revisions || []).length){ go('#/p/'+p.id); return; }
+  const revs = series.revisions;
+  const base = (r.rev != null ? revs.find(x=> x.rev === r.rev) : null) || revs[revs.length - 1];
+  const nextRev = (revs[revs.length - 1].rev || 0) + 1;
+
+  if(!STATE.quorev || STATE.quorev.sid !== series.id || STATE.quorev.baseRev !== base.rev){
+    const w = JSON.parse(JSON.stringify(base));
+    w.label = '';   // fresh label for the new revision
+    STATE.quorev = { pid: p.id, sid: series.id, baseRev: base.rev, w: w };
+  }
+  const w = STATE.quorev.w;
+  const t = quoRevTotals(w.items);
+
+  const rows = (w.items || []).map((it,i)=>
+    '<tr>'
+    + '<td><input data-qri="name" data-i="'+i+'" value="'+esc(it.name || '')+'" placeholder="Item"></td>'
+    + '<td><textarea data-qri="description" data-i="'+i+'" rows="2" placeholder="Description">'+esc(it.description || '')+'</textarea></td>'
+    + '<td><input class="qr-num" data-qri="qty" data-i="'+i+'" value="'+esc(it.qty || '')+'" inputmode="decimal"></td>'
+    + '<td><select data-qri="unit" data-i="'+i+'">'+quoUnitOpts(it.unit)+'</select></td>'
+    + '<td><input class="qr-num" data-qri="unitPrice" data-i="'+i+'" value="'+esc(it.unitPrice || '')+'" inputmode="decimal" placeholder="0.00"></td>'
+    + '<td class="qr-total" data-qrline="'+i+'">'+fmtSar(quoLineTotal(it))+'</td>'
+    + '<td><button class="btn btn-ghost btn-xs" data-qrdel="'+i+'" title="Remove">✕</button></td>'
+    + '</tr>'
+  ).join('');
+
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'">‹ '+esc(p.name||'Project')+'</button>'
+    + '<span class="title">'+esc(series.no)+' · Revise</span>'
+    + '<span class="save on">Rev '+base.rev+' → '+nextRev+'</span></div>'
+    + '<div class="wrap">'
+    +  '<div class="hint mt6">Editing a copy of <b>Rev '+base.rev+'</b>. Saving creates <b>Rev '+nextRev+'</b> — earlier revisions are never changed.</div>'
+    +  '<div class="card"><div class="eyebrow">Client</div><div class="body">'
+    +    '<div class="field"><label>Client name</label><input data-qrc="name" value="'+esc(w.client.name||'')+'"></div>'
+    +    '<div class="row">'
+    +      '<div class="field"><label>VAT reg. no.</label><input data-qrc="vat" value="'+esc(w.client.vat||'')+'" placeholder="Optional"></div>'
+    +      '<div class="field"><label>CR no.</label><input data-qrc="cr" value="'+esc(w.client.cr||'')+'" placeholder="Optional"></div>'
+    +    '</div>'
+    +    '<div class="field" style="margin-bottom:0"><label>Address <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>'
+    +      '<input data-qrc="address1" value="'+esc(w.client.address1||'')+'" placeholder="Street / building" style="margin-bottom:6px">'
+    +      '<div class="row"><div class="field" style="margin-bottom:0"><input data-qrc="city" value="'+esc(w.client.city||'')+'" placeholder="City"></div>'
+    +      '<div class="field" style="margin-bottom:0"><input data-qrc="postal" value="'+esc(w.client.postal||'')+'" placeholder="Postal code"></div></div>'
+    +    '</div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Items</div><div class="body">'
+    +    '<div class="qr-scroll"><table class="qr-tbl"><thead><tr>'
+    +      '<th>Item</th><th>Description</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Total</th><th></th>'
+    +    '</tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +    '<button class="btn btn-ghost btn-sm mt10" data-qradd>+ Add item</button>'
+    +    '<div class="qr-totals" id="qr-totals">'
+    +      '<span>Subtotal <b>'+fmtSar(t.subtotal)+'</b></span>'
+    +      '<span>VAT 15% <b>'+fmtSar(t.vat)+'</b></span>'
+    +      '<span class="qr-grand">Total <b>'+fmtSar(t.total)+'</b></span>'
+    +    '</div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Delivery &amp; notes</div><div class="body">'
+    +    '<div class="field"><label>Delivery / production — working days</label><input data-qrf="deliveryDays" value="'+esc(w.deliveryDays||'')+'" inputmode="numeric" style="max-width:150px"></div>'
+    +    '<div class="field" style="margin-bottom:0"><label>Quotation notes / regulations</label><textarea data-qrf="notes" rows="3" placeholder="Optional">'+esc(w.notes||'')+'</textarea></div>'
+    +  '</div></div>'
+    +  '<div class="card"><div class="body">'
+    +    '<div class="field"><label>Revision label</label><input data-qrf="label" value="" placeholder="e.g. Revised prices"></div>'
+    +    '<button class="btn btn-primary full" data-qrsave>Save as Rev '+nextRev+'</button>'
+    +    '<button class="btn btn-ghost full mt10" data-qrsaveopen>Save &amp; open in Vista Quotation →</button>'
+    +  '</div></div>'
+    + '</div>';
+}
+async function quoSaveRevision(p, openAfter){
+  const st = STATE.quorev; if(!st) return null;
+  const series = quoEnsure(p).find(s=> s.id === st.sid); if(!series) return null;
+  const revs = series.revisions || (series.revisions = []);
+  const nextRev = (revs.length ? (revs[revs.length - 1].rev || 0) : -1) + 1;
+  const w = st.w;
+  const t = quoRevTotals(w.items);
+  const now = Date.now();
+  const newRev = {
+    rev: nextRev,
+    label: String(w.label || '').trim() || 'Revision ' + nextRev,
+    createdAt: now, revisedAt: now,
+    client: {
+      name: w.client.name||'', vat: w.client.vat||'', cr: w.client.cr||'',
+      address1: w.client.address1||'', city: w.client.city||'', postal: w.client.postal||'',
+      daftraClientId: w.client.daftraClientId||'',
+    },
+    deliveryDays: w.deliveryDays || '', notes: w.notes || '',
+    items: (w.items || []).map(it=>({
+      itemId: it.itemId || null, name: it.name || '', description: it.description || '',
+      qty: String(it.qty == null ? '' : it.qty), unit: it.unit || 'no.',
+      unitPrice: String(it.unitPrice == null ? '' : it.unitPrice), currency: it.currency || 'SAR',
+      photoPrimary: it.photoPrimary || null, photoSecondary: it.photoSecondary || null,
+    })),
+    subtotal: t.subtotal, vat: t.vat, total: t.total,
+  };
+  revs.push(newRev);
+  try{ await dbPut('projects', p); }
+  catch(e){ toast('Save failed: ' + (e.message || e)); revs.pop(); return null; }
+  STATE.quorev = null;
+  toast(series.no + ' Rev ' + nextRev + ' saved');
+  if(openAfter){ await quoExportRevision(p, series, nextRev); }
+  else go('#/p/'+p.id);
+  return newRev;
+}
+async function quoExportRevision(p, series, revNum){
+  const revs = series.revisions || [];
+  const rev = revs.find(x=> x.rev === revNum) || revs[revs.length - 1];
+  if(!rev){ toast('Revision not found'); return; }
+  toast('Preparing quotation…');
+  const composed = await quoComposeItems((rev.items || []).map(x=>({
+    name:x.name, description:x.description, qty:x.qty, unit:x.unit, unitPrice:x.unitPrice,
+    photoPrimary:x.photoPrimary, photoSecondary:x.photoSecondary,
+  })));
+  const doc = quoWrapDoc(series.no, rev.client || {}, rev.deliveryDays, rev.notes, composed);
+  doc._quoRev = rev.rev;   // informational only; the generator ignores unknown keys
+  try{ await quoteWriteHandoff(doc, p.id); }
+  catch(e){ console.error(e); toast('Could not prepare the handoff'); return; }
   window.open(QUOTE_GENERATOR_FILE + '?tpquo=' + Date.now() + '#tp-quo', '_blank');
 }
 
