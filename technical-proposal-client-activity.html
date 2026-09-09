@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Client Activity — Vista Technical Proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --forest:#1A5C46; --forest-deep:#0E3D2E; --brass:#8A6E3B;
+    --ground:#F6F5F1; --surface:#FFFFFF; --sunk:#EEEDE6;
+    --ink:#1D211C; --ink-soft:#5C625A; --ink-faint:#8C918A;
+    --line:#DFDDD2; --stop:#9C3A34; --ok:#2E7D5B; --amber:#A9691A;
+    --shadow:0 1px 2px rgba(20,30,24,.05), 0 10px 30px -18px rgba(20,30,24,.2);
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--ground); color:var(--ink);
+    font-family:Inter, system-ui, -apple-system, "Segoe UI", sans-serif; font-size:15px; line-height:1.55; }
+  .bar{ background:var(--forest-deep); color:#EFEDE2; border-bottom:3px solid var(--brass); }
+  .bar-in{ max-width:1040px; margin:0 auto; padding:13px 22px; display:flex; align-items:center; gap:14px; }
+  .bar b{ font-family:Spectral, serif; font-weight:600; letter-spacing:.02em; }
+  .bar .who{ margin-left:auto; font-size:12px; color:#AEC3B4; }
+  .wrap{ max-width:1040px; margin:0 auto; padding:24px 22px 100px; }
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:20px 22px; margin-bottom:16px; }
+  h2{ font-family:Spectral, serif; font-weight:600; font-size:18px; margin:0 0 4px; }
+  h3{ font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--forest); font-weight:600; margin:18px 0 8px; }
+  .hint{ color:var(--ink-soft); font-size:13px; margin:0 0 14px; }
+  label{ display:block; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); margin:10px 0 5px; }
+  select, input, textarea{ width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font:inherit; background:var(--ground); }
+  select:focus, input:focus, textarea:focus{ outline:2px solid var(--forest); border-color:var(--forest); }
+  .btn{ padding:8px 15px; border:0; border-radius:8px; background:var(--forest); color:#fff; font-weight:600; font-size:13px; cursor:pointer; }
+  .btn:hover{ background:var(--forest-deep); } .btn:disabled{ opacity:.5; cursor:default; }
+  .btn.sm{ padding:5px 11px; font-size:12px; }
+  .btn.ghost{ background:transparent; color:var(--forest); border:1px solid var(--line); }
+  .btn.stop{ background:var(--stop); } .btn.stop:hover{ background:#822f2a; }
+  .btn.warn{ background:transparent; color:var(--amber); border:1px solid #E3CBA6; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .pill{ font-family:"IBM Plex Mono", monospace; font-size:10px; padding:1px 7px; border-radius:4px; border:1px solid currentColor; text-transform:uppercase; letter-spacing:.04em; }
+  .pill.pending{ color:var(--amber); } .pill.accepted{ color:var(--ok); } .pill.rejected{ color:var(--stop); }
+  .pill.partially_accepted{ color:var(--brass); } .pill.submitted{ color:var(--forest); }
+  code{ font-family:"IBM Plex Mono", monospace; font-size:.85em; background:var(--sunk); padding:1px 5px; border-radius:4px; }
+  .cs{ border:1px solid var(--line); border-radius:10px; margin-bottom:14px; overflow:hidden; }
+  .cs-head{ background:var(--sunk); padding:13px 16px; border-bottom:1px solid var(--line); }
+  .cs-head .t{ font-weight:600; }
+  .cs-meta{ font-size:12px; color:var(--ink-soft); margin-top:4px; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:2px 14px; }
+  .cs-body{ padding:14px 16px; }
+  .chg{ border:1px solid var(--line); border-left:3px solid var(--amber); border-radius:8px; padding:12px 14px; margin-bottom:10px; }
+  .chg.accepted{ border-left-color:var(--ok); opacity:.75; }
+  .chg.rejected{ border-left-color:var(--stop); opacity:.6; }
+  .chg .lbl{ font-weight:600; font-size:13.5px; }
+  .chg .who{ font-size:11.5px; color:var(--ink-faint); margin:2px 0 8px; }
+  .diff{ display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-size:13px; margin:6px 0 10px; }
+  .diff .k{ font-family:"IBM Plex Mono", monospace; font-size:10px; text-transform:uppercase; color:var(--ink-faint); padding-top:2px; }
+  .diff .old{ color:var(--stop); text-decoration:line-through; white-space:pre-wrap; }
+  .diff .new{ color:var(--ok); font-weight:500; white-space:pre-wrap; }
+  .note{ font-size:12px; color:var(--ink-soft); font-style:italic; margin-bottom:8px; }
+  .msg{ margin-top:12px; padding:10px 13px; border-radius:8px; font-size:13px; white-space:pre-wrap; }
+  .msg.err{ background:#F7E9E7; color:var(--stop); border:1px solid #E6C9C6; }
+  .msg.ok{ background:#E7F1EC; color:var(--ok); border:1px solid #CBE2D6; }
+  .comment{ background:var(--sunk); border-radius:8px; padding:9px 12px; font-size:13px; margin-bottom:6px; }
+  .comment .who{ font-size:11px; color:var(--ink-faint); }
+  .sig{ font-family:"IBM Plex Mono", monospace; font-size:12px; background:var(--sunk); border:1px solid var(--line); border-radius:8px; padding:10px 13px; margin-top:8px; }
+  .audit{ font-family:"IBM Plex Mono", monospace; font-size:11.5px; line-height:1.7; }
+  .audit .t{ color:var(--ink-faint); }
+  .spin{ display:inline-block; width:13px; height:13px; border:2px solid var(--line); border-top-color:var(--forest); border-radius:50%; animation:s .7s linear infinite; vertical-align:-2px; }
+  @keyframes s{ to{ transform:rotate(360deg); } }
+  .empty{ text-align:center; padding:40px 20px; color:var(--ink-faint); }
+  .badge-n{ background:var(--stop); color:#fff; font-size:11px; font-weight:700; border-radius:20px; padding:1px 8px; }
+</style>
+</head>
+<body>
+<div class="bar"><div class="bar-in"><b>Vista United — Client Activity</b><span class="who" id="who"></span></div></div>
+<div class="wrap">
+
+  <div class="card" id="cfg-card" hidden>
+    <h2>Portal not configured</h2>
+    <p class="hint" id="cfg-msg"></p>
+  </div>
+
+  <div class="card" id="main" hidden>
+    <h2>Client changes pending review</h2>
+    <p class="hint">Client edits arrive as <b>proposed changes</b> inside a signed change set. Only <b>Accept</b> writes into the Vista Central Database. Reject leaves the master unchanged. Every decision is recorded permanently.</p>
+    <label for="proj">Proposal</label>
+    <select id="proj"></select>
+    <div id="proj-meta" class="hint" style="margin-top:6px"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost sm" id="refresh">Refresh</button>
+      <button class="btn ghost sm" id="pull">Pull audit log</button>
+      <button class="btn sm" id="republish" hidden>Publish updated revision →</button>
+    </div>
+    <div id="republish-msg"></div>
+  </div>
+
+  <div id="activity"></div>
+  <div class="card" id="audit-card" hidden>
+    <h2>Audit history <span class="hint" style="text-transform:none">— permanent, never deleted</span></h2>
+    <div id="audit" class="audit"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var api = function(path, opts){
+    return fetch('/api/tp/portal/' + path, opts).then(function(r){
+      return r.json().then(function(j){ if(!r.ok || j.ok===false) throw new Error(j.error || ('HTTP '+r.status)); return j.data; });
+    });
+  };
+  var fmtVal = function(v){
+    if(v===null || v===undefined) return '(empty)';
+    if(typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  };
+  var fmtTime = function(s){ if(!s) return ''; return String(s).slice(0,16).replace('T',' ') + ' UTC'; };
+  var PROJECTS = [], CUR = null;
+
+  function loadProjects(){
+    return api('projects').then(function(list){
+      PROJECTS = list.filter(function(p){ return p.link && p.link.cloud_proposal_id; });
+      if(!PROJECTS.length){ $('proj').innerHTML = '<option>(no published proposals)</option>'; return; }
+      $('proj').innerHTML = PROJECTS.map(function(p){
+        return '<option value="'+esc(p.id)+'">'+esc(p.name||p.id)+'</option>';
+      }).join('');
+      onProj();
+    });
+  }
+  function onProj(){
+    CUR = PROJECTS.filter(function(x){ return x.id === $('proj').value; })[0];
+    if(!CUR) return;
+    $('proj-meta').innerHTML = 'cloud proposal <code>'+esc(CUR.link.cloud_proposal_id)+'</code> · last published '
+      + esc(CUR.link.last_published_revision||'—');
+    loadActivity(); loadAudit();
+  }
+
+  function loadActivity(){
+    $('activity').innerHTML = '<div class="card"><span class="spin"></span> loading client change sets…</div>';
+    api('client-activity?project='+encodeURIComponent(CUR.id)).then(function(d){
+      renderActivity(d.changeSets || []);
+    }).catch(function(e){ $('activity').innerHTML = '<div class="card"><div class="msg err">'+esc(e.message)+'</div></div>'; });
+  }
+
+  function renderActivity(sets){
+    var pendingChanges = 0;
+    sets.forEach(function(cs){ cs.changes.forEach(function(c){ if(c.state==='pending') pendingChanges++; }); });
+    var anyAccepted = sets.some(function(cs){ return cs.changes.some(function(c){ return c.state==='accepted'; }); });
+    $('republish').hidden = !anyAccepted;
+
+    if(!sets.length){
+      $('activity').innerHTML = '<div class="card"><div class="empty">No client change sets submitted yet.</div></div>';
+      return;
+    }
+    var head = '<div class="card"><h2>CLIENT CHANGES PENDING '
+      + (pendingChanges ? '<span class="badge-n">'+pendingChanges+'</span>' : '<span class="pill accepted">0</span>') + '</h2></div>';
+
+    var html = sets.map(function(cs){
+      var meta = ''
+        + '<span>Client: <b>'+esc(cs.clientName||cs.clientEmail)+'</b></span>'
+        + '<span>Email: '+esc(cs.clientEmail||'')+'</span>'
+        + '<span>Submitted: '+esc(fmtTime(cs.submittedAt))+'</span>'
+        + '<span>Against: '+esc(cs.revisionLabel)+'</span>'
+        + '<span>Signed: '+(cs.signed?'<b>Yes</b>':'No')+'</span>'
+        + (cs.decidedBy ? '<span>Decided by: '+esc(cs.decidedBy)+'</span>' : '');
+
+      var sig = cs.signed ? '<div class="sig">'
+        + 'Signature (' + esc(cs.signatureType||'typed') + '): <b>' + esc(cs.signerName||'') + '</b>'
+        + (cs.signerTitle ? ' · ' + esc(cs.signerTitle) : '')
+        + (cs.signerCompany ? ' · ' + esc(cs.signerCompany) : '') + '<br>'
+        + 'Signed at ' + esc(fmtTime(cs.signedAt))
+        + (cs.ip ? ' · IP ' + esc(cs.ip) : '')
+        + '<br>Confirmation checkbox: ' + (cs.confirmed ? 'ticked' : 'NOT ticked')
+        + '</div>' : '';
+
+      var changes = cs.changes.map(function(c){
+        var cls = c.state === 'accepted' ? ' accepted' : c.state === 'rejected' ? ' rejected' : '';
+        var actions = '';
+        if(c.state === 'pending'){
+          var isText = !/\.qty\.value$/.test(c.fieldToken);
+          actions = '<div class="row" style="margin-top:8px">'
+            + '<button class="btn sm" data-accept="'+esc(c.id)+'">Accept</button>'
+            + '<button class="btn sm stop" data-reject="'+esc(c.id)+'">Reject</button>'
+            + (isText ? '<button class="btn sm warn" data-edit="'+esc(c.id)+'">Edit before accept</button>' : '')
+            + '</div>';
+        } else {
+          actions = '<div class="who">'+esc(c.state.toUpperCase())
+            + (c.decidedBy ? ' by ' + esc(c.decidedBy) : '')
+            + (c.decisionNote ? ' — ' + esc(c.decisionNote) : '') + '</div>';
+        }
+        return '<div class="chg'+cls+'" id="chg-'+esc(c.id)+'">'
+          + '<div class="lbl">'+esc(c.label)+' <span class="pill '+esc(c.state)+'">'+esc(c.state)+'</span></div>'
+          + '<div class="who"><code>'+esc(c.fieldToken)+'</code></div>'
+          + '<div class="diff"><span class="k">Current</span><span class="old">'+esc(fmtVal(c.oldValue))+'</span>'
+          + '<span class="k">Client proposed</span><span class="new">'+esc(fmtVal(c.newValue))+'</span></div>'
+          + (c.clientNote ? '<div class="note">Client note: "'+esc(c.clientNote)+'"</div>' : '')
+          + actions
+          + '</div>';
+      }).join('');
+
+      var responses = cs.changes.filter(function(c){ return /\.response$/.test(c.fieldToken); });
+      var comments = (cs.comments||[]).map(function(cm){
+        return '<div class="comment"><div class="who">'+esc(cm.authorName)+' · '+esc(fmtTime(cm.createdAt))
+          + (cm.itemRef ? ' · Item '+esc(cm.itemRef) : '') + '</div>'+esc(cm.body)+'</div>';
+      }).join('');
+      var approvals = (cs.approvals||[]).map(function(ap){
+        return '<div class="comment"><div class="who">Approval · '+esc(ap.signedName)+' · '+esc(fmtTime(ap.signedAt))+'</div>'
+          + '<b>'+esc(ap.decision)+'</b> — '+esc(ap.token)+(ap.statement?'<br><span class="who">"'+esc(ap.statement)+'"</span>':'')+'</div>';
+      }).join('');
+
+      var bulk = cs.changes.some(function(c){ return c.state==='pending'; })
+        ? '<div class="row" style="margin:4px 0 14px">'
+          + '<button class="btn sm" data-acceptall="'+esc(cs.id)+'">Accept all</button>'
+          + '<button class="btn sm stop" data-rejectall="'+esc(cs.id)+'">Reject all</button></div>'
+        : '';
+
+      return '<div class="cs"><div class="cs-head">'
+        + '<div class="t">Change Set '+esc(cs.csNumber)+' <span class="pill '+esc(cs.status)+'">'+esc(cs.status.replace(/_/g,' '))+'</span></div>'
+        + '<div class="cs-meta">'+meta+'</div>'+sig+'</div>'
+        + '<div class="cs-body">'
+        + bulk
+        + (changes ? '<h3>Proposed changes ('+cs.changes.length+')</h3>'+changes : '')
+        + (responses.length ? '' : '')
+        + (comments ? '<h3>Comments ('+cs.comments.length+')</h3>'+comments : '')
+        + (approvals ? '<h3>Client action approvals ('+cs.approvals.length+')</h3>'+approvals : '')
+        + '</div></div>';
+    }).join('');
+
+    $('activity').innerHTML = '<div class="card">' + head.replace('<div class="card">','').replace('</div>','')
+      + html + '<div id="act-msg"></div></div>';
+    wireDecisions();
+  }
+
+  function wireDecisions(){
+    function decide(crId, decision, note, edited){
+      var el = $('chg-'+crId);
+      api('change-decision', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ projectId: CUR.id, changeRequestId: crId, decision: decision, note: note, editedValue: edited }) })
+        .then(function(res){
+          if(!res.ok){ msg('err', res.error || 'failed'); return; }
+          loadActivity(); loadAudit();
+        }).catch(function(e){ msg('err', e.message); });
+    }
+    document.querySelectorAll('[data-accept]').forEach(function(b){ b.onclick=function(){ decide(b.dataset.accept,'accept'); }; });
+    document.querySelectorAll('[data-reject]').forEach(function(b){ b.onclick=function(){
+      var n = prompt('Reason for rejecting (optional):','') ; decide(b.dataset.reject,'reject', n||''); }; });
+    document.querySelectorAll('[data-edit]').forEach(function(b){ b.onclick=function(){
+      var v = prompt('Edit the value before accepting into the Vista master:','');
+      if(v!==null) decide(b.dataset.edit,'accept','(edited before accept)', v); }; });
+    document.querySelectorAll('[data-acceptall]').forEach(function(b){ b.onclick=function(){
+      if(!confirm('Accept ALL pending changes in this set and write them to the Vista master?')) return;
+      bulk(b.dataset.acceptall,'accept_all'); }; });
+    document.querySelectorAll('[data-rejectall]').forEach(function(b){ b.onclick=function(){
+      if(!confirm('Reject ALL pending changes in this set? Master stays unchanged.')) return;
+      bulk(b.dataset.rejectall,'reject_all'); }; });
+  }
+  function bulk(csId, decision){
+    api('change-set-decision', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ projectId: CUR.id, changeSetId: csId, decision: decision }) })
+      .then(function(){ loadActivity(); loadAudit(); })
+      .catch(function(e){ msg('err', e.message); });
+  }
+  function msg(kind, text){ var m=$('act-msg'); if(m) m.innerHTML = '<div class="msg '+kind+'">'+esc(text)+'</div>'; }
+
+  function loadAudit(){
+    api('status?project='+encodeURIComponent(CUR.id)).then(function(){});
+    // audit history is mirrored locally after a pull; show it from the status endpoint's revisions + a dedicated fetch
+    fetch('/api/tp/portal/client-activity?project='+encodeURIComponent(CUR.id)); // touch
+    api('status?project='+encodeURIComponent(CUR.id)).then(function(s){
+      $('audit-card').hidden = false;
+    });
+    // full audit trail:
+    fetch('/api/tp/portal/audit?project='+encodeURIComponent(CUR.id)).then(function(r){ return r.ok ? r.json() : {data:{events:[]}}; })
+      .then(function(j){
+        var ev = (j.data && j.data.events) || [];
+        $('audit-card').hidden = false;
+        $('audit').innerHTML = ev.length ? ev.map(function(e){
+          return '<div><span class="t">'+esc(fmtTime(e.created_at))+'</span> · '
+            + esc(e.actor_name)+' <b>'+esc(e.event_type)+'</b>'
+            + (e.field_token ? ' <code>'+esc(e.field_token)+'</code>' : '')
+            + (e.old_value!=null || e.new_value!=null ? ' — '+esc(fmtVal(e.old_value))+' → '+esc(fmtVal(e.new_value)) : '')
+            + (e.note ? ' ('+esc(e.note)+')' : '') + '</div>';
+        }).join('') : '<div class="empty">Run "Pull audit log" to load the permanent history.</div>';
+      });
+  }
+
+  // boot
+  fetch('/api/tp/portal/public-config').then(function(r){ return r.json(); }).then(function(j){
+    if(j.ok === false){ $('cfg-card').hidden=false; $('cfg-msg').textContent=j.error||'not configured'; return; }
+    $('main').hidden = false;
+    $('proj').onchange = onProj;
+    $('refresh').onclick = function(){ loadActivity(); loadAudit(); };
+    $('pull').onclick = function(){
+      var b=$('pull'); b.disabled=true; b.textContent='Pulling…';
+      api('pull',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectId:CUR.id})})
+        .then(function(){ b.disabled=false; b.textContent='Pull audit log'; loadAudit(); })
+        .catch(function(e){ b.disabled=false; b.textContent='Pull audit log'; alert(e.message); });
+    };
+    $('republish').onclick = function(){
+      if(!confirm('Publish a NEW immutable revision from the current Vista master?\nThe client keeps access to prior revisions in history.')) return;
+      var b=$('republish'); b.disabled=true; b.textContent='Publishing…';
+      var users = (CUR.link && []);
+      api('status?project='+encodeURIComponent(CUR.id)).then(function(s){
+        var grantEmails = (s.grants||[]).filter(function(g){return !g.revoked;}).map(function(g){return {email:g.email,name:g.name};});
+        return api('publish',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ projectId:CUR.id, client:(CUR.client||'Client'), users:grantEmails,
+            grants:{comment:true,propose:true,approve:true} })});
+      }).then(function(res){
+        b.disabled=false; b.textContent='Publish updated revision →';
+        $('republish-msg').innerHTML = '<div class="msg ok">Published '+esc(res.revisionLabel)+' (content '+esc((res.contentHash||'').slice(0,12))+'). Prior revisions remain in client history.</div>';
+        loadProjects();
+      }).catch(function(e){ b.disabled=false; b.textContent='Publish updated revision →'; $('republish-msg').innerHTML='<div class="msg err">'+esc(e.message)+'</div>'; });
+    };
+    loadProjects();
+  }).catch(function(e){ $('cfg-card').hidden=false; $('cfg-msg').textContent=String(e); });
+})();
+</script>
+</html>

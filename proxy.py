@@ -108,6 +108,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith('/api/sqi/'):
             import sqi_storage_api
             sqi_storage_api.handle_get(self)
+        elif self.path.startswith('/api/tp/portal/'):
+            import tp_portal_api
+            tp_portal_api.handle_get(self)
         elif self.path.startswith('/api/tp/'):
             import tp_storage_api
             tp_storage_api.handle_get(self)
@@ -149,6 +152,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith('/api/sqi/'):
             import sqi_storage_api
             sqi_storage_api.handle_post(self)
+        elif self.path.startswith('/api/tp/portal/'):
+            import tp_portal_api
+            tp_portal_api.handle_post(self)
         elif self.path.startswith('/api/tp/'):
             import tp_storage_api
             tp_storage_api.handle_post(self)

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Publish to Client — Vista Technical Proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --forest:#1A5C46; --forest-deep:#0E3D2E; --brass:#8A6E3B;
+    --ground:#F6F5F1; --surface:#FFFFFF; --sunk:#EEEDE6;
+    --ink:#1D211C; --ink-soft:#5C625A; --ink-faint:#8C918A;
+    --line:#DFDDD2; --stop:#9C3A34; --ok:#2E7D5B;
+    --shadow:0 1px 2px rgba(20,30,24,.05), 0 10px 30px -18px rgba(20,30,24,.2);
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--ground); color:var(--ink);
+    font-family:Inter, system-ui, -apple-system, "Segoe UI", sans-serif; font-size:15px; line-height:1.6; }
+  .bar{ background:var(--forest-deep); color:#EFEDE2; border-bottom:3px solid var(--brass); }
+  .bar-in{ max-width:920px; margin:0 auto; padding:13px 22px; font-family:Spectral, serif; font-weight:600; letter-spacing:.02em; }
+  .wrap{ max-width:920px; margin:0 auto; padding:26px 22px 90px; }
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:22px 24px; margin-bottom:18px; }
+  h2{ font-family:Spectral, serif; font-weight:600; font-size:18px; margin:0 0 4px; }
+  .hint{ color:var(--ink-soft); font-size:13px; margin:0 0 16px; }
+  label{ display:block; font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint); margin:12px 0 5px; }
+  input, select{ width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font:inherit; background:var(--ground); }
+  input:focus, select:focus{ outline:2px solid var(--forest); border-color:var(--forest); }
+  .row{ display:flex; gap:12px; } .row > *{ flex:1; }
+  .btn{ margin-top:16px; padding:11px 20px; border:0; border-radius:8px; background:var(--forest); color:#fff; font-weight:600; cursor:pointer; }
+  .btn:hover{ background:var(--forest-deep); } .btn:disabled{ opacity:.55; cursor:default; }
+  .btn.ghost{ background:transparent; color:var(--forest); border:1px solid var(--line); }
+  .btn.sm{ margin-top:0; padding:7px 12px; font-size:12px; font-weight:500; }
+  .msg{ margin-top:14px; padding:11px 14px; border-radius:8px; font-size:13px; white-space:pre-wrap; }
+  .msg.err{ background:#F7E9E7; color:var(--stop); border:1px solid #E6C9C6; }
+  .msg.ok{ background:#E7F1EC; color:var(--ok); border:1px solid #CBE2D6; }
+  .msg.info{ background:var(--sunk); color:var(--ink-soft); border:1px solid var(--line); }
+  .users{ display:grid; gap:8px; }
+  .user{ display:flex; gap:8px; align-items:center; }
+  .user input{ flex:1; }
+  .user button{ background:none; border:1px solid var(--line); border-radius:7px; padding:8px 10px; cursor:pointer; color:var(--stop); }
+  table{ width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  th, td{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th{ font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint); font-weight:500; }
+  code{ font-family:"IBM Plex Mono", monospace; font-size:.85em; background:var(--sunk); padding:1px 5px; border-radius:4px; }
+  .pill{ font-family:"IBM Plex Mono", monospace; font-size:10px; padding:1px 6px; border-radius:4px; border:1px solid currentColor; }
+  .pill.pub{ color:var(--ok); } .pill.none{ color:var(--ink-faint); }
+  .mlink{ font-family:"IBM Plex Mono", monospace; font-size:11px; word-break:break-all; color:var(--forest); }
+  .spin{ display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--forest); border-radius:50%; animation:s .7s linear infinite; vertical-align:-2px; }
+  @keyframes s{ to{ transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="bar"><div class="bar-in">Vista United &mdash; Publish to Client</div></div>
+<div class="wrap">
+
+  <div class="card" id="cfg-card" hidden>
+    <h2>Portal not configured</h2>
+    <p class="hint" id="cfg-msg"></p>
+    <p class="hint">Add a <code>vista_portal</code> block to <code>config.json</code> and restart <code>proxy.py</code>.
+      See <code>VISTA_PORTAL_PHASE1_SETUP.md</code>.</p>
+  </div>
+
+  <div class="card" id="main" hidden>
+    <h2>Publish a Technical Proposal to a client</h2>
+    <p class="hint">Creates a read-only cloud snapshot and grants secure access to the client emails below.
+      Nothing internal (pricing, suppliers, risks, roadmap, internal notes) is included.</p>
+
+    <label for="proj">Proposal (from the Vista Central Database)</label>
+    <select id="proj"></select>
+    <div id="proj-meta" class="hint" style="margin-top:6px"></div>
+
+    <label for="client">Client organisation name</label>
+    <input id="client" placeholder="e.g. Saudi National Security Services">
+
+    <label>Client users to grant access (name + email)</label>
+    <div class="users" id="users"></div>
+    <button class="btn ghost sm" id="add-user" style="margin-top:8px">+ Add another user</button>
+
+    <div class="row">
+      <div><label for="title">Portal title (optional)</label><input id="title" placeholder="defaults to the proposal name"></div>
+      <div><label for="rev">Revision label (optional)</label><input id="rev" placeholder="defaults to the proposal revision"></div>
+    </div>
+
+    <button class="btn" id="publish">Publish to Client</button>
+    <div id="pub-msg"></div>
+  </div>
+
+  <div class="card" id="status-card" hidden>
+    <h2>Portal status</h2>
+    <div id="status-body"></div>
+    <button class="btn ghost sm" id="refresh" style="margin-top:12px">Refresh</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var api = function(path, opts){
+    return fetch('/api/tp/portal/' + path, opts).then(function(r){
+      return r.json().then(function(j){ if(!r.ok || j.ok === false) throw new Error(j.error || ('HTTP '+r.status)); return j.data; });
+    });
+  };
+  var PROJECTS = [];
+
+  function addUserRow(name, email){
+    var d = document.createElement('div');
+    d.className = 'user';
+    d.innerHTML = '<input class="u-name" placeholder="Full name" value="'+esc(name||'')+'">'
+      + '<input class="u-email" type="email" placeholder="email@company.com" value="'+esc(email||'')+'">'
+      + '<button title="remove">&times;</button>';
+    d.querySelector('button').onclick = function(){ d.remove(); };
+    $('users').appendChild(d);
+  }
+
+  function loadProjects(){
+    return api('projects').then(function(list){
+      PROJECTS = list;
+      $('proj').innerHTML = list.map(function(p){
+        return '<option value="'+esc(p.id)+'">'+esc(p.name||'(untitled)')
+          + '  —  '+ (p.items||0) +' items, '+(p.photos||0)+' photos'
+          + (p.link && p.link.portal_status === 'published' ? '  [published]' : '') + '</option>';
+      }).join('');
+      onProjChange();
+    });
+  }
+  function onProjChange(){
+    var p = PROJECTS.filter(function(x){ return x.id === $('proj').value; })[0];
+    if(!p) return;
+    if(!$('client').value) $('client').value = p.client || '';
+    $('proj-meta').innerHTML = 'ID <code>'+esc(p.id)+'</code> &middot; revision '+esc(p.revision||'—')
+      + (p.link && p.link.last_published_at ? ' &middot; last published '+esc(p.link.last_published_at.slice(0,16).replace('T',' ')) + ' as '+esc(p.link.last_published_revision) : ' &middot; not yet published');
+    loadStatus();
+  }
+
+  function loadStatus(){
+    var pid = $('proj').value;
+    if(!pid) return;
+    $('status-card').hidden = false;
+    $('status-body').innerHTML = '<span class="spin"></span> loading…';
+    api('status?project=' + encodeURIComponent(pid)).then(function(s){
+      if(!s.link || !s.link.cloud_proposal_id){
+        $('status-body').innerHTML = '<p class="hint">This proposal has not been published to the portal yet.</p>';
+        return;
+      }
+      var rows = (s.grants||[]).map(function(g){
+        return '<tr><td>'+esc(g.name||'')+'</td><td>'+esc(g.email||'')+'</td><td>'+esc(g.status||'')
+          +'</td><td>'+(g.revoked ? '<span class="pill none">revoked</span>' : '<span class="pill pub">active</span>')+'</td></tr>';
+      }).join('');
+      var revs = (s.revisions||[]).map(function(r){
+        return '<tr><td>'+esc(r.revision_label)+'</td><td>'+esc((r.published_at||'').slice(0,16).replace('T',' '))
+          +'</td><td>'+esc(r.published_by_name||'')+'</td><td><code>'+esc((r.content_hash||'').slice(0,12))+'</code></td></tr>';
+      }).join('');
+      $('status-body').innerHTML =
+          '<p class="hint">Cloud proposal <code>'+esc(s.link.cloud_proposal_id)+'</code></p>'
+        + '<h3 style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--forest);margin:14px 0 4px">Granted users</h3>'
+        + '<table><tr><th>Name</th><th>Email</th><th>Auth</th><th>Access</th></tr>'+(rows||'<tr><td colspan=4 class=hint>none</td></tr>')+'</table>'
+        + '<h3 style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--forest);margin:16px 0 4px">Published revisions</h3>'
+        + '<table><tr><th>Revision</th><th>Published</th><th>By</th><th>Hash</th></tr>'+revs+'</table>';
+    }).catch(function(e){ $('status-body').innerHTML = '<div class="msg err">'+esc(e.message)+'</div>'; });
+  }
+
+  function publish(){
+    var pid = $('proj').value;
+    var client = ($('client').value||'').trim();
+    var users = [].map.call($('users').querySelectorAll('.user'), function(u){
+      return { name: u.querySelector('.u-name').value.trim(), email: u.querySelector('.u-email').value.trim() };
+    }).filter(function(u){ return u.email; });
+    if(!client){ msg('err','Enter the client organisation name.'); return; }
+    if(!users.length){ msg('err','Add at least one client user email.'); return; }
+    var bad = users.filter(function(u){ return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(u.email); });
+    if(bad.length){ msg('err','Invalid email: ' + bad[0].email); return; }
+
+    var btn = $('publish'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Publishing…';
+    msg('info','Building snapshot, uploading photos, granting access…');
+    api('publish', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ projectId: pid, client: client, users: users,
+        title: $('title').value.trim() || null, revision: $('rev').value.trim() || null })
+    }).then(function(res){
+      btn.disabled = false; btn.textContent = 'Publish to Client';
+      var lines = ['Published: ' + res.revisionLabel + '  (' + res.items + ' items, ' + res.photos + ' photos)',
+                   'Cloud proposal: ' + res.proposalId,
+                   'Content hash: ' + res.contentHash,
+                   'Portal: ' + res.portalUrl, '', 'Client access:'];
+      res.users.forEach(function(u){
+        lines.push('  • ' + u.name + ' <' + u.email + '>' + (u.new ? '  (new — invite email sent)' : '  (existing)'));
+        if(u.magicLink) lines.push('      test sign-in link: ' + u.magicLink);
+      });
+      msg('ok', lines.join('\n'));
+      loadProjects(); loadStatus();
+    }).catch(function(e){
+      btn.disabled = false; btn.textContent = 'Publish to Client';
+      msg('err', e.message);
+    });
+  }
+  function msg(kind, text){ $('pub-msg').innerHTML = '<div class="msg '+kind+'">'+esc(text)+'</div>'; }
+
+  // boot
+  fetch('/api/tp/portal/public-config').then(function(r){ return r.json(); }).then(function(j){
+    if(j.ok === false){
+      $('cfg-card').hidden = false;
+      $('cfg-msg').textContent = j.error || 'not configured';
+      return;
+    }
+    $('main').hidden = false;
+    if(j.data && j.data.secretConfigured === false){
+      msg('err', 'The Supabase secret key is not set. Export VISTA_PORTAL_SUPABASE_SECRET_KEY '
+        + 'in the shell that runs proxy.py, then restart it. Publishing is disabled until then.');
+      $('publish').disabled = true;
+    }
+    addUserRow();
+    $('add-user').onclick = function(){ addUserRow(); };
+    $('proj').onchange = onProjChange;
+    $('publish').onclick = publish;
+    $('refresh').onclick = loadStatus;
+    loadProjects();
+  }).catch(function(e){
+    $('cfg-card').hidden = false; $('cfg-msg').textContent = String(e);
+  });
+})();
+</script>
+</html>
