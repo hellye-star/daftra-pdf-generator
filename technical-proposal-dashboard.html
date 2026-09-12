@@ -201,6 +201,8 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--emerald);
     font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; cursor:pointer; }
   .exadd span{ font-size:22px; line-height:1; }
+  .awphoto{ display:flex; flex-direction:column; gap:5px; }
+  .awcap{ font-size:11.5px; padding:6px 8px; }
   /* gallery lightbox nav */
   .lightbox .nav{ position:absolute; top:50%; transform:translateY(-50%); background:#fff; border:0; width:42px; height:56px;
     font-size:22px; font-weight:700; border-radius:8px; color:var(--forest); }
@@ -909,7 +911,50 @@ function newProject(){
   return { id:uid(), name:'Untitled Project', client:'', location:'', revision:'R1',
            descriptor:'', preparedBy:'', dateOfIssue:'', docRef:'',
            showPricing:false,
-           createdAt:t, updatedAt:t, items:[] };
+           createdAt:t, updatedAt:t, items:[], additionalWork:[] };
+}
+function newAdditionalWork(project){
+  const t = now();
+  return {
+    id: uid(), title:'', date:'', relatedItemRef:'',
+    qty:{ value:null, unit:'' },
+    description:'', reason:'', clientNotes:'',
+    photoIds:[], photoCaptions:{},
+    createdAt:t, updatedAt:t,
+  };
+}
+function currentAW(){
+  const r = parseHash();
+  if(r.view!=='aw' || !STATE.project) return null;
+  return (STATE.project.additionalWork||[]).find(x=>x.id===r.awid) || null;
+}
+async function deleteAdditionalWorkDeep(project, aw){
+  const ph = await dbIndexAll('photos','by_item', aw.id);
+  for(const p of ph) await dbDel('photos', p.id);
+  project.additionalWork = (project.additionalWork||[]).filter(x=>x.id!==aw.id);
+}
+async function addAWPhotos(project, aw, files){
+  aw.photoIds = aw.photoIds || [];
+  for(const file of files){
+    const proc = await processImage(file);
+    const id = uid();
+    await dbPut('photos', { id, projectId:project.id, itemId:aw.id, slot:'aw',
+      blob:proc.blob, mime:proc.mime, w:proc.w, h:proc.h, bytes:proc.bytes, createdAt:now() });
+    aw.photoIds.push(id);
+  }
+  await commitSave();
+}
+async function removeAWPhoto(project, aw, idx){
+  const arr = aw.photoIds || [];
+  const [id] = arr.splice(idx,1);
+  if(id){ await dbDel('photos', id); delete (aw.photoCaptions||{})[id]; }
+  await commitSave();
+}
+function moveAWPhoto(aw, idx, dir){
+  const a = aw.photoIds || []; const j = idx + dir;
+  if(j<0 || j>=a.length) return false;
+  [a[idx],a[j]] = [a[j],a[idx]];
+  return true;
 }
 function newItem(project){
   const n = project.items.length + 1;
@@ -1483,6 +1528,7 @@ function rmSuggestClientInputs(item){
 const RETIRED_PRESET_KEYS = ['installation'];
 function migrateProject(project){
   let changed = false;
+  if(!Array.isArray(project.additionalWork)){ project.additionalWork = []; changed = true; }
   (project.items||[]).forEach(it=>{
     // Existing Condition: single slot -> ordered collection (keeps the old id)
     if(!Array.isArray(it.existingPhotoIds)) it.existingPhotoIds = [];
@@ -1988,6 +2034,8 @@ function parseHash(){
   if(parts[0]==='p' && parts[2]==='i' && parts[4]==='roadmap') return { view:'roadmap', pid:parts[1], iid:parts[3] };
   if(parts[0]==='p' && parts[2]==='roadmap') return { view:'projroadmap', pid:parts[1] };
   if(parts[0]==='p' && parts[2]==='i') return { view:'item', pid:parts[1], iid:parts[3] };
+  if(parts[0]==='p' && parts[2]==='additional' && parts[3]) return { view:'aw', pid:parts[1], awid:parts[3] };
+  if(parts[0]==='p' && parts[2]==='additional') return { view:'additional', pid:parts[1] };
   if(parts[0]==='p' && parts[2]==='export') return { view:'export', pid:parts[1] };
   if(parts[0]==='p' && parts[2]==='quote' && parts[3]) return { view:'quorev', pid:parts[1], sid:parts[3], rev: (parts[4]==='rev' && parts[5]!=null) ? +parts[5] : null };
   if(parts[0]==='p' && parts[2]==='quote') return { view:'quote', pid:parts[1] };
@@ -2012,6 +2060,12 @@ async function render(){
   await loadProjectPhotos(p.id);
 
   if(r.view==='overview'){ STATE.otherOpen.clear(); return renderOverview(p); }
+  if(r.view==='additional'){ return renderAdditionalWorkList(p); }
+  if(r.view==='aw'){
+    const aw = (p.additionalWork||[]).find(x=>x.id===r.awid);
+    if(!aw){ go('#/p/'+p.id+'/additional'); return; }
+    return renderAdditionalWorkEditor(p, aw);
+  }
   if(r.view==='export'){ return renderExport(p); }
   if(r.view==='quote'){ return renderQuote(p); }
   if(r.view==='quorev'){ return renderQuoRev(p); }
@@ -2158,12 +2212,105 @@ function renderOverview(p){
     +    (items || '<div class="hint" style="margin-bottom:10px">No items yet — add the first one.</div>')
     +    '<button class="btn btn-ghost btn-sm full mt6" data-additem>+ Add Item</button>'
     +  '</div></div>'
+    +  '<div class="card"><div class="eyebrow">Additional Work <span class="rt">'+(p.additionalWork||[]).length+' total</span></div><div class="body">'
+    +    '<div class="hint" style="margin-bottom:10px">Work carried out beyond the original quoted &amp; signed scope of this proposal — kept fully separate from the proposal items above.</div>'
+    +    '<button class="btn btn-ghost full" data-viewaw>Open Additional Work →</button>'
+    +  '</div></div>'
     +  ((p.items.length || quoEnsure(p).length) ? quotationsCardHtml(p) : '')
     +  (p.items.length
         ? '<button class="btn btn-ghost full mt10" data-projroadmap>Execution Roadmap →</button>'
           + '<button class="btn btn-primary full mt10" data-export>Export / Preview PDF →</button>'
           + '<button class="btn btn-ghost full mt10" data-quote>Create Vista Quotation →</button>'
         : '')
+    + '</div>';
+}
+
+/* ============================================================
+   10a2 · View — Additional Work
+   ------------------------------------------------------------
+   Explicitly NOT part of the original quoted/signed proposal
+   scope. Stored on the project as its own array (additionalWork),
+   never mixed into p.items, never counted toward the main-proposal
+   version-status fingerprint, never auto-added to Proposal Acceptance.
+   ============================================================ */
+function renderAdditionalWorkList(p){
+  const list = p.additionalWork || [];
+  const rows = list.map(aw=>{
+    const th = photoUrl((aw.photoIds||[])[0]);
+    const q = aw.qty && aw.qty.value!=null ? ' · Qty '+esc(aw.qty.value)+(aw.qty.unit?' '+esc(aw.qty.unit):'') : '';
+    return '<div class="itemrow">'
+      + '<div class="irtap" data-openaw="'+aw.id+'">'
+      +   (th ? '<img class="thumb" src="'+th+'" alt="">' : '<div class="thumb empty">◱</div>')
+      +   '<div class="imain">'
+      +     '<span class="inm">'+esc(aw.title||'Untitled additional work')+'</span>'
+      +     '<div class="isub">'+esc(aw.date||'no date')+(aw.relatedItemRef?' · Item '+esc(aw.relatedItemRef):'')+q+'</div>'
+      +   '</div>'
+      + '</div>'
+      + '<button class="rowmenu" data-awmenu="'+aw.id+'">⋯</button>'
+      + '</div>';
+  }).join('');
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'">‹ '+esc(p.name||'Project')+'</button>'
+    + '<span class="title">Additional Work</span>'
+    + '<span class="save">Saved ✓</span></div>'
+    + '<div class="wrap">'
+    +  '<div class="card"><div class="eyebrow">Not part of the original quoted scope</div><div class="body">'
+    +    '<div class="hint" style="margin-bottom:10px">Record work executed beyond the signed Technical Proposal — extra items, variations, or scope additions requested after signing. Fully separate from the proposal items and their approvals.</div>'
+    +    (rows || '<div class="hint" style="margin-bottom:10px">No additional work recorded yet.</div>')
+    +    '<button class="btn btn-ghost btn-sm full mt6" data-addaw>+ Add Additional Work Entry</button>'
+    +  '</div></div>'
+    + '</div>';
+}
+
+function awPhotosCardHtml(project, aw){
+  const ids = (aw.photoIds||[]).filter(id=> photoUrl(id));
+  const caps = aw.photoCaptions || {};
+  const thumbs = ids.map((id,i)=>{
+    return '<div class="awphoto">'
+      + '<div class="exphoto">'
+      +   '<img src="'+photoUrl(id)+'" data-viewawphoto="'+i+'" alt="">'
+      +   '<div class="exnum">'+(i+1)+'</div>'
+      +   '<div class="exphoto-acts">'
+      +     '<button data-moveawphoto="'+i+'" data-dir="-1" title="Move left" '+(i===0?'disabled':'')+'>‹</button>'
+      +     '<button data-moveawphoto="'+i+'" data-dir="1" title="Move right" '+(i===ids.length-1?'disabled':'')+'>›</button>'
+      +     '<button class="del" data-removeawphoto="'+i+'" title="Remove">✕</button>'
+      +   '</div>'
+      + '</div>'
+      + '<input class="awcap" data-awcaption="'+id+'" value="'+esc(caps[id]||'')+'" placeholder="Caption (optional)">'
+      + '</div>';
+  }).join('');
+  return '<div class="card"><div class="eyebrow">Photos <span class="rt">'+ids.length+'</span></div><div class="body">'
+    +   '<div class="hint" style="margin-bottom:10px">Photos are shown first on the client-facing Additional Work page. Add as many as needed.</div>'
+    +   (ids.length ? '<div class="exgrid">'+thumbs+'<button class="exadd" data-addawphoto><span>＋</span>Add Photo</button></div>'
+                     : '<button class="photoslot primary" data-addawphoto><div class="ph-label"><span class="cam">📷</span><br>Add Photos<small>Capture or upload — you can add several</small></div></button>')
+    + '</div></div>';
+}
+
+function renderAdditionalWorkEditor(p, aw){
+  const itemOpts = (p.items||[]).map(it=>'<option value="'+esc(it.number)+'"'+(aw.relatedItemRef===it.number?' selected':'')+'>'+esc(it.number)+' — '+esc(it.name||'Untitled item')+'</option>').join('');
+  app().innerHTML =
+    '<div class="appbar">'
+    + '<button class="back" data-back="#/p/'+p.id+'/additional">‹ Additional Work</button>'
+    + '<span class="title">'+esc(aw.title||'Untitled additional work')+'</span>'
+    + '<span class="save">Saved ✓</span></div>'
+    + '<div class="wrap">'
+    +  awPhotosCardHtml(p, aw)
+    +  '<div class="card"><div class="eyebrow">Details</div><div class="body">'
+    +    '<div class="field"><label>Title</label><input data-awp="title" value="'+esc(aw.title||'')+'" placeholder="e.g. Extra signage at north entrance"></div>'
+    +    '<div class="row">'
+    +      '<div class="field"><label>Date</label><input data-awp="date" value="'+esc(aw.date||'')+'" placeholder="YYYY-MM-DD" inputmode="numeric"></div>'
+    +      '<div class="field"><label>Related original item (optional)</label><select data-awp="relatedItemRef"><option value="">— none —</option>'+itemOpts+'</select></div>'
+    +    '</div>'
+    +    '<div class="row">'
+    +      '<div class="field"><label>Quantity (optional)</label><input data-awp="qty.value" type="number" min="0" value="'+(aw.qty&&aw.qty.value!=null?esc(aw.qty.value):'')+'" placeholder="e.g. 3"></div>'
+    +      '<div class="field"><label>Unit</label><input data-awp="qty.unit" value="'+esc((aw.qty&&aw.qty.unit)||'')+'" placeholder="no. / m² / lm"></div>'
+    +    '</div>'
+    +    '<div class="field"><label>Brief description / explanation</label><textarea data-awp="description" rows="3" placeholder="What was done">'+esc(aw.description||'')+'</textarea></div>'
+    +    '<div class="field"><label>Reason / context</label><textarea data-awp="reason" rows="3" placeholder="Why this was requested/needed">'+esc(aw.reason||'')+'</textarea></div>'
+    +    '<div class="field"><label>Client-facing notes</label><textarea data-awp="clientNotes" rows="3" placeholder="Notes the client will see">'+esc(aw.clientNotes||'')+'</textarea></div>'
+    +  '</div></div>'
+    +  '<button class="btn btn-ghost full mt10" data-back="#/p/'+p.id+'/additional">Done</button>'
     + '</div>';
 }
 
@@ -3641,6 +3788,19 @@ document.addEventListener('input', e=>{
     if(t.dataset.pf==='name'){ const ti=document.querySelector('.appbar .title'); if(ti) ti.textContent = t.value||'Untitled Project'; }
     scheduleSave(); return;
   }
+  // Additional Work — entry fields + photo captions
+  if(t.dataset.awp!=null){
+    const aw = currentAW(); if(!aw) return;
+    setPath(aw, t.dataset.awp, t.value);
+    if(t.dataset.awp==='title'){ const ti=document.querySelector('.appbar .title'); if(ti) ti.textContent = t.value||'Untitled additional work'; }
+    scheduleSave(); return;
+  }
+  if(t.dataset.awcaption!=null){
+    const aw = currentAW(); if(!aw) return;
+    aw.photoCaptions = aw.photoCaptions || {};
+    aw.photoCaptions[t.dataset.awcaption] = t.value;
+    scheduleSave(); return;
+  }
   // execution roadmap — text fields: mutate + save, never re-render (keep focus)
   if(t.dataset.rmf === 'label' || t.dataset.rmf === 'note'){
     const f = rmFind(t.dataset.rmid);
@@ -4198,6 +4358,61 @@ document.addEventListener('click', async e=>{
     return;
   }
 
+  /* ----- Additional Work: list ----- */
+  if(closest('[data-viewaw]')){ go('#/p/'+STATE.project.id+'/additional'); return; }
+  if(closest('[data-addaw]')){
+    const aw = newAdditionalWork(STATE.project);
+    STATE.project.additionalWork = STATE.project.additionalWork || [];
+    STATE.project.additionalWork.push(aw);
+    await commitSave();
+    go('#/p/'+STATE.project.id+'/additional/'+aw.id); return;
+  }
+  const openAW = closest('[data-openaw]');
+  if(openAW){ go('#/p/'+STATE.project.id+'/additional/'+openAW.dataset.openaw); return; }
+  const awm = closest('[data-awmenu]');
+  if(awm){
+    const aw = (STATE.project.additionalWork||[]).find(x=>x.id===awm.dataset.awmenu);
+    const a = await sheetMenu([{label:'Open',v:'open'},{label:'Delete entry',v:'del',danger:true}]);
+    if(!a) return;
+    if(a.v==='open') go('#/p/'+STATE.project.id+'/additional/'+aw.id);
+    if(a.v==='del' && await confirmDialog('Delete this Additional Work entry?', '"'+(aw.title||'Untitled additional work')+'" and its photos will be removed. This does not affect the original proposal.', true)){
+      await deleteAdditionalWorkDeep(STATE.project, aw); await commitSave(); await loadProjectPhotos(STATE.project.id); renderAdditionalWorkList(STATE.project);
+    }
+    return;
+  }
+
+  /* ----- Additional Work: editor + photos ----- */
+  const aw = currentAW();
+  if(aw){
+    const awAdd = closest('[data-addawphoto]');
+    if(awAdd){
+      const fp = $('#filepick');
+      fp.dataset.mode = 'aw-add'; fp.multiple = true; fp.value = ''; fp.click();
+      return;
+    }
+    const awRm = closest('[data-removeawphoto]');
+    if(awRm){
+      if(await confirmDialog('Remove this photo?', 'This deletes the stored image.', true)){
+        await removeAWPhoto(STATE.project, aw, +awRm.dataset.removeawphoto);
+        await loadProjectPhotos(STATE.project.id);
+        renderAdditionalWorkEditor(STATE.project, aw);
+      }
+      return;
+    }
+    const awMv = closest('[data-moveawphoto]');
+    if(awMv){
+      if(moveAWPhoto(aw, +awMv.dataset.moveawphoto, +awMv.dataset.dir)){
+        await commitSave(); renderAdditionalWorkEditor(STATE.project, aw);
+      }
+      return;
+    }
+    const awView = closest('[data-viewawphoto]');
+    if(awView){
+      lightbox((aw.photoIds||[]).map(id=>photoUrl(id)), +awView.dataset.viewawphoto);
+      return;
+    }
+  }
+
   /* ----- item editor ----- */
   const it = currentItem();
 
@@ -4348,8 +4563,22 @@ document.addEventListener('click', async e=>{
 $('#filepick').addEventListener('change', async e=>{
   const files = [...(e.target.files||[])];
   const mode = e.target.dataset.mode || 'slot';
+  if(!files.length){ e.target.value=''; return; }
+  if(mode==='aw-add'){
+    const aw = currentAW();
+    if(!aw){ e.target.value=''; return; }
+    toast(files.length>1 ? 'Processing '+files.length+' photos…' : 'Processing photo…');
+    try{
+      await addAWPhotos(STATE.project, aw, files);
+      await loadProjectPhotos(STATE.project.id);
+      renderAdditionalWorkEditor(STATE.project, aw);
+      toast(files.length>1 ? files.length+' photos saved' : 'Photo saved');
+    }catch(err){ console.error(err); toast('Could not read that image'); }
+    e.target.value=''; e.target.multiple=false;
+    return;
+  }
   const it = currentItem();
-  if(!files.length || !it){ e.target.value=''; return; }
+  if(!it){ e.target.value=''; return; }
   toast(files.length>1 ? 'Processing '+files.length+' photos…' : 'Processing photo…');
   try{
     if(mode==='existing-add'){

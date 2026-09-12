@@ -3,9 +3,13 @@ proxy.py handlers for /api/tp/portal/*  (Phase 1 — read-only portal).
 
 Routes (all localhost-only, same trust model as /api/tp/*):
   GET  /api/tp/portal/public-config      -> { url, anonKey, bucket }   (NO service key)
-  GET  /api/tp/portal/status?project=ID  -> link + grants + revisions
+  GET  /api/tp/portal/status?project=ID  -> link + grants + revisions (Main Proposal only)
+  GET  /api/tp/portal/version-status?project=ID -> Main Proposal { published, upToDate, revisionLabel, publishedAt }
+  GET  /api/tp/portal/additional-work-status?project=ID -> Additional Work { published, upToDate, revisionLabel, publishedAt }
   GET  /api/tp/portal/projects           -> central-DB projects (id,name,client,items,photos,link)
   POST /api/tp/portal/publish            -> { projectId, client, users:[{name,email}], title?, revision? }
+  POST /api/tp/portal/republish          -> { projectId, title?, revision? }  (Main Proposal; reuses existing client/users)
+  POST /api/tp/portal/publish-additional-work -> { projectId, revision? }  (independent revision stream; reuses existing client/users; requires the Main Proposal to already be published)
   POST /api/tp/portal/pull               -> { projectId }
 """
 import json
@@ -55,6 +59,18 @@ def handle_get(handler):
             if not pid:
                 return _err(handler, 400, 'project query param required')
             return _send(handler, {'ok': True, 'data': tp_portal.status(pid)})
+
+        if path == '/api/tp/portal/version-status':
+            pid = (qs.get('project') or [''])[0]
+            if not pid:
+                return _err(handler, 400, 'project query param required')
+            return _send(handler, {'ok': True, 'data': tp_portal.version_status(pid)})
+
+        if path == '/api/tp/portal/additional-work-status':
+            pid = (qs.get('project') or [''])[0]
+            if not pid:
+                return _err(handler, 400, 'project query param required')
+            return _send(handler, {'ok': True, 'data': tp_portal.additional_work_status(pid)})
 
         if path == '/api/tp/portal/projects':
             tp_portal_db.init_db()
@@ -113,6 +129,22 @@ def handle_post(handler):
                                     title=(body.get('title') or None),
                                     revision_label=(body.get('revision') or None),
                                     grants=grants)
+            return _send(handler, {'ok': True, 'data': res})
+
+        if path == '/api/tp/portal/republish':
+            pid = body.get('projectId') or body.get('project_id')
+            if not pid:
+                return _err(handler, 400, 'projectId required')
+            res = tp_portal.republish(pid,
+                                      title=(body.get('title') or None),
+                                      revision_label=(body.get('revision') or None))
+            return _send(handler, {'ok': True, 'data': res})
+
+        if path == '/api/tp/portal/publish-additional-work':
+            pid = body.get('projectId') or body.get('project_id')
+            if not pid:
+                return _err(handler, 400, 'projectId required')
+            res = tp_portal.publish_additional_work(pid, revision_label=(body.get('revision') or None))
             return _send(handler, {'ok': True, 'data': res})
 
         if path == '/api/tp/portal/pull':

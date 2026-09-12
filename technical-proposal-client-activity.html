@@ -205,10 +205,33 @@
         return '<div class="comment"><div class="who">'+esc(cm.authorName)+' · '+esc(fmtTime(cm.createdAt))
           + (cm.itemRef ? ' · Item '+esc(cm.itemRef) : '') + '</div>'+esc(cm.body)+'</div>';
       }).join('');
-      var approvals = (cs.approvals||[]).map(function(ap){
-        return '<div class="comment"><div class="who">Approval · '+esc(ap.signedName)+' · '+esc(fmtTime(ap.signedAt))+'</div>'
+      // approvals are signed evidence (no Accept/Reject). Split whole-proposal /
+      // whole-item sign-off from Client Action approvals — all live in the same
+      // portal_approvals table.
+      var isProposalApproval = function(ap){ return ap.token === 'approval.proposal'; };
+      var isItemApproval = function(ap){ return /^approval\.item\.\d{1,3}$/.test(ap.token || ''); };
+      var proposalApprovals = (cs.approvals||[]).filter(isProposalApproval).map(function(ap){
+        var role = [cs.signerTitle, cs.signerCompany].filter(Boolean).join(' — ');
+        return '<div class="comment" style="border-left:3px solid #B08A3C">'
+          + '<div class="who"><b>PROPOSAL APPROVAL</b> · Whole proposal — Approved</div>'
+          + 'Approved by: <b>'+esc(ap.signedName)+'</b>'+(role?' · '+esc(role):'')
+          + '<br><span class="who">Signed: '+esc(fmtTime(ap.signedAt))+' · <code>'+esc(ap.token)+'</code></span>'
+          + (ap.statement?'<br><span class="who">"'+esc(ap.statement)+'"</span>':'') + '</div>';
+      }).join('');
+      var itemApprovals = (cs.approvals||[]).filter(isItemApproval).map(function(ap){
+        var ref = (String(ap.token).match(/^approval\.item\.(\d{1,3})$/)||[])[1] || ap.itemRef || '';
+        var role = [cs.signerTitle, cs.signerCompany].filter(Boolean).join(' — ');
+        return '<div class="comment" style="border-left:3px solid #2E7D5B">'
+          + '<div class="who"><b>ITEM APPROVAL</b> · Item '+esc(ref)+' — Approved</div>'
+          + 'Approved by: <b>'+esc(ap.signedName)+'</b>'+(role?' · '+esc(role):'')
+          + '<br><span class="who">Signed: '+esc(fmtTime(ap.signedAt))+' · <code>'+esc(ap.token)+'</code></span>'
+          + (ap.statement?'<br><span class="who">"'+esc(ap.statement)+'"</span>':'') + '</div>';
+      }).join('');
+      var actionApprovals = (cs.approvals||[]).filter(function(ap){ return !isItemApproval(ap) && !isProposalApproval(ap); }).map(function(ap){
+        return '<div class="comment"><div class="who"><b>CLIENT ACTION APPROVAL</b> · '+esc(ap.signedName)+' · '+esc(fmtTime(ap.signedAt))+'</div>'
           + '<b>'+esc(ap.decision)+'</b> — '+esc(ap.token)+(ap.statement?'<br><span class="who">"'+esc(ap.statement)+'"</span>':'')+'</div>';
       }).join('');
+      var approvals = proposalApprovals + itemApprovals + actionApprovals;
 
       var bulk = cs.changes.some(function(c){ return c.state==='pending'; })
         ? '<div class="row" style="margin:4px 0 14px">'
@@ -224,7 +247,7 @@
         + (changes ? '<h3>Proposed changes ('+cs.changes.length+')</h3>'+changes : '')
         + (responses.length ? '' : '')
         + (comments ? '<h3>Comments ('+cs.comments.length+')</h3>'+comments : '')
-        + (approvals ? '<h3>Client action approvals ('+cs.approvals.length+')</h3>'+approvals : '')
+        + (approvals ? '<h3>Client approvals ('+cs.approvals.length+')</h3>'+approvals : '')
         + '</div></div>';
     }).join('');
 

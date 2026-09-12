@@ -461,6 +461,72 @@ def _photo_ref(item_ref, slot, ordinal, row):
     }
 
 
+# ── Additional Work snapshot (client-safe projection) — fully independent of
+# build_snapshot()/the Main Proposal. Explicitly NOT part of the original
+# quoted/signed scope; published as its own revision stream (see publish()
+# vs publish_additional_work()). ─────────────────────────────────────────────
+
+def build_additional_work_snapshot(project_id):
+    project = tp_db.get_project(project_id)
+    if not project:
+        raise KeyError('project %r not found in central DB' % project_id)
+    photos = tp_db.list_photos(project_id)
+    photo_by_id = {p['id']: p for p in photos}
+    item_names = {_nn(it.get('number')): _nn(it.get('name')) for it in (project.get('items') or [])}
+
+    entries = []
+    photo_manifest = []  # (aw_ref, slot, ordinal, photo_row)
+    for aw in (project.get('additionalWork') or []):
+        aw_ref = _nn(aw.get('id')) or str(len(entries) + 1)
+        captions = aw.get('photoCaptions') or {}
+        pics = []
+        for ord_i, pid in enumerate(aw.get('photoIds') or []):
+            row = photo_by_id.get(pid)
+            if row:
+                pref = _photo_ref(aw_ref, 'additional_work', ord_i, row)
+                pref['caption'] = _nn(captions.get(pid))
+                pics.append(pref)
+                photo_manifest.append((aw_ref, 'additional_work', ord_i, row))
+        related_ref = _nn(aw.get('relatedItemRef'))
+        entries.append({
+            'ref': aw_ref,
+            'title': _nn(aw.get('title')) or 'Untitled additional work',
+            'date': _nn(aw.get('date')),
+            'relatedItemRef': related_ref,
+            'relatedItemName': item_names.get(related_ref, '') if related_ref else '',
+            'qty': _qty(aw.get('qty')),
+            'description': _nn(aw.get('description')),
+            'reason': _nn(aw.get('reason')),
+            'clientNotes': _nn(aw.get('clientNotes')),
+            'photos': pics,
+        })
+
+    snapshot = {
+        'snapshotSchema': SNAPSHOT_SCHEMA,
+        'documentType': 'additional_work',
+        'generatedAt': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'project': {
+            'name': _nn(project.get('name')) or 'Untitled Project',
+            'client': _nn(project.get('client')),
+            'docRef': _nn(project.get('docRef')),
+        },
+        'entries': entries,
+    }
+
+    # hard safety net — same discipline as build_snapshot()
+    blob = canonical_json(snapshot)
+    leaked = [s for s in _FORBIDDEN_SUBSTRINGS if s.split('.')[-1].lower() in blob.lower()
+              and s in ('supplier', 'quotation')]
+    if leaked:
+        raise RuntimeError('additional work snapshot projection leak: %s' % leaked)
+    return snapshot, photo_manifest
+
+
+def additional_work_fingerprint(snapshot):
+    reduced = {k: v for k, v in (snapshot or {}).items() if k != 'generatedAt'}
+    return content_hash(reduced)
+
+
 # ── field-token whitelist (Phase 0 spec §9) ────────────────────────────────
 # The ONLY tokens a client may ever propose against. Generated per revision
 # from the snapshot; frozen into portal_field_defs. A token absent here cannot
@@ -517,9 +583,15 @@ def _clip(s, n):
 
 
 def approval_targets(snapshot):
-    """One approvable target per client-input that carries a client action."""
-    out = []
+    """Approvable targets exposed to the client, all under the existing
+    portal_approvals model:
+      * approval.proposal                 — whole-proposal sign-off (scope='proposal'), one per revision
+      * approval.item.<ref>                — whole-item sign-off (scope='item'), one per item
+      * approval.item.<ref>.<ciRef>        — one per client-input that carries a client action (scope='item')
+    """
+    out = ['approval.proposal']
     for it in snapshot['items']:
+        out.append('approval.item.%s' % it['ref'])
         for c in it.get('clientInputs', []):
             if _has(c.get('clientAction')):
                 out.append('approval.item.%s.%s' % (it['ref'], c['ref']))
@@ -673,15 +745,20 @@ def publish(project_id, client_name, users, *, title=None, revision_label=None, 
                 'title': title, 'status': 'active', 'created_by': identity_email})
             proposal_id = row['id']
 
+    # Main Proposal revision chain ONLY (document_type='proposal') — Additional
+    # Work revisions live under the same proposal_id but must never be picked
+    # up here as a "previous" main-proposal revision, and publishing here must
+    # never touch the Additional Work chain.
     supersedes = None
     prev = supa.select('portal_revisions', params={
-        'proposal_id': 'eq.%s' % proposal_id, 'select': 'id,revision_label',
-        'order': 'published_at.desc', 'limit': 1})
+        'proposal_id': 'eq.%s' % proposal_id, 'document_type': 'eq.proposal',
+        'select': 'id,revision_label', 'order': 'published_at.desc', 'limit': 1})
     if prev:
         supersedes = prev[0]['id']
-        # auto-suffix if the label collides
+        # auto-suffix if the label collides (main-proposal labels only)
         taken = {r['revision_label'] for r in supa.select('portal_revisions', params={
-            'proposal_id': 'eq.%s' % proposal_id, 'select': 'revision_label'})}
+            'proposal_id': 'eq.%s' % proposal_id, 'document_type': 'eq.proposal',
+            'select': 'revision_label'})}
         if revision_label in taken:
             n = 2
             while '%s-%s' % (revision_label, chr(95 + n)) in taken:
@@ -689,7 +766,7 @@ def publish(project_id, client_name, users, *, title=None, revision_label=None, 
             revision_label = '%s-%s' % (revision_label, chr(95 + n))  # R1-b, R1-c ...
 
     revision = supa.insert('portal_revisions', {
-        'proposal_id': proposal_id, 'revision_label': revision_label,
+        'proposal_id': proposal_id, 'revision_label': revision_label, 'document_type': 'proposal',
         'snapshot_schema': SNAPSHOT_SCHEMA, 'snapshot_jsonb': snapshot,
         'content_hash': chash, 'supersedes_revision_id': supersedes,
         'published_by': identity_email, 'published_by_name': identity_name})
@@ -764,7 +841,7 @@ def publish(project_id, client_name, users, *, title=None, revision_label=None, 
     }
 
 
-def _append_publish_history(project_id, revision_label, cloud_revision_id, when, by):
+def _append_publish_history(project_id, revision_label, cloud_revision_id, when, by, document_type='proposal'):
     proj = tp_db.get_project(project_id)
     if not proj:
         return
@@ -772,7 +849,7 @@ def _append_publish_history(project_id, revision_label, cloud_revision_id, when,
     if not isinstance(hist, list):
         hist = []
     hist.append({'revision': revision_label, 'cloudRevisionId': cloud_revision_id,
-                 'publishedAt': when, 'publishedBy': by})
+                 'publishedAt': when, 'publishedBy': by, 'documentType': document_type})
     proj['publishHistory'] = hist
     proj['updatedAt'] = int(datetime.datetime.utcnow().timestamp() * 1000)
     tp_db.upsert_project(proj)
@@ -814,12 +891,242 @@ def status(project_id):
                 'revoked': bool(g.get('revoked_at')),
             } for g in grants]
             revs = supa.select('portal_revisions', params={
-                'proposal_id': 'eq.%s' % pid, 'select': 'revision_label,published_at,published_by_name,content_hash',
+                'proposal_id': 'eq.%s' % pid, 'document_type': 'eq.proposal',
+                'select': 'revision_label,published_at,published_by_name,content_hash',
                 'order': 'published_at.desc'})
             out['revisions'] = revs
     except Exception as e:  # noqa: BLE001
         out['error'] = str(e)
     return out
+
+
+def _active_grant_users(supa, proposal_id):
+    """The active granted users + their access flags, read straight off
+    whatever was already published — used by both republish() and
+    publish_additional_work() so neither ever re-asks for client/users."""
+    grant_rows = supa.select('portal_proposal_grants', params={
+        'proposal_id': 'eq.%s' % proposal_id,
+        'select': 'client_user_id,can_comment,can_propose,can_approve,revoked_at'})
+    active = [g for g in grant_rows if not g.get('revoked_at')]
+    if not active:
+        raise ValueError('proposal has no active granted users')
+    uids = sorted({g['client_user_id'] for g in active})
+    user_rows = supa.select('portal_client_users', params={
+        'id': 'in.(%s)' % ','.join(uids), 'select': 'id,email,full_name'})
+    umap = {u['id']: u for u in user_rows}
+    users = [{'name': umap[g['client_user_id']]['full_name'], 'email': umap[g['client_user_id']]['email']}
+             for g in active if g['client_user_id'] in umap]
+    grants = {
+        'comment': any(g.get('can_comment') for g in active),
+        'propose': any(g.get('can_propose') for g in active),
+        'approve': any(g.get('can_approve') for g in active),
+    }
+    return users, grants
+
+
+# ── local <-> online version status ────────────────────────────────────────
+# build_snapshot() embeds a volatile 'generatedAt' timestamp, so raw
+# content_hash() is not stable across two calls with identical real content.
+# client_fingerprint() strips that plus the derived 'approvalTargets' key
+# before hashing, giving a fingerprint that depends only on client-facing
+# MAIN PROPOSAL content — safe to compare the freshly-built local snapshot
+# against an already-published revision's frozen snapshot_jsonb. Additional
+# Work is an entirely separate document/revision stream (see
+# additional_work_fingerprint() / additional_work_status() below) and never
+# factors into this comparison.
+
+def client_fingerprint(snapshot):
+    reduced = {k: v for k, v in (snapshot or {}).items()
+               if k not in ('generatedAt', 'approvalTargets')}
+    return content_hash(reduced)
+
+
+def version_status(project_id):
+    """Compare the CURRENT local Main Proposal against the latest published
+    document_type='proposal' revision. Read-only — never publishes, never
+    mutates anything. Wholly independent of Additional Work's own status."""
+    link = tp_portal_db.get_link(project_id)
+    if not link or not link.get('cloud_proposal_id'):
+        return {'published': False}
+    supa = Supa(load_config())
+    pid = link['cloud_proposal_id']
+    revs = supa.select('portal_revisions', params={
+        'proposal_id': 'eq.%s' % pid, 'document_type': 'eq.proposal',
+        'select': 'revision_label,published_at,content_hash,snapshot_jsonb',
+        'order': 'published_at.desc', 'limit': 1})
+    if not revs:
+        return {'published': False}
+    latest = revs[0]
+    local_snapshot, _ = build_snapshot(project_id)
+    up_to_date = client_fingerprint(local_snapshot) == client_fingerprint(latest.get('snapshot_jsonb'))
+    return {
+        'published': True,
+        'revisionLabel': latest['revision_label'],
+        'publishedAt': latest['published_at'],
+        'upToDate': up_to_date,
+    }
+
+
+def republish(project_id, actor=None, title=None, revision_label=None):
+    """Publish a NEW immutable Main Proposal revision (document_type='proposal')
+    reusing the client + users + access already on file for this project —
+    never re-asks, never overwrites the prior revision, never touches the
+    Additional Work revision chain."""
+    link = tp_portal_db.get_link(project_id)
+    if not link or not link.get('cloud_proposal_id') or not link.get('cloud_client_id'):
+        raise ValueError('project has not been published yet')
+    supa = Supa(load_config())
+    proposal_id = link['cloud_proposal_id']
+
+    client_rows = supa.select('portal_clients', params={
+        'id': 'eq.%s' % link['cloud_client_id'], 'select': 'name', 'limit': 1})
+    client_name = client_rows[0]['name'] if client_rows else 'Client'
+    users, grants = _active_grant_users(supa, proposal_id)
+    return publish(project_id, client_name, users, title=title, revision_label=revision_label,
+                   actor=actor, grants=grants)
+
+
+# ── Additional Work — independent publish + version status ──────────────────
+# Reuses the SAME portal_proposals row / client / grants as the Main Proposal
+# (established by publish() above — a project must already be published as a
+# Main Proposal at least once). Creates its own document_type='additional_work'
+# portal_revisions row: never touches portal_proposals.current_revision_id,
+# never creates/changes a Main Proposal revision, and its own
+# supersedes_revision_id / revision-label collision logic is scoped ONLY to
+# prior document_type='additional_work' revisions.
+
+def additional_work_fingerprint(snapshot):
+    reduced = {k: v for k, v in (snapshot or {}).items() if k != 'generatedAt'}
+    return content_hash(reduced)
+
+
+def additional_work_status(project_id):
+    """Compare the CURRENT local Additional Work against the latest published
+    document_type='additional_work' revision. Read-only. Wholly independent
+    of the Main Proposal's own version_status()."""
+    link = tp_portal_db.get_link(project_id)
+    if not link or not link.get('cloud_proposal_id'):
+        return {'published': False}
+    supa = Supa(load_config())
+    pid = link['cloud_proposal_id']
+    revs = supa.select('portal_revisions', params={
+        'proposal_id': 'eq.%s' % pid, 'document_type': 'eq.additional_work',
+        'select': 'revision_label,published_at,content_hash,snapshot_jsonb',
+        'order': 'published_at.desc', 'limit': 1})
+    if not revs:
+        return {'published': False}
+    latest = revs[0]
+    local_snapshot, _ = build_additional_work_snapshot(project_id)
+    up_to_date = additional_work_fingerprint(local_snapshot) == additional_work_fingerprint(latest.get('snapshot_jsonb'))
+    return {
+        'published': True,
+        'revisionLabel': latest['revision_label'],
+        'publishedAt': latest['published_at'],
+        'upToDate': up_to_date,
+    }
+
+
+def publish_additional_work(project_id, actor=None, revision_label=None):
+    """Publish a NEW immutable Additional Work revision. Requires the project
+    to already have a cloud proposal link (i.e. the Main Proposal has been
+    published at least once) — reuses that same proposal_id/client/grants.
+    Never updates portal_proposals.current_revision_id or creates a Main
+    Proposal revision."""
+    link = tp_portal_db.get_link(project_id)
+    if not link or not link.get('cloud_proposal_id'):
+        raise ValueError('project has not been published as a Main Proposal yet — publish the '
+                          'Main Proposal first so Additional Work can reuse its client/access')
+    cfg = load_config()
+    supa = Supa(cfg)
+    ident = actor or cfg['identity']
+    identity_email = ident.get('email', 'portal@vista.local')
+    identity_name = ident.get('name', 'Vista United')
+    proposal_id = link['cloud_proposal_id']
+
+    users, _grants = _active_grant_users(supa, proposal_id)  # existence check only — grants unchanged here
+
+    snapshot, manifest = build_additional_work_snapshot(project_id)
+    chash = content_hash(snapshot)
+
+    # Additional Work revision chain ONLY (document_type='additional_work') —
+    # completely separate from the Main Proposal's R1/R1-a/... chain even
+    # though both live under the same proposal_id. Labels are a clean
+    # incrementing sequence AW-R1, AW-R2, AW-R3, ... (unlike the Main
+    # Proposal's R1/R1-a/R1-b scheme, which reuses the project's own
+    # revision field and auto-suffixes on collision).
+    prev_all = supa.select('portal_revisions', params={
+        'proposal_id': 'eq.%s' % proposal_id, 'document_type': 'eq.additional_work',
+        'select': 'id,revision_label', 'order': 'published_at.desc'})
+    supersedes = prev_all[0]['id'] if prev_all else None
+
+    if not revision_label:
+        used = set()
+        for r in prev_all:
+            m = re.match(r'^AW-R(\d+)$', r['revision_label'] or '')
+            if m:
+                used.add(int(m.group(1)))
+        n = 1
+        while n in used:
+            n += 1
+        revision_label = 'AW-R%d' % n
+    else:
+        taken = {r['revision_label'] for r in prev_all}
+        if revision_label in taken:
+            n = 2
+            while '%s-%s' % (revision_label, chr(95 + n)) in taken:
+                n += 1
+            revision_label = '%s-%s' % (revision_label, chr(95 + n))
+
+    revision = supa.insert('portal_revisions', {
+        'proposal_id': proposal_id, 'revision_label': revision_label, 'document_type': 'additional_work',
+        'snapshot_schema': SNAPSHOT_SCHEMA, 'snapshot_jsonb': snapshot,
+        'content_hash': chash, 'supersedes_revision_id': supersedes,
+        'published_by': identity_email, 'published_by_name': identity_name})
+    revision_id = revision['id']
+
+    # photos -> storage + portal_revision_photos (slot='additional_work')
+    photo_rows = []
+    for (aw_ref, slot, ordinal, prow) in manifest:
+        got = tp_db.get_photo_bytes(prow['id'])
+        if not got:
+            continue
+        data, mime, _meta = got
+        ext = mimetypes.guess_extension(mime or '') or '.jpg'
+        if ext == '.jpe':
+            ext = '.jpg'
+        path = '%s/%s/%s-%s-%d%s' % (proposal_id, revision_id, aw_ref, slot, ordinal, ext)
+        supa.storage_upload(path, data, mime)
+        photo_rows.append({
+            'revision_id': revision_id, 'item_ref': aw_ref, 'slot': slot, 'ordinal': ordinal,
+            'storage_path': path, 'mime': mime, 'w': prow.get('w'), 'h': prow.get('h'),
+            'sha256': hashlib.sha256(data).hexdigest()})
+    if photo_rows:
+        supa.rest('POST', 'portal_revision_photos', json_body=photo_rows, prefer='return=minimal')
+
+    # NOTE: deliberately no portal_field_defs, no portal_proposals PATCH, no
+    # approvalTargets — Additional Work has no client edit/approval surface
+    # yet (see the architecture note on approval.additional_work.<ref>).
+
+    def log(event, **kw):
+        try:
+            supa.rpc('portal_log_event', {
+                'p_proposal': proposal_id, 'p_revision': revision_id,
+                'p_actor_type': 'vista', 'p_actor_id': identity_email, 'p_actor_name': identity_name,
+                'p_event': event, **kw})
+        except Exception:  # noqa: BLE001
+            pass
+    log('additional_work_revision.published', p_note=revision_label)
+
+    now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    _append_publish_history(project_id, revision_label, revision_id, now, identity_email,
+                             document_type='additional_work')
+
+    return {
+        'ok': True, 'proposalId': proposal_id, 'revisionId': revision_id,
+        'revisionLabel': revision_label, 'contentHash': chash,
+        'photos': len(photo_rows), 'entries': len(snapshot['entries']),
+        'users': [{'email': u['email'], 'name': u['name']} for u in users],
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════

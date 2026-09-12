@@ -46,6 +46,14 @@
   code{ font-family:"IBM Plex Mono", monospace; font-size:.85em; background:var(--sunk); padding:1px 5px; border-radius:4px; }
   .pill{ font-family:"IBM Plex Mono", monospace; font-size:10px; padding:1px 6px; border-radius:4px; border:1px solid currentColor; }
   .pill.pub{ color:var(--ok); } .pill.none{ color:var(--ink-faint); }
+  .vstat{ display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:8px; margin-top:2px; }
+  .vstat.ok{ background:#E7F1EC; border:1px solid #CBE2D6; }
+  .vstat.stale{ background:#FBF0E4; border:1px solid #E9D2AC; }
+  .vstat .dot{ font-size:16px; line-height:1; }
+  .vstat.ok .dot{ color:var(--ok); } .vstat.stale .dot{ color:#9A6B1E; }
+  .vstat .txt{ flex:1; font-size:13px; }
+  .vstat .txt b{ display:block; font-size:13.5px; margin-bottom:2px; }
+  .btn.warn{ background:#9A6B1E; } .btn.warn:hover{ background:#7E5817; }
   .mlink{ font-family:"IBM Plex Mono", monospace; font-size:11px; word-break:break-all; color:var(--forest); }
   .spin{ display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--forest); border-radius:50%; animation:s .7s linear infinite; vertical-align:-2px; }
   @keyframes s{ to{ transform:rotate(360deg); } }
@@ -88,9 +96,17 @@
   </div>
 
   <div class="card" id="status-card" hidden>
-    <h2>Portal status</h2>
+    <h2>Main Proposal</h2>
+    <div id="vstat-body" style="margin-bottom:14px"></div>
     <div id="status-body"></div>
     <button class="btn ghost sm" id="refresh" style="margin-top:12px">Refresh</button>
+  </div>
+
+  <div class="card" id="aw-status-card" hidden>
+    <h2>Additional Work</h2>
+    <p class="hint">Work carried out beyond the original quoted &amp; signed scope — published and versioned
+      completely independently of the Main Proposal above, using the same client access.</p>
+    <div id="aw-vstat-body"></div>
   </div>
 </div>
 
@@ -135,6 +151,95 @@
     $('proj-meta').innerHTML = 'ID <code>'+esc(p.id)+'</code> &middot; revision '+esc(p.revision||'—')
       + (p.link && p.link.last_published_at ? ' &middot; last published '+esc(p.link.last_published_at.slice(0,16).replace('T',' ')) + ' as '+esc(p.link.last_published_revision) : ' &middot; not yet published');
     loadStatus();
+    if(p.link && p.link.cloud_proposal_id){
+      loadAdditionalWorkStatus();
+    } else {
+      $('aw-status-card').hidden = true;   // Additional Work needs the Main Proposal published first
+    }
+  }
+
+  function loadVersionStatus(){
+    var pid = $('proj').value;
+    if(!pid) return;
+    $('vstat-body').innerHTML = '<span class="spin"></span> checking version…';
+    api('version-status?project=' + encodeURIComponent(pid)).then(function(v){
+      if(!v.published){ $('vstat-body').innerHTML = ''; return; }
+      if(v.upToDate){
+        $('vstat-body').innerHTML =
+          '<div class="vstat ok"><span class="dot">&#10003;</span><div class="txt">'
+          + '<b>Up to date</b>Online client portal matches the current local proposal. Published revision '
+          + esc(v.revisionLabel) + '.</div></div>';
+      } else {
+        $('vstat-body').innerHTML =
+          '<div class="vstat stale"><span class="dot">&#9888;</span><div class="txt">'
+          + '<b>ONLINE VERSION OUT OF DATE</b>The local proposal has changed since '
+          + esc(v.revisionLabel) + ' was published.</div>'
+          + '<button class="btn warn sm" id="republish-btn">Publish Updated Revision</button></div>';
+        $('republish-btn').onclick = republish;
+      }
+    }).catch(function(e){ $('vstat-body').innerHTML = '<div class="msg err">'+esc(e.message)+'</div>'; });
+  }
+
+  function republish(){
+    var pid = $('proj').value;
+    var btn = $('republish-btn');
+    if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Publishing…'; }
+    api('republish', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ projectId: pid })
+    }).then(function(res){
+      msg('ok', 'Published new revision ' + res.revisionLabel + ' (' + res.items + ' items, ' + res.photos + ' photos).');
+      loadProjects(); loadStatus(); loadVersionStatus();
+    }).catch(function(e){
+      if(btn){ btn.disabled = false; btn.textContent = 'Publish Updated Revision'; }
+      msg('err', e.message);
+    });
+  }
+
+  /* ===== Additional Work — fully independent revision stream/status ===== */
+  function loadAdditionalWorkStatus(){
+    var pid = $('proj').value;
+    if(!pid) return;
+    $('aw-status-card').hidden = false;
+    $('aw-vstat-body').innerHTML = '<span class="spin"></span> checking Additional Work…';
+    api('additional-work-status?project=' + encodeURIComponent(pid)).then(function(v){
+      if(!v.published){
+        $('aw-vstat-body').innerHTML =
+          '<div class="vstat"><div class="txt"><b>Not Published</b>No Additional Work has been published to the client yet.</div>'
+          + '<button class="btn sm" id="aw-publish-btn">Publish Additional Work</button></div>';
+        $('aw-publish-btn').onclick = publishAdditionalWork;
+        return;
+      }
+      if(v.upToDate){
+        $('aw-vstat-body').innerHTML =
+          '<div class="vstat ok"><span class="dot">&#10003;</span><div class="txt">'
+          + '<b>Up to date</b>Online Additional Work matches the current local records. Published '
+          + esc(v.revisionLabel) + '.</div></div>';
+      } else {
+        $('aw-vstat-body').innerHTML =
+          '<div class="vstat stale"><span class="dot">&#9888;</span><div class="txt">'
+          + '<b>ADDITIONAL WORK OUT OF DATE</b>The local Additional Work has changed since '
+          + esc(v.revisionLabel) + ' was published.</div>'
+          + '<button class="btn warn sm" id="aw-publish-btn">Publish Updated Additional Work</button></div>';
+        $('aw-publish-btn').onclick = publishAdditionalWork;
+      }
+    }).catch(function(e){ $('aw-vstat-body').innerHTML = '<div class="msg err">'+esc(e.message)+'</div>'; });
+  }
+
+  function publishAdditionalWork(){
+    var pid = $('proj').value;
+    var btn = $('aw-publish-btn');
+    if(btn){ btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Publishing…'; }
+    api('publish-additional-work', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ projectId: pid })
+    }).then(function(res){
+      msg('ok', 'Published Additional Work ' + res.revisionLabel + ' (' + res.entries + ' entries, ' + res.photos + ' photos).');
+      loadAdditionalWorkStatus();
+    }).catch(function(e){
+      if(btn){ btn.disabled = false; btn.textContent = 'Publish Additional Work'; }
+      $('aw-vstat-body').insertAdjacentHTML('beforeend', '<div class="msg err">'+esc(e.message)+'</div>');
+    });
   }
 
   function loadStatus(){
@@ -142,6 +247,7 @@
     if(!pid) return;
     $('status-card').hidden = false;
     $('status-body').innerHTML = '<span class="spin"></span> loading…';
+    loadVersionStatus();
     api('status?project=' + encodeURIComponent(pid)).then(function(s){
       if(!s.link || !s.link.cloud_proposal_id){
         $('status-body').innerHTML = '<p class="hint">This proposal has not been published to the portal yet.</p>';

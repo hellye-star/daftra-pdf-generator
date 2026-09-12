@@ -157,6 +157,14 @@
   .cover .meta .row .v.serif{ font-family:'Playfair Display',Georgia,serif; font-weight:600; font-size:13px; color:var(--forest); }
   .cover .foot{ margin-top:15px; display:flex; justify-content:space-between; font-size:7px; letter-spacing:0.16em; text-transform:uppercase; color:var(--grey-soft); }
 
+  /* ---------- ADDITIONAL WORK — appendix divider ---------- */
+  .awdivider{ display:flex; flex-direction:column; }
+  .awdivider .awd-inner{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 18mm; }
+  .awdivider .awd-kicker{ font-size:9px; font-weight:600; letter-spacing:0.38em; text-transform:uppercase; color:var(--gold-ink); margin-bottom:18px; }
+  .awdivider h1{ font-family:'Playfair Display',Georgia,serif; font-weight:600; font-size:36px; line-height:1.16; letter-spacing:0.005em; color:var(--emerald); margin:0; }
+  .awdivider .awd-rule{ width:54px; height:2px; background:var(--gold); margin:22px auto; }
+  .awdivider .awd-sub{ font-size:11px; line-height:1.7; color:var(--grey); max-width:130mm; }
+
 
   /* ---------- TABLES ---------- */
   table.grid{ width:100%; border-collapse:collapse; margin-top:4px; }
@@ -1447,6 +1455,23 @@ var DATA_MODE = false;
 
     const installerIds = selIds && selIds.length ? selIds : items.map(i=>i.id);
 
+    // Additional Work — explicitly NOT part of the original quoted/signed scope.
+    // Photos resolve through the same recById map as items (centralGetPhotoRecs
+    // fetches ALL project photos, AW entries included) — zero extra fetching.
+    const additionalWork = (project.additionalWork||[]).map(aw=>{
+      const photoUrls = (aw.photoIds||[]).map(id=> recById[id]).filter(Boolean).map(r=> URL.createObjectURL(r.blob));
+      const captions = aw.photoCaptions || {};
+      const photos = (aw.photoIds||[]).map((id,i)=> ({ url: photoUrls[i]||null, caption: nn(captions[id]) })).filter(p=>p.url);
+      return {
+        id: aw.id, title: nn(aw.title) || 'Untitled additional work',
+        date: fmtDate(aw.date) || nn(aw.date),
+        relatedItemRef: nn(aw.relatedItemRef),
+        qty: { value: (aw.qty && aw.qty.value!=null && aw.qty.value!=='') ? aw.qty.value : null, unit: (aw.qty && aw.qty.unit) || '' },
+        description: nn(aw.description), reason: nn(aw.reason), clientNotes: nn(aw.clientNotes),
+        photos: photos,
+      };
+    });
+
     const showPricing = !!project.showPricing;
     const priced = items.filter(i=> i.lineTotal!=null);
     const pricingCurrency = (priced[0] && priced[0].currency) || 'SAR';
@@ -1466,7 +1491,8 @@ var DATA_MODE = false;
       pricing: { show: showPricing, currency: pricingCurrency, subtotal: subtotal,
                  anyPriced: priced.length>0, mixedCurrency: mixedCurrency },
       items: items,
-      installerItems: items.filter(i=> installerIds.indexOf(i.id) !== -1)
+      installerItems: items.filter(i=> installerIds.indexOf(i.id) !== -1),
+      additionalWork: additionalWork
     };
   }
 
@@ -1924,6 +1950,53 @@ var DATA_MODE = false;
       + '</section>';
   }
 
+  /* ---- Additional Work appendix — explicitly NOT part of the original quoted/
+     signed scope. Only appended when the project has entries; the original
+     Technical Proposal (through the Client Action Plan) always finishes first. ---- */
+  function awDividerPage(P, pageNo, total){
+    const proj = P.project, n = P.additionalWork.length;
+    return '<section class="page awdivider" data-title="Additional Work Implemented">'
+      + '<div class="awd-inner">'
+      +   '<div class="awd-kicker">Appendix</div>'
+      +   '<h1>ADDITIONAL WORK<br>IMPLEMENTED</h1>'
+      +   '<div class="awd-rule"></div>'
+      +   '<p class="awd-sub">The following '+n+' record'+(n===1?'':'s')+' document work carried out beyond the '
+      +   'original quoted &amp; signed scope of this Technical Proposal ('+esc(proj.docRef)+', revision '+esc(proj.revision)
+      +   '). This appendix is not part of the Proposal Acceptance signed for this document.</p>'
+      + '</div>'
+      + RF('Additional Work · '+proj.revision, 'Page '+pageNo+' / '+total)
+      + '</section>';
+  }
+  function awRecordPage(P, aw, pageNo, total){
+    const proj = P.project;
+    const photos = aw.photos.length
+      ? '<div class="exgallery'+(aw.photos.length<=2?' two':'')+'" style="margin-top:0">'
+        + aw.photos.map(ph=> '<figure class="photo"><div class="frame" style="position:relative">'
+            + '<img src="'+ph.url+'" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></div>'
+            + (ph.caption ? '<figcaption>'+esc(ph.caption)+'</figcaption>' : '')
+            + '</figure>').join('')
+        + '</div>'
+      : '<p class="fine">No photos on file for this entry.</p>';
+    const kf = '<div class="keyfacts" style="margin-top:12px;flex-wrap:wrap">'
+      + (has(aw.date) ? '<div class="kf"><div class="k">Date</div><div class="v">'+esc(aw.date)+'</div></div>' : '')
+      + (has(aw.relatedItemRef) ? '<div class="kf"><div class="k">Related Proposal Item</div><div class="v">'+esc(aw.relatedItemRef)+'</div></div>' : '')
+      + (aw.qty.value!=null ? '<div class="kf"><div class="k">Quantity</div><div class="v">'+esc(aw.qty.value)+(aw.qty.unit?' '+esc(aw.qty.unit):'')+'</div></div>' : '')
+      + '</div>';
+    const spec = [];
+    if(has(aw.description)) spec.push('<div class="item"><div class="k">Description</div><div class="v">'+esc(aw.description)+'</div></div>');
+    if(has(aw.reason))      spec.push('<div class="item"><div class="k">Reason / Context</div><div class="v">'+esc(aw.reason)+'</div></div>');
+    if(has(aw.clientNotes)) spec.push('<div class="item"><div class="k">Client-Facing Notes</div><div class="v">'+esc(aw.clientNotes)+'</div></div>');
+    const specHtml = spec.length ? '<div class="spec" style="margin-top:9px;grid-template-columns:1fr">'+spec.join('')+'</div>' : '';
+    return '<section class="page" data-title="Additional Work — '+esc(aw.title)+'">'+RH(proj)
+      + '<div class="eyebrow">Additional Work · Not Part of Original Scope</div>'
+      + photos
+      + '<div class="page-title" style="margin-top:12px">'+esc(aw.title)+'</div>'
+      + kf
+      + specHtml
+      + RF('Additional Work · '+proj.revision, 'Page '+pageNo+' / '+total)
+      + '</section>';
+  }
+
   function clientPages(P){
     // build page plan first (for numbering + cross-refs)
     const plan = [{t:'cover'},{t:'scope'}];
@@ -1935,6 +2008,12 @@ var DATA_MODE = false;
     });
     plan.push({t:'summary'});
     plan.push({t:'actionplan'});
+    // Additional Work — only if the project has entries; always AFTER the
+    // complete original Technical Proposal above, never interleaved with it.
+    if(P.additionalWork && P.additionalWork.length){
+      plan.push({t:'awdivider'});
+      P.additionalWork.forEach(aw=> plan.push({t:'awrecord', aw:aw}));
+    }
     const total = plan.length;
     return plan.map((pg,i)=>{
       const no = i+1;
@@ -1945,6 +2024,8 @@ var DATA_MODE = false;
       if(pg.t==='pending')    return itemPending(P, pg.it, no, total);
       if(pg.t==='summary')    return summaryPage(P, no, total, pageMap);
       if(pg.t==='actionplan') return clientActionPlanPage(P, no, total);
+      if(pg.t==='awdivider')  return awDividerPage(P, no, total);
+      if(pg.t==='awrecord')   return awRecordPage(P, pg.aw, no, total);
     }).join('\n\n');
   }
 
