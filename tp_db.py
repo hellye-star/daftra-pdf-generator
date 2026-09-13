@@ -209,6 +209,67 @@ def delete_project(project_id):
 
 # ── duplicate (server-side clone: new project + item + photo IDs, own files) ──
 
+def _money_num(v):
+    """Mirrors the browser's moneyNum(): '' / None / non-numeric -> None."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        return float(s.replace(',', '').replace(' ', ''))
+    except ValueError:
+        return None
+
+
+def _find_latest_saved_rate_for_item(project, item_id):
+    """Latest ACTUALLY SAVED quotation rate for one exact source item id —
+    scans every saved series/revision in project.quotations[], matched only
+    by itemId (never by array position or name), keeping the entry with the
+    newest revisedAt/createdAt. None if no saved-quotation line ever
+    referenced this exact item id."""
+    if not item_id:
+        return None
+    best = None
+    for series in (project.get('quotations') or []):
+        for rev in (series.get('revisions') or []):
+            for li in (rev.get('items') or []):
+                if li.get('itemId') != item_id:
+                    continue
+                price = _money_num(li.get('unitPrice'))
+                if price is None:
+                    continue
+                at = rev.get('revisedAt') or rev.get('createdAt') or 0
+                if best is None or at > best['at']:
+                    best = {'value': price, 'currency': li.get('currency') or 'SAR', 'at': at}
+    return {'value': best['value'], 'currency': best['currency']} if best else None
+
+
+def _derive_previous_unit_rate(src_project, src_item, src_item_id):
+    """Internal-only historical price reference for a duplicated item.
+    Matching priority: (1) latest saved quotation line for this EXACT source
+    item id, (2) else the source item's own live unitPrice, (3) else None —
+    never a guess by position or name. Always computed from the immediate
+    source project (never forwards an inherited previousUnitRate)."""
+    saved = _find_latest_saved_rate_for_item(src_project, src_item_id)
+    if saved:
+        return {
+            'value': saved['value'], 'currency': saved['currency'] or src_item.get('currency') or 'SAR',
+            'sourceProjectId': src_project.get('id'), 'sourceProjectName': src_project.get('name') or '',
+            'sourceItemId': src_item_id, 'sourceItemName': src_item.get('name') or '',
+            'capturedAt': int(datetime.datetime.utcnow().timestamp() * 1000), 'source': 'savedQuotation',
+        }
+    live = _money_num(src_item.get('unitPrice'))
+    if live is not None:
+        return {
+            'value': live, 'currency': src_item.get('currency') or 'SAR',
+            'sourceProjectId': src_project.get('id'), 'sourceProjectName': src_project.get('name') or '',
+            'sourceItemId': src_item_id, 'sourceItemName': src_item.get('name') or '',
+            'capturedAt': int(datetime.datetime.utcnow().timestamp() * 1000), 'source': 'itemUnitPrice',
+        }
+    return None
+
+
 _uid_ctr = 0
 
 
@@ -229,12 +290,17 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
       * every photo reference inside the doc (item.photoIds / existingPhotoIds /
         referencePhotoIds) rewritten to the new IDs; photo DB rows re-pointed to
         the new project + new item IDs
-      * everything else in the JSON (quantities, dims, pricing, presets,
-        statuses, notes, client inputs, keepSource metadata, roadmap activities,
+      * everything else in the JSON (quantities, dims, presets, statuses,
+        notes, client inputs, keepSource metadata, roadmap activities,
         dependencies, risks, dismissedRuleKeys, execution.waves + waveId
         assignments) copied VERBATIM — wave/activity/risk ids stay as-is because
         they are only ever referenced within the same doc and remain internally
         consistent after the deep copy
+      * commercial quotation is NOT carried over: project.quotations is reset
+        to [] and every item's live unitPrice is cleared (currency is kept),
+        so the next quotation is generated fresh from the duplicate's current
+        items — each item instead gets a read-only previousUnitRate reference
+        (see _derive_previous_unit_rate) for pricing convenience only
       * createdAt / updatedAt set to now; provenance kept in `duplicatedFrom`
       * THE SOURCE PROJECT IS ONLY READ — never written, moved or altered
       * on any failure the partial new project (rows + files) is removed so no
@@ -258,6 +324,7 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
     doc['createdAt'] = now_ms
     doc['updatedAt'] = now_ms
     doc['duplicatedFrom'] = src_id
+    doc['quotations'] = []        # fresh commercial quotation history — never inherited
 
     item_id_map = {}
     photo_id_map = {}
@@ -271,6 +338,15 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
 
     for it in (doc.get('items') or []):
         old_iid = it.get('id')
+        # Recomputed from the immediate source (src) every time — a
+        # duplicate-of-a-duplicate never just carries the prior
+        # previousUnitRate forward.
+        prev_rate = _derive_previous_unit_rate(src, it, old_iid)
+        if prev_rate:
+            it['previousUnitRate'] = prev_rate
+        else:
+            it.pop('previousUnitRate', None)
+        it['unitPrice'] = ''      # start pricing fresh; currency is retained as-is
         new_iid = _uid()
         item_id_map[old_iid] = new_iid
         it['id'] = new_iid

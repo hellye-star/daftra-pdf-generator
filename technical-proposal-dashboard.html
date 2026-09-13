@@ -1632,6 +1632,54 @@ async function duplicateProject(p){
   }
 }
 
+/* Find the latest ACTUALLY SAVED quotation rate for a specific source item,
+   matched only by its exact itemId (never by array position or name) —
+   scans every saved series/revision and keeps the one with the newest
+   revisedAt/createdAt. Returns null when no saved-quotation line ever
+   referenced this exact item id. */
+function findLatestSavedRateForItem(project, itemId){
+  if(!itemId) return null;
+  let best = null;
+  (quoEnsure(project) || []).forEach(series=>{
+    (series.revisions || []).forEach(rev=>{
+      (rev.items || []).forEach(li=>{
+        if(li.itemId !== itemId) return;
+        const price = moneyNum(li.unitPrice);
+        if(price == null) return;
+        const at = rev.revisedAt || rev.createdAt || 0;
+        if(!best || at > best.at) best = { value: price, currency: li.currency || 'SAR', at: at };
+      });
+    });
+  });
+  return best ? { value: best.value, currency: best.currency } : null;
+}
+/* Internal-only historical price reference for a duplicated item. Matching
+   priority: (1) latest saved quotation line for this EXACT source item id,
+   (2) else the source item's own live unitPrice, (3) else none — never a
+   guess by position or name. Always recomputed from the immediate source
+   project (never copies an inherited previousUnitRate forward). */
+function derivePreviousUnitRate(srcProject, srcItem, srcItemId){
+  const saved = findLatestSavedRateForItem(srcProject, srcItemId);
+  if(saved){
+    return {
+      value: saved.value, currency: saved.currency || srcItem.currency || 'SAR',
+      sourceProjectId: srcProject.id, sourceProjectName: srcProject.name || '',
+      sourceItemId: srcItemId, sourceItemName: srcItem.name || '',
+      capturedAt: Date.now(), source: 'savedQuotation',
+    };
+  }
+  const live = moneyNum(srcItem.unitPrice);
+  if(live != null){
+    return {
+      value: live, currency: srcItem.currency || 'SAR',
+      sourceProjectId: srcProject.id, sourceProjectName: srcProject.name || '',
+      sourceItemId: srcItemId, sourceItemName: srcItem.name || '',
+      capturedAt: Date.now(), source: 'itemUnitPrice',
+    };
+  }
+  return null;
+}
+
 /* IndexedDB-mode fallback — same guarantees, client-side */
 async function duplicateProjectIdb(p, choice){
   const src    = await IDB.get('projects', p.id);
@@ -1643,12 +1691,19 @@ async function duplicateProjectIdb(p, choice){
   if(choice.revision) doc.revision = choice.revision;
   doc.createdAt = doc.updatedAt = now();
   doc.duplicatedFrom = p.id;
+  doc.quotations = [];   // fresh commercial quotation history — never inherited
 
   const itemMap = {}, photoMap = {};
   const remap = old => { if(!old) return old; if(!photoMap[old]) photoMap[old] = uid(); return photoMap[old]; };
 
   (doc.items || []).forEach(it=>{
-    const nid = uid(); itemMap[it.id] = nid; it.id = nid; it.createdAt = it.updatedAt = now();
+    const oldIid = it.id;
+    const nid = uid(); itemMap[oldIid] = nid; it.id = nid; it.createdAt = it.updatedAt = now();
+    // Recomputed from the immediate source (src/p) every time — a duplicate-
+    // of-a-duplicate never just carries the prior previousUnitRate forward.
+    const prevRate = derivePreviousUnitRate(src, it, oldIid);
+    if(prevRate) it.previousUnitRate = prevRate; else delete it.previousUnitRate;
+    it.unitPrice = '';   // start pricing fresh; currency is retained as-is
     it.existingPhotoIds = (it.existingPhotoIds || []).map(remap);
     it.photoIds = Object.fromEntries(Object.entries(it.photoIds || {}).filter(([,v])=>v).map(([k,v])=>[k, remap(v)]));
     if(Array.isArray(it.referencePhotoIds)) it.referencePhotoIds = it.referencePhotoIds.map(remap);
@@ -2583,13 +2638,22 @@ function refreshCard(which, item){
   const el = document.getElementById('card-'+which);
   if(el && map[which]){ el.outerHTML = map[which](); }
 }
+/* Small, muted, read-only reference — internal pricing memory only. Never
+   populates the price input, never affects totals, never exported to any
+   quotation/PDF/client portal (nothing downstream reads previousUnitRate). */
+function prevRateNoteHtml(pr){
+  if(!pr || pr.value == null || pr.value === '') return '';
+  return '<div class="hint prev-rate">Previous rate: '+esc(String(pr.value))+' '+esc(pr.currency||'SAR')+'/unit</div>';
+}
 function pricingCardHtml(item){
   const t = lineTotal(item);
   const cur = item.currency || 'SAR';
   const showsInPdf = STATE.project && STATE.project.showPricing;
   return '<div class="card" id="card-pricing"><div class="eyebrow">Pricing <span class="rt">optional</span></div><div class="body">'
     + '<div class="row">'
-    +   '<div class="field"><label>Unit price</label><input data-p="unitPrice" value="'+esc(item.unitPrice||'')+'" inputmode="decimal" placeholder="e.g. 1250"></div>'
+    +   '<div class="field"><label>Unit price</label><input data-p="unitPrice" value="'+esc(item.unitPrice||'')+'" inputmode="decimal" placeholder="e.g. 1250">'
+    +     prevRateNoteHtml(item.previousUnitRate)
+    +   '</div>'
     +   '<div class="field" style="flex:0 0 96px"><label>Currency</label><select data-p="currency">'
     +      CURRENCIES.map(c=>'<option '+(cur===c?'selected':'')+'>'+esc(c)+'</option>').join('')
     +   '</select></div>'
@@ -4642,23 +4706,31 @@ const Q_EXISTWORK_PHRASE = {
    Never invents a spec. Never dumps the full Technical Specifications table.
    Fully editable by the user before transfer. */
 function composeQuoteDescription(it){
-  const scope = String((it.notes && it.notes.scope) || '').trim().replace(/\s+/g,' ').replace(/[.;,\s]+$/,'');
+  // Built ONLY from structured technical Specifications (presets/dims) — never
+  // from it.notes.scope / it.notes.technical, which are client-facing fields
+  // (published to and editable by the client in the portal). Client Notes /
+  // Client Actions / comments must never feed this automatically; if a user
+  // wants that text in the quotation, they can type it into the (editable)
+  // description afterward.
   const material    = qGroupVals(it,'material').join(' / ');
   const fabrication = [...qGroupVals(it,'branding'), ...qGroupVals(it,'fabrication')]
                         .filter((v,i,a)=>a.indexOf(v)===i).join(', ');
   const finish   = qGroupVals(it,'finish').join(' / ');
   const lighting = qGroupVals(it,'lighting').filter(v=>v && v!=='None');
+  // Only the structured, controlled-vocabulary existingWork VALUES are used
+  // (a fixed options list — see the `existingWork` preset definition) — never
+  // presets.existingWorkNote. That note is free text meant for a physical
+  // removal/modification detail, but in practice it can hold client-guidance
+  // / action-request wording (e.g. "Need guidance from client for waste
+  // management") — indistinguishable from a genuine spec without unreliable
+  // keyword filtering, so it is excluded from auto-composition entirely.
   const existWork = qGroupVals(it,'existingWork').filter(v=>v && v!=='Keep As Is');
-  const existNote = String((it.presets && it.presets.existingWorkNote) || '').trim().replace(/[.;,\s]+$/,'');
 
-  let lead = scope;
-  if(!lead){
-    const bits = [];
-    if(lighting.length) bits.push('illuminated');
-    if(material) bits.push(qLc(material));
-    if(fabrication) bits.push(qLc(fabrication));
-    lead = bits.join(' ').trim() || String(it.name || '').trim();
-  }
+  const bits = [];
+  if(lighting.length) bits.push('illuminated');
+  if(material) bits.push(qLc(material));
+  if(fabrication) bits.push(qLc(fabrication));
+  let lead = bits.join(' ').trim() || String(it.name || '').trim();
 
   const parts = [];
   if(lead) parts.push(lead);
@@ -4668,18 +4740,10 @@ function composeQuoteDescription(it){
     parts.push(qLc(lighting.join(' / '))+' lighting');
 
   let out = parts.filter(Boolean).join(', ');
-  if(existWork.length || existNote){
-    // Existing-work handling only — never appended with "and installation".
-    // Installation is added ONLY if the item's own stored scope/technical text
-    // actually mentions it (checked below); nothing is invented here.
-    const ewPhrase = existNote
-      ? existNote
-      : existWork.map(v=> Q_EXISTWORK_PHRASE[v] || qLc(v)).join(' and ');
+  if(existWork.length){
+    const ewPhrase = existWork.map(v=> Q_EXISTWORK_PHRASE[v] || qLc(v)).join(' and ');
     out += (out ? ', ' : '') + 'including ' + ewPhrase;
   }
-  const scopeText = ((it.notes && (it.notes.scope||'') + ' ' + (it.notes.technical||'')) || '').toLowerCase();
-  if(/\binstall(ation|ing|ed|s)?\b/.test(scopeText) && !/install/i.test(out))
-    out += (out ? ', ' : '') + 'including installation';
   out = out.replace(/\s+/g,' ').trim();
   if(out) out = out.charAt(0).toUpperCase() + out.slice(1) + '.';
   return out;
@@ -4706,6 +4770,7 @@ function buildQuoteState(p){
       qty: (it.qty && it.qty.value != null) ? String(it.qty.value) : '1',
       unit: (it.qty && it.qty.unit) || 'no.',
       unitPrice: it.unitPrice || '',
+      previousUnitRate: it.previousUnitRate || null,   // display-only; never exported
       currency: it.currency || 'SAR',
       photoPrimary: primaryExisting(it) || null,
       photoSecondary: null,
@@ -5356,7 +5421,9 @@ function renderQuote(p){
       +   '<div class="field"><label>Unit</label><select data-qf="unit" data-qitem="'+esc(x.id)+'">'+unitOpts(x.unit)+'</select></div>'
       + '</div>'
       + '<div class="row">'
-      +   '<div class="field"><label>Unit price</label><input data-qf="unitPrice" data-qitem="'+esc(x.id)+'" value="'+esc(x.unitPrice)+'" inputmode="decimal" placeholder="blank = not priced"></div>'
+      +   '<div class="field"><label>Unit price</label><input data-qf="unitPrice" data-qitem="'+esc(x.id)+'" value="'+esc(x.unitPrice)+'" inputmode="decimal" placeholder="blank = not priced">'
+      +     prevRateNoteHtml(x.previousUnitRate)
+      +   '</div>'
       +   '<div class="field"><label>Currency</label><select data-qf="currency" data-qitem="'+esc(x.id)+'">'+curOpts(x.currency)+'</select></div>'
       + '</div>'
       + '<div class="field" style="margin-bottom:0"><label>Existing photos — choose up to 2</label>'+photos+'</div>'
