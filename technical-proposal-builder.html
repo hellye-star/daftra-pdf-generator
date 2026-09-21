@@ -216,6 +216,10 @@
     display:block;
   }
   figure.photo.big .frame{ aspect-ratio:16/10; }
+  figure.photo.samplefig .frame{ aspect-ratio:4/3; background:var(--cream); }
+  figure.photo.samplefig .frame img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:center; }
+  .samplefig-wrap{ margin-top:11px; }
+  .samplefig-wrap figure.photo{ max-width:46%; margin:0 auto; }
   figure.photo .frame svg{ display:block; width:100%; height:100%; }
   figure.photo figcaption{
     display:flex; justify-content:space-between; align-items:baseline;
@@ -1556,6 +1560,14 @@ var DATA_MODE = false;
       + esc(label||'Photo not yet on file') + '</span></div>';
   }
 
+  /* ---- Sample Photo: whole image visible (object-fit:contain), nothing when absent ---- */
+  function sampleFigure(it){
+    if(!it.photos.sample) return '';
+    return '<figure class="photo samplefig"><div class="frame" style="position:relative">'
+      + '<img src="'+it.photos.sample+'" alt=""></div>'
+      + '<figcaption>Sample Photo <span class="tag">'+(has(it.status.sampleRev)?esc(it.status.sampleRev):'—')+'</span></figcaption></figure>';
+  }
+
   const RH  = (proj,pack)=> '<div class="rh"><span class="wm"><span class="wm-mk" role="img" aria-label="Vista United"></span>'
     + '<span class="wm-tx">Vista United Co.</span></span><span class="doc">'
     + (pack==='installer' ? 'Installer Execution Pack · '+esc(proj.docRefInstaller) : 'Technical Proposal · '+esc(proj.docRef))
@@ -1784,16 +1796,17 @@ var DATA_MODE = false;
     const proj = P.project, s = it.status;
     let sampleBlock;
     if(s.sample === 'na'){
-      sampleBlock = '<p class="fine">Sample not required for this item (Sample Status: N/A).</p>';
+      sampleBlock = '<p class="fine">Sample not required for this item (Sample Status: N/A).</p>'
+        + (it.photos.sample ? '<div class="samplefig-wrap">'+sampleFigure(it)+'</div>' : '');
     } else {
       const rows = ['<div class="item"><div class="k">Sample Status</div><div class="v">'+badge('sample',s.sample)+'</div></div>'];
       if(has(s.sampleRev))     rows.push('<div class="item"><div class="k">Revision</div><div class="v">'+esc(s.sampleRev)+'</div></div>');
       if(has(s.sampleBy))      rows.push('<div class="item"><div class="k">Approved / Reviewed By</div><div class="v">'+esc(s.sampleBy)+'</div></div>');
       if(has(s.sampleDate))    rows.push('<div class="item"><div class="k">Approval Date</div><div class="v">'+esc(fmtDate(s.sampleDate))+'</div></div>');
       if(has(s.sampleComment)) rows.push('<div class="item"><div class="k">Rejection / Client Comment</div><div class="v">'+esc(s.sampleComment)+'</div></div>');
-      sampleBlock = '<div class="two-col"><div><div class="spec one">'+rows.join('')+'</div></div>'
-        + '<div><figure class="photo">'+photoBox(it.photos.sample,'Sample photo — not yet on file')
-        + '<figcaption>Sample Photo <span class="tag">'+(has(s.sampleRev)?esc(s.sampleRev):'—')+'</span></figcaption></figure></div></div>';
+      sampleBlock = it.photos.sample
+        ? '<div class="two-col"><div><div class="spec one">'+rows.join('')+'</div></div><div>'+sampleFigure(it)+'</div></div>'
+        : '<div class="spec one">'+rows.join('')+'</div>';
     }
     const blockedBy = s.design!=='approved' ? 'Design approval'
       : (s.sample!=='approved' && s.sample!=='na') ? 'Sample approval'
@@ -1841,6 +1854,7 @@ var DATA_MODE = false;
       +     '</span></figcaption></figure>'
       + '</div>'
       + existingExtraGallery(it.photos.existingList)
+      + (it.photos.sample ? '<div class="samplefig-wrap">'+sampleFigure(it)+'</div>' : '')
       + (has(specRows)
           ? '<div class="section-head"><span class="n">B</span><h3>Technical Specifications</h3></div><div class="presets">'+specRows+'</div>'
           : '')
