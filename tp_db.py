@@ -301,6 +301,9 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
         so the next quotation is generated fresh from the duplicate's current
         items — each item instead gets a read-only previousUnitRate reference
         (see _derive_previous_unit_rate) for pricing convenience only
+      * delivery history and installation evidence are NOT carried over either:
+        project.deliveries and every item's installationProofs (and the proof
+        photo rows/files) start empty in the duplicate
       * createdAt / updatedAt set to now; provenance kept in `duplicatedFrom`
       * THE SOURCE PROJECT IS ONLY READ — never written, moved or altered
       * on any failure the partial new project (rows + files) is removed so no
@@ -348,6 +351,7 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
         else:
             it.pop('previousUnitRate', None)
         it['unitPrice'] = ''      # start pricing fresh; currency is retained as-is
+        it['installationProofs'] = []   # installation evidence belongs to the source project only
         new_iid = _uid()
         item_id_map[old_iid] = new_iid
         it['id'] = new_iid
@@ -358,7 +362,8 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
         if 'referencePhotoIds' in it:
             it['referencePhotoIds'] = [remap_photo(x) for x in (it.get('referencePhotoIds') or [])]
 
-    src_photos = list_photos(src_id)
+    # installation-proof photo rows are never carried into a duplicate
+    src_photos = [p for p in list_photos(src_id) if p.get('slot') != 'proof']
     src_photo_by_id = {p['id']: p for p in src_photos}
     for p in src_photos:                          # also carry any orphan rows
         remap_photo(p['id'])

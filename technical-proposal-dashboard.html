@@ -201,6 +201,24 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--emerald);
     font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; cursor:pointer; }
   .exadd span{ font-size:22px; line-height:1; }
+  /* Installation / Delivery Proof (TP master evidence) */
+  .proofcard{ border:1px solid var(--rule-strong); border-radius:11px; background:#fff; padding:10px 11px 11px; margin-bottom:10px; }
+  .proofcard .proof-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .proofcard .proof-title{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--emerald); }
+  .proofcard .proofph{ display:flex; flex-direction:column; gap:5px; }
+  .proofcard .proofph .exphoto{ aspect-ratio:4/3; }
+  .proofcard .proofph input{ font-size:12px; padding:6px 8px; }
+  .proofcard .excap{ position:absolute; left:0; right:0; bottom:28px; padding:3px 7px; background:rgba(14,26,20,.72); color:#fff;
+                     font-size:11px; line-height:1.25; pointer-events:none; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .proofcard .excap[hidden]{ display:none; }
+  .proofcard .vidrow{ display:flex; align-items:center; gap:6px; border:1px solid var(--rule); border-radius:8px; padding:6px 8px; margin-bottom:6px; background:var(--cream); }
+  .proofcard .vidrow .vid-main{ flex:1; min-width:0; }
+  .proofcard .vidrow .vid-label{ font-size:12.5px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .proofcard .vidrow .vid-url{ font-size:10.5px; color:var(--grey); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .proofcard .vidrow a.btn{ text-decoration:none; }
+  .lightbox .lbcap{ position:absolute; left:50%; bottom:60px; transform:translateX(-50%); max-width:min(86vw,640px); background:rgba(14,26,20,.82); color:#fff;
+                    border-radius:8px; padding:6px 12px; font-size:13px; text-align:center; }
+  .proofcard .proof-photos-label{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin:4px 0 6px; }
   .awphoto{ display:flex; flex-direction:column; gap:5px; }
   .awcap{ font-size:11.5px; padding:6px 8px; }
   /* gallery lightbox nav */
@@ -956,6 +974,83 @@ function moveAWPhoto(aw, idx, dir){
   [a[idx],a[j]] = [a[j],a[idx]];
   return true;
 }
+/* ---- Installation / Delivery Proof — TP master evidence -------------------
+   item.installationProofs = [ { id, location, qty, date, note,
+                                 photos:[ {photoId, caption} ],
+                                 videos:[ {id, url, label} ] } ]
+   Photos are ordinary project photo rows (slot:'proof', itemId = the item), so
+   they are cleaned up with the item (deleteItemDeep) and the original image is
+   never altered - the caption is data only. `qty` is EVIDENCE ONLY: nothing
+   reads it for item qty, quotation, delivery quantities or Remaining. */
+function proofsOf(it){ return Array.isArray(it.installationProofs) ? it.installationProofs : []; }
+function proofFind(it, id){ return proofsOf(it).find(x=> x.id === id) || null; }
+async function addProofPhotos(project, item, proof, files){
+  proof.photos = proof.photos || [];
+  for(const file of files){
+    const proc = await processImage(file);
+    const id = uid();
+    await dbPut('photos', { id, projectId:project.id, itemId:item.id, slot:'proof',
+      blob:proc.blob, mime:proc.mime, w:proc.w, h:proc.h, bytes:proc.bytes, createdAt:now() });
+    proof.photos.push({ photoId:id, caption:'' });
+  }
+  await commitSave();
+}
+async function removeProofPhoto(project, proof, idx){
+  const [ph] = (proof.photos||[]).splice(idx, 1);
+  if(ph && ph.photoId) await dbDel('photos', ph.photoId);
+  await commitSave();
+}
+function moveProofPhoto(proof, idx, dir){
+  const a = proof.photos || []; const j = idx + dir;
+  if(j<0 || j>=a.length) return false;
+  [a[idx], a[j]] = [a[j], a[idx]];
+  return true;
+}
+/* proof.videos = [ { id, url, label } ] - Google Drive share LINKS only. Nothing is
+   uploaded/downloaded/embedded and no Google credential is ever stored. A later
+   Delivery Note can print label + clickable url + a QR encoding url. */
+function proofVideos(pr){ return Array.isArray(pr.videos) ? pr.videos : []; }
+function normalizeDriveUrl(raw){
+  let v = String(raw||'').trim();
+  if(!v) return { ok:false, err:'Paste the Google Drive video link.' };
+  if(/\s/.test(v)) return { ok:false, err:'The link must not contain spaces.' };
+  if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) v = 'https://' + v;
+  let u; try{ u = new URL(v); }catch(_){ return { ok:false, err:'This is not a valid link.' }; }
+  if(u.protocol !== 'https:' && u.protocol !== 'http:') return { ok:false, err:'The link must start with https://' };
+  const h = u.hostname.toLowerCase();
+  if(h !== 'drive.google.com' && h !== 'docs.google.com') return { ok:false, err:'Use a Google Drive share link (drive.google.com).' };
+  if(u.pathname === '/' || u.pathname === '') return { ok:false, err:'This looks like the Drive home page, not a file link.' };
+  u.protocol = 'https:';
+  return { ok:true, url:u.toString() };
+}
+function videoDialog(init){
+  return new Promise(res=>{
+    const o=document.createElement('div'); o.className='overlay';
+    o.innerHTML='<div class="dialog"><h3>'+(init?'Edit video link':'Add video link')+'</h3>'
+      +'<div class="field"><label>Label</label><input data-vlabel maxlength="80" placeholder="e.g. Installation walkthrough" value="'+esc(init?init.label:'')+'"></div>'
+      +'<div class="field"><label>Google Drive link</label><input data-vurl placeholder="https://drive.google.com/file/d/…" value="'+esc(init?init.url:'')+'"></div>'
+      +'<p data-verr style="color:var(--stop);font-size:12px;margin:0 0 10px" hidden></p>'
+      +'<div class="acts"><button class="btn btn-ghost" data-x="0">Cancel</button><button class="btn btn-primary" data-x="1">Save</button></div></div>';
+    const q = sel=> o.querySelector(sel);
+    o.addEventListener('click',e=>{
+      if(e.target===o){ o.remove(); res(null); return; }
+      const x=e.target.closest('[data-x]'); if(!x) return;
+      if(x.dataset.x==='0'){ o.remove(); res(null); return; }
+      const r = normalizeDriveUrl(q('[data-vurl]').value);
+      if(!r.ok){ const er=q('[data-verr]'); er.textContent=r.err; er.hidden=false; q('[data-vurl]').focus(); return; }
+      o.remove(); res({ url:r.url, label:q('[data-vlabel]').value.trim() });
+    });
+    document.body.appendChild(o);
+    q('[data-vlabel]').focus();
+  });
+}
+async function deleteProof(project, item, proofId){
+  const arr = item.installationProofs || [];
+  const k = arr.findIndex(x=> x.id === proofId); if(k < 0) return;
+  const [pr] = arr.splice(k, 1);
+  for(const ph of (pr.photos||[])){ if(ph && ph.photoId) await dbDel('photos', ph.photoId); }
+  await commitSave();
+}
 function newItem(project){
   const n = project.items.length + 1;
   return {
@@ -1705,13 +1800,16 @@ async function duplicateProjectIdb(p, choice){
     const prevRate = derivePreviousUnitRate(src, it, oldIid);
     if(prevRate) it.previousUnitRate = prevRate; else delete it.previousUnitRate;
     it.unitPrice = '';   // start pricing fresh; currency is retained as-is
+    it.installationProofs = [];   // installation evidence belongs to the source project only
     it.existingPhotoIds = (it.existingPhotoIds || []).map(remap);
     it.photoIds = Object.fromEntries(Object.entries(it.photoIds || {}).filter(([,v])=>v).map(([k,v])=>[k, remap(v)]));
     if(Array.isArray(it.referencePhotoIds)) it.referencePhotoIds = it.referencePhotoIds.map(remap);
   });
-  photos.forEach(ph=> remap(ph.id));
+  // proof photos are never carried into a duplicate (their rows are skipped entirely)
+  const carryPhotos = photos.filter(ph=> ph.slot !== 'proof');
+  carryPhotos.forEach(ph=> remap(ph.id));
 
-  for(const ph of photos){
+  for(const ph of carryPhotos){
     const np = photoMap[ph.id]; if(!np) continue;
     const freshBlob = ph.blob ? ph.blob.slice(0, ph.blob.size, ph.blob.type) : ph.blob;
     await IDB.put('photos', { ...ph, id: np, projectId: newPid,
@@ -2045,7 +2143,7 @@ function sheetMenu(actions){
     document.body.appendChild(o);
   });
 }
-function lightbox(urls, start){
+function lightbox(urls, start, captions){
   const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
   if(!list.length) return;
   let i = Math.max(0, Math.min(start||0, list.length-1));
@@ -2053,6 +2151,7 @@ function lightbox(urls, start){
   const draw = ()=>{ o.innerHTML='<button class="x">Close</button>'
     + (list.length>1 ? '<button class="nav prev">‹</button>' : '')
     + '<img src="'+list[i]+'" alt="">'
+    + ((captions && captions[i]) ? '<div class="lbcap">'+esc(captions[i])+'</div>' : '')
     + (list.length>1 ? '<button class="nav next">›</button><div class="cnt">'+(i+1)+' / '+list.length+'</div>' : ''); };
   draw();
   o.addEventListener('click',e=>{
@@ -2530,6 +2629,53 @@ function photosCardHtml(project, item){
     + '</div>'
     + '</div></div>';
 }
+function proofsCardHtml(item){
+  const proofs = proofsOf(item);
+  const cards = proofs.map((pr,n)=>{
+    const phs = (pr.photos||[]).filter(ph=> ph && photoUrl(ph.photoId));
+    const thumbs = phs.map((ph,i)=>
+      '<div class="proofph"><div class="exphoto">'
+      + '<img src="'+photoUrl(ph.photoId)+'" data-viewproofph="'+esc(pr.id)+'|'+i+'" alt="">'
+      + '<div class="exnum">'+(i+1)+'</div>'
+      + '<div class="excap"'+(ph.caption?'':' hidden')+'>'+esc(ph.caption||'')+'</div>'
+      + '<div class="exphoto-acts">'
+      +   '<button data-mvproofph="'+esc(pr.id)+'|'+i+'" data-dir="-1" title="Move left" '+(i===0?'disabled':'')+'>‹</button>'
+      +   '<button data-mvproofph="'+esc(pr.id)+'|'+i+'" data-dir="1" title="Move right" '+(i===phs.length-1?'disabled':'')+'>›</button>'
+      +   '<button class="del" data-rmproofph="'+esc(pr.id)+'|'+i+'" title="Remove photo">✕</button>'
+      + '</div></div>'
+      + '<input data-ipcap data-proof="'+esc(pr.id)+'" data-i="'+i+'" value="'+esc(ph.caption||'')+'" placeholder="Caption (optional)" maxlength="140">'
+      + '</div>'
+    ).join('');
+    const vids = proofVideos(pr);
+    const vidRows = vids.map(v=>
+      '<div class="vidrow"><div class="vid-main"><div class="vid-label">'+esc(v.label||'Video')+'</div>'
+      + '<div class="vid-url">'+esc(v.url)+'</div></div>'
+      + '<a class="btn btn-ghost btn-xs" href="'+esc(v.url)+'" target="_blank" rel="noopener noreferrer">Open Video</a>'
+      + '<button class="btn btn-ghost btn-xs" data-editvid="'+esc(pr.id)+'|'+esc(v.id)+'">Edit</button>'
+      + '<button class="btn btn-ghost btn-xs" style="color:var(--stop)" data-rmvid="'+esc(pr.id)+'|'+esc(v.id)+'">Remove</button></div>'
+    ).join('');
+    return '<div class="proofcard" data-proofcard="'+esc(pr.id)+'">'
+      + '<div class="proof-head"><span class="proof-title">Proof '+(n+1)+'</span>'
+      +   '<button class="btn btn-ghost btn-xs" style="color:var(--stop)" data-delproof="'+esc(pr.id)+'">Delete</button></div>'
+      + '<div class="field"><label>Location / site</label><input data-ipf="location" data-proof="'+esc(pr.id)+'" value="'+esc(pr.location||'')+'" placeholder="e.g. Jeddah Airport — Entrance A"></div>'
+      + '<div class="row">'
+      +   '<div class="field"><label>Installed qty</label><input data-ipf="qty" data-proof="'+esc(pr.id)+'" value="'+esc(pr.qty==null?'':pr.qty)+'" inputmode="decimal" placeholder="e.g. 2"></div>'
+      +   '<div class="field"><label>Date</label><input data-ipf="date" data-proof="'+esc(pr.id)+'" value="'+esc(pr.date||'')+'" placeholder="DD/MM/YYYY"></div>'
+      + '</div>'
+      + '<div class="field"><label>Note</label><input data-ipf="note" data-proof="'+esc(pr.id)+'" value="'+esc(pr.note||'')+'" placeholder="Optional"></div>'
+      + '<div class="proof-photos-label">Photos <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--grey-soft)">· '+phs.length+' · order = print order</span></div>'
+      + '<div class="exgrid">'+thumbs
+      +   '<button class="exadd" data-addproofph="'+esc(pr.id)+'"><span>＋</span>Add Photos</button></div>'
+      + '<div class="proof-photos-label" style="margin-top:12px">Videos <span style="text-transform:none;letter-spacing:0;font-weight:500;color:var(--grey-soft)">· Google Drive links · '+vids.length+'</span></div>'
+      + vidRows
+      + '<button class="btn btn-ghost btn-xs" data-addvid="'+esc(pr.id)+'">+ Add Video Link</button>'
+      + '</div>';
+  }).join('');
+  return '<div class="card" id="card-proofs"><div class="eyebrow">Installation / Delivery Proof <span class="rt">evidence only</span></div><div class="body">'
+    + (cards || '<div class="hint" style="margin:0 0 8px">No installation proof yet. Add one per installation location.</div>')
+    + '<button class="btn btn-ghost btn-sm mt6" data-addproof>+ Add Installation Proof</button>'
+    + '</div></div>';
+}
 function statusCardHtml(item){
   const s = item.status;
   let designDetail='';
@@ -2638,7 +2784,7 @@ function collapsedNotesCardHtml(item){
 function refreshCard(which, item){
   const map = { photos:()=>photosCardHtml(STATE.project,item), status:()=>statusCardHtml(item),
                 ci:()=>clientInputsCardHtml(item), notes:()=>collapsedNotesCardHtml(item),
-                presets:()=>presetsCardHtml(item), pricing:()=>pricingCardHtml(item),
+                presets:()=>presetsCardHtml(item), pricing:()=>pricingCardHtml(item), proofs:()=>proofsCardHtml(item),
                 roadmap:()=>roadmapCardHtml(item) };
   const el = document.getElementById('card-'+which);
   if(el && map[which]){ el.outerHTML = map[which](); }
@@ -2739,6 +2885,7 @@ function renderItem(p, it){
 
     + pricingCardHtml(it)
     + photosCardHtml(p, it)
+    + proofsCardHtml(it)
     + presetsCardHtml(it)
     + statusCardHtml(it)
     + clientInputsCardHtml(it)
@@ -3864,6 +4011,17 @@ document.addEventListener('input', e=>{
     if(t.dataset.awp==='title'){ const ti=document.querySelector('.appbar .title'); if(ti) ti.textContent = t.value||'Untitled additional work'; }
     scheduleSave(); return;
   }
+  // Installation proof fields / photo captions - mutate + save, never re-render (keep focus)
+  if(t.dataset.ipf!=null || t.dataset.ipcap!=null){
+    const pit = currentItem(); const pr = pit && proofFind(pit, t.dataset.proof); if(!pr) return;
+    if(t.dataset.ipf!=null) pr[t.dataset.ipf] = t.value;
+    else {
+      const ph = (pr.photos||[])[+t.dataset.i]; if(ph) ph.caption = t.value;
+      const cap = t.closest('.proofph') && t.closest('.proofph').querySelector('.excap');
+      if(cap){ cap.textContent = t.value; cap.hidden = !t.value.trim(); }
+    }
+    scheduleSave(); return;
+  }
   if(t.dataset.awcaption!=null){
     const aw = currentAW(); if(!aw) return;
     aw.photoCaptions = aw.photoCaptions || {};
@@ -4632,6 +4790,83 @@ document.addEventListener('click', async e=>{
   const vp = closest('[data-viewphoto]');
   if(vp){ const u = photoUrl(vp.dataset.viewphoto); if(u) lightbox(u); return; }
 
+  /* ----- Installation / Delivery Proof ----- */
+  if(closest('[data-addproof]') && it){
+    const pr = { id:uid(), location:'', qty:'', date:quoteToday(), note:'', photos:[] };
+    (it.installationProofs = proofsOf(it)).push(pr);
+    await commitSave(); refreshCard('proofs', it);
+    const f = document.querySelector('[data-ipf="location"][data-proof="'+pr.id+'"]'); if(f) f.focus();
+    return;
+  }
+  const pdel = closest('[data-delproof]');
+  if(pdel && it){
+    if(await confirmDialog('Delete this installation proof?', 'Its photos are deleted too. Other proofs are kept.', true)){
+      await deleteProof(STATE.project, it, pdel.dataset.delproof);
+      await loadProjectPhotos(STATE.project.id);
+      refreshCard('proofs', it);
+    }
+    return;
+  }
+  const paddph = closest('[data-addproofph]');
+  if(paddph && it){
+    const fp = $('#filepick');
+    fp.dataset.mode = 'proof-add'; fp.dataset.proof = paddph.dataset.addproofph;
+    fp.multiple = true; fp.value = ''; fp.click();
+    return;
+  }
+  const prm = closest('[data-rmproofph]');
+  if(prm && it){
+    const [pid, pi] = prm.dataset.rmproofph.split('|'); const pr = proofFind(it, pid);
+    if(pr && await confirmDialog('Remove this proof photo?', 'Only this photo is removed.', true)){
+      await removeProofPhoto(STATE.project, pr, +pi);
+      await loadProjectPhotos(STATE.project.id);
+      refreshCard('proofs', it);
+    }
+    return;
+  }
+  const pmv = closest('[data-mvproofph]');
+  if(pmv && it){
+    const [pid, pi] = pmv.dataset.mvproofph.split('|'); const pr = proofFind(it, pid);
+    if(pr && moveProofPhoto(pr, +pi, +pmv.dataset.dir)){ await commitSave(); refreshCard('proofs', it); }
+    return;
+  }
+  const pvw = closest('[data-viewproofph]');
+  if(pvw && it){
+    const [pid, pi] = pvw.dataset.viewproofph.split('|'); const pr = proofFind(it, pid);
+    if(pr){
+      const shown = (pr.photos||[]).filter(ph=> ph && photoUrl(ph.photoId));
+      lightbox(shown.map(ph=> photoUrl(ph.photoId)), +pi, shown.map(ph=> (ph.caption||'').trim()));
+    }
+    return;
+  }
+  const vadd = closest('[data-addvid]');
+  if(vadd && it){
+    const pr = proofFind(it, vadd.dataset.addvid); if(!pr) return;
+    const r = await videoDialog(null); if(!r) return;
+    const arr = (pr.videos = proofVideos(pr));
+    arr.push({ id:uid(), url:r.url, label:r.label || ('Video '+(arr.length+1)) });
+    await commitSave(); refreshCard('proofs', it);
+    return;
+  }
+  const vedit = closest('[data-editvid]');
+  if(vedit && it){
+    const [pid, vid] = vedit.dataset.editvid.split('|'); const pr = proofFind(it, pid);
+    const v = pr && proofVideos(pr).find(x=> x.id === vid); if(!v) return;
+    const r = await videoDialog(v); if(!r) return;
+    v.url = r.url; v.label = r.label || v.label || 'Video';
+    await commitSave(); refreshCard('proofs', it);
+    return;
+  }
+  const vrm = closest('[data-rmvid]');
+  if(vrm && it){
+    const [pid, vid] = vrm.dataset.rmvid.split('|'); const pr = proofFind(it, pid);
+    if(pr && await confirmDialog('Remove this video link?', 'Only the link is removed - the video stays in Google Drive.', true)){
+      pr.videos = proofVideos(pr).filter(x=> x.id !== vid);
+      await commitSave(); refreshCard('proofs', it);
+    }
+    return;
+  }
+
   /* ----- photos: Existing Condition collection ----- */
   const exAdd = closest('[data-addexisting]');
   if(exAdd && it){
@@ -4713,11 +4948,14 @@ $('#filepick').addEventListener('change', async e=>{
       await addExistingPhotos(STATE.project, it, files);
     } else if(mode==='existing-replace'){
       await replaceExistingPhoto(STATE.project, it, +e.target.dataset.exidx, files[0]);
+    } else if(mode==='proof-add'){
+      const pr = proofFind(it, e.target.dataset.proof);
+      if(pr) await addProofPhotos(STATE.project, it, pr, files);
     } else {
       await setPhoto(STATE.project, it, e.target.dataset.slot, files[0]);
     }
     await loadProjectPhotos(STATE.project.id);
-    refreshCard('photos', it);
+    refreshCard(mode==='proof-add' ? 'proofs' : 'photos', it);
     toast(files.length>1 ? files.length+' photos saved' : 'Photo saved');
   }catch(err){ console.error(err); toast('Could not read that image'); }
   e.target.value=''; e.target.multiple=false;
