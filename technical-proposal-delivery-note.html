@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vista United — Delivery Note</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400;1,500;1,600&family=Jost:wght@300;400;500;600&family=Cairo:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!--
+  Vista United — Technical Proposal Delivery Note (client-facing)
+  ---------------------------------------------------------------
+  Opened from the Technical Proposal dashboard:
+      technical-proposal-delivery-note.html?pid=<projectId>&eid=<deliveryEventId>
+
+  * Reads the Central DB project (GET /api/tp/projects/<pid>) and renders ONE A4
+    page per delivered line of that saved delivery event.
+  * Proof data comes ONLY from the saved event snapshot (event.lines[].proofs) and
+    its DN-owned photo copies (slot 'dn-proof'). It never reads the live
+    installationProofs of a Technical Proposal item, so a reprint of an old DN is
+    always identical to the original. Which frozen photos print is event.lines[].pdfPhotoIds
+    (max 6); with <= 6 photos all print, with MORE than 6 and no saved choice the page
+    refuses to render (the Deliver screen asks the user to choose) - it never takes "the first 6".
+  * STRICT PAGE RULE: exactly one delivered item = exactly one A4 page. Every page
+    is a fixed 210 x 297 mm box (overflow hidden); the photo zone is the only
+    flexible part, everything else has a fixed budget, long texts are line-clamped,
+    and at most MAX_PHOTOS photos are placed. Nothing ever continues onto a 2nd page.
+  * Output = browser "Save as PDF" (A4, margins none) - the same route the
+    Technical Proposal export uses. No Daftra dashboard involved.
+-->
+<style>
+  :root{
+    --ink:#1C1C1A; --grey:#6B6B67; --grey-soft:#ADADAA; --rule:#D8D5CF; --wash:#F5F2EC;
+    --forest:#0F3D2E; --emerald:#1A5C46; --gold:#8C7643;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ background:#E7E5E0; color:var(--ink); font-family:'Jost','Helvetica Neue',Arial,sans-serif; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .ar{ font-family:'Cairo','Segoe UI',Tahoma,sans-serif; direction:rtl; unicode-bidi:isolate; }
+
+  /* ---------- screen chrome (never printed) ---------- */
+  .bar{ position:sticky; top:0; z-index:5; display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:10px 16px;
+        background:var(--forest); color:#fff; font-size:13px; }
+  .bar b{ font-weight:600; }
+  .bar button{ background:#fff; color:var(--forest); border:0; border-radius:7px; padding:7px 14px; font:600 13px 'Jost',sans-serif; cursor:pointer; }
+  .bar .sp{ flex:1; }
+  .warn{ margin:10px auto 0; max-width:210mm; background:#FBF3E0; border:1px solid #E7D5A8; color:#7a5f22; border-radius:8px; padding:9px 12px; font-size:13px; }
+  .msg{ max-width:210mm; margin:40px auto; background:#fff; padding:24px; border-radius:10px; font-size:14px; }
+  #pages{ padding:18px 0 40px; }
+
+  /* ---------- the A4 page ---------- */
+  .dn-page{ position:relative; width:210mm; height:297mm; margin:0 auto 14px; background:#fff; overflow:hidden;
+            display:flex; flex-direction:column; padding:13mm 15mm 10mm; box-shadow:0 2px 14px rgba(0,0,0,.18); break-after:page; page-break-after:always; }
+  .dn-page:last-child{ break-after:auto; page-break-after:auto; }
+  .dn-page > *{ flex:none; }
+
+  .hd{ display:flex; align-items:flex-start; justify-content:space-between; height:22mm; }
+  .logo{ position:relative; width:50mm; height:19mm; overflow:hidden; }
+  .logo img{ position:absolute; width:83.9mm; left:-20.1mm; top:-32.4mm; }   /* crops the padded 1024px logo.png to the mark */
+  .ttl{ text-align:right; }
+  .ttl .h{ font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:500; font-size:29px; line-height:1; color:var(--ink); }
+  .ttl .h-ar{ font-size:12px; color:var(--grey); margin-top:1px; text-align:right; }
+  .ttl .meta{ font-size:8.5px; color:var(--grey); margin-top:3px; line-height:1.5; letter-spacing:.02em; }
+  .ttl .meta b{ color:var(--ink); font-weight:500; }
+  .rule{ height:0; border-top:.35mm solid var(--forest); margin:0 0 3.2mm; }
+
+  .lbl{ font-size:6.6px; font-weight:500; letter-spacing:.2em; text-transform:uppercase; color:var(--grey-soft); line-height:1.2; }
+  .lbl .ar{ font-size:8px; letter-spacing:0; text-transform:none; margin-left:7px; color:#BDBAB4; }
+
+  .info{ display:grid; grid-template-columns:1.25fr 1fr; gap:8mm; height:16mm; }
+  .info .nm{ font-family:'Cormorant Garamond',serif; font-weight:600; font-size:14px; line-height:1.15; margin-top:1.6mm; color:var(--ink);
+             display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .info .sub{ font-size:8.4px; color:var(--grey); line-height:1.4; margin-top:.8mm; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+  .item{ margin-top:2.2mm; padding:3.4mm 4mm 3.6mm; background:var(--wash); border-left:1.2mm solid var(--forest); display:flex; flex-direction:column; }
+  .item .top{ display:flex; align-items:baseline; gap:3mm; }
+  .item .no{ font-size:7.5px; font-weight:600; letter-spacing:.22em; color:var(--gold); text-transform:uppercase; white-space:nowrap; }
+  .item .name{ font-family:'Cormorant Garamond',serif; font-weight:600; font-size:19px; line-height:1.1; color:var(--ink);
+               display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .item .desc{ font-size:8.6px; font-weight:300; color:#4a4a46; line-height:1.45; margin-top:1.4mm; max-height:11.5mm;
+               display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .qty{ display:grid; grid-template-columns:1fr 1fr 1.25fr; gap:3mm; margin-top:1.8mm; }
+  .qty > div{ background:#fff; border:.25mm solid var(--rule); padding:1.5mm 2.4mm 1.7mm; }
+  .qty .v{ font-family:'Cormorant Garamond',serif; font-weight:600; font-size:15px; line-height:1.05; margin-top:.6mm; }
+  .qty .v small{ font-family:'Jost',sans-serif; font-size:7.5px; font-weight:400; color:var(--grey); margin-inline-start:2px; }
+  .qty .now{ background:var(--forest); border-color:var(--forest); }
+  .qty .now .lbl, .qty .now .lbl .ar{ color:#BFD3C9; }
+  .qty .now .v, .qty .now .v small{ color:#fff; }
+
+  .sec{ display:flex; align-items:baseline; justify-content:space-between; margin-top:3.6mm; padding-bottom:1.2mm; border-bottom:.25mm solid var(--rule); }
+  .sec .t{ font-size:7.2px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:var(--forest); }
+  .sec .t .ar{ font-size:8.5px; letter-spacing:0; text-transform:none; color:var(--grey); margin-left:8px; font-weight:400; }
+  .sec .c{ font-size:7.5px; color:var(--grey-soft); }
+
+  .proofs{ margin-top:1.6mm; }
+  .prow{ display:grid; grid-template-columns:1.7fr .85fr .45fr 1.6fr; gap:4mm; font-size:8.6px; line-height:1.35; padding:.9mm 0; }
+  .prow + .prow{ border-top:.2mm dotted var(--rule); }
+  .prow .k{ display:block; font-size:6px; letter-spacing:.16em; text-transform:uppercase; color:var(--grey-soft); font-weight:500; }
+  .prow .v{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--ink); }
+  .pmore{ font-size:7.5px; color:var(--grey); padding-top:.6mm; }
+
+  /* photo zone - the ONLY flexible region of the page */
+  .photos{ flex:1 1 0 !important; min-height:0; margin-top:2.4mm; display:grid; gap:3mm; overflow:hidden;
+           grid-template-columns:repeat(12,1fr); grid-template-rows:1fr; }
+  .fig{ display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .fig .box{ flex:1 1 0; min-height:0; position:relative; background:var(--wash); border:.25mm solid var(--rule); display:flex; align-items:center; justify-content:center; }
+  .fig .box img{ max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; display:block; }   /* never cropped, aspect preserved */
+  .fig .idx{ position:absolute; left:0; top:0; background:var(--forest); color:#fff; font-size:7px; font-weight:600; padding:.5mm 1.7mm; }
+  .fig .cap{ flex:none; height:8.6mm; max-height:8.6mm; padding-top:1mm; font-size:8.2px; line-height:1.3; color:var(--ink); overflow:hidden;
+             display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .fig .cap .loc{ color:var(--gold); font-weight:500; }
+  .nophoto{ flex:1 1 0; min-height:0; margin-top:2.4mm; display:flex; align-items:center; justify-content:center; }
+  .nophoto .empty{ width:112mm; padding:9mm 8mm 8.5mm; text-align:center; background:var(--wash); border:.25mm solid var(--rule); border-top:.7mm solid var(--forest); }
+  .nophoto .empty svg{ width:11mm; height:11mm; display:block; margin:0 auto 3.4mm; stroke:var(--grey-soft); fill:none; stroke-width:1.2; stroke-linecap:round; stroke-linejoin:round; }
+  .nophoto .empty .t{ font-size:7px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:var(--forest); margin-bottom:2mm; }
+  .nophoto .empty .m{ font-size:10px; color:var(--ink); line-height:1.45; }
+  .nophoto .empty .m-ar{ font-size:10px; color:var(--grey); margin-top:1.6mm; line-height:1.6; }
+
+  .vids{ margin-top:2.6mm; display:grid; gap:3mm; }
+  .vid{ display:flex; gap:2.6mm; align-items:center; border:.25mm solid var(--rule); padding:1.6mm 2.4mm; min-width:0; }
+  .vid .qr{ flex:none; width:15mm; height:15mm; }
+  .vid .qr img, .vid .qr canvas{ width:15mm !important; height:15mm !important; display:block; }
+  .vid .qr table{ display:none; }
+  .vid .tx{ min-width:0; }
+  .vid .l{ font-size:8.6px; font-weight:500; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .vid .u{ font-size:6.4px; color:var(--grey); margin-top:.8mm; word-break:break-all; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .vid .u a{ color:var(--emerald); text-decoration:none; }
+  .vids.many .vid .qr, .vids.many .vid .qr img, .vids.many .vid .qr canvas{ width:12mm !important; height:12mm !important; }
+  .vmore{ font-size:7.5px; color:var(--grey); margin-top:1mm; }
+
+  .rcpt{ margin-top:3.4mm; }
+  .rcpt .cols{ display:grid; grid-template-columns:1.2fr 1.4fr 1fr; gap:9mm; margin-top:2.2mm; }
+  .rcpt .line{ height:14mm; border-bottom:.3mm solid var(--ink); position:relative; }
+  .rcpt .line span{ position:absolute; left:0; bottom:1.2mm; font-size:9.5px; color:var(--ink); white-space:nowrap; }
+  .clause{ height:10mm; }               /* reserved: bilingual 3-business-day receipt clause is added in a later phase */
+  .ft{ display:flex; justify-content:space-between; align-items:flex-end; border-top:.2mm solid var(--rule); padding-top:1.6mm; font-size:6.6px; color:var(--grey-soft); letter-spacing:.03em; height:6mm; }
+
+  @page{ size:A4; margin:0; }
+  @media print{
+    html,body{ background:#fff; }
+    .bar,.warn,.msg{ display:none !important; }
+    #pages{ padding:0; }
+    .dn-page{ margin:0; box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+<div class="bar noprint" id="bar" hidden>
+  <b id="barTitle">Delivery Note</b><span id="barInfo"></span><span class="sp"></span>
+  <button onclick="window.print()">Print / Save as PDF</button>
+</div>
+<div id="warnHost"></div>
+<div id="pages"><div class="msg" id="msg">Loading delivery note…</div></div>
+
+<script>
+'use strict';
+const MAX_PHOTOS = 6;          // hard cap per item page (an item never spills onto a 2nd page)
+const MAX_VIDEOS = 6;
+const API = '/api/tp';
+const CO = { name:'Vista United Co.', address:'Jeddah, KSA, Al Muhammadiya Dist, Muhammad Ibn 23625 Hatib Street',
+             web:'vistaunited.co', phone:'+966 55 568 4753', email:'info@vistaunited.co', vat:'314573358300003', cr:'7053413683' };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[, ]/g,'')); return isFinite(n) ? n : null; };
+const fmtQty = n => { const v = Number(n) || 0; return Math.round(v*100)/100 % 1 === 0 ? String(Math.round(v)) : v.toFixed(2); };
+const keyOf = x => (x && (x.lineId || x.itemId)) || '';
+const photoSrc = id => API + '/photos/' + encodeURIComponent(id);
+const shortUrl = u => String(u||'').replace(/^https?:\/\//,'').replace(/\?.*$/,'').replace(/\/(view|edit)$/,'');
+const clip = (t, n) => { t = String(t == null ? '' : t).trim(); return t.length > n ? t.slice(0, n - 1).trim() + '…' : t; };
+
+function fail(text){ $('#msg').textContent = text; }
+
+async function main(){
+  const q = new URLSearchParams(location.search);
+  const pid = q.get('pid'), eid = q.get('eid');
+  if(!pid || !eid) return fail('Missing project or delivery event in the link.');
+  let project;
+  try{
+    const r = await fetch(API + '/projects/' + encodeURIComponent(pid));
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(); project = j.data || j;
+  }catch(e){ return fail('Could not load the project from the Central Database (' + (e.message||e) + '). Start the local Vista server and reopen.'); }
+
+  // locate the saved event
+  let record = null, event = null, evIndex = -1;
+  for(const rec of (project.deliveries || [])){
+    const i = (rec.events || []).findIndex(e => e.id === eid);
+    if(i >= 0){ record = rec; event = rec.events[i]; evIndex = i; break; }
+  }
+  if(!event) return fail('This delivery event was not found in the project.');
+
+  const series = (project.quotations || []).find(s => s.id === record.quotationId);
+  const rev = series && (series.revisions || []).find(x => x.rev === record.quotationRev);
+  const client = (rev && rev.client) || {};
+  const clientName = client.name || project.client || '';
+  const clientAddr = [client.address1, client.city, client.postal].filter(Boolean).join(', ');
+
+  // "previously delivered" per line = everything recorded in EARLIER events of the same record
+  const prev = {};
+  (record.events || []).slice(0, evIndex).forEach(ev => (ev.lines || []).forEach(l => { prev[keyOf(l)] = (prev[keyOf(l)] || 0) + (Number(l.qtyDeliveredNow) || 0); }));
+
+  const lines = (event.lines || []).filter(l => (Number(l.qtyDeliveredNow) || 0) > 0);
+  const total = lines.length;
+  if(!total) return fail('This delivery event has no delivered items.');
+
+  const ctx = { project, record, event, clientName, clientAddr, total };
+  const picks = lines.map(l => pickPhotos(l));
+  const needing = lines.map((l, i) => picks[i].needs ? (record.items.find(x => keyOf(x) === keyOf(l)) || {}).name || keyOf(l) : null).filter(Boolean);
+  if(needing.length){
+    return fail('Photo selection required. ' + needing.map(n => '“' + n + '”').join(', ') + ' ha' + (needing.length === 1 ? 's' : 've')
+      + ' more than ' + MAX_PHOTOS + ' proof photos and no saved choice, so this Delivery Note cannot be generated yet. '
+      + 'Open the Deliver screen in the Technical Proposal and press Reprint to choose which photos (maximum ' + MAX_PHOTOS + ') appear on the page.');
+  }
+  const warnings = [];
+  const html = lines.map((l, i) => {
+    const pos = record.items.findIndex(x => keyOf(x) === keyOf(l));
+    const it = record.items[pos] || { name: keyOf(l) };
+    return pageHtml(ctx, l, it, pos + 1, i + 1, prev[keyOf(l)] || 0, picks[i]);
+  }).join('');
+  $('#pages').innerHTML = html;
+
+  $('#bar').hidden = false;
+  $('#barTitle').textContent = event.dnNo;
+  $('#barInfo').textContent = total + ' item page' + (total === 1 ? '' : 's') + ' · one A4 page per delivered item';
+  document.title = event.dnNo + ' — Delivery Note';
+  if(warnings.length) $('#warnHost').innerHTML = warnings.map(w => '<div class="warn">' + esc(w) + '</div>').join('');
+
+  drawQrs();
+  layoutAll();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(layoutAll);
+  window.addEventListener('beforeprint', layoutAll);
+}
+
+/* the photos placed on one item page, from the FROZEN snapshot only.
+   pdfPhotoIds (saved on the event line) wins; without it <= MAX_PHOTOS photos all print;
+   more than MAX_PHOTOS with no valid saved choice = { needs:true } (never silently the first 6). */
+function pickPhotos(line){
+  const flat = [];
+  (line.proofs || []).forEach(p => (p.photos || []).forEach(ph => flat.push({ ph, loc: p.location })));
+  const multi = (line.proofs || []).length > 1;
+  if(Array.isArray(line.pdfPhotoIds) && line.pdfPhotoIds.length){
+    const byId = new Map(flat.map(x => [x.ph.photoId, x]));
+    const chosen = line.pdfPhotoIds.map(id => byId.get(id)).filter(Boolean);
+    if(chosen.length >= 1 && chosen.length <= MAX_PHOTOS) return { chosen, multi, needs:false };
+    return { chosen:[], multi, needs:true, total:flat.length };
+  }
+  if(flat.length <= MAX_PHOTOS) return { chosen:flat, multi, needs:false };
+  return { chosen:[], multi, needs:true, total:flat.length };
+}
+
+/* ---------- adaptive photo layout ----------
+   Candidate arrangements (12-column grid, rects = [col, colSpan, row, rowSpan] in reading order) are scored by the
+   total area the photos actually DISPLAY at (aspect preserved, never cropped) inside the measured photo zone;
+   the best one wins. Works for 1..6 photos and mixes of portrait/landscape. */
+const R = (c, cs, r, rs) => [c, cs, r, rs];
+function candidates(n){
+  const row = k => Array.from({length:n}, (_, i) => R(1 + i * (12 / k), 12 / k, 1, 1));   // n cells in one row
+  const col = () => Array.from({length:n}, (_, i) => R(1, 12, 1 + i, 1));                  // n cells stacked
+  if(n === 1) return [{ rows:1, rects:[R(1,12,1,1)] }];
+  if(n === 2) return [{ rows:1, rects:row(2) }, { rows:2, rects:col() }];
+  if(n === 3) return [
+    { rows:1, rects:row(3) }, { rows:3, rects:col() },
+    { rows:2, rects:[R(1,6,1,2), R(7,6,1,1), R(7,6,2,1)] },      // tall left + 2 stacked right
+    { rows:2, rects:[R(1,6,1,1), R(1,6,2,1), R(7,6,1,2)] },      // 2 stacked left + tall right
+    { rows:2, rects:[R(1,12,1,1), R(1,6,2,1), R(7,6,2,1)] },     // wide top + 2 below
+    { rows:2, rects:[R(1,6,1,1), R(7,6,1,1), R(1,12,2,1)] } ];   // 2 above + wide bottom
+  if(n === 4) return [
+    { rows:1, rects:row(4) }, { rows:2, rects:[R(1,6,1,1), R(7,6,1,1), R(1,6,2,1), R(7,6,2,1)] },
+    { rows:3, rects:[R(1,6,1,3), R(7,6,1,1), R(7,6,2,1), R(7,6,3,1)] },
+    { rows:3, rects:[R(1,6,1,1), R(1,6,2,1), R(1,6,3,1), R(7,6,1,3)] },
+    { rows:2, rects:[R(1,12,1,1), R(1,4,2,1), R(5,4,2,1), R(9,4,2,1)] } ];
+  if(n === 5) return [
+    { rows:2, rects:[R(1,4,1,1), R(5,4,1,1), R(9,4,1,1), R(1,6,2,1), R(7,6,2,1)] },
+    { rows:2, rects:[R(1,6,1,1), R(7,6,1,1), R(1,4,2,1), R(5,4,2,1), R(9,4,2,1)] },
+    { rows:1, rects:Array.from({length:5}, (_, i) => R(1 + i * 2.4, 2.4, 1, 1)) } ].filter(l => l.rects.every(r => Number.isInteger(r[0]) && Number.isInteger(r[1])));
+  return [ { rows:2, rects:[R(1,4,1,1), R(5,4,1,1), R(9,4,1,1), R(1,4,2,1), R(5,4,2,1), R(9,4,2,1)] },
+           { rows:3, rects:[R(1,6,1,1), R(7,6,1,1), R(1,6,2,1), R(7,6,2,1), R(1,6,3,1), R(7,6,3,1)] } ];
+}
+function scoreLayout(lay, dims, W, H, gap, capH){
+  const rowH = (H - (lay.rows - 1) * gap) / lay.rows, colW = (W - 11 * gap) / 12;
+  let total = 0, min = Infinity;
+  lay.rects.forEach((r, i) => {
+    const cw = colW * r[1] + gap * (r[1] - 1), chh = rowH * r[3] + gap * (r[3] - 1) - capH;
+    const d = dims[i]; if(cw <= 4 || chh <= 4) { total -= 1e9; return; }
+    const sc = Math.min(cw / d.w, chh / d.h), area = d.w * d.h * sc * sc;
+    total += area; min = Math.min(min, area);
+  });
+  return total + min * 0.35;      // mostly "largest photos overall", slightly favouring no tiny outlier
+}
+function layoutAll(){
+  const mm = 96 / 25.4;
+  document.querySelectorAll('.photos').forEach(zone => {
+    const figs = [...zone.children]; if(!figs.length) return;
+    const dims = figs.map(f => { const w = +f.dataset.w, h = +f.dataset.h; return (w > 0 && h > 0) ? { w, h } : { w:4, h:3 }; });
+    const W = zone.clientWidth, H = zone.clientHeight; if(!W || !H) return;
+    let best = null;
+    candidates(figs.length).forEach(l => { const sc = scoreLayout(l, dims, W, H, 3 * mm, 8.6 * mm); if(!best || sc > best.sc) best = { l, sc }; });
+    zone.style.gridTemplateRows = 'repeat(' + best.l.rows + ', 1fr)';
+    figs.forEach((f, i) => { const r = best.l.rects[i]; f.style.gridColumn = r[0] + ' / span ' + r[1]; f.style.gridRow = r[2] + ' / span ' + r[3]; });
+  });
+}
+
+function pageHtml(ctx, line, it, itemNo, pageNo, prevQty, pk){
+  const { event, record, project, clientName, clientAddr, total } = ctx;
+  const ordered = Number(it.orderedQty) || 0, now = Number(line.qtyDeliveredNow) || 0, unit = it.unit || 'no.';
+  const proofs = line.proofs || [];
+
+  const figs = pk.chosen.map((c, i) =>
+    '<div class="fig" data-w="' + (c.ph.w || 0) + '" data-h="' + (c.ph.h || 0) + '"><div class="box"><img src="' + esc(photoSrc(c.ph.photoId)) + '" alt=""><div class="idx">' + (i + 1) + '</div></div>'
+    + '<div class="cap">' + (pk.multi && c.loc ? '<span class="loc">' + esc(clip(c.loc, 22)) + '</span>' + (c.ph.caption ? ' · ' : '') : '') + esc(clip(c.ph.caption, 84)) + '</div></div>'
+  ).join('');
+
+  const shownProofs = proofs.slice(0, 3);
+  const proofRows = shownProofs.map(p =>
+    '<div class="prow">'
+    + '<div><span class="k">Location</span><span class="v">' + esc(p.location || '—') + '</span></div>'
+    + '<div><span class="k">Installation / Proof date</span><span class="v">' + esc(p.date || '—') + '</span></div>'
+    + '<div><span class="k">Proof qty</span><span class="v">' + esc(num(p.qty) == null ? '—' : fmtQty(num(p.qty))) + '</span></div>'
+    + '<div><span class="k">Note</span><span class="v">' + esc(p.note || '—') + '</span></div>'
+    + '</div>').join('') + (proofs.length > 3 ? '<div class="pmore">+ ' + (proofs.length - 3) + ' more proof location(s) recorded</div>' : '');
+
+  // videos: label + QR (+ small clickable link); never embedded
+  const vids = []; proofs.forEach(p => (p.videos || []).forEach(v => { if(v && v.url) vids.push(v); }));
+  const shownVids = vids.slice(0, MAX_VIDEOS);
+  const vcols = shownVids.length <= 1 ? 1 : (shownVids.length === 2 ? 2 : 3);
+  const vidHtml = shownVids.length
+    ? '<div class="vids' + (shownVids.length > 3 ? ' many' : '') + '" style="grid-template-columns:repeat(' + vcols + ',1fr)">'
+      + shownVids.map(v => '<div class="vid"><div class="qr" data-qr="' + esc(v.url) + '"></div><div class="tx"><div class="l">' + esc(v.label || 'Video') + '</div>'
+        + '<div class="u"><a href="' + esc(v.url) + '">' + esc(shortUrl(v.url)) + '</a></div></div></div>').join('')
+      + '</div>' + (vids.length > MAX_VIDEOS ? '<div class="vmore">+ ' + (vids.length - MAX_VIDEOS) + ' more video link(s) recorded</div>' : '')
+    : '';
+
+  const receiver = (event.receiverName || '').trim(), rdate = (event.receiverDate || '').trim();
+  const desc = (it.description || '').trim();
+
+  return '<section class="dn-page" data-page="' + pageNo + '">'
+    + '<div class="hd"><div class="logo"><img src="logo.png" alt="Vista United"></div>'
+    +   '<div class="ttl"><div class="h">Delivery Note</div><div class="h-ar ar">مذكرة تسليم</div>'
+    +   '<div class="meta"><b>No. ' + esc(event.dnNo) + '</b> &nbsp;·&nbsp; Delivery Date: <b>' + esc(event.dnDate) + '</b><br>Ref. Quotation: <b>' + esc(record.quotationNo) + '</b> · Rev ' + esc(record.quotationRev) + '</div></div></div>'
+    + '<div class="rule"></div>'
+    + '<div class="info">'
+    +   '<div><div class="lbl">Delivered To<span class="ar">تسليم إلى</span></div><div class="nm">' + esc(clientName || '—') + '</div>' + (clientAddr ? '<div class="sub">' + esc(clientAddr) + ', Kingdom of Saudi Arabia</div>' : '<div class="sub">Kingdom of Saudi Arabia</div>') + '</div>'
+    +   '<div><div class="lbl">Project<span class="ar">المشروع</span></div><div class="nm">' + esc(project.name || '—') + '</div>' + (project.location ? '<div class="sub">' + esc(project.location) + '</div>' : '') + '</div>'
+    + '</div>'
+    + '<div class="item">'
+    +   '<div class="top"><span class="no">Item ' + String(itemNo).padStart(2, '0') + '</span><span class="name">' + esc(it.name || '—') + '</span></div>'
+    +   '<div class="desc">' + (desc ? esc(desc) : '') + '</div>'
+    +   '<div class="qty">'
+    +     '<div><div class="lbl">Ordered Qty<span class="ar">المطلوب</span></div><div class="v">' + fmtQty(ordered) + '<small>' + esc(unit) + '</small></div></div>'
+    +     '<div><div class="lbl">Previously Delivered<span class="ar">سابقاً</span></div><div class="v">' + fmtQty(prevQty) + '<small>' + esc(unit) + '</small></div></div>'
+    +     '<div class="now"><div class="lbl">Delivered Now<span class="ar">المسلَّم الآن</span></div><div class="v">' + fmtQty(now) + '<small>' + esc(unit) + '</small></div></div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="sec"><span class="t">Installation / Delivery Proof<span class="ar">إثبات التركيب / التسليم</span></span><span class="c">' + [pk.chosen.length ? pk.chosen.length + ' photo' + (pk.chosen.length === 1 ? '' : 's') : '', vids.length ? vids.length + ' video' + (vids.length === 1 ? '' : 's') : ''].filter(Boolean).join(' · ') + '</span></div>'
+    + (proofs.length ? '<div class="proofs">' + proofRows + '</div>' : '')
+    + (pk.chosen.length ? '<div class="photos">' + figs + '</div>' : '<div class="nophoto"><div class="empty"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="1.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="M3.5 17l5-4.6 3.6 3.2 3-2.6 5.4 4.9"/></svg>'
+       + '<div class="t">No installation proof</div><div class="m">No installation proof photos were attached to this delivery.</div>'
+       + '<div class="m-ar ar">لم يتم إرفاق صور إثبات التركيب بهذا التسليم.</div></div></div>')
+    + vidHtml
+    + '<div class="rcpt"><div class="sec" style="margin-top:0"><span class="t">Receipt Confirmation<span class="ar">تأكيد الاستلام</span></span></div>'
+    +   '<div class="cols">'
+    +     '<div><div class="lbl">Receiver Name<span class="ar">اسم المستلم</span></div><div class="line">' + (receiver ? '<span>' + esc(receiver) + '</span>' : '') + '</div></div>'
+    +     '<div><div class="lbl">Signature<span class="ar">التوقيع</span></div><div class="line"></div></div>'
+    +     '<div><div class="lbl">Date Received<span class="ar">تاريخ الاستلام</span></div><div class="line">' + (rdate ? '<span>' + esc(rdate) + '</span>' : '') + '</div></div>'
+    +   '</div></div>'
+    + '<div class="clause"></div>'
+    + '<div class="ft"><span>' + esc(CO.name) + ' · ' + esc(CO.address) + ' · ' + esc(CO.web) + ' · VAT ' + esc(CO.vat) + '</span><span>' + esc(event.dnNo) + ' · Item page ' + pageNo + ' of ' + total + '</span></div>'
+    + '</section>';
+}
+
+function drawQrs(){
+  const els = document.querySelectorAll('[data-qr]');
+  const go = () => els.forEach(el => {
+    if(el.dataset.done) return; el.dataset.done = '1';
+    try{
+      const box = document.createElement('div');
+      new QRCode(box, { text: el.dataset.qr, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M });
+      const cv = box.querySelector('canvas');
+      el.innerHTML = '';
+      if(cv){ const img = new Image(); img.src = cv.toDataURL('image/png'); el.appendChild(img); }
+      else el.appendChild(box);
+    }catch(e){ el.textContent = 'QR unavailable'; }
+  });
+  if(typeof QRCode !== 'undefined') go();
+  else window.addEventListener('load', () => { if(typeof QRCode !== 'undefined') go(); else els.forEach(el => el.textContent = 'QR unavailable (offline)'); });
+}
+
+main();
+</script>
+</body>
+</html>

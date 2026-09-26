@@ -218,6 +218,16 @@
   .proofcard .vidrow a.btn{ text-decoration:none; }
   .lightbox .lbcap{ position:absolute; left:50%; bottom:60px; transform:translateX(-50%); max-width:min(86vw,640px); background:rgba(14,26,20,.82); color:#fff;
                     border-radius:8px; padding:6px 12px; font-size:13px; text-align:center; }
+  .dialog.ppick{ max-width:600px; max-height:92vh; overflow:auto; }
+  .ppick .pp-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:10px 0 12px; }
+  .ppick .pp-th{ position:relative; display:flex; flex-direction:column; gap:3px; border:2px solid var(--rule); border-radius:9px; padding:4px; cursor:pointer; background:#fff; }
+  .ppick .pp-th.on{ border-color:var(--emerald); background:var(--emerald-wash); }
+  .ppick .pp-th.off{ opacity:.4; cursor:not-allowed; }
+  .ppick .pp-th img{ width:100%; aspect-ratio:1/1; object-fit:contain; background:var(--cream); border-radius:6px; display:block; }
+  .ppick .pp-th input{ position:absolute; top:9px; left:9px; width:18px; height:18px; }
+  .ppick .pp-th .pp-tag{ font-size:10px; color:var(--gold-ink); font-weight:600; line-height:1.2; }
+  .ppick .pp-th .pp-cap{ font-size:10.5px; color:var(--grey); line-height:1.25; min-height:13px; }
+  .ppick .pp-count{ font-size:12.5px; font-weight:700; color:var(--emerald); }
   .dlv-proofrow > td{ width:auto !important; padding:0 6px 8px !important; }
   .dlv-proofrow details{ border:1px solid var(--rule); border-radius:8px; background:var(--cream); padding:6px 9px; }
   .dlv-proofrow summary{ cursor:pointer; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--emerald); }
@@ -4564,8 +4574,12 @@ document.addEventListener('click', async e=>{
     const dlvSave = closest('[data-dlvsave]');
     if(dlvSave && STATE.project){
       const r = parseHash();
-      const res = await deliverySaveEvent(STATE.project, r.sid, r.rev);
-      if(res){ STATE.project = res.project; await deliveryExportEvent(res.project, res.record, res.event); render(); }
+      const w = dlvOpenPending();                                           // opened synchronously so it is not blocked
+      const choice = await dlvCollectPhotoChoices(STATE.project);           // >6 photos on an item -> user chooses BEFORE save
+      if(choice === null){ if(w) w.close(); return; }
+      const res = await deliverySaveEvent(STATE.project, r.sid, r.rev, choice);
+      if(res){ STATE.project = res.project; deliveryExportEvent(res.project, res.record, res.event, w); render(); }
+      else if(w) w.close();
       return;
     }
     const dlvFull = closest('[data-dlvfull]');
@@ -4618,7 +4632,11 @@ document.addEventListener('click', async e=>{
       const r = parseHash();
       const record = deliveryFind(STATE.project, r.sid, r.rev);
       const ev = record && record.events.find(x=> x.id === dlvReprint.dataset.dlvreprint);
-      if(record && ev) await deliveryExportEvent(STATE.project, record, ev);
+      if(record && ev){
+        const w = dlvOpenPending();
+        if(await dlvEnsurePdfSelection(STATE.project, record, ev)) deliveryExportEvent(STATE.project, record, ev, w);
+        else if(w) w.close();
+      }
       return;
     }
   }
@@ -5829,7 +5847,9 @@ function renderQuote(p){
      items:[ {itemId,name,unit,orderedQty} ],
      events:[ { id, dnNo, dnDate, createdAt, receiverName, receiverDate,
                 lines:[ {lineId,itemId,qtyDeliveredNow,
-                         proofs?:[ frozen Installation Proof snapshot - see below ]} ] } ] } ]
+                         proofs?:[ frozen Installation Proof snapshot - see below ],
+                         pdfPhotoIds?:[ frozen dn-proof photoIds (max 6) printed on the client
+                                        Delivery Note page; proofs[] keeps ALL frozen photos ]} ] } ] } ]
 
    A delivery record is locked forever to the exact quotation revision it
    was created from (quotationId+quotationRev is its lookup key) — a later
@@ -5988,6 +6008,107 @@ async function dlvCopyProofPhoto(projectId, srcId){
   return { id, mime, w, h };
 }
 async function dlvDropPhotos(ids){ for(const id of ids){ try{ await dbDel('photos', id); }catch(_){} } }
+
+/* ---- client Delivery Note: photo selection (max 6 per item page) ------------
+   One item = one A4 page, which holds at most DN_MAX_PHOTOS photos. Up to 6 photos
+   are used automatically; MORE than 6 always needs the user's explicit choice
+   (never "the first 6"). The choice is frozen on the event line as pdfPhotoIds
+   (frozen dn-proof photoIds); proofs[] keeps every frozen photo. */
+const DN_MAX_PHOTOS = 6;
+const DN_NOTE_FILE = 'technical-proposal-delivery-note.html';
+function dlvPhotoPicker(opt){
+  return new Promise(res=>{
+    const max = opt.max || DN_MAX_PHOTOS, sel = new Set(opt.preselected || []);
+    const o = document.createElement('div'); o.className = 'overlay';
+    const grid = opt.items.map(x=>
+      '<label class="pp-th" data-pid="'+esc(x.id)+'"><input type="checkbox" data-pid="'+esc(x.id)+'">'
+      + '<img src="'+esc(x.url)+'" alt="">'
+      + (x.tag ? '<div class="pp-tag">'+esc(x.tag)+'</div>' : '')
+      + '<div class="pp-cap">'+esc(x.caption || '')+'</div></label>').join('');
+    o.innerHTML = '<div class="dialog ppick"><h3>Select photos for: '+esc(opt.title)+'</h3>'
+      + '<p style="margin-bottom:2px">This item has <b>'+opt.items.length+'</b> proof photos, but one Delivery Note page holds at most <b>'+max+'</b>. '
+      + 'Choose which appear on the client PDF.'+(opt.step ? ' <span style="color:var(--gold-ink)">('+esc(opt.step)+')</span>' : '')+'</p>'
+      + '<div class="pp-grid">'+grid+'</div>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">'
+      + '<span class="pp-count" data-ppcount></span>'
+      + '<span class="acts" style="margin:0"><button class="btn btn-ghost" data-x="0">Cancel</button>'
+      + '<button class="btn btn-primary" data-x="1" data-ppok>Use these photos</button></span></div></div>';
+    const paint = ()=>{
+      const n = sel.size;
+      o.querySelectorAll('.pp-th').forEach(el=>{
+        const on = sel.has(el.dataset.pid), off = !on && n >= max;
+        el.classList.toggle('on', on); el.classList.toggle('off', off);
+        const cb = el.querySelector('input'); cb.checked = on; cb.disabled = off;
+      });
+      o.querySelector('[data-ppcount]').textContent = n + ' of ' + max + ' selected' + (n >= max ? ' - maximum reached' : '');
+      o.querySelector('[data-ppok]').disabled = n < 1 || n > max;
+    };
+    o.addEventListener('change', e=>{
+      const cb = e.target.closest('input[data-pid]'); if(!cb) return;
+      if(cb.checked){ if(sel.size >= max){ paint(); return; } sel.add(cb.dataset.pid); } else sel.delete(cb.dataset.pid);
+      paint();
+    });
+    o.addEventListener('click', e=>{
+      if(e.target === o){ o.remove(); res(null); return; }
+      const x = e.target.closest('[data-x]'); if(!x) return;
+      if(x.dataset.x === '0'){ o.remove(); res(null); return; }
+      if(sel.size < 1 || sel.size > max) return;
+      o.remove(); res(opt.items.map(i=> i.id).filter(id=> sel.has(id)));       // keeps proof order
+    });
+    document.body.appendChild(o); paint();
+  });
+}
+/* Before Save: for every delivered line whose picked proofs hold more than 6 photos, make the
+   user choose (by LIVE source photo id; mapped to the frozen copies at save time). null = cancelled. */
+async function dlvCollectPhotoChoices(p){
+  const st = STATE.dlv, choice = {}, need = [];
+  (st ? st.items : []).forEach(it=>{
+    if(!it.itemId || !(it.proofSel||[]).length || !((moneyNum(it.qtyNow)||0) > 0)) return;
+    const photos = [];
+    dlvLiveProofs(p, it.itemId).filter(pr=> it.proofSel.includes(pr.id)).forEach(pr=>
+      (pr.photos||[]).forEach(ph=>{ if(ph && photoUrl(ph.photoId)) photos.push({ id:ph.photoId, url:photoUrl(ph.photoId), caption:ph.caption||'', tag:pr.location||'' }); }));
+    if(photos.length > DN_MAX_PHOTOS) need.push({ it, photos });
+  });
+  for(let k = 0; k < need.length; k++){
+    const ids = await dlvPhotoPicker({ title:need[k].it.name, items:need[k].photos, max:DN_MAX_PHOTOS,
+      step: need.length > 1 ? 'item '+(k+1)+' of '+need.length : '' });
+    if(!ids) return null;
+    choice[need[k].it.lineId] = ids;
+  }
+  return choice;
+}
+/* Reprint of a SAVED event: lines with more than 6 frozen photos and no valid pdfPhotoIds (older
+   events) must be chosen once, then the choice is stored on that event line. Never picks silently. */
+async function dlvEnsurePdfSelection(p, record, event){
+  const frozenOf = l => (l.proofs||[]).flatMap(pr=> (pr.photos||[]).map(ph=> ({ ph, loc:pr.location })));
+  const bad = (event.lines||[]).filter(l=>{
+    const all = frozenOf(l); if(all.length <= DN_MAX_PHOTOS) return false;
+    const ids = Array.isArray(l.pdfPhotoIds) ? l.pdfPhotoIds : [];
+    return !(ids.length >= 1 && ids.length <= DN_MAX_PHOTOS && ids.every(id=> all.some(x=> x.ph.photoId === id)));
+  });
+  if(!bad.length) return true;
+  const picked = {};
+  for(let k = 0; k < bad.length; k++){
+    const l = bad[k], rit = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l)) || {};
+    const ids = await dlvPhotoPicker({ title:rit.name || deliveryLineKey(l),
+      items: frozenOf(l).map(x=>({ id:x.ph.photoId, url:photoUrl(x.ph.photoId) || (TP_API_BASE+'/photos/'+encodeURIComponent(x.ph.photoId)), caption:x.ph.caption||'', tag:x.loc||'' })),
+      max:DN_MAX_PHOTOS, step: bad.length > 1 ? 'item '+(k+1)+' of '+bad.length : '' });
+    if(!ids) return false;
+    picked[deliveryLineKey(l)] = ids;
+  }
+  let fresh;
+  try{ fresh = await dbGet('projects', p.id); }catch(e){ toast('Could not reach the Central Database: '+(e.message||e)); return false; }
+  const rec = fresh && deliveryEnsure(fresh).find(d=> d.id === record.id), ev = rec && rec.events.find(x=> x.id === event.id);
+  if(!ev){ toast('Delivery event not found.'); return false; }
+  (ev.lines||[]).forEach(l=>{ const k = deliveryLineKey(l); if(picked[k]) l.pdfPhotoIds = picked[k]; });
+  try{ await dbPut('projects', fresh); }catch(e){ toast('Save failed: '+(e.message||e)); return false; }
+  (event.lines||[]).forEach(l=>{ const k = deliveryLineKey(l); if(picked[k]) l.pdfPhotoIds = picked[k]; });
+  return true;
+}
+/* The client Delivery Note opens in a tab created synchronously at the click (so pop-up blockers
+   allow it), then pointed at the page once the event is saved. */
+function dlvOpenPending(){ try{ return window.open('', '_blank'); }catch(_){ return null; } }
+function dlvNoteUrl(pid, eid){ return DN_NOTE_FILE + '?pid=' + encodeURIComponent(pid) + '&eid=' + encodeURIComponent(eid); }
 /* Freezes the picked proofs of one TP item (read from `p`, the freshly loaded
    Central DB document) into plain snapshot objects; `copied` collects the ids
    of the DN-owned photo rows created so a failed save can roll them back. */
@@ -6038,7 +6159,7 @@ function renderDeliverScreen(p){
         itemId: it.itemId || null, name: it.name || '', unit: it.unit || 'no.',
         orderedQty: moneyNum(it.qty) || 0, qtyNow: '', proofSel: [],
       })),
-      receiverName: '', receiverDate: quoteToday(),
+      receiverName: '', receiverDate: '',      // Date Received is only ever what the user actually enters
     };
   }
   const st = STATE.dlv;
@@ -6124,7 +6245,7 @@ function renderDeliverScreen(p){
     + '</div>';
 }
 
-async function deliverySaveEvent(p, sid, rev){
+async function deliverySaveEvent(p, sid, rev, photoChoice){
   if(!(await deliveryRequireCentral())) return null;
   const st = STATE.dlv;
   if(!st || st.sid !== sid || st.rev !== rev) return null;
@@ -6168,7 +6289,7 @@ async function deliverySaveEvent(p, sid, rev){
     }
     const line = { lineId: key, itemId: it.itemId || null, qtyDeliveredNow: qtyNow };
     const selIds = (draftIt && draftIt.proofSel) || [];
-    if(it.itemId && selIds.length) pendingProofs.push({ line, itemId: it.itemId, selIds });
+    if(it.itemId && selIds.length) pendingProofs.push({ line, itemId: it.itemId, selIds, name: it.name });
     lines.push(line);
   }
   if(!lines.length){ toast('Enter a quantity for at least one item.'); return null; }
@@ -6179,7 +6300,17 @@ async function deliverySaveEvent(p, sid, rev){
   try{
     for(const pp of pendingProofs){
       const snap = await deliverySnapshotProofs(fresh, pp.itemId, pp.selIds, copied);
-      if(snap.length) pp.line.proofs = snap;
+      if(!snap.length) continue;
+      pp.line.proofs = snap;
+      // which frozen photos print on the client page: all when <= 6, otherwise ONLY what the user chose
+      const all = snap.flatMap(pr=> pr.photos);
+      if(all.length <= DN_MAX_PHOTOS) pp.line.pdfPhotoIds = all.map(x=> x.photoId);
+      else{
+        const want = (photoChoice && photoChoice[pp.line.lineId]) || [];
+        const ids = all.filter(x=> want.includes(x.sourcePhotoId)).map(x=> x.photoId);
+        if(!ids.length || ids.length > DN_MAX_PHOTOS) throw new Error('choose 1 to '+DN_MAX_PHOTOS+' photos for "'+pp.name+'"');
+        pp.line.pdfPhotoIds = ids;
+      }
     }
   }catch(e){ await dlvDropPhotos(copied); toast('Could not save the proof photos: ' + (e.message||e)); return null; }
 
@@ -6246,35 +6377,15 @@ async function deliveryCorrectOriginalQty(p, sid, rev, lineId, rawQty){
   return fresh;
 }
 
-/* Hands the finished event to the existing Vista PDF generator via the
-   SAME single-use handoff the Create-Quotation flow already uses — the
-   generator is a pure consumer, unaware of quotations vs delivery notes.
-   The legacy Daftra-invoice Delivery Note screen there is untouched: this
-   payload shape (doc.type==='delivery_note') is new and only recognised
-   by the new import branch added alongside it. */
-async function deliveryExportEvent(p, record, event){
-  const series = quoEnsure(p).find(s=> s.id === record.quotationId);
-  const revObj = series && (series.revisions||[]).find(x=> x.rev === record.quotationRev);
-  const client = (revObj && revObj.client) || {};
-  const doc = {
-    type: 'delivery_note',
-    dnNo: event.dnNo,
-    dnDate: event.dnDate,
-    quotationNo: record.quotationNo,
-    quotationRev: record.quotationRev,
-    client: client.name || p.client || '',
-    addrLine: [client.address1, client.city, client.postal].filter(Boolean).join(', '),
-    receiverName: event.receiverName || '',
-    receiverDate: event.receiverDate || '',
-    items: event.lines.map(l=>{
-      const it = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l)) || {};
-      // proofs: read ONLY from the saved event snapshot (never from the live TP item)
-      return { name: it.name || '', desc: it.description || '', qty: l.qtyDeliveredNow, proofs: l.proofs || [] };
-    }),
-  };
-  try{ await quoteWriteHandoff(doc, p.id); }
-  catch(e){ console.error(e); toast('Could not prepare the handoff'); return; }
-  window.open(QUOTE_GENERATOR_FILE + '?tpquo=' + Date.now() + '#tp-quo', '_blank');
+/* Opens the Technical Proposal client Delivery Note (technical-proposal-delivery-note.html) for
+   ONE saved event. That page reads the project + this event from the Central DB and renders one A4
+   page per delivered line from the saved snapshot only (event.lines[], .proofs[], .pdfPhotoIds[],
+   dn-proof photo copies, saved video links) - never the live installationProofs. TP Delivery Notes
+   are no longer handed to the Daftra generator. `w` is the pre-opened tab (see dlvOpenPending). */
+function deliveryExportEvent(p, record, event, w){
+  const url = dlvNoteUrl(p.id, event.id);
+  if(w && !w.closed){ try{ w.location.href = url; return; }catch(_){} }
+  window.open(url, '_blank');
 }
 
 /* ============================================================
