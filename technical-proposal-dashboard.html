@@ -1692,6 +1692,7 @@ async function duplicateProjectIdb(p, choice){
   doc.createdAt = doc.updatedAt = now();
   doc.duplicatedFrom = p.id;
   doc.quotations = [];   // fresh commercial quotation history — never inherited
+  doc.deliveries = [];   // delivery history/evidence belongs to the source project only
 
   const itemMap = {}, photoMap = {};
   const remap = old => { if(!old) return old; if(!photoMap[old]) photoMap[old] = uid(); return photoMap[old]; };
@@ -1969,6 +1970,7 @@ const STATE = {
   exportItems:null,   // null = all; else Set of item ids
   quote:null,         // Create Vista Quotation — prep-screen working state
   quorev:null,        // Saved Quotation Revision editor — working copy
+  dlv:null,           // Quotation-based Delivery screen — working copy
 };
 let saveTimer=null;
 function scheduleSave(){
@@ -2094,6 +2096,7 @@ function parseHash(){
   if(parts[0]==='p' && parts[2]==='export') return { view:'export', pid:parts[1] };
   if(parts[0]==='p' && parts[2]==='quote' && parts[3]) return { view:'quorev', pid:parts[1], sid:parts[3], rev: (parts[4]==='rev' && parts[5]!=null) ? +parts[5] : null };
   if(parts[0]==='p' && parts[2]==='quote') return { view:'quote', pid:parts[1] };
+  if(parts[0]==='p' && parts[2]==='deliver' && parts[3] && parts[4]==='rev' && parts[5]!=null) return { view:'deliver', pid:parts[1], sid:parts[3], rev:+parts[5] };
   if(parts[0]==='storage') return { view:'storage' };
   if(parts[0]==='p') return { view:'overview', pid:parts[1] };
   return { view:'projects' };
@@ -2112,6 +2115,7 @@ async function render(){
   STATE.project = p;
   if(migrateProject(p)){ try{ await dbPut('projects', p); }catch(_){} }
   if(r.view !== 'quorev') STATE.quorev = null;   // drop unsaved revision edits on leave
+  if(r.view !== 'deliver') STATE.dlv = null;     // drop unsaved delivery-qty draft on leave
   await loadProjectPhotos(p.id);
 
   if(r.view==='overview'){ STATE.otherOpen.clear(); return renderOverview(p); }
@@ -2124,6 +2128,7 @@ async function render(){
   if(r.view==='export'){ return renderExport(p); }
   if(r.view==='quote'){ return renderQuote(p); }
   if(r.view==='quorev'){ return renderQuoRev(p); }
+  if(r.view==='deliver'){ return renderDeliverScreen(p); }
   if(r.view==='projroadmap'){ return renderProjectRoadmap(p); }
   if(r.view==='roadmap'){
     const it = p.items.find(x=>x.id===r.iid);
@@ -4068,6 +4073,18 @@ document.addEventListener('input', e=>{
     }
     return;
   }
+
+  /* delivery screen — draft mutation only; quantities are validated for
+     real (negative / over-remaining / all-zero) at Save time, not here */
+  if(STATE.dlv && t.dataset.dlvqty != null){
+    const it = STATE.dlv.items[+t.dataset.i]; if(it) it.qtyNow = t.value;
+    return;
+  }
+  if(STATE.dlv && t.dataset.dlvorig != null){ STATE.dlv.editVal = t.value; return; }
+  if(STATE.dlv && t.dataset.dlvf != null){
+    STATE.dlv[t.dataset.dlvf] = t.value;
+    return;
+  }
 });
 
 document.addEventListener('click', async e=>{
@@ -4366,6 +4383,53 @@ document.addEventListener('click', async e=>{
     if(qPdfRev && STATE.project){ const [sid, rv] = qPdfRev.dataset.quopdfrev.split('|');
       const s = quoEnsure(STATE.project).find(x=> x.id === sid);
       if(s) await quoExportRevision(STATE.project, s, +rv);
+      return;
+    }
+    const qDeliver = closest('[data-quodeliver]');
+    if(qDeliver && STATE.project){ const [sid, rv] = qDeliver.dataset.quodeliver.split('|');
+      go('#/p/'+STATE.project.id+'/deliver/'+sid+'/rev/'+rv); return;
+    }
+  }
+  /* ----- quotation-based delivery screen ----- */
+  {
+    const dlvSave = closest('[data-dlvsave]');
+    if(dlvSave && STATE.project){
+      const r = parseHash();
+      const res = await deliverySaveEvent(STATE.project, r.sid, r.rev);
+      if(res){ STATE.project = res.project; await deliveryExportEvent(res.project, res.record, res.event); render(); }
+      return;
+    }
+    const dlvFull = closest('[data-dlvfull]');
+    if(dlvFull && STATE.dlv){
+      // fills the field only — never saves; validation still runs at Save time
+      const i = +dlvFull.dataset.dlvfull, rem = dlvFull.dataset.rem;
+      const it = STATE.dlv.items[i]; if(it) it.qtyNow = rem;
+      const inp = document.querySelector('[data-dlvqty][data-i="'+i+'"]'); if(inp) inp.value = rem;
+      return;
+    }
+    const dlvEdit = closest('[data-dlvedit]');
+    if(dlvEdit && STATE.project && STATE.dlv){
+      const id = dlvEdit.dataset.dlvedit;
+      const di = STATE.dlv.items.find(x=> x.lineId === id);
+      STATE.dlv.editing = id;
+      STATE.dlv.editVal = fmtQty(di ? di.orderedQty : 0);
+      renderDeliverScreen(STATE.project); return;
+    }
+    if(closest('[data-dlvcancelorig]') && STATE.project && STATE.dlv){
+      STATE.dlv.editing = null; renderDeliverScreen(STATE.project); return;
+    }
+    if(closest('[data-dlvsaveorig]') && STATE.project && STATE.dlv){
+      const st = STATE.dlv;
+      const fresh = await deliveryCorrectOriginalQty(STATE.project, st.sid, st.rev, st.editing, st.editVal);
+      if(fresh){ STATE.project = fresh; st.editing = null; renderDeliverScreen(fresh); }
+      return;
+    }
+    const dlvReprint = closest('[data-dlvreprint]');
+    if(dlvReprint && STATE.project){
+      const r = parseHash();
+      const record = deliveryFind(STATE.project, r.sid, r.rev);
+      const ev = record && record.events.find(x=> x.id === dlvReprint.dataset.dlvreprint);
+      if(record && ev) await deliveryExportEvent(STATE.project, record, ev);
       return;
     }
   }
@@ -5227,17 +5291,25 @@ function quotationsCardHtml(p){
   const rows = list.map(s=>{
     const revs = (s.revisions || []).slice();
     const latest = revs[revs.length - 1] || {};
-    const hist = revs.slice().reverse().map(r=>
-      '<div class="quo-hrow">'
+    const hist = revs.slice().reverse().map(r=>{
+      const drec = deliveryFind(p, s.id, r.rev);
+      const dtag = drec
+        ? (drec.status==='closed'
+            ? '<span style="color:var(--emerald);font-weight:600">· Fully delivered</span>'
+            : '<span style="color:var(--gold-ink);font-weight:600">· '+drec.events.length+' delivery event'+(drec.events.length===1?'':'s')+'</span>')
+        : '';
+      return '<div class="quo-hrow">'
       + '<span class="quo-hno">Rev '+r.rev+'</span>'
-      + '<span class="quo-hlabel">'+esc(r.label || '')+'</span>'
+      + '<span class="quo-hlabel">'+esc(r.label || '')+' '+dtag+'</span>'
       + '<span class="quo-hfig">Sub '+fmtSar(r.subtotal)+' · VAT '+fmtSar(r.vat)+' · <b>'+fmtSar(r.total)+'</b></span>'
       + '<span class="quo-hdate">created '+fmtQuoDate(r.createdAt)+'</span>'
       + '<span class="quo-hacts">'
       +   '<button class="btn btn-ghost btn-xs" data-quoopenrev="'+esc(s.id)+'|'+r.rev+'">Open</button>'
       +   '<button class="btn btn-ghost btn-xs" data-quopdfrev="'+esc(s.id)+'|'+r.rev+'">PDF</button>'
+      +   '<button class="btn btn-ghost btn-xs" data-quodeliver="'+esc(s.id)+'|'+r.rev+'">Deliver</button>'
       + '</span>'
-      + '</div>').join('');
+      + '</div>';
+    }).join('');
     return '<div class="quo-row">'
       + '<div class="quo-top">'
       +   '<div class="quo-id"><span class="quo-no">'+esc(s.no || 'Quotation')+'</span>'
@@ -5478,6 +5550,350 @@ function renderQuote(p){
         : 'Opens the existing Vista quotation editor in a new tab with these items pre-filled. Prices, notes, delivery days and photos stay editable there before the PDF is downloaded.')
     +  '</div>'
     + '</div>';
+}
+
+/* ============================================================
+   10e · Delivery Notes (quotation-based) — Central DB only
+   ------------------------------------------------------------
+   project.deliveries = [ { id, quotationId, quotationNo, quotationRev,
+     createdAt, status:'open'|'closed',
+     items:[ {itemId,name,unit,orderedQty} ],
+     events:[ { id, dnNo, dnDate, createdAt, receiverName, receiverDate,
+                lines:[ {itemId,qtyDeliveredNow} ] } ] } ]
+
+   A delivery record is locked forever to the exact quotation revision it
+   was created from (quotationId+quotationRev is its lookup key) — a later
+   revision of the same quotation series never touches an existing record;
+   revising creates a new series entry with its own rev number, so it
+   naturally gets its own, separate delivery record the first time
+   something is delivered against it. Events are only ever appended, never
+   edited or removed, so historical Delivery Notes never change.
+
+   Central DB only, by design (never IndexedDB/localStorage): this data
+   only has one writer path (deliverySaveEvent below), which refuses to
+   run unless STORE_MODE==='central' — see deliveryRequireCentral().
+   Persisted the same way project.quotations[] already is: as part of the
+   one verbatim project JSON document via dbPut('projects', p) → PUT
+   /api/tp/projects/<id> → tp_db.upsert_project(). No new endpoint/schema.
+   ============================================================ */
+function deliveryEnsure(p){ return Array.isArray(p.deliveries) ? p.deliveries : []; }
+function deliveryAttach(p){ if(!Array.isArray(p.deliveries)) p.deliveries = []; return p.deliveries; }
+function deliveryFind(p, sid, rev){
+  return deliveryEnsure(p).find(d=> d.quotationId === sid && d.quotationRev === rev) || null;
+}
+/* Stable delivery-line identity. Every delivery-record line carries its own
+   `lineId`; events reference it. A TP-backed quotation line uses its exact
+   TP itemId as the lineId (keeps the TP relationship, and old events/records
+   that only carry `itemId` keep resolving with no migration). A manual
+   quotation line (itemId null) gets its own unique generated id when the
+   record is created — so no two lines can ever share delivery totals. The
+   key is read from the stored data, never derived from array position. */
+function deliveryLineKey(x){ return (x && (x.lineId || x.itemId)) || ''; }
+function deliveryDeliveredMap(record){
+  const map = {};
+  (record ? record.events : []).forEach(ev=> (ev.lines||[]).forEach(l=>{
+    const k = deliveryLineKey(l);
+    map[k] = (map[k] || 0) + (Number(l.qtyDeliveredNow) || 0);
+  }));
+  return map;
+}
+function deliveryStatus(record){
+  if(!record) return 'open';
+  const delivered = deliveryDeliveredMap(record);
+  return record.items.every(it=> (delivered[deliveryLineKey(it)]||0) >= it.orderedQty - 1e-9) ? 'closed' : 'open';
+}
+/* Builds a delivery record from a saved quotation revision. `draftItems` (the
+   screen's working lines, themselves built from that same immutable revision)
+   supplies the lineIds already shown on screen for manual lines, so what the
+   user sees and what gets saved can't disagree; index correspondence is used
+   only here, at creation time, never afterwards. */
+function deliveryBuildRecord(series, revObj, draftItems){
+  const src = revObj.items || [];
+  const useDraft = Array.isArray(draftItems) && draftItems.length === src.length;
+  return {
+    id: uid(), quotationId: series.id, quotationNo: series.no, quotationRev: revObj.rev,
+    createdAt: Date.now(), status: 'open',
+    items: src.map((it,i)=>({
+      lineId: it.itemId || (useDraft && draftItems[i] && draftItems[i].lineId) || ('ml-' + uid()),
+      itemId: it.itemId || null,
+      name: it.name || '', unit: it.unit || 'no.', orderedQty: moneyNum(it.qty) || 0,
+      description: it.description || '',
+    })),
+    events: [],
+  };
+}
+/* DN numbers are unique per quotation number ACROSS all its revisions:
+   the sequence is recomputed from every saved event, of every delivery record
+   of this project, whose quotation number matches — never a separate counter,
+   never restarting per revision. Existing saved numbers are never rewritten. */
+function deliveryNextDnNo(p, quotationNo){
+  const esc_ = String(quotationNo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('^DN-' + esc_ + '-(\\d+)$');
+  let max = 0;
+  deliveryEnsure(p).forEach(rec=>{
+    if(String(rec.quotationNo) !== String(quotationNo)) return;
+    (rec.events||[]).forEach(ev=>{ const m = re.exec(String(ev.dnNo||'')); if(m) max = Math.max(max, +m[1]); });
+  });
+  return 'DN-' + quotationNo + '-' + String(max + 1).padStart(2, '0');
+}
+async function deliveryRequireCentral(){
+  if(STORE_MODE === 'central') return true;
+  await confirmDialog('Central Database Required',
+    'Delivery Notes are only stored in the Vista Local Database (Central DB) — never in this '
+    + 'browser. Start the local Vista server on this PC, then reopen this screen.', false);
+  return false;
+}
+function fmtQty(n){ const v = Number(n) || 0; return (Math.round(v*100)/100) % 1 === 0 ? String(Math.round(v)) : v.toFixed(2); }
+
+function renderDeliverScreen(p){
+  const r = parseHash();
+  const series = quoEnsure(p).find(s=> s.id === r.sid);
+  if(!series){ go('#/p/'+p.id); return; }
+  const revObj = (series.revisions||[]).find(x=> x.rev === r.rev);
+  if(!revObj){ go('#/p/'+p.id); return; }
+
+  const backBtn = '<button class="back" data-back="#/p/'+p.id+'">‹ '+esc(p.name||'Project')+'</button>';
+
+  if(STORE_MODE !== 'central'){
+    app().innerHTML =
+      '<div class="appbar">'+backBtn+'<span class="title">'+esc(series.no)+' · Deliver</span></div>'
+      + '<div class="wrap"><div class="banner">Delivery Notes are only stored in the <b>Vista Local Database (Central DB)</b> — '
+      + 'never in this browser. Start the local Vista server on this PC, then reopen this screen.</div></div>';
+    return;
+  }
+
+  const record = deliveryFind(p, series.id, revObj.rev);
+  const delivered = deliveryDeliveredMap(record);
+  const closed = record && record.status === 'closed';
+
+  if(!STATE.dlv || STATE.dlv.sid !== series.id || STATE.dlv.rev !== revObj.rev){
+    STATE.dlv = {
+      pid: p.id, sid: series.id, rev: revObj.rev,
+      items: (revObj.items||[]).map(it=>({
+        lineId: it.itemId || ('ml-' + uid()),
+        itemId: it.itemId || null, name: it.name || '', unit: it.unit || 'no.',
+        orderedQty: moneyNum(it.qty) || 0, qtyNow: '',
+      })),
+      receiverName: '', receiverDate: quoteToday(),
+    };
+  }
+  const st = STATE.dlv;
+  // Once a delivery record exists it is the source of the lines (its own
+  // snapshot, keyed by stable lineId) — rebuild the working lines from it,
+  // keeping any quantities already typed for the same lineId.
+  if(record){
+    const typed = {}; st.items.forEach(x=>{ typed[x.lineId] = x.qtyNow; });
+    st.items = record.items.map(ri=>{
+      const k = deliveryLineKey(ri);
+      return { lineId: k, itemId: ri.itemId || null, name: ri.name || '', unit: ri.unit || 'no.',
+               orderedQty: ri.orderedQty, qtyNow: typed[k] || '' };
+    });
+  }
+
+  const rows = st.items.map((it,i)=>{
+    const already = delivered[it.lineId] || 0;
+    const ordered = it.orderedQty;
+    const remaining = Math.max(0, ordered - already);
+    const done = remaining <= 1e-9;
+    const editing = st.editing === it.lineId;
+    const origCell = editing
+      ? '<input class="qr-num" data-dlvorig value="'+esc(st.editVal)+'" inputmode="decimal" style="width:70px"> '
+        + '<button class="btn btn-primary btn-xs" data-dlvsaveorig>Save</button> '
+        + '<button class="btn btn-ghost btn-xs" data-dlvcancelorig>✕</button>'
+      : fmtQty(ordered)+' '+esc(it.unit)+' <button class="btn btn-ghost btn-xs" data-dlvedit="'+esc(it.lineId)+'" title="Edit Original Qty">Edit</button>';
+    return '<tr'+(done?' style="opacity:.55"':'')+'>'
+      + '<td>'+esc(it.name)+(done?' <span style="color:var(--emerald);font-weight:600;font-size:11px">· Fully delivered</span>':'')+'</td>'
+      + '<td class="qr-num">'+origCell+'</td>'
+      + '<td class="qr-num">'+fmtQty(already)+'</td>'
+      + '<td><input class="qr-num" data-dlvqty data-i="'+i+'" value="'+esc(it.qtyNow)+'" inputmode="decimal"'
+      +   (done || closed ? ' disabled placeholder="—"' : ' placeholder="0"')+'>'
+      +   (done || closed ? '' : ' <button class="btn btn-ghost btn-xs" data-dlvfull="'+i+'" data-rem="'+(Math.round(remaining*1e6)/1e6)+'" title="Fill with the remaining quantity">Full</button>')
+      + '</td>'
+      + '<td class="qr-num">'+fmtQty(remaining)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  const eventsHtml = (record && record.events.length)
+    ? record.events.slice().reverse().map(ev=>{
+        const lineTxt = ev.lines.map(l=>{
+          const it = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l));
+          return esc(it ? it.name : deliveryLineKey(l)) + ': ' + fmtQty(l.qtyDeliveredNow);
+        }).join(', ');
+        return '<div class="quo-hrow">'
+          + '<span class="quo-hno">'+esc(ev.dnNo)+'</span>'
+          + '<span class="quo-hlabel">'+esc(ev.dnDate)+(ev.receiverName ? ' · '+esc(ev.receiverName) : '')+'</span>'
+          + '<span class="quo-hfig">'+lineTxt+'</span>'
+          + '<span class="quo-hacts"><button class="btn btn-ghost btn-xs" data-dlvreprint="'+esc(ev.id)+'">Reprint</button></span>'
+          + '</div>';
+      }).join('')
+    : '<div class="hint" style="margin:0">No partial deliveries recorded yet.</div>';
+
+  app().innerHTML =
+    '<div class="appbar">'+backBtn
+    + '<span class="title">'+esc(series.no)+' · Rev '+revObj.rev+' · Deliver</span>'
+    + '<span class="save'+(closed?' on':'')+'">'+(closed?'Fully Delivered':'Open')+'</span></div>'
+    + '<div class="wrap">'
+    +  (closed
+        ? '<div class="banner" style="background:var(--gold-wash);border-color:var(--cream-edge);color:var(--gold-ink)">'
+          + 'All items on this quotation revision are fully delivered. No further delivery quantities can be recorded against it.</div>'
+        : '')
+    +  '<div class="card"><div class="eyebrow">Items</div><div class="body">'
+    +    (st.editing ? '<div class="qwarn" style="margin-bottom:8px">This changes the delivery tracking quantity only. Previous Delivery Notes will not change.</div>' : '')
+    +    '<div class="qr-scroll"><table class="qr-tbl"><thead><tr>'
+    +      '<th>Item</th><th>Original Qty</th><th>Previously Delivered</th><th>Deliver Now</th><th>Remaining</th>'
+    +    '</tr></thead><tbody>'+rows+'</tbody></table></div>'
+    +  '</div></div>'
+    +  (closed ? '' :
+       '<div class="card"><div class="eyebrow">Receipt details <span class="rt">optional</span></div><div class="body">'
+    +    '<div class="row">'
+    +      '<div class="field"><label>Receiver name</label><input data-dlvf="receiverName" value="'+esc(st.receiverName)+'" placeholder="Optional"></div>'
+    +      '<div class="field"><label>Receiver date (date received)</label><input data-dlvf="receiverDate" value="'+esc(st.receiverDate)+'" placeholder="DD/MM/YYYY"></div>'
+    +    '</div>'
+    +  '</div></div>'
+    +  '<button class="btn btn-primary full mt10" data-dlvsave>Save Delivery &amp; Print</button>')
+    +  '<div class="card mt10"><div class="eyebrow">Delivery History</div><div class="body">'
+    +    '<div class="quo-hlist">'+eventsHtml+'</div>'
+    +  '</div></div>'
+    + '</div>';
+}
+
+async function deliverySaveEvent(p, sid, rev){
+  if(!(await deliveryRequireCentral())) return null;
+  const st = STATE.dlv;
+  if(!st || st.sid !== sid || st.rev !== rev) return null;
+
+  // Re-read the freshest project doc straight from the Central DB right
+  // before writing (not the possibly-stale in-memory `p`) so two tabs open
+  // on the same quotation revision can't silently overwrite each other's
+  // delivery history, and so the DN sequence number below is always
+  // computed from what is actually on disk.
+  let fresh;
+  try{ fresh = await dbGet('projects', p.id); }
+  catch(e){ toast('Could not reach the Central Database: ' + (e.message||e)); return null; }
+  if(!fresh){ toast('Project not found in the Central Database.'); return null; }
+
+  const series = quoEnsure(fresh).find(s=> s.id === sid);
+  if(!series){ toast('Quotation not found.'); return null; }
+  const revObj = (series.revisions||[]).find(x=> x.rev === rev);
+  if(!revObj){ toast('Quotation revision not found.'); return null; }
+
+  const list = deliveryAttach(fresh);
+  let record = list.find(d=> d.quotationId === sid && d.quotationRev === rev);
+  if(!record){
+    record = deliveryBuildRecord(series, revObj, st.items);
+    list.push(record);
+  }
+  if(record.status === 'closed'){ toast('This delivery record is already fully delivered.'); return null; }
+
+  const delivered = deliveryDeliveredMap(record);
+  const lines = [];
+  for(const it of record.items){
+    const key = deliveryLineKey(it);
+    const draftIt = st.items.find(x=> x.lineId === key);
+    const qtyNow = draftIt ? (moneyNum(draftIt.qtyNow) || 0) : 0;
+    if(qtyNow < 0){ toast('Quantities cannot be negative.'); return null; }
+    if(qtyNow === 0) continue;
+    const already = delivered[key] || 0;
+    const remaining = it.orderedQty - already;
+    if(qtyNow > remaining + 1e-9){
+      toast('"'+it.name+'" — delivering '+fmtQty(qtyNow)+' would exceed the remaining '+fmtQty(remaining)+' '+it.unit+'.');
+      return null;
+    }
+    lines.push({ lineId: key, itemId: it.itemId || null, qtyDeliveredNow: qtyNow });
+  }
+  if(!lines.length){ toast('Enter a quantity for at least one item.'); return null; }
+
+  const event = {
+    id: uid(), dnNo: deliveryNextDnNo(fresh, series.no), dnDate: quoteToday(), createdAt: Date.now(),
+    receiverName: String(st.receiverName||'').trim(), receiverDate: String(st.receiverDate||'').trim(),
+    lines,
+  };
+  record.events.push(event);
+  record.status = deliveryStatus(record);
+
+  try{ await dbPut('projects', fresh); }
+  catch(e){ toast('Save failed: ' + (e.message||e)); record.events.pop(); record.status = deliveryStatus(record); return null; }
+
+  STATE.dlv = null;
+  toast(event.dnNo + ' saved');
+  return { project: fresh, record, event };
+}
+
+/* Corrects the Original Qty used by the delivery tracker for ONE item —
+   a fix to the tracking baseline only. Stored on the delivery record's own
+   item snapshot (creating the record from the saved revision first if this
+   is the first thing done on it); the saved quotation revision, every
+   recorded delivery event and every printed DN are never touched. Can never
+   go below what has already been delivered. Status is recomputed, so a
+   closed record reopens if the baseline goes up, and closes if it drops to
+   exactly what was delivered. */
+async function deliveryCorrectOriginalQty(p, sid, rev, lineId, rawQty){
+  if(!(await deliveryRequireCentral())) return null;
+  const newQty = moneyNum(rawQty);
+  if(newQty == null || !(newQty > 0)){ toast('Enter a quantity greater than 0.'); return null; }
+
+  let fresh;
+  try{ fresh = await dbGet('projects', p.id); }
+  catch(e){ toast('Could not reach the Central Database: ' + (e.message||e)); return null; }
+  if(!fresh){ toast('Project not found in the Central Database.'); return null; }
+  const series = quoEnsure(fresh).find(s=> s.id === sid);
+  const revObj = series && (series.revisions||[]).find(x=> x.rev === rev);
+  if(!revObj){ toast('Quotation revision not found.'); return null; }
+
+  const list = deliveryAttach(fresh);
+  let record = list.find(d=> d.quotationId === sid && d.quotationRev === rev);
+  if(!record){
+    record = deliveryBuildRecord(series, revObj, STATE.dlv && STATE.dlv.items);
+    list.push(record);
+  }
+  const line = record.items.find(x=> deliveryLineKey(x) === lineId);
+  if(!line){ toast('Item not found on this delivery record.'); return null; }
+  const already = deliveryDeliveredMap(record)[lineId] || 0;
+  if(newQty < already - 1e-9){
+    toast('Cannot set Original Qty below the '+fmtQty(already)+' already delivered.');
+    return null;
+  }
+  const from = line.orderedQty, prevStatus = record.status;
+  line.orderedQty = newQty;
+  (record.qtyCorrections || (record.qtyCorrections = [])).push({ lineId, itemId: line.itemId || null, from, to: newQty, at: Date.now() });
+  record.status = deliveryStatus(record);
+  try{ await dbPut('projects', fresh); }
+  catch(e){
+    line.orderedQty = from; record.qtyCorrections.pop(); record.status = prevStatus;
+    toast('Save failed: ' + (e.message||e)); return null;
+  }
+  toast('Original Qty updated');
+  return fresh;
+}
+
+/* Hands the finished event to the existing Vista PDF generator via the
+   SAME single-use handoff the Create-Quotation flow already uses — the
+   generator is a pure consumer, unaware of quotations vs delivery notes.
+   The legacy Daftra-invoice Delivery Note screen there is untouched: this
+   payload shape (doc.type==='delivery_note') is new and only recognised
+   by the new import branch added alongside it. */
+async function deliveryExportEvent(p, record, event){
+  const series = quoEnsure(p).find(s=> s.id === record.quotationId);
+  const revObj = series && (series.revisions||[]).find(x=> x.rev === record.quotationRev);
+  const client = (revObj && revObj.client) || {};
+  const doc = {
+    type: 'delivery_note',
+    dnNo: event.dnNo,
+    dnDate: event.dnDate,
+    quotationNo: record.quotationNo,
+    quotationRev: record.quotationRev,
+    client: client.name || p.client || '',
+    addrLine: [client.address1, client.city, client.postal].filter(Boolean).join(', '),
+    receiverName: event.receiverName || '',
+    receiverDate: event.receiverDate || '',
+    items: event.lines.map(l=>{
+      const it = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l)) || {};
+      return { name: it.name || '', desc: it.description || '', qty: l.qtyDeliveredNow };
+    }),
+  };
+  try{ await quoteWriteHandoff(doc, p.id); }
+  catch(e){ console.error(e); toast('Could not prepare the handoff'); return; }
+  window.open(QUOTE_GENERATOR_FILE + '?tpquo=' + Date.now() + '#tp-quo', '_blank');
 }
 
 /* ============================================================

@@ -325,6 +325,7 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
     doc['updatedAt'] = now_ms
     doc['duplicatedFrom'] = src_id
     doc['quotations'] = []        # fresh commercial quotation history — never inherited
+    doc['deliveries'] = []        # delivery history/evidence belongs to the source project only
 
     item_id_map = {}
     photo_id_map = {}

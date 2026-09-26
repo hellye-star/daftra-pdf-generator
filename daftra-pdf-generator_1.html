@@ -1780,6 +1780,7 @@ function showDNTab() {
         <button class="btn btn-dark" style="width:auto;padding:10px 20px;white-space:nowrap;" onclick="fetchDN()">Generate Delivery Note</button>
       </div>
       ${noDocsNote}
+      <div class="form-note" style="margin-top:8px;">Delivering against a saved Vista quotation instead? Use the <strong>Deliver</strong> button on that quotation's revision in the Technical Proposal dashboard.</div>
     </div>
     <div id="dnPreviewArea"></div>`;
 }
@@ -1892,11 +1893,20 @@ function renderDNForm() {
   if (!dnState) return;
   const tabsHTML = buildTabsHTML();
 
+  // Quotation-sourced quantities were already validated and saved as a
+  // permanent delivery event in the Central DB before this screen ever
+  // opened — editing them here would let the printed note silently drift
+  // from that saved history, so the qty cell is read-only for that source.
+  // The legacy Daftra-invoice path (sourceType unset) keeps its original
+  // freely-editable behavior exactly as before.
+  const dnQtyLocked = dnState.sourceType === 'quotation';
   const itemRows = dnState.items.map((it, i) => `
     <tr>
       <td style="color:var(--dark);font-weight:500;">${escapeHtml(it.name)}</td>
       <td style="color:var(--mid);">${escapeHtml(it.desc) || '<span style="color:var(--light);">—</span>'}</td>
-      <td><input class="dn-qty" type="number" value="${it.qty}" min="0" step="any" oninput="updateDNQty(${i},this.value)"></td>
+      <td>${dnQtyLocked
+        ? `<span style="display:inline-block;padding:6px 0;">${it.qty}</span>`
+        : `<input class="dn-qty" type="number" value="${it.qty}" min="0" step="any" oninput="updateDNQty(${i},this.value)">`}</td>
     </tr>`).join('');
 
   $('mainArea').innerHTML = tabsHTML + `
@@ -1921,7 +1931,7 @@ function renderDNForm() {
             oninput="dnState.dnDate=this.value;renderDNPreview()">
         </div>
         <div class="form-group">
-          <div class="form-label">Related Invoice No.</div>
+          <div class="form-label">${escapeHtml(dnState.refLabel || 'Related Invoice No.')}</div>
           <input class="form-input" value="${escapeHtml(dnState.invoiceNo)}" readonly
             style="color:var(--light);cursor:default;">
         </div>
@@ -1963,7 +1973,12 @@ function renderDNPreview() {
   const el = $('pdfPage');
   if (!el) return;
   const c = co();
-  const { dnNo, dnDate, invoiceNo, client, addrLine, items, notes } = dnState;
+  const { dnNo, dnDate, invoiceNo, pdfRefLabel, client, addrLine, items, notes, receiverName, receiverDate } = dnState;
+  // Saved receiver values (quotation-based DNs only) sit on the signature line;
+  // the legacy invoice path never sets them and renders exactly as before.
+  const onLine = (v) => v
+    ? `<div style="border-bottom:0.5px solid #1C1C1A;position:relative;"><span style="position:absolute;left:0;bottom:3px;font-size:9px;font-weight:400;color:#1C1C1A;white-space:nowrap;">${escapeHtml(v)}</span></div>`
+    : `<div style="border-bottom:0.5px solid #1C1C1A;"></div>`;
 
   const itemRows = items.map((it, i) => {
     const qty = it.qty;
@@ -1990,8 +2005,8 @@ function renderDNPreview() {
       <div class="pp-title-block">
         <div class="pp-doc-heading">Delivery Note</div>
         <div class="pp-doc-heading-ar">مذكرة تسليم</div>
-        <div class="pp-doc-meta">No. ${escapeHtml(dnNo)} &nbsp;&middot;&nbsp; ${escapeHtml(dnDate)}</div>
-        <div class="pp-doc-meta" style="margin-top:3px;font-size:6.5px;">Ref. Invoice: ${escapeHtml(invoiceNo)}</div>
+        <div class="pp-doc-meta">No. ${escapeHtml(dnNo)} &nbsp;&middot;&nbsp; ${dnState.sourceType === 'quotation' ? 'Delivery Date: ' : ''}${escapeHtml(dnDate)}</div>
+        <div class="pp-doc-meta" style="margin-top:3px;font-size:6.5px;">${escapeHtml(pdfRefLabel || 'Ref. Invoice')}: ${escapeHtml(invoiceNo)}</div>
       </div>
     </div>
 
@@ -2034,15 +2049,15 @@ function renderDNPreview() {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px;">
           <div>
             <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:26px;">Receiver Name</div>
-            <div style="border-bottom:0.5px solid #1C1C1A;"></div>
+            ${onLine(receiverName)}
           </div>
           <div>
             <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:26px;">Receiver Signature</div>
             <div style="border-bottom:0.5px solid #1C1C1A;"></div>
           </div>
           <div>
-            <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:26px;">Delivery Date</div>
-            <div style="border-bottom:0.5px solid #1C1C1A;"></div>
+            <div style="font-size:6.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#ADADAA;margin-bottom:26px;">${dnState.sourceType === 'quotation' ? 'Date Received' : 'Delivery Date'}</div>
+            ${onLine(receiverDate)}
           </div>
         </div>
       </div>
@@ -4898,7 +4913,22 @@ async function importVistaQuotationFromTP() {
   try { payload = await _tpQuoReadPayload(); }
   catch (e) { console.error('[TP→Quotation] could not read handoff:', e); return; }
 
-  if (!payload || !payload.doc || !Array.isArray(payload.doc._items)) {
+  if (!payload || !payload.doc) {
+    console.warn('[TP→Quotation] no valid handoff payload found.');
+    return;
+  }
+
+  // Quotation-based Delivery Note (see deliveryExportEvent() in the
+  // Technical Proposal dashboard) — a completely separate payload shape
+  // from the estimate/quotation one below, routed to the existing Delivery
+  // Note renderer instead. Never touches the legacy Daftra-invoice DN path.
+  if (payload.doc.type === 'delivery_note') {
+    importVistaDeliveryNoteFromTP(payload.doc);
+    _tpQuoClearPayload();
+    return;
+  }
+
+  if (!Array.isArray(payload.doc._items)) {
     console.warn('[TP→Quotation] no valid handoff payload found.');
     return;
   }
@@ -4917,6 +4947,37 @@ async function importVistaQuotationFromTP() {
 
   // Single-use: remove immediately so a refresh doesn't silently re-import.
   _tpQuoClearPayload();
+}
+
+// Quotation-based Delivery Note — fed by the Technical Proposal dashboard's
+// Deliver screen. Reuses the SAME renderDNForm()/renderDNPreview() as the
+// legacy Daftra-invoice path below; only the data source differs (a saved
+// quotation revision + delivery event instead of a live Daftra invoice
+// fetch). dnState.refLabel/pdfRefLabel let those shared functions print the
+// right reference wording without changing anything for the invoice path,
+// which never sets them and keeps saying "Invoice" exactly as before.
+function importVistaDeliveryNoteFromTP(d) {
+  dnState = {
+    sourceType: 'quotation',
+    refLabel: 'Related Quotation No.',
+    pdfRefLabel: 'Ref. Quotation',
+    invoiceNo: String(d.quotationNo || '') + (d.quotationRev != null ? ' · Rev ' + d.quotationRev : ''),
+    dnNo: d.dnNo || '',
+    dnDate: d.dnDate || '',
+    client: d.client || '',
+    addrLine: d.addrLine || '',
+    items: Array.isArray(d.items) ? d.items.map(it => ({
+      name: it.name || '—', desc: it.desc || '', qty: parseFloat(it.qty) || 0,
+    })) : [],
+    // saved on the delivery event in the Central DB — shown as-is on the PDF
+    // (never re-read from any live UI), so a reprint matches the original
+    receiverName: d.receiverName || '',
+    receiverDate: d.receiverDate || '',
+    notes: '',
+  };
+  currentTab = 'delivery_note';
+  currentDoc = { doc: { no: dnState.dnNo }, type: 'delivery_note' };
+  renderDNForm();
 }
 
 // Fire on initial load and on hash changes (a query cache-buster from the
