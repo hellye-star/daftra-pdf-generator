@@ -362,8 +362,9 @@ def duplicate_project(src_id, name=None, revision=None) -> dict:
         if 'referencePhotoIds' in it:
             it['referencePhotoIds'] = [remap_photo(x) for x in (it.get('referencePhotoIds') or [])]
 
-    # installation-proof photo rows are never carried into a duplicate
-    src_photos = [p for p in list_photos(src_id) if p.get('slot') != 'proof']
+    # installation-proof photo rows - and the DN-owned proof copies kept for saved
+    # Delivery Notes - are never carried into a duplicate
+    src_photos = [p for p in list_photos(src_id) if p.get('slot') not in ('proof', 'dn-proof')]
     src_photo_by_id = {p['id']: p for p in src_photos}
     for p in src_photos:                          # also carry any orphan rows
         remap_photo(p['id'])

@@ -218,6 +218,16 @@
   .proofcard .vidrow a.btn{ text-decoration:none; }
   .lightbox .lbcap{ position:absolute; left:50%; bottom:60px; transform:translateX(-50%); max-width:min(86vw,640px); background:rgba(14,26,20,.82); color:#fff;
                     border-radius:8px; padding:6px 12px; font-size:13px; text-align:center; }
+  .dlv-proofrow > td{ width:auto !important; padding:0 6px 8px !important; }
+  .dlv-proofrow details{ border:1px solid var(--rule); border-radius:8px; background:var(--cream); padding:6px 9px; }
+  .dlv-proofrow summary{ cursor:pointer; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--emerald); }
+  .dlv-proofrow summary .dp-sel{ text-transform:none; letter-spacing:0; font-weight:600; color:var(--grey); }
+  .dlvproof{ display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px solid var(--rule); font-size:12px; }
+  .dlvproof:first-of-type{ margin-top:6px; }
+  .dlvproof label{ display:flex; align-items:center; gap:7px; flex:1; min-width:0; cursor:pointer; }
+  .dlvproof input[type=checkbox]{ width:auto; flex:none; }
+  .dlvproof .dp-main{ min-width:0; }
+  .dlvproof .dp-sub{ color:var(--grey); font-size:11px; }
   .proofcard .proof-photos-label{ font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--grey); margin:4px 0 6px; }
   .awphoto{ display:flex; flex-direction:column; gap:5px; }
   .awcap{ font-size:11.5px; padding:6px 8px; }
@@ -1805,8 +1815,9 @@ async function duplicateProjectIdb(p, choice){
     it.photoIds = Object.fromEntries(Object.entries(it.photoIds || {}).filter(([,v])=>v).map(([k,v])=>[k, remap(v)]));
     if(Array.isArray(it.referencePhotoIds)) it.referencePhotoIds = it.referencePhotoIds.map(remap);
   });
-  // proof photos are never carried into a duplicate (their rows are skipped entirely)
-  const carryPhotos = photos.filter(ph=> ph.slot !== 'proof');
+  // proof photos (and the DN-owned proof copies kept for saved Delivery Notes) are never
+  // carried into a duplicate - deliveries/proofs start empty, so their rows are skipped entirely
+  const carryPhotos = photos.filter(ph=> ph.slot !== 'proof' && ph.slot !== 'dn-proof');
   carryPhotos.forEach(ph=> remap(ph.id));
 
   for(const ph of carryPhotos){
@@ -4235,7 +4246,7 @@ document.addEventListener('input', e=>{
   /* delivery screen — draft mutation only; quantities are validated for
      real (negative / over-remaining / all-zero) at Save time, not here */
   if(STATE.dlv && t.dataset.dlvqty != null){
-    const it = STATE.dlv.items[+t.dataset.i]; if(it) it.qtyNow = t.value;
+    const it = STATE.dlv.items[+t.dataset.i]; if(it){ it.qtyNow = t.value; dlvRefreshProofUi(it.lineId); }
     return;
   }
   if(STATE.dlv && t.dataset.dlvorig != null){ STATE.dlv.editVal = t.value; return; }
@@ -4563,6 +4574,26 @@ document.addEventListener('click', async e=>{
       const i = +dlvFull.dataset.dlvfull, rem = dlvFull.dataset.rem;
       const it = STATE.dlv.items[i]; if(it) it.qtyNow = rem;
       const inp = document.querySelector('[data-dlvqty][data-i="'+i+'"]'); if(inp) inp.value = rem;
+      if(it) dlvRefreshProofUi(it.lineId);
+      return;
+    }
+    const dlvPr = closest('input[data-dlvproof]');
+    if(dlvPr && STATE.dlv){
+      const [lid, pid] = dlvPr.dataset.dlvproof.split('|');
+      const line = STATE.dlv.items.find(x=> x.lineId === lid); if(!line) return;
+      const set = new Set(line.proofSel || []);
+      if(dlvPr.checked) set.add(pid); else set.delete(pid);
+      line.proofSel = [...set];
+      dlvRefreshProofUi(lid);
+      return;
+    }
+    const dlvView = closest('[data-dlvviewproof]');
+    if(dlvView && STATE.project){
+      const [lid, pid] = dlvView.dataset.dlvviewproof.split('|');
+      const line = STATE.dlv && STATE.dlv.items.find(x=> x.lineId === lid);
+      const pr = line && dlvLiveProofs(STATE.project, line.itemId).find(x=> x.id === pid);
+      const shown = pr ? (pr.photos||[]).filter(ph=> ph && photoUrl(ph.photoId)) : [];
+      if(shown.length) lightbox(shown.map(ph=> photoUrl(ph.photoId)), 0, shown.map(ph=> (ph.caption||'').trim()));
       return;
     }
     const dlvEdit = closest('[data-dlvedit]');
@@ -5797,7 +5828,8 @@ function renderQuote(p){
      createdAt, status:'open'|'closed',
      items:[ {itemId,name,unit,orderedQty} ],
      events:[ { id, dnNo, dnDate, createdAt, receiverName, receiverDate,
-                lines:[ {itemId,qtyDeliveredNow} ] } ] } ]
+                lines:[ {lineId,itemId,qtyDeliveredNow,
+                         proofs?:[ frozen Installation Proof snapshot - see below ]} ] } ] } ]
 
    A delivery record is locked forever to the exact quotation revision it
    was created from (quotationId+quotationRev is its lookup key) — a later
@@ -5883,6 +5915,100 @@ async function deliveryRequireCentral(){
 }
 function fmtQty(n){ const v = Number(n) || 0; return (Math.round(v*100)/100) % 1 === 0 ? String(Math.round(v)) : v.toFixed(2); }
 
+/* ---- Installation Proofs on a Delivery Note ------------------------------
+   The TP item's installationProofs[] stay the LIVE master (edited in the item
+   editor). When a Delivery Note is SAVED, the proofs picked for a line are
+   frozen INTO that saved event line:
+
+     event.lines[i].proofs = [ { proofId, location, qty, date, note,
+        photos:[ { photoId, sourcePhotoId, caption, mime, w, h } ],
+        videos:[ { id, label, url } ] } ]
+
+   photoId points at a DN-OWNED COPY of the image (its own photo row, slot
+   'dn-proof', itemId null, same project) - never at the live proof photo - so
+   editing/deleting a proof, its photos or captions, or the whole TP item later
+   cannot change or break a saved Delivery Note. sourcePhotoId is provenance
+   only and is never read for display/reprint. Reprint reads ONLY this snapshot.
+   Proof qty is evidence only: it is compared with Deliver Now as a soft
+   warning and is used for no calculation. */
+const DN_PROOF_SLOT = 'dn-proof';
+function dlvLiveProofs(p, itemId){
+  const it = itemId ? (p.items||[]).find(x=> x.id === itemId) : null;
+  return it ? proofsOf(it) : [];
+}
+function dlvProofWarnHtml(p, line){
+  const sel = line.proofSel || [];
+  if(!sel.length) return '';
+  const nums = dlvLiveProofs(p, line.itemId).filter(pr=> sel.includes(pr.id))
+    .map(pr=> moneyNum(pr.qty)).filter(n=> n != null);
+  if(!nums.length) return '';                      // blank / non-numeric proof qty is ignored
+  const total = nums.reduce((a,b)=> a+b, 0), now = moneyNum(line.qtyNow) || 0;
+  if(Math.abs(total - now) < 1e-9) return '';
+  return '<div class="qwarn" style="margin:6px 0 2px">Selected proof quantity: <b>'+fmtQty(total)+'</b><br>'
+    + 'Deliver Now quantity: <b>'+fmtQty(now)+'</b>'
+    + '<div style="font-size:11px;margin-top:2px">Proof quantity is evidence only - Deliver Now is what is recorded. You can still save.</div></div>';
+}
+function dlvProofRowHtml(p, line){
+  const proofs = dlvLiveProofs(p, line.itemId);
+  if(!proofs.length) return '';
+  const sel = line.proofSel || [];
+  const list = proofs.map(pr=>{
+    const nPh = (pr.photos||[]).length, nVid = proofVideos(pr).length;
+    return '<div class="dlvproof"><label><input type="checkbox" data-dlvproof="'+esc(line.lineId)+'|'+esc(pr.id)+'"'+(sel.includes(pr.id)?' checked':'')+'>'
+      + '<span class="dp-main"><b>'+esc(pr.location||'(no location)')+'</b>'
+      + ' <span class="dp-sub">· Qty '+esc(pr.qty==null||pr.qty===''?'-':pr.qty)+(pr.date?' · '+esc(pr.date):'')
+      + ' · '+nPh+' photo'+(nPh===1?'':'s')+(nVid?' · '+nVid+' video'+(nVid===1?'':'s'):'')+'</span>'
+      + (pr.note ? '<br><span class="dp-sub">'+esc(pr.note)+'</span>' : '')
+      + '</span></label>'
+      + (nPh ? '<button class="btn btn-ghost btn-xs" data-dlvviewproof="'+esc(line.lineId)+'|'+esc(pr.id)+'">View</button>' : '')
+      + '</div>';
+  }).join('');
+  return '<tr class="dlv-proofrow" data-dlvproofrow="'+esc(line.lineId)+'"><td colspan="5"><details'+(sel.length?' open':'')+'>'
+    + '<summary>Installation Proofs ('+proofs.length+' available) <span class="dp-sel" data-dlvselcount>'+(sel.length?'· '+sel.length+' selected':'')+'</span></summary>'
+    + list + '<div data-dlvwarn>'+dlvProofWarnHtml(p, line)+'</div></details></td></tr>';
+}
+function dlvRefreshProofUi(lineId){
+  const line = STATE.dlv && STATE.dlv.items.find(x=> x.lineId === lineId);
+  const row = document.querySelector('[data-dlvproofrow="'+lineId+'"]');
+  if(!line || !row || !STATE.project) return;
+  row.querySelector('[data-dlvwarn]').innerHTML = dlvProofWarnHtml(STATE.project, line);
+  const n = (line.proofSel||[]).length;
+  row.querySelector('[data-dlvselcount]').textContent = n ? '· '+n+' selected' : '';
+}
+/* Copies one live proof photo into a DN-owned photo row (same project). Returns
+   null when the source image no longer exists. Never touches the original. */
+async function dlvCopyProofPhoto(projectId, srcId){
+  let blob;
+  try{ const resp = await fetch(TP_API_BASE+'/photos/'+encodeURIComponent(srcId)); if(!resp.ok) return null; blob = await resp.blob(); }
+  catch(_){ return null; }
+  let meta = null; try{ meta = await dbGet('photos', srcId); }catch(_){}
+  const id = uid(), mime = (meta && meta.mime) || blob.type || 'image/jpeg';
+  const w = meta ? meta.w : null, h = meta ? meta.h : null;
+  await dbPut('photos', { id, projectId, itemId:null, slot:DN_PROOF_SLOT, blob, mime, w, h, bytes:blob.size, createdAt:now() });
+  return { id, mime, w, h };
+}
+async function dlvDropPhotos(ids){ for(const id of ids){ try{ await dbDel('photos', id); }catch(_){} } }
+/* Freezes the picked proofs of one TP item (read from `p`, the freshly loaded
+   Central DB document) into plain snapshot objects; `copied` collects the ids
+   of the DN-owned photo rows created so a failed save can roll them back. */
+async function deliverySnapshotProofs(p, itemId, selIds, copied){
+  const out = [];
+  for(const pr of dlvLiveProofs(p, itemId)){
+    if(!selIds.includes(pr.id)) continue;
+    const photos = [];
+    for(const ph of (pr.photos||[])){
+      if(!ph || !ph.photoId) continue;
+      const c = await dlvCopyProofPhoto(p.id, ph.photoId);
+      if(!c) continue;
+      copied.push(c.id);
+      photos.push({ photoId:c.id, sourcePhotoId:ph.photoId, caption:String(ph.caption||''), mime:c.mime, w:c.w, h:c.h });
+    }
+    out.push({ proofId:pr.id, location:String(pr.location||''), qty:(pr.qty==null?'':pr.qty), date:String(pr.date||''), note:String(pr.note||''),
+      photos, videos: proofVideos(pr).map(v=>({ id:v.id, label:String(v.label||''), url:String(v.url||'') })) });
+  }
+  return out;
+}
+
 function renderDeliverScreen(p){
   const r = parseHash();
   const series = quoEnsure(p).find(s=> s.id === r.sid);
@@ -5910,7 +6036,7 @@ function renderDeliverScreen(p){
       items: (revObj.items||[]).map(it=>({
         lineId: it.itemId || ('ml-' + uid()),
         itemId: it.itemId || null, name: it.name || '', unit: it.unit || 'no.',
-        orderedQty: moneyNum(it.qty) || 0, qtyNow: '',
+        orderedQty: moneyNum(it.qty) || 0, qtyNow: '', proofSel: [],
       })),
       receiverName: '', receiverDate: quoteToday(),
     };
@@ -5920,11 +6046,11 @@ function renderDeliverScreen(p){
   // snapshot, keyed by stable lineId) — rebuild the working lines from it,
   // keeping any quantities already typed for the same lineId.
   if(record){
-    const typed = {}; st.items.forEach(x=>{ typed[x.lineId] = x.qtyNow; });
+    const typed = {}, typedSel = {}; st.items.forEach(x=>{ typed[x.lineId] = x.qtyNow; typedSel[x.lineId] = x.proofSel || []; });
     st.items = record.items.map(ri=>{
       const k = deliveryLineKey(ri);
       return { lineId: k, itemId: ri.itemId || null, name: ri.name || '', unit: ri.unit || 'no.',
-               orderedQty: ri.orderedQty, qtyNow: typed[k] || '' };
+               orderedQty: ri.orderedQty, qtyNow: typed[k] || '', proofSel: typedSel[k] || [] };
     });
   }
 
@@ -5948,14 +6074,17 @@ function renderDeliverScreen(p){
       +   (done || closed ? '' : ' <button class="btn btn-ghost btn-xs" data-dlvfull="'+i+'" data-rem="'+(Math.round(remaining*1e6)/1e6)+'" title="Fill with the remaining quantity">Full</button>')
       + '</td>'
       + '<td class="qr-num">'+fmtQty(remaining)+'</td>'
-      + '</tr>';
+      + '</tr>'
+      + ((done || closed || !it.itemId) ? '' : dlvProofRowHtml(p, it));   // proofs only for TP-backed, still-open lines
   }).join('');
 
   const eventsHtml = (record && record.events.length)
     ? record.events.slice().reverse().map(ev=>{
         const lineTxt = ev.lines.map(l=>{
           const it = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l));
-          return esc(it ? it.name : deliveryLineKey(l)) + ': ' + fmtQty(l.qtyDeliveredNow);
+          const np = (l.proofs||[]).length;
+          return esc(it ? it.name : deliveryLineKey(l)) + ': ' + fmtQty(l.qtyDeliveredNow)
+            + (np ? ' <span style="color:var(--grey);font-size:11px">('+np+' proof'+(np===1?'':'s')+')</span>' : '');
         }).join(', ');
         return '<div class="quo-hrow">'
           + '<span class="quo-hno">'+esc(ev.dnNo)+'</span>'
@@ -6024,7 +6153,7 @@ async function deliverySaveEvent(p, sid, rev){
   if(record.status === 'closed'){ toast('This delivery record is already fully delivered.'); return null; }
 
   const delivered = deliveryDeliveredMap(record);
-  const lines = [];
+  const lines = [], pendingProofs = [];
   for(const it of record.items){
     const key = deliveryLineKey(it);
     const draftIt = st.items.find(x=> x.lineId === key);
@@ -6037,9 +6166,22 @@ async function deliverySaveEvent(p, sid, rev){
       toast('"'+it.name+'" — delivering '+fmtQty(qtyNow)+' would exceed the remaining '+fmtQty(remaining)+' '+it.unit+'.');
       return null;
     }
-    lines.push({ lineId: key, itemId: it.itemId || null, qtyDeliveredNow: qtyNow });
+    const line = { lineId: key, itemId: it.itemId || null, qtyDeliveredNow: qtyNow };
+    const selIds = (draftIt && draftIt.proofSel) || [];
+    if(it.itemId && selIds.length) pendingProofs.push({ line, itemId: it.itemId, selIds });
+    lines.push(line);
   }
   if(!lines.length){ toast('Enter a quantity for at least one item.'); return null; }
+
+  // Freeze the picked Installation Proofs (read from the fresh Central DB copy) into the
+  // event lines, with DN-owned photo copies. Rolled back if anything below fails.
+  const copied = [];
+  try{
+    for(const pp of pendingProofs){
+      const snap = await deliverySnapshotProofs(fresh, pp.itemId, pp.selIds, copied);
+      if(snap.length) pp.line.proofs = snap;
+    }
+  }catch(e){ await dlvDropPhotos(copied); toast('Could not save the proof photos: ' + (e.message||e)); return null; }
 
   const event = {
     id: uid(), dnNo: deliveryNextDnNo(fresh, series.no), dnDate: quoteToday(), createdAt: Date.now(),
@@ -6050,7 +6192,7 @@ async function deliverySaveEvent(p, sid, rev){
   record.status = deliveryStatus(record);
 
   try{ await dbPut('projects', fresh); }
-  catch(e){ toast('Save failed: ' + (e.message||e)); record.events.pop(); record.status = deliveryStatus(record); return null; }
+  catch(e){ toast('Save failed: ' + (e.message||e)); record.events.pop(); record.status = deliveryStatus(record); await dlvDropPhotos(copied); return null; }
 
   STATE.dlv = null;
   toast(event.dnNo + ' saved');
@@ -6126,7 +6268,8 @@ async function deliveryExportEvent(p, record, event){
     receiverDate: event.receiverDate || '',
     items: event.lines.map(l=>{
       const it = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l)) || {};
-      return { name: it.name || '', desc: it.description || '', qty: l.qtyDeliveredNow };
+      // proofs: read ONLY from the saved event snapshot (never from the live TP item)
+      return { name: it.name || '', desc: it.description || '', qty: l.qtyDeliveredNow, proofs: l.proofs || [] };
     }),
   };
   try{ await quoteWriteHandoff(doc, p.id); }
