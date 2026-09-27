@@ -22,6 +22,14 @@ Design (deliberate, mirrors sqi_db.py):
     ORDER is already canonical inside the project JSON
     (item.existingPhotoIds[] etc), so it is not duplicated here.
 
+Stale-save protection (optimistic concurrency): every project row carries an
+integer `rev` (column, NOT part of the JSON document). Creating a project sets
+rev=1; a normal update must present the rev the caller loaded and succeeds only
+if it is still current (then rev+1); a stale rev is a conflict, a missing row is
+"gone" - a normal update can NEVER create a missing project. The rev is never
+read from the JSON body, so an old browser tab that echoes the document back
+still cannot satisfy it.
+
 Phase 1 scope: storage + migration + manual backup + emergency browser
 export. NOT in scope yet: automatic daily backups, Keep-importer
 integration, review-draft storage, IndexedDB removal.
@@ -59,7 +67,8 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at  TEXT,
   updated_at  TEXT NOT NULL,
   schema_ver  INTEGER NOT NULL DEFAULT 1,
-  data_json   TEXT NOT NULL
+  data_json   TEXT NOT NULL,
+  rev         INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS photos (
@@ -110,8 +119,19 @@ def init_db():
     try:
         c.executescript(_SCHEMA)
         c.commit()
+        _ensure_rev_column(c)
     finally:
         c.close()
+
+
+def _ensure_rev_column(c):
+    """Existing databases get the `rev` column added in place. ADD COLUMN with a
+    constant DEFAULT gives every existing row rev=1 without rewriting or changing
+    any project content (data_json / name / updated_at are untouched)."""
+    cols = [r['name'] for r in c.execute("PRAGMA table_info(projects)").fetchall()]
+    if 'rev' not in cols:
+        c.execute("ALTER TABLE projects ADD COLUMN rev INTEGER NOT NULL DEFAULT 1")
+        c.commit()
 
 
 def db_path():
@@ -142,6 +162,41 @@ def get_project(project_id):
         c.close()
 
 
+def get_project_with_rev(project_id):
+    """(document, rev) or None. The rev lives only in the column, never in the JSON."""
+    c = _conn()
+    try:
+        row = c.execute("SELECT data_json, rev FROM projects WHERE id=?", (project_id,)).fetchone()
+        return (json.loads(row['data_json']), row['rev']) if row else None
+    finally:
+        c.close()
+
+
+def list_projects_with_revs():
+    """([documents], {id: rev}) in the same order as list_projects()."""
+    c = _conn()
+    try:
+        rows = c.execute("SELECT id, data_json, rev FROM projects ORDER BY updated_at DESC").fetchall()
+        return [json.loads(r['data_json']) for r in rows], {r['id']: r['rev'] for r in rows}
+    finally:
+        c.close()
+
+
+class ProjectExists(Exception):
+    """create_project() for an id that already exists."""
+
+
+class ProjectGone(Exception):
+    """update_project() for an id that no longer exists (deleted)."""
+
+
+class RevConflict(Exception):
+    """update_project() with a stale rev; .current is the rev now in the DB."""
+    def __init__(self, current):
+        super().__init__('revision conflict: current rev is %s' % current)
+        self.current = current
+
+
 def project_exists(project_id):
     c = _conn()
     try:
@@ -164,7 +219,8 @@ def upsert_project(doc: dict):
             ON CONFLICT(id) DO UPDATE SET
               name=excluded.name, client=excluded.client, location=excluded.location,
               revision=excluded.revision, updated_at=excluded.updated_at,
-              schema_ver=excluded.schema_ver, data_json=excluded.data_json
+              schema_ver=excluded.schema_ver, data_json=excluded.data_json,
+              rev=projects.rev + 1
         """, {
             'id': pid,
             'name': doc.get('name'),
@@ -177,6 +233,78 @@ def upsert_project(doc: dict):
             'data_json': json.dumps(doc, ensure_ascii=False),
         })
         c.commit()
+    finally:
+        c.close()
+
+
+def _project_columns(doc):
+    return {
+        'id': doc.get('id'),
+        'name': doc.get('name'),
+        'client': doc.get('client'),
+        'location': doc.get('location'),
+        'revision': doc.get('revision'),
+        'created_at': _stringify_ts(doc.get('createdAt')),
+        'updated_at': _stringify_ts(doc.get('updatedAt') or doc.get('createdAt')) or _now_iso(),
+        'schema_ver': int(doc.get('schemaVer') or 1),
+        'data_json': json.dumps(doc, ensure_ascii=False),
+    }
+
+
+def create_project(doc: dict) -> int:
+    """EXPLICIT creation of a genuinely new project (rev=1). Never replaces:
+    raises ProjectExists if the id is already there."""
+    if not doc.get('id'):
+        raise ValueError('project id is required')
+    c = _conn()
+    try:
+        try:
+            c.execute("""
+                INSERT INTO projects (id, name, client, location, revision, created_at, updated_at, schema_ver, data_json, rev)
+                VALUES (:id, :name, :client, :location, :revision, :created_at, :updated_at, :schema_ver, :data_json, 1)
+            """, _project_columns(doc))
+            c.commit()
+        except sqlite3.IntegrityError:
+            c.rollback()
+            raise ProjectExists(doc.get('id'))
+        return 1
+    finally:
+        c.close()
+
+
+def update_project(doc: dict, expected_rev: int) -> int:
+    """Normal (autosave / edit) update. Atomic compare-and-set on rev:
+        UPDATE projects SET ..., rev=rev+1 WHERE id=? AND rev=?
+    Returns the new rev (or the unchanged rev when the document is byte-identical
+    to what is stored - nothing is written or bumped in that case).
+    ProjectGone  -> no such project (deleted): NEVER recreated here.
+    RevConflict  -> someone saved since the caller loaded it."""
+    pid = doc.get('id')
+    if not pid:
+        raise ValueError('project id is required')
+    cols = _project_columns(doc)
+    c = _conn()
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        row = c.execute("SELECT rev, data_json FROM projects WHERE id=?", (pid,)).fetchone()
+        if row is None:
+            c.rollback()
+            raise ProjectGone(pid)
+        if row['rev'] != expected_rev:
+            c.rollback()
+            raise RevConflict(row['rev'])
+        if row['data_json'] == cols['data_json']:
+            c.rollback()
+            return row['rev']
+        cur = c.execute("""
+            UPDATE projects SET name=:name, client=:client, location=:location, revision=:revision,
+                   updated_at=:updated_at, schema_ver=:schema_ver, data_json=:data_json, rev=rev+1
+             WHERE id=:id AND rev=:expected""", dict(cols, expected=expected_rev))
+        if cur.rowcount != 1:
+            c.rollback()
+            raise RevConflict(None)
+        c.commit()
+        return expected_rev + 1
     finally:
         c.close()
 

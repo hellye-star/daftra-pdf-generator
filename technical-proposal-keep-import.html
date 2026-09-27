@@ -261,7 +261,7 @@ async function idbPut(s,v){ const d=await openDB(); return rq(d.transaction(s,'r
    Any unreachable-proxy failure throws the exact hard-stop message;
    this mode never silently falls through to idb*(). ---- */
 const TP_API_BASE = '/api/tp';
-async function tpFetch(path, opts){
+async function tpFetch(path, opts, full){
   let r;
   try{ r = await fetch(TP_API_BASE + path, opts); }
   catch(e){ throw new Error('Vista Central Database unavailable. Start proxy.py and reload.'); }
@@ -271,7 +271,7 @@ async function tpFetch(path, opts){
     err.httpStatus = r.status;
     throw err;
   }
-  return j.data;
+  return full ? j : j.data;
 }
 async function blobToB64(blob){
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -279,9 +279,16 @@ async function blobToB64(blob){
   for(let i=0;i<bytes.length;i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000));
   return btoa(s);
 }
+/* revision-controlled saves (server rev): a loaded project remembers the rev it was read at and a
+   normal update sends it as If-Match - never a revision-less PUT, never a forced overwrite */
+const PROJ_REV = new WeakMap();
 async function centralGet(store,key){
   try{
-    if(store==='projects') return await tpFetch('/projects/'+encodeURIComponent(key));
+    if(store==='projects'){
+      const j = await tpFetch('/projects/'+encodeURIComponent(key), undefined, true);
+      PROJ_REV.set(j.data, j.rev);
+      return j.data;
+    }
     if(store==='photos')   return await tpFetch('/photos/'+encodeURIComponent(key)+'/meta');
   }catch(e){ if(e.httpStatus===404) return undefined; throw e; }
 }
@@ -292,8 +299,11 @@ async function centralGetAll(store){
 }
 async function centralPut(store,val){
   if(store==='projects'){
-    await tpFetch('/projects/'+encodeURIComponent(val.id),
-      { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(val) });
+    const rev = PROJ_REV.get(val);
+    if(rev == null){ const err = new Error('This tab is outdated: reload before making changes.'); err.httpStatus = 428; throw err; }
+    const j = await tpFetch('/projects/'+encodeURIComponent(val.id),
+      { method:'PUT', headers:{'Content-Type':'application/json', 'If-Match':String(rev)}, body: JSON.stringify(val) }, true);
+    PROJ_REV.set(val, j.data.rev);      // 409 changed / 410 deleted / 428 outdated surface as errors - nothing is retried or forced
     return val.id;
   }
   if(store==='photos'){
@@ -305,11 +315,19 @@ async function centralPut(store,val){
   }
 }
 
+/* genuinely NEW project: explicit create (POST) - the only call that may bring a missing id into existence */
+async function centralCreate(store,val){
+  const j = await tpFetch('/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(val) }, true);
+  PROJ_REV.set(val, j.data.rev);
+  return val.id;
+}
+
 /* ---- dispatcher — every existing call site (dbGet/dbGetAll/dbPut)
    keeps working unchanged; only the backend behind it switches. ---- */
 async function dbGet(s,k){    return STORE_MODE==='central' ? centralGet(s,k)    : idbGet(s,k); }
 async function dbGetAll(s){   return STORE_MODE==='central' ? centralGetAll(s)   : idbGetAll(s); }
 async function dbPut(s,v){    return STORE_MODE==='central' ? centralPut(s,v)    : idbPut(s,v); }
+async function dbCreate(s,v){ return STORE_MODE==='central' ? centralCreate(s,v) : idbPut(s,v); }
 
 /* ============================================================
    2 · pdf.js worker
@@ -1624,7 +1642,7 @@ async function approveImport(mode, value){
     project.items.push(it);
   }
   project.updatedAt = now();
-  await dbPut('projects', project);
+  await (isNew ? dbCreate('projects', project) : dbPut('projects', project));
 
   }catch(e){
     const errEl = $('#apt-err');

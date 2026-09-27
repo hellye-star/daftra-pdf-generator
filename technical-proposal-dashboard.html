@@ -880,6 +880,37 @@ async function tpFetch(path, opts){
   }
   return j.data;
 }
+/* Same as tpFetch but returns the whole envelope ({data, rev|revs}) - the project
+   revision travels beside the document, never inside it. */
+async function tpFetchFull(path, opts){
+  const r = await fetch(TP_API_BASE + path, opts);
+  let j = null; try{ j = await r.json(); }catch(_){}
+  if(!r.ok || !j || j.ok === false){
+    const err = new Error((j && j.error) || ('HTTP ' + r.status));
+    err.httpStatus = r.status; err.code = j && j.code;
+    throw err;
+  }
+  return j;
+}
+/* ---- stale-save protection (client half) ---------------------------------
+   PROJ_META tracks, PER LOADED PROJECT OBJECT (not per id):
+     rev  - the server revision this object was loaded/saved at (central mode)
+     snap - JSON of the object as last loaded/saved, minus the top-level
+            updatedAt. commitSave() writes ONLY when the object differs from it,
+            so render / tab-hide / pagehide / navigation never write, bump
+            updatedAt or bump the revision unless something really changed.
+   Tracking per object (a WeakMap) means a project re-read for another purpose
+   (e.g. a delivery save) can never lend its newer revision to an older,
+   still-open in-memory copy. PROJ_STALE holds instances the server refused
+   (409 changed / 410 deleted / 428 outdated): they never write again. */
+const PROJ_META = new WeakMap();
+const PROJ_STALE = new WeakSet();
+function projSnap(p){
+  return JSON.stringify(p, function(k, v){ return (k === 'updatedAt' && this === p) ? undefined : v; });
+}
+function projMetaSet(doc, rev){ PROJ_META.set(doc, { rev: (rev == null ? null : rev), snap: projSnap(doc) }); }
+function projIsDirty(p){ const m = PROJ_META.get(p); return !m || m.snap !== projSnap(p); }
+
 async function blobToB64(blob){
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let s = '';
@@ -891,19 +922,33 @@ async function blobToB64(blob){
 const TP_API = {
   async get(store,key){
     try{
-      if(store==='projects') return await tpFetch('/projects/'+encodeURIComponent(key));
+      if(store==='projects'){
+        const j = await tpFetchFull('/projects/'+encodeURIComponent(key));
+        projMetaSet(j.data, j.rev); return j.data;
+      }
       if(store==='photos')   return await tpFetch('/photos/'+encodeURIComponent(key)+'/meta');
     }catch(e){ if(e.httpStatus===404) return undefined; throw e; }
   },
   async getAll(store){
-    if(store==='projects') return await tpFetch('/projects');
+    if(store==='projects'){
+      const j = await tpFetchFull('/projects');
+      (j.data||[]).forEach(d=> projMetaSet(d, j.revs && j.revs[d.id]));
+      return j.data;
+    }
     if(store==='photos')   return await tpFetch('/photos');
     return [];
   },
   async put(store,val){
     if(store==='projects'){
-      await tpFetch('/projects/'+encodeURIComponent(val.id),
-        { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(val) });
+      // a normal save ALWAYS carries the revision this copy was loaded at (If-Match) - it can
+      // update an existing project, never create one and never overwrite a newer one
+      const meta = PROJ_META.get(val);
+      if(!meta || meta.rev == null){
+        const err = new Error('This tab is outdated: reload before making changes.'); err.httpStatus = 428; throw err;
+      }
+      const j = await tpFetchFull('/projects/'+encodeURIComponent(val.id),
+        { method:'PUT', headers:{'Content-Type':'application/json', 'If-Match':String(meta.rev)}, body: JSON.stringify(val) });
+      meta.rev = j.data.rev;
       return val.id;
     }
     if(store==='photos'){
@@ -913,6 +958,11 @@ const TP_API = {
           mime:val.mime, w:val.w, h:val.h, keepPage:(val.keepPage!=null?val.keepPage:null), dataBase64 }) });
       return val.id;
     }
+  },
+  async create(store,val){            // EXPLICIT creation of a genuinely new project
+    const j = await tpFetchFull('/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(val) });
+    projMetaSet(val, j.data.rev);
+    return val.id;
   },
   async del(store,key){
     const path = (store==='projects' ? '/projects/' : '/photos/') + encodeURIComponent(key);
@@ -932,9 +982,28 @@ const TP_API = {
 };
 
 function _store(){ return STORE_MODE==='central' ? TP_API : IDB; }
-async function dbGet(store,key){          return _store().get(store,key); }
-async function dbGetAll(store){           return _store().getAll(store); }
-async function dbPut(store,val){          return _store().put(store,val); }
+async function dbGet(store,key){
+  const v = await _store().get(store,key);
+  if(store==='projects' && v && !PROJ_META.has(v)) projMetaSet(v, null);     // browser-only mode: snapshot for change detection
+  return v;
+}
+async function dbGetAll(store){
+  const a = await _store().getAll(store);
+  if(store==='projects') (a||[]).forEach(v=>{ if(v && !PROJ_META.has(v)) projMetaSet(v, null); });
+  return a;
+}
+async function dbPut(store,val){
+  const r = await _store().put(store,val);
+  if(store==='projects'){ const m = PROJ_META.get(val); if(m) m.snap = projSnap(val); else projMetaSet(val, null); }
+  return r;
+}
+/* creation of a NEW project - the only browser call allowed to bring a missing id into existence */
+async function dbCreate(store,val){
+  if(STORE_MODE==='central' && store==='projects') return TP_API.create(store,val);
+  const r = await _store().put(store,val);
+  if(store==='projects') projMetaSet(val, null);
+  return r;
+}
 async function dbDel(store,key){          return _store().del(store,key); }
 async function dbIndexAll(store,index,key){ return _store().indexAll(store,index,key); }
 
@@ -1674,6 +1743,7 @@ async function deleteItemDeep(project, item){
   renumber(project);
 }
 async function deleteProjectDeep(id){
+  if(STATE.project && STATE.project.id === id){ clearTimeout(saveTimer); saveTimer = null; STATE.project = null; }   // nothing of it may be saved after deletion
   const ph = await dbIndexAll('photos','by_project', id);
   for(const p of ph) await dbDel('photos', p.id);
   await dbDel('projects', id);
@@ -2048,7 +2118,7 @@ async function seedSampleProject(demo){
   d.notes = { scope:'', site:'', technical:'', criticalInstaller:'' };
   p.items.push(d);
 
-  await dbPut('projects', p);
+  await dbCreate('projects', p);
 
   async function ph(item, slot, title, kind, variant){
     const blob = await makePlaceholder(title, kind, variant); const id = uid();
@@ -2093,16 +2163,46 @@ const STATE = {
 };
 let saveTimer=null;
 function scheduleSave(){
+  if(STATE.project && PROJ_STALE.has(STATE.project)) return;       // outdated/deleted copy: never writes again
   setSaveFlag('Saving…', false);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(commitSave, 420);
 }
+/* Writes the open project ONLY if it really changed since it was loaded/saved (projIsDirty).
+   render(), tab-hide, pagehide and navigation all call this - with no changes it does nothing:
+   no PUT, no updatedAt bump, no revision bump. A refused save (409/410/428) marks this copy
+   stale and stops it from ever writing again; nothing is retried, forced or recreated. */
 async function commitSave(){
   clearTimeout(saveTimer); saveTimer=null;
-  if(!STATE.project) return;
-  STATE.project.updatedAt = now();
-  try{ await dbPut('projects', STATE.project); setSaveFlag('Saved ✓', true); }
-  catch(e){ setSaveFlag('Save failed', false); console.error(e); }
+  const p = STATE.project;
+  if(!p || PROJ_STALE.has(p)) return;
+  if(!projIsDirty(p)){ setSaveFlag('Saved ✓', true); return; }
+  p.updatedAt = now();
+  try{ await dbPut('projects', p); setSaveFlag('Saved ✓', true); }
+  catch(e){ projSaveFailed(p, e); }
+}
+function projSaveFailed(p, e){
+  const st = e && e.httpStatus;
+  if(st === 409 || st === 410 || st === 428){
+    PROJ_STALE.add(p);
+    setSaveFlag('Not saved', false);
+    showStaleDialog(st);
+  } else {
+    setSaveFlag('Save failed', false); console.error(e);
+  }
+}
+let STALE_DIALOG_OPEN = false;
+function showStaleDialog(status){
+  if(STALE_DIALOG_OPEN) return; STALE_DIALOG_OPEN = true;
+  const t = status === 410 ? ['Project was deleted', 'This project was deleted in another tab/session and cannot be saved.']
+          : status === 428 ? ['This tab is outdated', 'This tab is outdated. Reload before making changes.']
+          :                  ['Project changed elsewhere', 'This project changed in another tab/session. Reload the latest version.'];
+  const o = document.createElement('div'); o.className = 'overlay'; o.dataset.stale = String(status);
+  o.innerHTML = '<div class="dialog"><h3>'+esc(t[0])+'</h3><p>'+esc(t[1])+'</p>'
+    + '<p style="font-size:12px">Nothing was saved or overwritten. Edits made in this tab since it loaded were not kept.</p>'
+    + '<div class="acts"><button class="btn btn-primary" data-stalereload>Reload latest</button></div></div>';
+  o.addEventListener('click', e=>{ if(e.target.closest('[data-stalereload]')) location.reload(); });
+  document.body.appendChild(o);
 }
 function setSaveFlag(txt, on){
   const el = document.querySelector('.appbar .save');
@@ -2224,7 +2324,8 @@ function parseHash(){
 function go(hash){ location.hash = hash; }
 
 async function render(){
-  await commitSave();                 // flush pending edits before switching
+  await commitSave();                 // flush pending edits before switching (no-op when nothing changed)
+  if(STATE.project && PROJ_STALE.has(STATE.project)) return;     // refused copy: stay put, the dialog offers Reload
   const r = parseHash();
 
   if(r.view==='projects'){ STATE.project=null; clearPhotoCache(); return renderProjects(); }
@@ -4288,7 +4389,7 @@ document.addEventListener('click', async e=>{
   if(closest('[data-migswitch]')){ migSwitch(); return; }
 
   if(closest('[data-newproject]')){
-    const p = newProject(); await dbPut('projects', p); go('#/p/'+p.id); return;
+    const p = newProject(); await dbCreate('projects', p); go('#/p/'+p.id); return;
   }
   if(closest('[data-loadsample]')){
     toast('Building sample…');
@@ -6102,6 +6203,7 @@ async function dlvEnsurePdfSelection(p, record, event){
   if(!ev){ toast('Delivery event not found.'); return false; }
   (ev.lines||[]).forEach(l=>{ const k = deliveryLineKey(l); if(picked[k]) l.pdfPhotoIds = picked[k]; });
   try{ await dbPut('projects', fresh); }catch(e){ toast('Save failed: '+(e.message||e)); return false; }
+  if(STATE.project && STATE.project.id === fresh.id) STATE.project = fresh;    // continue on the copy holding the newest revision
   (event.lines||[]).forEach(l=>{ const k = deliveryLineKey(l); if(picked[k]) l.pdfPhotoIds = picked[k]; });
   return true;
 }

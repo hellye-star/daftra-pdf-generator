@@ -8,8 +8,12 @@ so this database is never reachable off this PC).
 Phase 1 endpoints:
     GET    /api/tp/status
     GET    /api/tp/projects
-    GET    /api/tp/projects/<id>
-    PUT    /api/tp/projects/<id>            (?mode=skip-existing → never overwrite)
+    GET    /api/tp/projects/<id>            → {ok, data:<doc>, rev}
+    POST   /api/tp/projects                 EXPLICIT create of a NEW project {doc}; 409 if the id exists
+    PUT    /api/tp/projects/<id>            normal update; REQUIRES header If-Match: <rev>
+                                              200 {rev}   saved (rev+1) · 409 stale rev · 410 project deleted
+                                              428 no/invalid If-Match (old clients) - never creates, never overwrites
+                                            (?mode=skip-existing → explicit import: create if missing, never overwrite)
     POST   /api/tp/projects/<id>/duplicate  {name, revision} → clone w/ new IDs + own photo files
     DELETE /api/tp/projects/<id>
     GET    /api/tp/photos?projectId=<id>
@@ -42,6 +46,7 @@ _GET = [
     (re.compile(r'^/api/tp/backup$'),                       '_backup'),
 ]
 _POST = [
+    (re.compile(r'^/api/tp/projects$'), '_create_project'),
     (re.compile(r'^/api/tp/projects/' + _PID + r'/duplicate$'), '_duplicate_project'),
     (re.compile(r'^/api/tp/photos$'),   '_post_photo'),
     (re.compile(r'^/api/tp/migrate$'),  '_migrate'),
@@ -63,8 +68,11 @@ def _parse(handler):
     return p.path, parse_qs(p.query)
 
 
-def _ok(handler, data, status=200):
-    body = json.dumps({'ok': True, 'data': data}, ensure_ascii=False).encode('utf-8')
+def _ok(handler, data, status=200, extra=None):
+    payload = {'ok': True, 'data': data}
+    if extra:
+        payload.update(extra)
+    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
     handler.send_response(status)
     handler.send_header('Content-Type', 'application/json; charset=utf-8')
     handler.send_header('Content-Length', str(len(body)))
@@ -73,8 +81,11 @@ def _ok(handler, data, status=200):
     handler.wfile.write(body)
 
 
-def _err(handler, status, msg):
-    body = json.dumps({'ok': False, 'error': msg}, ensure_ascii=False).encode('utf-8')
+def _err(handler, status, msg, extra=None):
+    payload = {'ok': False, 'error': msg}
+    if extra:
+        payload.update(extra)
+    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
     handler.send_response(status)
     handler.send_header('Content-Type', 'application/json; charset=utf-8')
     handler.send_header('Content-Length', str(len(body)))
@@ -157,15 +168,48 @@ def _put_setting(handler, params, qs):
 # ── projects ───────────────────────────────────────────────────────────────
 
 def _list_projects(handler, params, qs):
-    _ok(handler, tp_db.list_projects())
+    docs, revs = tp_db.list_projects_with_revs()
+    _ok(handler, docs, extra={'revs': revs})
 
 
 def _get_project(handler, params, qs):
-    doc = tp_db.get_project(params['id'])
-    if doc is None:
+    got = tp_db.get_project_with_rev(params['id'])
+    if got is None:
         _err(handler, 404, 'Project not found.')
         return
-    _ok(handler, doc)
+    _ok(handler, got[0], extra={'rev': got[1]})
+
+
+def _if_match(handler):
+    """The revision the caller loaded, from the If-Match header ONLY (never from
+    the JSON body - an old tab echoes the whole document back). None if absent/invalid."""
+    raw = (handler.headers.get('If-Match') or '').strip()
+    if raw.startswith('W/'):
+        raw = raw[2:]
+    raw = raw.strip('"')
+    return int(raw) if raw.isdigit() else None
+
+
+def _create_project(handler, params, qs):
+    """EXPLICIT creation of a genuinely new project. The only way (besides the
+    server-side duplicate / import flows) to bring a missing id into existence."""
+    try:
+        doc = _json_body(handler)
+    except (ValueError, json.JSONDecodeError):
+        _err(handler, 400, 'Malformed JSON body.')
+        return
+    if not isinstance(doc, dict) or not isinstance(doc.get('id'), str) or not doc.get('id'):
+        _err(handler, 400, 'Body must be a project object with an id.')
+        return
+    try:
+        rev = tp_db.create_project(doc)
+    except tp_db.ProjectExists:
+        _err(handler, 409, 'A project with this id already exists.', extra={'code': 'exists'})
+        return
+    except ValueError as e:
+        _err(handler, 400, str(e))
+        return
+    _ok(handler, {'id': doc['id'], 'rev': rev}, status=201)
 
 
 def _put_project(handler, params, qs):
@@ -177,16 +221,41 @@ def _put_project(handler, params, qs):
     if not isinstance(doc, dict) or doc.get('id') != params['id']:
         _err(handler, 400, 'Body must be a project object whose id matches the URL.')
         return
-    skip_existing = (qs.get('mode', [''])[0] == 'skip-existing')
-    if skip_existing and tp_db.project_exists(params['id']):
-        _ok(handler, {'id': params['id'], 'skipped': True})
+    # explicit import intent (browser -> central copy): create if missing, NEVER overwrite
+    if qs.get('mode', [''])[0] == 'skip-existing':
+        if tp_db.project_exists(params['id']):
+            _ok(handler, {'id': params['id'], 'skipped': True})
+            return
+        try:
+            rev = tp_db.create_project(doc)
+        except (tp_db.ProjectExists, ValueError) as e:
+            _err(handler, 409, str(e))
+            return
+        _ok(handler, {'id': params['id'], 'skipped': False, 'rev': rev})
+        return
+
+    # NORMAL update: needs the revision the caller loaded. No revision (old tabs) = refused.
+    expected = _if_match(handler)
+    if expected is None:
+        _err(handler, 428, 'This tab is outdated: it did not send the project revision. '
+                           'Reload the page before making changes. Nothing was saved.',
+             extra={'code': 'rev_required'})
         return
     try:
-        tp_db.upsert_project(doc)
+        rev = tp_db.update_project(doc, expected)
+    except tp_db.ProjectGone:
+        _err(handler, 410, 'This project was deleted (in another tab or session) and cannot be saved. '
+                           'Nothing was saved.', extra={'code': 'gone'})
+        return
+    except tp_db.RevConflict as e:
+        _err(handler, 409, 'This project changed in another tab or session. Reload the latest '
+                           'version before saving. Nothing was overwritten.',
+             extra={'code': 'rev_conflict', 'currentRev': e.current})
+        return
     except ValueError as e:
         _err(handler, 400, str(e))
         return
-    _ok(handler, {'id': params['id'], 'skipped': False})
+    _ok(handler, {'id': params['id'], 'skipped': False, 'rev': rev})
 
 
 def _delete_project(handler, params, qs):
