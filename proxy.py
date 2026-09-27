@@ -20,14 +20,53 @@ Routes:
 import base64 as _b64
 import datetime
 import json
+import logging
 import os
+import socket
 import subprocess
 import sys
 import time
+import traceback
 import urllib.request
 import urllib.error
 from http.server import HTTPServer, SimpleHTTPRequestHandler, ThreadingHTTPServer
+from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse, parse_qs, unquote, quote as _urllib_parse_quote
+
+# -- Reliability: persistent lifecycle log -----------------------------------
+# C:\claude\logs\vista-proxy.log -- startup/PID/bind/SQI-outcome/shutdown ONLY.
+# Never config.json values, tokens, credentials, or request payloads (see
+# _log_life below and every call site that uses it).
+_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+_LOG_PATH = os.path.join(_LOG_DIR, 'vista-proxy.log')
+_life_logger = None
+
+
+def _lifecycle_logger():
+    global _life_logger
+    if _life_logger is not None:
+        return _life_logger
+    logger = logging.getLogger('vista_proxy_lifecycle')
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not logger.handlers:
+        try:
+            os.makedirs(_LOG_DIR, exist_ok=True)
+            h = RotatingFileHandler(_LOG_PATH, maxBytes=1_000_000, backupCount=3, encoding='utf-8')
+            h.setFormatter(logging.Formatter('%(asctime)s  %(message)s'))
+            logger.addHandler(h)
+        except OSError:
+            pass  # logging must never stop the proxy from starting
+    _life_logger = logger
+    return logger
+
+
+def _print_and_log(msg):
+    # Prints exactly as before AND appends the same line to the persistent
+    # lifecycle log, so a message that used to only reach an invisible (no
+    # console, launched by Task Scheduler) stdout now also survives.
+    print(msg)
+    _lifecycle_logger().info(msg)
 
 # ── Load config ────────────────────────────────────────────────────────────────
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
@@ -2180,7 +2219,7 @@ def _sqi_ai_proxy_expected_build():
 def _sqi_ai_proxy_line(label, data):
     key_note = 'AI ready' if (data and data.get('available')) else 'API key not configured'
     build_note = (', build ' + data.get('build')) if (data and data.get('build')) else ''
-    print(f'  SQI AI proxy         : {label} ({key_note}{build_note})')
+    _print_and_log(f'  SQI AI proxy         : {label} ({key_note}{build_note})')
 
 
 def _find_pid_listening_on_port(port):
@@ -2249,13 +2288,13 @@ def _start_sqi_ai_proxy():
     if state == 'up':
         # Stale instance would not go down (e.g. taskkill failed) — do not
         # spawn a duplicate on top of it.
-        print(f'  SQI AI proxy         : AI proxy unavailable - old build would not stop on port {_SQI_AI_PROXY_PORT}')
+        _print_and_log(f'  SQI AI proxy         : AI proxy unavailable - old build would not stop on port {_SQI_AI_PROXY_PORT}')
         return
     if state == 'conflict':
-        print(f'  SQI AI proxy         : AI proxy unavailable - port {_SQI_AI_PROXY_PORT} is already in use by another process')
+        _print_and_log(f'  SQI AI proxy         : AI proxy unavailable - port {_SQI_AI_PROXY_PORT} is already in use by another process')
         return
     if not os.path.isfile(_SQI_AI_PROXY_SCRIPT):
-        print('  SQI AI proxy         : AI proxy unavailable - sqi_ai_proxy.py not found')
+        _print_and_log('  SQI AI proxy         : AI proxy unavailable - sqi_ai_proxy.py not found')
         return
     try:
         creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -2273,7 +2312,7 @@ def _start_sqi_ai_proxy():
             creationflags=creationflags,
         )
     except Exception as e:
-        print(f'  SQI AI proxy         : AI proxy unavailable - failed to start ({e})')
+        _print_and_log(f'  SQI AI proxy         : AI proxy unavailable - failed to start ({e})')
         return
     # Give it a moment to bind the port, then confirm rather than assume.
     # A generous window (up to ~8s) because some Python launchers (e.g. the
@@ -2288,7 +2327,7 @@ def _start_sqi_ai_proxy():
             return
         if _sqi_ai_proxy_process.poll() is not None:
             break  # the child exited already — stop waiting on it
-    print(f'  SQI AI proxy         : AI proxy unavailable - did not respond on port {_SQI_AI_PROXY_PORT} after starting')
+    _print_and_log(f'  SQI AI proxy         : AI proxy unavailable - did not respond on port {_SQI_AI_PROXY_PORT} after starting')
 
 
 def _stop_sqi_ai_proxy():
@@ -2308,6 +2347,26 @@ def _stop_sqi_ai_proxy():
                 pass
 
 
+class _SingleInstanceHTTPServer(ThreadingHTTPServer):
+    # Refuses to share port 8080 with a second proxy.py. HTTPServer enables
+    # SO_REUSEADDR by default; on Windows that lets a second process bind the
+    # SAME live address:port (not just a TIME_WAIT socket), so two proxy.py
+    # instances could listen at once with neither one noticing - that is
+    # exactly how this happened before. Disabling reuse, and additionally
+    # requesting SO_EXCLUSIVEADDRUSE (the strongest guarantee Windows offers,
+    # ignored harmlessly on other platforms), makes a second bind fail
+    # immediately with a plain OSError instead.
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            try:
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            except OSError:
+                pass
+        super().server_bind()
+
+
 # ── Startup ────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     # Change working directory to the folder containing this script
@@ -2318,6 +2377,7 @@ if __name__ == '__main__':
     print('  Vista Platform — Local Proxy')
     print(f'  http://{BIND}:{PORT}/')
     print()
+    _print_and_log(f'startup: pid={os.getpid()} python={sys.executable} cwd={os.getcwd()} bind_target={BIND}:{PORT}')
     print(f'  Social Media source  : {"OK - configured" if _token_ready(_social_token)   else "NOT SET - edit config.json"}')
     print(f'  Personal source      : {"OK - configured" if _token_ready(_personal_token) else "NOT SET - edit config.json"}')
     print(f'  Daftra               : {"OK - configured" if (_token_ready(_daftra_subdomain) and _token_ready(_daftra_api_key)) else "NOT SET - edit config.json"}')
@@ -2336,18 +2396,30 @@ if __name__ == '__main__':
                       and os.path.isfile(_meta_token_path))
     print(f'  Meta / Instagram API : {"OK - configured" if (_meta_acct_ok and _meta_file_ok) else "NOT SET - use Meta Setup Center"}')
     _start_sqi_ai_proxy()
+
+    try:
+        server = _SingleInstanceHTTPServer((BIND, PORT), VistaProxyHandler)
+    except OSError as e:
+        # A second instance (e.g. started by mistake alongside the scheduled-task
+        # one) hits this immediately, before ever touching a request - the
+        # existing healthy server is never disturbed.
+        _print_and_log(f'startup: BIND FAILED on {BIND}:{PORT} errno={getattr(e, "errno", None)} ({e})')
+        print(f'\n  ERROR: Vista Proxy is already running on port {PORT}.')
+        print(f'  (Could not bind: {e})')
+        sys.exit(1)
+    _print_and_log(f'startup: bind OK on {BIND}:{PORT}')
     print()
     print('  Press Ctrl+C to stop.')
     print()
-
     try:
-        server = ThreadingHTTPServer((BIND, PORT), VistaProxyHandler)
         server.serve_forever()
     except KeyboardInterrupt:
         _stop_sqi_ai_proxy()
+        _print_and_log('shutdown: reason=KeyboardInterrupt')
         print('\n  Proxy stopped.')
-    except OSError as e:
+    except Exception:
         _stop_sqi_ai_proxy()
-        print(f'\n  ERROR: Could not start server on port {PORT}: {e}')
-        print(f'  Try changing "port" in config.json to a free port (e.g. 8081).')
-        sys.exit(1)
+        _print_and_log('shutdown: reason=unhandled exception\n' + traceback.format_exc())
+        raise
+    finally:
+        _print_and_log('exit: pid=%s' % os.getpid())
