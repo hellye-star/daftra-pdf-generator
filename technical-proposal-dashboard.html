@@ -4672,8 +4672,16 @@ document.addEventListener('click', async e=>{
   }
   /* ----- quotation-based delivery screen ----- */
   {
-    const dlvSave = closest('[data-dlvsave]');
-    if(dlvSave && STATE.project){
+    const dlvSaveDraft = closest('[data-dlvsavedraft]');
+    if(dlvSaveDraft && STATE.project){
+      const r = parseHash();
+      // Save Draft never selects/freezes photos and never opens the client PDF.
+      const res = await deliverySaveDraft(STATE.project, r.sid, r.rev);
+      if(res){ STATE.project = res.project; renderDeliverScreen(res.project); }
+      return;
+    }
+    const dlvFinalize = closest('[data-dlvfinalize]');
+    if(dlvFinalize && STATE.project){
       const r = parseHash();
       const w = dlvOpenPending();                                           // opened synchronously so it is not blocked
       const choice = await dlvCollectPhotoChoices(STATE.project);           // >6 photos on an item -> user chooses BEFORE save
@@ -4681,6 +4689,22 @@ document.addEventListener('click', async e=>{
       const res = await deliverySaveEvent(STATE.project, r.sid, r.rev, choice);
       if(res){ STATE.project = res.project; deliveryExportEvent(res.project, res.record, res.event, w); render(); }
       else if(w) w.close();
+      return;
+    }
+    const dlvResume = closest('[data-dlvresume]');
+    if(dlvResume && STATE.project && STATE.dlv){
+      const r = parseHash();
+      const record = deliveryFind(STATE.project, r.sid, r.rev);
+      if(record && dlvResumeDraft(record, dlvResume.dataset.dlvresume)) renderDeliverScreen(STATE.project);
+      return;
+    }
+    const dlvDelDraft = closest('[data-dlvdeletedraft]');
+    if(dlvDelDraft && STATE.project){
+      const r = parseHash();
+      if(await confirmDialog('Delete this draft?', 'It has no official DN number and was never counted as delivered. This only removes the draft.', true)){
+        const fresh = await deliveryDeleteDraft(STATE.project, r.sid, r.rev, dlvDelDraft.dataset.dlvdeletedraft);
+        if(fresh){ STATE.project = fresh; renderDeliverScreen(fresh); }
+      }
       return;
     }
     const dlvFull = closest('[data-dlvfull]');
@@ -5946,11 +5970,21 @@ function renderQuote(p){
    project.deliveries = [ { id, quotationId, quotationNo, quotationRev,
      createdAt, status:'open'|'closed',
      items:[ {itemId,name,unit,orderedQty} ],
-     events:[ { id, dnNo, dnDate, createdAt, receiverName, receiverDate,
-                lines:[ {lineId,itemId,qtyDeliveredNow,
-                         proofs?:[ frozen Installation Proof snapshot - see below ],
-                         pdfPhotoIds?:[ frozen dn-proof photoIds (max 6) printed on the client
-                                        Delivery Note page; proofs[] keeps ALL frozen photos ]} ] } ] } ]
+     events:[ { id, status:'draft'|'final'|'void', createdAt, updatedAt,
+                receiverName, receiverDate,
+                -- DRAFT: editable work in progress. No dnNo. NEVER counts toward delivered qty.
+                   lines:[ {lineId,itemId,qtyDeliveredNow,proofSel:[liveProofId,...]} ]
+                -- FINAL: immutable, assigned a dnNo, counts toward Previously Delivered.
+                   dnNo, dnDate, finalizedAt,
+                   lines:[ {lineId,itemId,qtyDeliveredNow,
+                            proofs?:[ frozen Installation Proof snapshot - see below ],
+                            pdfPhotoIds?:[ frozen dn-proof photoIds (max 6) printed on the client
+                                           Delivery Note page; proofs[] keeps ALL frozen photos ]} ]
+              } ] } ]
+
+   An event with NO status field is a pre-Phase-3 event — treated everywhere as 'final' (never
+   rewritten to add the field). 'void' is reserved for Phase 3B (Void & Reissue) and never
+   produced yet.
 
    A delivery record is locked forever to the exact quotation revision it
    was created from (quotationId+quotationRev is its lookup key) — a later
@@ -5980,9 +6014,14 @@ function deliveryFind(p, sid, rev){
    record is created — so no two lines can ever share delivery totals. The
    key is read from the stored data, never derived from array position. */
 function deliveryLineKey(x){ return (x && (x.lineId || x.itemId)) || ''; }
+/* status-less (pre-Phase-3) events are treated as 'final'; 'draft' and 'void' events are
+   never treated as final and so never affect delivered/remaining quantities. */
+function deliveryEventIsFinal(ev){ return !ev || !ev.status || ev.status === 'final'; }
+function deliveryDrafts(record){ return (record ? record.events : []).filter(ev=> ev && ev.status === 'draft'); }
+function deliveryFinals(record){ return (record ? record.events : []).filter(deliveryEventIsFinal); }
 function deliveryDeliveredMap(record){
   const map = {};
-  (record ? record.events : []).forEach(ev=> (ev.lines||[]).forEach(l=>{
+  deliveryFinals(record).forEach(ev=> (ev.lines||[]).forEach(l=>{
     const k = deliveryLineKey(l);
     map[k] = (map[k] || 0) + (Number(l.qtyDeliveredNow) || 0);
   }));
@@ -6262,6 +6301,7 @@ function renderDeliverScreen(p){
         orderedQty: moneyNum(it.qty) || 0, qtyNow: '', proofSel: [],
       })),
       receiverName: '', receiverDate: '',      // Date Received is only ever what the user actually enters
+      draftId: null,   // set while Resuming a saved Draft; Save Draft then updates it in place
     };
   }
   const st = STATE.dlv;
@@ -6301,8 +6341,9 @@ function renderDeliverScreen(p){
       + ((done || closed || !it.itemId) ? '' : dlvProofRowHtml(p, it));   // proofs only for TP-backed, still-open lines
   }).join('');
 
-  const eventsHtml = (record && record.events.length)
-    ? record.events.slice().reverse().map(ev=>{
+  const finals = deliveryFinals(record);
+  const eventsHtml = finals.length
+    ? finals.slice().reverse().map(ev=>{
         const lineTxt = ev.lines.map(l=>{
           const it = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l));
           const np = (l.proofs||[]).length;
@@ -6317,6 +6358,20 @@ function renderDeliverScreen(p){
           + '</div>';
       }).join('')
     : '<div class="hint" style="margin:0">No partial deliveries recorded yet.</div>';
+  const drafts = deliveryDrafts(record);
+  const draftsHtml = drafts.length
+    ? drafts.slice().reverse().map(dr=>{
+        const n = (dr.lines||[]).filter(l=> (Number(l.qtyDeliveredNow)||0) > 0 || (l.proofSel||[]).length).length;
+        return '<div class="quo-hrow">'
+          + '<span class="quo-hno" style="color:var(--gold-ink)">Draft</span>'
+          + '<span class="quo-hlabel">'+esc(fmtDraftWhen(dr.updatedAt||dr.createdAt))+'</span>'
+          + '<span class="quo-hfig">'+n+' item'+(n===1?'':'s')+'</span>'
+          + '<span class="quo-hacts">'
+          +   '<button class="btn btn-ghost btn-xs" data-dlvresume="'+esc(dr.id)+'">Resume</button>'
+          +   '<button class="btn btn-ghost btn-xs" style="color:var(--stop)" data-dlvdeletedraft="'+esc(dr.id)+'">Delete Draft</button>'
+          + '</span></div>';
+      }).join('')
+    : '<div class="hint" style="margin:0">No drafts saved.</div>';
 
   app().innerHTML =
     '<div class="appbar">'+backBtn
@@ -6340,13 +6395,124 @@ function renderDeliverScreen(p){
     +      '<div class="field"><label>Receiver date (date received)</label><input data-dlvf="receiverDate" value="'+esc(st.receiverDate)+'" placeholder="DD/MM/YYYY"></div>'
     +    '</div>'
     +  '</div></div>'
-    +  '<button class="btn btn-primary full mt10" data-dlvsave>Save Delivery &amp; Print</button>')
+    +    (st.draftId ? '<div class="hint" style="margin:8px 0 0">Resuming a saved draft — Save Draft updates it; Finalize &amp; Print assigns the official DN number and removes it from Drafts.</div>' : '')
+    +    '<div class="row mt10">'
+    +      '<button class="btn btn-ghost full" data-dlvsavedraft>Save Draft</button>'
+    +      '<button class="btn btn-primary full" data-dlvfinalize>Finalize &amp; Print</button>'
+    +    '</div>')
+    +  '<div class="card mt10"><div class="eyebrow">Drafts <span class="rt">not yet delivered</span></div><div class="body">'
+    +    '<div class="quo-hlist">'+draftsHtml+'</div>'
+    +  '</div></div>'
     +  '<div class="card mt10"><div class="eyebrow">Delivery History</div><div class="body">'
     +    '<div class="quo-hlist">'+eventsHtml+'</div>'
     +  '</div></div>'
     + '</div>';
 }
+function fmtDraftWhen(ms){
+  if(!ms) return '';
+  const d = new Date(ms);
+  return isNaN(d) ? '' : d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ' '
+    + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+/* Loads a saved Draft's quantities/proof selections/receiver fields back into the working
+   screen state so it can be edited further; live proof checkboxes re-render checked because
+   proofSel is restored verbatim. */
+function dlvResumeDraft(record, draftId){
+  const st = STATE.dlv; const draft = record && record.events.find(e=> e.id === draftId && e.status === 'draft');
+  if(!st || !draft) return false;
+  const byKey = {}; (draft.lines||[]).forEach(l=> byKey[deliveryLineKey(l)] = l);
+  st.items.forEach(it=>{
+    const l = byKey[it.lineId];
+    it.qtyNow = (l && (Number(l.qtyDeliveredNow) || 0)) ? String(l.qtyDeliveredNow) : '';
+    it.proofSel = (l && l.proofSel) ? [...l.proofSel] : [];
+  });
+  st.receiverName = draft.receiverName || ''; st.receiverDate = draft.receiverDate || '';
+  st.draftId = draftId; st.editing = null;
+  return true;
+}
 
+/* SAVE DRAFT — no DN number, no dn-proof copies, no quantity impact (deliveryDeliveredMap
+   never counts a 'draft' event). Stores only the live proof IDS the user picked (proofSel),
+   never a frozen snapshot - only Finalize ever creates dn-proof photo copies (see §5 of the
+   Phase 3A brief: an abandoned/edited draft must not leave duplicate proof files behind). */
+async function deliverySaveDraft(p, sid, rev){
+  if(!(await deliveryRequireCentral())) return null;
+  const st = STATE.dlv;
+  if(!st || st.sid !== sid || st.rev !== rev) return null;
+
+  let fresh;
+  try{ fresh = await dbGet('projects', p.id); }
+  catch(e){ toast('Could not reach the Central Database: ' + (e.message||e)); return null; }
+  if(!fresh){ toast('Project not found in the Central Database.'); return null; }
+  const series = quoEnsure(fresh).find(s=> s.id === sid);
+  if(!series){ toast('Quotation not found.'); return null; }
+  const revObj = (series.revisions||[]).find(x=> x.rev === rev);
+  if(!revObj){ toast('Quotation revision not found.'); return null; }
+
+  const list = deliveryAttach(fresh);
+  let record = list.find(d=> d.quotationId === sid && d.quotationRev === rev);
+  if(!record){ record = deliveryBuildRecord(series, revObj, st.items); list.push(record); }
+  if(record.status === 'closed'){ toast('This delivery record is already fully delivered.'); return null; }
+
+  const lines = [];
+  for(const it of record.items){
+    const key = deliveryLineKey(it);
+    const draftIt = st.items.find(x=> x.lineId === key);
+    const qtyRaw = draftIt ? draftIt.qtyNow : '';
+    const qtyNow = moneyNum(qtyRaw);
+    if(qtyNow != null && qtyNow < 0){ toast('Quantities cannot be negative.'); return null; }
+    const selIds = (draftIt && draftIt.proofSel) || [];
+    if((qtyNow == null || qtyNow === 0) && !selIds.length) continue;   // nothing on this line yet
+    lines.push({ lineId: key, itemId: it.itemId || null, qtyDeliveredNow: qtyNow || 0, proofSel: [...selIds] });
+  }
+  const hasReceiver = String(st.receiverName||'').trim() || String(st.receiverDate||'').trim();
+  if(!lines.length && !hasReceiver){ toast('Enter a quantity or select proofs before saving a draft.'); return null; }
+
+  const now = Date.now();
+  let draft = st.draftId ? record.events.find(e=> e.id === st.draftId && e.status === 'draft') : null;
+  let pushedNew = false;
+  if(draft){
+    draft.lines = lines; draft.receiverName = String(st.receiverName||'').trim();
+    draft.receiverDate = String(st.receiverDate||'').trim(); draft.updatedAt = now;
+  } else {
+    draft = { id: uid(), status: 'draft', createdAt: now, updatedAt: now,
+      receiverName: String(st.receiverName||'').trim(), receiverDate: String(st.receiverDate||'').trim(), lines };
+    record.events.push(draft); pushedNew = true;
+  }
+
+  try{ await dbPut('projects', fresh); }
+  catch(e){
+    if(pushedNew) record.events.pop();
+    toast('Save failed: ' + (e.message||e)); return null;
+  }
+  st.draftId = draft.id;
+  toast('Draft saved');
+  return { project: fresh, record, draft };
+}
+/* DELETE DRAFT — removes only that draft event. Never touches delivered quantity/history
+   (drafts were never counted in the first place). If the deleted draft is the one currently
+   loaded on screen, the working screen resets to blank. */
+async function deliveryDeleteDraft(p, sid, rev, draftId){
+  if(!(await deliveryRequireCentral())) return null;
+  let fresh;
+  try{ fresh = await dbGet('projects', p.id); }
+  catch(e){ toast('Could not reach the Central Database: ' + (e.message||e)); return null; }
+  if(!fresh){ toast('Project not found in the Central Database.'); return null; }
+  const record = deliveryFind(fresh, sid, rev);
+  if(!record){ toast('Delivery record not found.'); return null; }
+  const di = record.events.findIndex(e=> e.id === draftId && e.status === 'draft');
+  if(di < 0){ toast('Draft not found.'); return null; }
+  const [removed] = record.events.splice(di, 1);
+  try{ await dbPut('projects', fresh); }
+  catch(e){ record.events.splice(di, 0, removed); toast('Save failed: ' + (e.message||e)); return null; }
+  const st = STATE.dlv;
+  if(st && st.draftId === draftId){
+    st.draftId = null; st.receiverName = ''; st.receiverDate = '';
+    st.items.forEach(it=>{ it.qtyNow = ''; it.proofSel = []; });
+  }
+  toast('Draft deleted');
+  return fresh;
+}
 async function deliverySaveEvent(p, sid, rev, photoChoice){
   if(!(await deliveryRequireCentral())) return null;
   const st = STATE.dlv;
@@ -6375,7 +6541,7 @@ async function deliverySaveEvent(p, sid, rev, photoChoice){
   }
   if(record.status === 'closed'){ toast('This delivery record is already fully delivered.'); return null; }
 
-  const delivered = deliveryDeliveredMap(record);
+  const delivered = deliveryDeliveredMap(record);   // FINAL events only - drafts never reduce Remaining
   const lines = [], pendingProofs = [];
   for(const it of record.items){
     const key = deliveryLineKey(it);
@@ -6395,6 +6561,17 @@ async function deliverySaveEvent(p, sid, rev, photoChoice){
     lines.push(line);
   }
   if(!lines.length){ toast('Enter a quantity for at least one item.'); return null; }
+
+  // A selected proof must still exist on the FRESH project. Checked BEFORE anything is
+  // created, so a proof deleted since it was selected (in a draft or live on screen) is a
+  // clean refusal - never a silent fallback photo, never a half-finalized DN.
+  for(const pp of pendingProofs){
+    const live = new Set(dlvLiveProofs(fresh, pp.itemId).map(x=> x.id));
+    if(pp.selIds.some(id=> !live.has(id))){
+      toast('A selected Installation Proof for "'+pp.name+'" no longer exists. Reload and reselect before finalizing.');
+      return null;
+    }
+  }
 
   // Freeze the picked Installation Proofs (read from the fresh Central DB copy) into the
   // event lines, with DN-owned photo copies. Rolled back if anything below fails.
@@ -6416,16 +6593,29 @@ async function deliverySaveEvent(p, sid, rev, photoChoice){
     }
   }catch(e){ await dlvDropPhotos(copied); toast('Could not save the proof photos: ' + (e.message||e)); return null; }
 
+  const now = Date.now();
   const event = {
-    id: uid(), dnNo: deliveryNextDnNo(fresh, series.no), dnDate: quoteToday(), createdAt: Date.now(),
+    id: uid(), status: 'final', dnNo: deliveryNextDnNo(fresh, series.no), dnDate: quoteToday(),
+    createdAt: now, finalizedAt: now,
     receiverName: String(st.receiverName||'').trim(), receiverDate: String(st.receiverDate||'').trim(),
     lines,
   };
+  // If this finalizes a resumed Draft, that draft is removed in the SAME write - it never
+  // shows up as both a draft and a final DN, and a failed save leaves the draft untouched
+  // (the removal only ever applies to `fresh`, which is discarded below on failure).
+  let draftIdx = -1;
+  if(st.draftId) draftIdx = record.events.findIndex(e=> e.id === st.draftId && e.status === 'draft');
+  let removedDraft = null;
+  if(draftIdx >= 0) removedDraft = record.events.splice(draftIdx, 1)[0];
   record.events.push(event);
   record.status = deliveryStatus(record);
 
   try{ await dbPut('projects', fresh); }
-  catch(e){ toast('Save failed: ' + (e.message||e)); record.events.pop(); record.status = deliveryStatus(record); await dlvDropPhotos(copied); return null; }
+  catch(e){
+    toast('Save failed: ' + (e.message||e));
+    record.events.pop(); if(removedDraft) record.events.splice(draftIdx, 0, removedDraft);
+    record.status = deliveryStatus(record); await dlvDropPhotos(copied); return null;
+  }
 
   STATE.dlv = null;
   toast(event.dnNo + ' saved');
