@@ -4723,6 +4723,7 @@ document.addEventListener('click', async e=>{
       const set = new Set(line.proofSel || []);
       if(dlvPr.checked) set.add(pid); else set.delete(pid);
       line.proofSel = [...set];
+      if(set.size){ line.proofMissingOriginal = false; const w = document.querySelector('[data-dlvmissingwarn="'+lid+'"]'); if(w) w.remove(); }
       dlvRefreshProofUi(lid);
       return;
     }
@@ -4750,6 +4751,20 @@ document.addEventListener('click', async e=>{
       const st = STATE.dlv;
       const fresh = await deliveryCorrectOriginalQty(STATE.project, st.sid, st.rev, st.editing, st.editVal);
       if(fresh){ STATE.project = fresh; st.editing = null; renderDeliverScreen(fresh); }
+      return;
+    }
+    const dlvVoid = closest('[data-dlvvoid]');
+    if(dlvVoid && STATE.project){
+      const r = parseHash();
+      const record = deliveryFind(STATE.project, r.sid, r.rev);
+      const ev = record && record.events.find(x=> x.id === dlvVoid.dataset.dlvvoid);
+      if(record && ev){
+        const reason = await dlvVoidReasonDialog(ev.dnNo);
+        if(reason){
+          const res = await deliveryVoidAndReissue(STATE.project, r.sid, r.rev, ev.id, reason);
+          if(res){ STATE.project = res.project; renderDeliverScreen(res.project); }
+        }
+      }
       return;
     }
     const dlvReprint = closest('[data-dlvreprint]');
@@ -5983,8 +5998,24 @@ function renderQuote(p){
               } ] } ]
 
    An event with NO status field is a pre-Phase-3 event — treated everywhere as 'final' (never
-   rewritten to add the field). 'void' is reserved for Phase 3B (Void & Reissue) and never
-   produced yet.
+   rewritten to add the field).
+
+   VOID (Phase 3B): a Final (or legacy) event is never edited or deleted. Void & Reissue instead
+   mutates ONLY status/voidedAt/voidReason on the SAME event object - every other field (dnNo,
+   lines, frozen proofs, dn-proof photoIds, pdfPhotoIds, receiver data, finalizedAt) stays exactly
+   as originally saved, forever. Its dnNo is never reused (deliveryNextDnNo already scans dnNo on
+   every event regardless of status). In the same write, ONE replacement Draft is created:
+     lines:[ {lineId,itemId,qtyDeliveredNow,proofSel,proofMissing?:true} ]
+     reissueOfEventId, reissueOfDnNo
+   proofMissing marks a line whose original frozen proof no longer exists live on that TP item
+   (proofSel is then left EMPTY - never a substituted photo). Finalizing that draft carries
+   reissuedFromEventId/reissuedFromDnNo onto the new Final event and works through the exact same
+   Finalize & Print logic as any other draft (own new dn-proof copies, own new DN number).
+   A void event can never be voided again; a draft can never be voided (only a Final/legacy one). */
+function deliveryEventIsVoid(ev){ return !!(ev && ev.status === 'void'); }
+/* everything shown in "Delivery History" - final, legacy-final AND void; never drafts */
+function deliveryHistoryEvents(record){ return (record ? record.events : []).filter(ev=> ev && ev.status !== 'draft'); }
+/*
 
    A delivery record is locked forever to the exact quotation revision it
    was created from (quotationId+quotationRev is its lookup key) — a later
@@ -6108,9 +6139,17 @@ function dlvProofWarnHtml(p, line){
     + 'Deliver Now quantity: <b>'+fmtQty(now)+'</b>'
     + '<div style="font-size:11px;margin-top:2px">Proof quantity is evidence only - Deliver Now is what is recorded. You can still save.</div></div>';
 }
+/* Shown on a REISSUE draft whose original frozen proof no longer exists live on this item -
+   never a substituted photo, just a clear prompt to pick a current one before finalizing. */
+function dlvProofMissingWarnHtml(line){
+  if(!line.proofMissingOriginal || (line.proofSel||[]).length) return '';
+  return '<div class="qwarn" data-dlvmissingwarn="'+esc(line.lineId)+'" style="margin:0 0 8px">'
+    + 'Original delivery proof is no longer available. Review and select current proof before finalizing.</div>';
+}
 function dlvProofRowHtml(p, line){
   const proofs = dlvLiveProofs(p, line.itemId);
-  if(!proofs.length) return '';
+  const missingHtml = dlvProofMissingWarnHtml(line);
+  if(!proofs.length) return missingHtml ? '<tr class="dlv-proofrow" data-dlvproofrow="'+esc(line.lineId)+'"><td colspan="5">'+missingHtml+'</td></tr>' : '';
   const sel = line.proofSel || [];
   const list = proofs.map(pr=>{
     const nPh = (pr.photos||[]).length, nVid = proofVideos(pr).length;
@@ -6123,9 +6162,9 @@ function dlvProofRowHtml(p, line){
       + (nPh ? '<button class="btn btn-ghost btn-xs" data-dlvviewproof="'+esc(line.lineId)+'|'+esc(pr.id)+'">View</button>' : '')
       + '</div>';
   }).join('');
-  return '<tr class="dlv-proofrow" data-dlvproofrow="'+esc(line.lineId)+'"><td colspan="5"><details'+(sel.length?' open':'')+'>'
+  return '<tr class="dlv-proofrow" data-dlvproofrow="'+esc(line.lineId)+'"><td colspan="5"><details'+(sel.length||missingHtml?' open':'')+'>'
     + '<summary>Installation Proofs ('+proofs.length+' available) <span class="dp-sel" data-dlvselcount>'+(sel.length?'· '+sel.length+' selected':'')+'</span></summary>'
-    + list + '<div data-dlvwarn>'+dlvProofWarnHtml(p, line)+'</div></details></td></tr>';
+    + missingHtml + list + '<div data-dlvwarn>'+dlvProofWarnHtml(p, line)+'</div></details></td></tr>';
 }
 function dlvRefreshProofUi(lineId){
   const line = STATE.dlv && STATE.dlv.items.find(x=> x.lineId === lineId);
@@ -6309,11 +6348,12 @@ function renderDeliverScreen(p){
   // snapshot, keyed by stable lineId) — rebuild the working lines from it,
   // keeping any quantities already typed for the same lineId.
   if(record){
-    const typed = {}, typedSel = {}; st.items.forEach(x=>{ typed[x.lineId] = x.qtyNow; typedSel[x.lineId] = x.proofSel || []; });
+    const typed = {}, typedSel = {}, typedMissing = {};
+    st.items.forEach(x=>{ typed[x.lineId] = x.qtyNow; typedSel[x.lineId] = x.proofSel || []; typedMissing[x.lineId] = !!x.proofMissingOriginal; });
     st.items = record.items.map(ri=>{
       const k = deliveryLineKey(ri);
       return { lineId: k, itemId: ri.itemId || null, name: ri.name || '', unit: ri.unit || 'no.',
-               orderedQty: ri.orderedQty, qtyNow: typed[k] || '', proofSel: typedSel[k] || [] };
+               orderedQty: ri.orderedQty, qtyNow: typed[k] || '', proofSel: typedSel[k] || [], proofMissingOriginal: typedMissing[k] || false };
     });
   }
 
@@ -6341,21 +6381,31 @@ function renderDeliverScreen(p){
       + ((done || closed || !it.itemId) ? '' : dlvProofRowHtml(p, it));   // proofs only for TP-backed, still-open lines
   }).join('');
 
-  const finals = deliveryFinals(record);
-  const eventsHtml = finals.length
-    ? finals.slice().reverse().map(ev=>{
+  const history = deliveryHistoryEvents(record);
+  const eventsHtml = history.length
+    ? history.slice().reverse().map(ev=>{
         const lineTxt = ev.lines.map(l=>{
           const it = record.items.find(x=> deliveryLineKey(x) === deliveryLineKey(l));
           const np = (l.proofs||[]).length;
           return esc(it ? it.name : deliveryLineKey(l)) + ': ' + fmtQty(l.qtyDeliveredNow)
             + (np ? ' <span style="color:var(--grey);font-size:11px">('+np+' proof'+(np===1?'':'s')+')</span>' : '');
         }).join(', ');
+        if(deliveryEventIsVoid(ev)){
+          return '<div class="quo-hrow" style="opacity:.8">'
+            + '<span class="quo-hno" style="color:var(--stop);text-decoration:line-through">'+esc(ev.dnNo)+'</span>'
+            + '<span class="quo-hlabel" style="color:var(--stop);font-weight:700;letter-spacing:.04em">VOID'+(ev.receiverName ? ' · '+esc(ev.receiverName) : '')+'</span>'
+            + '<span class="quo-hfig">Voided '+esc(fmtDraftWhen(ev.voidedAt))+' · '+esc(ev.voidReason||'')+'</span>'
+            + '<span class="quo-hacts"><button class="btn btn-ghost btn-xs" data-dlvreprint="'+esc(ev.id)+'">Reprint VOID copy</button></span>'
+            + '</div>';
+        }
         return '<div class="quo-hrow">'
           + '<span class="quo-hno">'+esc(ev.dnNo)+'</span>'
-          + '<span class="quo-hlabel">'+esc(ev.dnDate)+(ev.receiverName ? ' · '+esc(ev.receiverName) : '')+'</span>'
+          + '<span class="quo-hlabel">'+esc(ev.dnDate)+(ev.receiverName ? ' · '+esc(ev.receiverName) : '')+(ev.reissuedFromDnNo ? ' <span style="color:var(--grey-soft);font-size:11px">· reissued from '+esc(ev.reissuedFromDnNo)+'</span>' : '')+'</span>'
           + '<span class="quo-hfig">'+lineTxt+'</span>'
-          + '<span class="quo-hacts"><button class="btn btn-ghost btn-xs" data-dlvreprint="'+esc(ev.id)+'">Reprint</button></span>'
-          + '</div>';
+          + '<span class="quo-hacts">'
+          +   '<button class="btn btn-ghost btn-xs" data-dlvreprint="'+esc(ev.id)+'">Reprint</button>'
+          +   '<button class="btn btn-ghost btn-xs" style="color:var(--stop)" data-dlvvoid="'+esc(ev.id)+'">Void &amp; Reissue</button>'
+          + '</span></div>';
       }).join('')
     : '<div class="hint" style="margin:0">No partial deliveries recorded yet.</div>';
   const drafts = deliveryDrafts(record);
@@ -6364,7 +6414,7 @@ function renderDeliverScreen(p){
         const n = (dr.lines||[]).filter(l=> (Number(l.qtyDeliveredNow)||0) > 0 || (l.proofSel||[]).length).length;
         return '<div class="quo-hrow">'
           + '<span class="quo-hno" style="color:var(--gold-ink)">Draft</span>'
-          + '<span class="quo-hlabel">'+esc(fmtDraftWhen(dr.updatedAt||dr.createdAt))+'</span>'
+          + '<span class="quo-hlabel">'+esc(fmtDraftWhen(dr.updatedAt||dr.createdAt))+(dr.reissueOfDnNo ? ' <span style="color:var(--stop);font-size:11px">· reissue of '+esc(dr.reissueOfDnNo)+'</span>' : '')+'</span>'
           + '<span class="quo-hfig">'+n+' item'+(n===1?'':'s')+'</span>'
           + '<span class="quo-hacts">'
           +   '<button class="btn btn-ghost btn-xs" data-dlvresume="'+esc(dr.id)+'">Resume</button>'
@@ -6425,6 +6475,7 @@ function dlvResumeDraft(record, draftId){
     const l = byKey[it.lineId];
     it.qtyNow = (l && (Number(l.qtyDeliveredNow) || 0)) ? String(l.qtyDeliveredNow) : '';
     it.proofSel = (l && l.proofSel) ? [...l.proofSel] : [];
+    it.proofMissingOriginal = !!(l && l.proofMissing);
   });
   st.receiverName = draft.receiverName || ''; st.receiverDate = draft.receiverDate || '';
   st.draftId = draftId; st.editing = null;
@@ -6462,8 +6513,11 @@ async function deliverySaveDraft(p, sid, rev){
     const qtyNow = moneyNum(qtyRaw);
     if(qtyNow != null && qtyNow < 0){ toast('Quantities cannot be negative.'); return null; }
     const selIds = (draftIt && draftIt.proofSel) || [];
-    if((qtyNow == null || qtyNow === 0) && !selIds.length) continue;   // nothing on this line yet
-    lines.push({ lineId: key, itemId: it.itemId || null, qtyDeliveredNow: qtyNow || 0, proofSel: [...selIds] });
+    const proofMissing = !!(draftIt && draftIt.proofMissingOriginal && !selIds.length);
+    if((qtyNow == null || qtyNow === 0) && !selIds.length && !proofMissing) continue;   // nothing on this line yet
+    const ln = { lineId: key, itemId: it.itemId || null, qtyDeliveredNow: qtyNow || 0, proofSel: [...selIds] };
+    if(proofMissing) ln.proofMissing = true;
+    lines.push(ln);
   }
   const hasReceiver = String(st.receiverName||'').trim() || String(st.receiverDate||'').trim();
   if(!lines.length && !hasReceiver){ toast('Enter a quantity or select proofs before saving a draft.'); return null; }
@@ -6602,11 +6656,16 @@ async function deliverySaveEvent(p, sid, rev, photoChoice){
   };
   // If this finalizes a resumed Draft, that draft is removed in the SAME write - it never
   // shows up as both a draft and a final DN, and a failed save leaves the draft untouched
-  // (the removal only ever applies to `fresh`, which is discarded below on failure).
+  // (the removal only ever applies to `fresh`, which is discarded below on failure). A Draft
+  // created by Void & Reissue carries its origin onto the new Final event as an audit trail.
   let draftIdx = -1;
   if(st.draftId) draftIdx = record.events.findIndex(e=> e.id === st.draftId && e.status === 'draft');
   let removedDraft = null;
   if(draftIdx >= 0) removedDraft = record.events.splice(draftIdx, 1)[0];
+  if(removedDraft && removedDraft.reissueOfEventId){
+    event.reissuedFromEventId = removedDraft.reissueOfEventId;
+    event.reissuedFromDnNo = removedDraft.reissueOfDnNo;
+  }
   record.events.push(event);
   record.status = deliveryStatus(record);
 
@@ -6622,6 +6681,79 @@ async function deliverySaveEvent(p, sid, rev, photoChoice){
   return { project: fresh, record, event };
 }
 
+/* VOID & REISSUE confirmation - the reason is mandatory; OK stays disabled until non-blank. */
+function dlvVoidReasonDialog(dnNo){
+  return new Promise(res=>{
+    const o=document.createElement('div'); o.className='overlay';
+    o.innerHTML='<div class="dialog"><h3>Void Delivery Note</h3><p>'+esc(dnNo)+'</p>'
+      +'<div class="field"><label>Reason (required)</label><textarea data-voidreason placeholder="Why is this Delivery Note being voided?"></textarea></div>'
+      +'<div class="acts"><button class="btn btn-ghost" data-x="0">Cancel</button>'
+      +'<button class="btn btn-danger" data-x="1" data-voidok disabled>Void &amp; Create Replacement Draft</button></div></div>';
+    const ta = ()=> o.querySelector('[data-voidreason]');
+    o.addEventListener('input', ()=>{ o.querySelector('[data-voidok]').disabled = !ta().value.trim(); });
+    o.addEventListener('click', e=>{
+      if(e.target===o){ o.remove(); res(null); return; }
+      const x=e.target.closest('[data-x]'); if(!x) return;
+      if(x.dataset.x==='0'){ o.remove(); res(null); return; }
+      const reason = ta().value.trim(); if(!reason) return;
+      o.remove(); res(reason);
+    });
+    document.body.appendChild(o); ta().focus();
+  });
+}
+/* VOID & REISSUE — one atomic write: the original Final event is mutated ONLY on status/
+   voidedAt/voidReason (every other field, including dnNo, is untouched forever - never
+   overwritten, never deleted); ONE replacement Draft is created alongside it, prefilled from
+   the voided event's own lines. An original frozen proof is preselected in proofSel ONLY if
+   that exact proofId still exists as a LIVE proof on that TP item; otherwise proofSel is left
+   empty and the line is flagged proofMissing (never a substituted photo - see
+   dlvProofMissingWarnHtml). The Draft creates 0 dn-proof rows, exactly like any other Draft. */
+async function deliveryVoidAndReissue(p, sid, rev, eventId, reason){
+  if(!(await deliveryRequireCentral())) return null;
+  reason = String(reason||'').trim();
+  if(!reason) return null;
+
+  let fresh;
+  try{ fresh = await dbGet('projects', p.id); }
+  catch(e){ toast('Could not reach the Central Database: ' + (e.message||e)); return null; }
+  if(!fresh){ toast('Project not found in the Central Database.'); return null; }
+  const record = deliveryFind(fresh, sid, rev);
+  if(!record){ toast('Delivery record not found.'); return null; }
+  const event = record.events.find(e=> e.id === eventId);
+  if(!event){ toast('Delivery Note not found.'); return null; }
+  if(event.status === 'void'){ toast('This Delivery Note is already void.'); return null; }
+  if(event.status === 'draft'){ toast('A draft cannot be voided — use Delete Draft instead.'); return null; }
+  if(!deliveryEventIsFinal(event)){ toast('This Delivery Note cannot be voided.'); return null; }
+
+  const now = Date.now();
+  const prevStatus = event.status, prevRecordStatus = record.status;
+  event.status = 'void'; event.voidedAt = now; event.voidReason = reason;
+
+  const lines = (event.lines || []).map(l=>{
+    const out = { lineId: l.lineId, itemId: l.itemId || null, qtyDeliveredNow: l.qtyDeliveredNow, proofSel: [] };
+    const origProofIds = (l.proofs || []).map(pr=> pr.proofId).filter(Boolean);
+    if(origProofIds.length && l.itemId){
+      const live = new Set(dlvLiveProofs(fresh, l.itemId).map(x=> x.id));
+      const stillLive = origProofIds.filter(id=> live.has(id));
+      if(stillLive.length) out.proofSel = stillLive; else out.proofMissing = true;
+    }
+    return out;
+  });
+  const draft = { id: uid(), status: 'draft', createdAt: now, updatedAt: now,
+    receiverName: event.receiverName || '', receiverDate: event.receiverDate || '', lines,
+    reissueOfEventId: event.id, reissueOfDnNo: event.dnNo };
+  record.events.push(draft);
+  record.status = deliveryStatus(record);
+
+  try{ await dbPut('projects', fresh); }
+  catch(e){
+    event.status = prevStatus; delete event.voidedAt; delete event.voidReason;
+    record.events.pop(); record.status = prevRecordStatus;
+    toast('Save failed: ' + (e.message||e)); return null;
+  }
+  toast(event.dnNo + ' voided — replacement draft created');
+  return { project: fresh, record, event, draft };
+}
 /* Corrects the Original Qty used by the delivery tracker for ONE item —
    a fix to the tracking baseline only. Stored on the delivery record's own
    item snapshot (creating the record from the saved revision first if this

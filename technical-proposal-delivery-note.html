@@ -20,6 +20,11 @@
     always identical to the original. Which frozen photos print is event.lines[].pdfPhotoIds
     (max 6); with <= 6 photos all print, with MORE than 6 and no saved choice the page
     refuses to render (the Deliver screen asks the user to choose) - it never takes "the first 6".
+  * A voided event (event.status === 'void') renders its ORIGINAL frozen data completely
+    unchanged, with a VOID watermark/badge and the void date/reason added on top - it is an
+    audit copy, never a live document. A reissued Final event (event.reissuedFromDnNo set)
+    shows a small, non-dominant "Reissued from" reference; it otherwise uses only its OWN new
+    frozen snapshot.
   * STRICT PAGE RULE: exactly one delivered item = exactly one A4 page. Every page
     is a fixed 210 x 297 mm box (overflow hidden); the photo zone is the only
     flexible part, everything else has a fixed budget, long texts are line-clamped,
@@ -133,6 +138,13 @@
   .clause{ height:10mm; }               /* reserved: bilingual 3-business-day receipt clause is added in a later phase */
   .ft{ display:flex; justify-content:space-between; align-items:flex-end; border-top:.2mm solid var(--rule); padding-top:1.6mm; font-size:6.6px; color:var(--grey-soft); letter-spacing:.03em; height:6mm; }
 
+  .void-mark{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; overflow:hidden; pointer-events:none; z-index:5; }
+  .void-mark span{ font-family:'Cormorant Garamond',serif; font-weight:600; font-size:150px; letter-spacing:.12em; text-transform:uppercase;
+                    color:rgba(156,58,52,.14); transform:rotate(-30deg); white-space:nowrap; }
+  .void-badge{ position:absolute; top:4mm; right:15mm; background:#9C3A34; color:#fff; font-size:8px; font-weight:700; letter-spacing:.16em;
+               text-transform:uppercase; padding:1.6mm 3.6mm; border-radius:1mm; z-index:6; }
+  .void-note{ margin-top:1.6mm; font-size:8.5px; color:#9C3A34; font-weight:500; }
+  .reissue-note{ font-size:7.5px; color:var(--grey-soft); margin-top:1.2mm; }
   @page{ size:A4; margin:0; }
   @media print{
     html,body{ background:#fff; }
@@ -194,9 +206,12 @@ async function main(){
   const clientName = client.name || project.client || '';
   const clientAddr = [client.address1, client.city, client.postal].filter(Boolean).join(', ');
 
-  // "previously delivered" per line = everything recorded in EARLIER events of the same record
+  // "previously delivered" per line = everything recorded in EARLIER FINAL events of the same
+  // record (a status-less event is legacy-final; draft and void events never count here either -
+  // matching the Deliver screen's own deliveryDeliveredMap exactly).
+  const isFinalEvent = ev => !ev.status || ev.status === 'final';
   const prev = {};
-  (record.events || []).slice(0, evIndex).forEach(ev => (ev.lines || []).forEach(l => { prev[keyOf(l)] = (prev[keyOf(l)] || 0) + (Number(l.qtyDeliveredNow) || 0); }));
+  (record.events || []).slice(0, evIndex).filter(isFinalEvent).forEach(ev => (ev.lines || []).forEach(l => { prev[keyOf(l)] = (prev[keyOf(l)] || 0) + (Number(l.qtyDeliveredNow) || 0); }));
 
   const lines = (event.lines || []).filter(l => (Number(l.qtyDeliveredNow) || 0) > 0);
   const total = lines.length;
@@ -331,11 +346,16 @@ function pageHtml(ctx, line, it, itemNo, pageNo, prevQty, pk){
 
   const receiver = (event.receiverName || '').trim(), rdate = (event.receiverDate || '').trim();
   const desc = (it.description || '').trim();
+  const isVoid = event.status === 'void';
 
   return '<section class="dn-page" data-page="' + pageNo + '">'
+    + (isVoid ? '<div class="void-mark"><span>VOID</span></div><div class="void-badge">Void</div>' : '')
     + '<div class="hd"><div class="logo"><img src="logo.png" alt="Vista United"></div>'
     +   '<div class="ttl"><div class="h">Delivery Note</div><div class="h-ar ar">مذكرة تسليم</div>'
-    +   '<div class="meta"><b>No. ' + esc(event.dnNo) + '</b> &nbsp;·&nbsp; Delivery Date: <b>' + esc(event.dnDate) + '</b><br>Ref. Quotation: <b>' + esc(record.quotationNo) + '</b> · Rev ' + esc(record.quotationRev) + '</div></div></div>'
+    +   '<div class="meta"><b>No. ' + esc(event.dnNo) + '</b> &nbsp;·&nbsp; Delivery Date: <b>' + esc(event.dnDate) + '</b><br>Ref. Quotation: <b>' + esc(record.quotationNo) + '</b> · Rev ' + esc(record.quotationRev) + '</div>'
+    +     (isVoid ? '<div class="void-note">Voided: ' + esc(event.voidedAt ? new Date(event.voidedAt).toLocaleDateString('en-GB') : '—') + ' &nbsp;·&nbsp; Reason: ' + esc(event.voidReason || '—') + '</div>' : '')
+    +     (!isVoid && event.reissuedFromDnNo ? '<div class="reissue-note">Reissued from: ' + esc(event.reissuedFromDnNo) + '</div>' : '')
+    +   '</div></div>'
     + '<div class="rule"></div>'
     + '<div class="info">'
     +   '<div><div class="lbl">Delivered To<span class="ar">تسليم إلى</span></div><div class="nm">' + esc(clientName || '—') + '</div>' + (clientAddr ? '<div class="sub">' + esc(clientAddr) + ', Kingdom of Saudi Arabia</div>' : '<div class="sub">Kingdom of Saudi Arabia</div>') + '</div>'
