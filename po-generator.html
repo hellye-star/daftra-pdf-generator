@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PO Generator — Vista United</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&family=Cairo:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --dark: #1C1C1A; --mid: #6B6B67; --light: #ADADAA;
+    --rule: #D8D5CF; --cream: #FAF8F5; --white: #FFFFFF;
+    --ok: #3A7D52; --ok-bg: #EAF4EE; --warn: #B06B1A; --warn-bg: #FEF3E7;
+    --bad: #A33A2B; --bad-bg: #FBECE9; --info-bg: #F0F0EE;
+  }
+  body { font-family: 'Jost', 'Cairo', sans-serif; background: var(--cream); color: var(--dark); min-height: 100vh; font-size: 13px; }
+  button, input, select, textarea { font-family: inherit; font-size: 12.5px; color: var(--dark); }
+
+  .topbar { background: var(--dark); padding: 14px 28px; display: flex; align-items: center; gap: 12px; }
+  .topbar svg { width: 24px; height: 24px; flex-shrink: 0; }
+  .topbar-name { font-weight: 500; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #fff; }
+  .topbar-sub { font-weight: 300; font-size: 6.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--light); margin-top: 2px; }
+  .topbar-div { width: 1px; height: 24px; background: #444; margin: 0 8px; }
+  .topbar-tool { font-weight: 300; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--light); }
+  .topbar-nav { margin-left: auto; display: flex; gap: 18px; }
+  .topbar-nav a { color: var(--light); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; text-decoration: none; }
+  .topbar-nav a:hover { color: #fff; }
+
+  .layout { display: grid; grid-template-columns: 270px 1fr; min-height: calc(100vh - 52px); }
+  .side { border-right: 1px solid var(--rule); background: var(--white); padding: 20px 16px; }
+  .main { padding: 24px 32px 80px; max-width: 1180px; width: 100%; }
+
+  .lbl { font-size: 9px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--mid); }
+  .muted { color: var(--mid); }
+  .small { font-size: 11px; }
+  .btn { border: 1px solid var(--dark); background: var(--dark); color: #fff; padding: 7px 14px; cursor: pointer; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; }
+  .btn:hover { background: #333; }
+  .btn:disabled { background: var(--rule); border-color: var(--rule); color: var(--mid); cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--dark); }
+  .btn-ghost:hover { background: var(--info-bg); }
+  .btn-sm { padding: 4px 9px; font-size: 9px; }
+  .link { background: none; border: none; color: var(--dark); text-decoration: underline; cursor: pointer; padding: 0; font-size: 11px; }
+
+  .side h2 { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 400; margin-bottom: 12px; }
+  .draft-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .draft-row { text-align: left; border: 1px solid var(--rule); background: var(--cream); padding: 8px 10px; cursor: pointer; width: 100%; }
+  .draft-row:hover { border-color: var(--dark); }
+  .draft-row.active { border-color: var(--dark); background: var(--white); box-shadow: inset 3px 0 0 var(--dark); }
+  .draft-row .t { font-weight: 500; font-size: 12px; overflow-wrap: anywhere; }
+  .draft-row .s { font-size: 10.5px; color: var(--mid); margin-top: 2px; overflow-wrap: anywhere; }
+  .conn { margin-top: 18px; font-size: 10.5px; padding: 6px 8px; }
+
+  .pagehead { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .pagehead h1 { font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 400; font-size: 34px; line-height: 1; }
+  .savebar { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .savestate { font-size: 11px; color: var(--mid); }
+  .savestate.dirty { color: var(--warn); font-weight: 500; }
+
+  .card { background: var(--white); border: 1px solid var(--rule); margin-bottom: 16px; }
+  .card-h { padding: 12px 18px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .card-h h3 { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 400; }
+  .card-h .step { font-size: 9px; letter-spacing: 0.2em; color: var(--light); }
+  .card-b { padding: 14px 18px; }
+
+  .chip { display: inline-block; font-size: 9px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; white-space: nowrap; }
+  .chip-ok { background: var(--ok-bg); color: var(--ok); }
+  .chip-warn { background: var(--warn-bg); color: var(--warn); }
+  .chip-bad { background: var(--bad-bg); color: var(--bad); }
+  .chip-info { background: var(--info-bg); color: var(--mid); }
+
+  .banner { padding: 10px 14px; margin-bottom: 14px; border: 1px solid; font-size: 12px; line-height: 1.5; }
+  .banner-bad { background: var(--bad-bg); border-color: #E7B9B0; color: #6B241A; }
+  .banner-warn { background: var(--warn-bg); border-color: #F0CF9E; color: #6E430F; }
+  .banner-info { background: var(--info-bg); border-color: var(--rule); color: var(--dark); }
+  .banner .acts { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .banner ul { margin: 6px 0 0 18px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .inp { border: 1px solid var(--rule); background: var(--cream); padding: 6px 8px; width: 100%; }
+  .inp:focus { outline: none; border-color: var(--dark); background: #fff; }
+  .inp.err { border-color: var(--bad); background: var(--bad-bg); }
+  textarea.inp { resize: vertical; min-height: 34px; line-height: 1.45; }
+
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 5px 12px; font-size: 12px; }
+  .kv dt { color: var(--mid); }
+  .kv dd { overflow-wrap: anywhere; }
+
+  .sup-results { max-height: 320px; overflow: auto; border: 1px solid var(--rule); margin-top: 10px; }
+  .sup-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #EEECE8; align-items: center; }
+  .sup-row:last-child { border-bottom: none; }
+  .sup-row .n { font-weight: 500; overflow-wrap: anywhere; }
+  .sup-row .m { font-size: 11px; color: var(--mid); overflow-wrap: anywhere; }
+  .state { padding: 16px; text-align: center; color: var(--mid); font-size: 12px; }
+
+  table.items { width: 100%; border-collapse: collapse; }
+  table.items th { font-size: 9px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--mid); text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--rule); }
+  table.items td { padding: 7px 6px; border-bottom: 1px solid #EEECE8; vertical-align: top; }
+  table.items td.num, table.items th.num { text-align: right; }
+  .item { border-bottom: 1px solid #EEECE8; padding: 12px 0; }
+  .item:first-child { padding-top: 2px; }
+  .item-top { display: grid; grid-template-columns: 20px 22px 1fr auto; gap: 8px; align-items: start; }
+  .item-top input[type=checkbox] { margin-top: 9px; }
+  .item-no { color: var(--mid); padding-top: 6px; font-size: 12px; }
+  .item-desc textarea { min-height: 52px; }
+  .item-fields { display: grid; grid-template-columns: minmax(60px,.7fr) minmax(76px,.9fr) minmax(90px,1fr) minmax(140px,1.4fr) minmax(100px,1fr); gap: 8px 10px; margin: 8px 0 0 50px; align-items: start; }
+  .ifield { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .ifield .inp { min-width: 0; }
+  .inp:disabled { opacity: .45; }
+  .amt { padding-top: 5px; text-align: right; font-size: 13px; }
+  .item.excluded { background: #F7F6F3; color: var(--mid); padding: 10px 8px; }
+  .item.excluded .desc-ro { text-decoration: line-through; white-space: pre-wrap; }
+  .iss { color: var(--bad); font-size: 10.5px; margin-top: 3px; }
+  .calc { font-variant-numeric: tabular-nums; }
+  .src { font-size: 9px; color: var(--light); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .totals { margin-left: auto; max-width: 420px; }
+  .totals .row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #EEECE8; font-size: 12.5px; }
+  .totals .row.grand { font-weight: 600; font-size: 14px; border-bottom: 2px solid var(--dark); }
+  .policy { font-size: 11px; color: var(--mid); line-height: 1.6; margin-top: 10px; }
+  .policy summary { cursor: pointer; }
+
+  .ms-list { margin-top: 14px; }
+  .ms-row { display: grid; grid-template-columns: minmax(180px, 1fr) 76px 120px minmax(150px, 30%); gap: 10px; align-items: start; padding: 7px 0; border-bottom: 1px solid #EEECE8; }
+  .ms-head { border-bottom-color: var(--rule); padding-bottom: 5px; }
+  .ms-row textarea { resize: none; min-height: 32px; overflow: hidden; }
+  .ms-r { text-align: right; }
+  .ms-amt .calc { padding-top: 6px; }
+  .ms-due { padding-top: 6px; line-height: 1.45; }
+  .ms-mlbl { display: none; }
+  .radio { display: flex; gap: 8px; align-items: flex-start; margin: 5px 0; font-size: 12px; cursor: pointer; }
+  .blockers { list-style: none; }
+  .blockers li { padding: 5px 0; border-bottom: 1px solid #EEECE8; font-size: 12px; display: flex; gap: 8px; align-items: baseline; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--dark); color: #fff; padding: 10px 16px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 380px; }
+  .toast.show { opacity: 1; }
+  .phase { border: 1px dashed var(--rule); padding: 12px 14px; color: var(--mid); font-size: 12px; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { border-right: none; border-bottom: 1px solid var(--rule); }
+    .main { padding: 18px 16px 60px; }
+    .grid2 { grid-template-columns: 1fr; }
+    .item-fields { margin-left: 0; grid-template-columns: 1fr 1fr; }
+    .ms-head { display: none; }
+    .ms-row { grid-template-columns: 1fr 1fr; padding: 10px 0; }
+    .ms-label, .ms-due { grid-column: 1 / -1; }
+    .ms-label, .ms-pct, .ms-amt, .ms-due { display: flex; flex-direction: column; gap: 3px; }
+    .ms-mlbl { display: block; }
+    .ms-amt .calc { text-align: left; }
+    .ms-due { padding-top: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="1" y="1" width="10" height="10" stroke="#fff" stroke-width="1"/>
+    <rect x="15" y="1" width="10" height="10" stroke="#fff" stroke-width="1" opacity="0.5"/>
+    <rect x="1" y="15" width="10" height="10" stroke="#fff" stroke-width="1" opacity="0.5"/>
+    <rect x="15" y="15" width="10" height="10" stroke="#fff" stroke-width="1" opacity="0.3"/>
+  </svg>
+  <div>
+    <div class="topbar-name">Vista United Co.</div>
+    <div class="topbar-sub">Brand Experience Studio</div>
+  </div>
+  <div class="topbar-div"></div>
+  <div class="topbar-tool">PO Generator</div>
+  <nav class="topbar-nav">
+    <a href="index.html">Platform</a>
+    <a href="daftra-pdf-generator_1.html">Document Generator</a>
+  </nav>
+</div>
+
+<div class="layout">
+  <aside class="side">
+    <h2>Purchase orders</h2>
+    <button class="btn" id="newDraftBtn" style="width:100%">+ New PO draft</button>
+    <div class="draft-list" id="draftList"></div>
+    <div class="conn chip-info" id="connState">Checking PO storage…</div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════════════════
+   PO Generator — Phase 1 (drafts only)
+   Data never leaves this PC except Daftra supplier GETs through the local
+   read-only proxy (/daftra/...). No credentials in this page, no browser
+   storage. All server text is rendered through esc().
+   Rounding policy mirrors po_model.py exactly (see "How totals are
+   calculated" on the page).
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const CURRENCIES = { SAR:2, USD:2, EUR:2, GBP:2, AED:2, QAR:2, EGP:2, CNY:2, INR:2, TRY:2, KWD:3, BHD:3, OMR:3, JOD:3, JPY:0 };
+const TAX_LABELS = { unresolved:'Unresolved', taxable:'Taxable at rate', zero_rated:'Zero-rated (0%)', exempt:'Exempt', out_of_scope:'Out of scope' };
+// Fallback only — the server's /api/po/status value (po_model.DEFAULT_ITEM_TAX) is used when available.
+let DEFAULT_ITEM_TAX = { treatment: 'taxable', rate: '15', origin: 'default' };
+const DEFAULT_PAYMENT_TEXT = '50% advance payment; remaining 50% one calendar month after delivery.';
+const ACCEPTANCE_PAYMENT_TEXT = '50% advance payment; remaining 50% one calendar month after delivery and written acceptance.';
+const qs = new URLSearchParams(location.search);
+const SUPPLIER_PAGE_SIZE = Math.min(100, Math.max(1, parseInt(qs.get('supplierPageSize') || '100', 10) || 100));
+const SUPPLIER_MAX_PAGES = 50;
+
+const S = {
+  drafts: [], draft: null, rev: null, dirty: false, saving: false,
+  server: null,          // {computed, readiness, rev} from the last server response
+  banner: null,          // {kind, html}
+  fieldErrors: {},       // server validation errors keyed by path
+  sup: { status: 'idle', list: [], error: '', query: '', page: 0, pageCount: 0, partial: false,
+         review: null, reviewStatus: 'idle', reviewError: '', changing: false },
+};
+
+// ── utils ──────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"'`]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '`':'&#96;' }[c]));
+}
+function rid(prefix, n) {
+  const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const b = crypto.getRandomValues(new Uint8Array(n));
+  return prefix + Array.from(b, x => a[x % a.length]).join('');
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600); }
+function fmtTime(iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? String(iso) : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+const AR_DIGITS = { '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9','٫':'.' };
+function normDigits(s) { return String(s == null ? '' : s).replace(/[٠-٩۰-۹٫]/g, c => AR_DIGITS[c]).trim(); }
+
+// ── decimal (BigInt rationals; identical rules to po_model.py) ─────────────
+function parseDec(s, maxDp) {
+  s = normDigits(s);
+  if (!/^\d{1,15}(\.\d{1,8})?$/.test(s)) return null;
+  const [a, b = ''] = s.split('.');
+  if (b.length > maxDp) return null;
+  return { n: BigInt(a + b), d: 10n ** BigInt(b.length) };
+}
+const isZero = f => f.n === 0n;
+const cmp = (f, g) => { const x = f.n * g.d, y = g.n * f.d; return x < y ? -1 : x > y ? 1 : 0; };
+const mul = (f, g) => ({ n: f.n * g.n, d: f.d * g.d });
+function roundHalfUp(f, dp) { return (f.n * (10n ** BigInt(dp)) * 2n + f.d) / (2n * f.d); } // → BigInt minor units (f >= 0)
+function fmtMinor(m, dp) {
+  let s = (m < 0n ? -m : m).toString();
+  if (dp > 0) { s = s.padStart(dp + 1, '0'); s = s.slice(0, -dp) + '.' + s.slice(-dp); }
+  return (m < 0n ? '-' : '') + s;
+}
+function fmtExact(f) {
+  for (let dp = 0; dp < 20; dp++) { const sc = f.n * (10n ** BigInt(dp)); if (sc % f.d === 0n) return fmtMinor(sc / f.d, dp); }
+  return String(Number(f.n) / Number(f.d));
+}
+function money(v, cur) {
+  if (v == null) return '—';
+  const [i, f] = String(v).split('.');
+  return (cur ? cur + ' ' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (f != null ? '.' + f : '');
+}
+
+// ── field validation (mirrors the server) ──────────────────────────────────
+function checkNum(v, maxDp, allowZero, label) {
+  v = normDigits(v);
+  if (v === '') return null;
+  const f = parseDec(v, maxDp);
+  if (!f) return `${label}: plain number, max ${maxDp} decimals (digits and one dot)`;
+  if (!allowZero && isZero(f)) return `${label} must be greater than zero`;
+  return null;
+}
+function itemFieldErrors(it) {
+  const e = {};
+  const q = checkNum(it.qty, 3, false, 'Quantity'); if (q) e.qty = q;
+  const p = checkNum(it.unitPrice, 4, true, 'Unit price'); if (p) e.unitPrice = p;
+  if (it.tax.treatment === 'taxable' && it.tax.rate) {
+    const r = parseDec(it.tax.rate, 2);
+    if (!r || isZero(r) || cmp(r, { n: 100n, d: 1n }) > 0) e.rate = 'Rate: above 0, max 100, 2 decimals';
+  }
+  return e;
+}
+function clientErrors() {
+  const out = [];
+  (S.draft.items || []).forEach((it, i) => Object.values(itemFieldErrors(it)).forEach(m => out.push(`Item ${i + 1}: ${m}`)));
+  (S.draft.paymentTerms.milestones || []).forEach((m, i) => {
+    if (m.pct) { const f = parseDec(m.pct, 2); if (!f || isZero(f) || cmp(f, { n: 100n, d: 1n }) > 0) out.push(`Payment milestone ${i + 1}: percentage above 0, max 100`); }
+  });
+  return out;
+}
+
+// ── calculation (mirror of po_model.compute) ───────────────────────────────
+function compute(doc) {
+  const cur = doc.currency || '', dp = CURRENCIES[cur], basis = doc.priceTaxBasis || 'unresolved';
+  const lines = {}, invalid = [], taxUnres = [];
+  let net = 0n, tax = 0n, gross = 0n; const groups = {};
+  for (const it of doc.items) {
+    const row = { exact: null, amount: null, net: null, tax: null, gross: null, issues: [] };
+    const q = it.qty ? parseDec(it.qty, 3) : null;
+    const p = it.unitPrice !== '' ? parseDec(it.unitPrice, 4) : null;
+    if (!it.description.trim()) row.issues.push('description missing');
+    if (!it.unit.trim()) row.issues.push('unit missing');
+    if (!q || isZero(q)) row.issues.push('quantity missing');
+    if (!p) row.issues.push('unit price missing');
+    if (q && p) row.exact = fmtExact(mul(q, p));
+    const t = it.tax.treatment, rate = it.tax.rate ? parseDec(it.tax.rate, 2) : null;
+    if (t === 'unresolved') row.issues.push('tax treatment unresolved');
+    else if (t === 'taxable' && !rate) row.issues.push('tax rate missing');
+    else if (t === 'taxable' && basis === 'unresolved') row.issues.push('price tax basis (inclusive/exclusive) unresolved');
+    if (it.included) {
+      if (row.issues.some(x => x.endsWith('missing') && !x.includes('tax'))) invalid.push(it.id);
+      else if (row.issues.some(x => x.includes('tax'))) taxUnres.push(it.id);
+    }
+    if (dp != null && q && p) {
+      const amount = roundHalfUp(mul(q, p), dp);
+      row.amount = fmtMinor(amount, dp);
+      const taxOk = ['zero_rated', 'exempt', 'out_of_scope'].includes(t) || (t === 'taxable' && rate && basis !== 'unresolved');
+      if (taxOk) {
+        const scale = 10n ** BigInt(dp); let n, x;
+        if (t !== 'taxable') { n = amount; x = 0n; }
+        else if (basis === 'exclusive') { n = amount; x = roundHalfUp({ n: amount * rate.n, d: scale * rate.d * 100n }, dp); }
+        else { n = roundHalfUp({ n: amount * 100n * rate.d, d: scale * (100n * rate.d + rate.n) }, dp); x = amount - n; }
+        row.net = fmtMinor(n, dp); row.tax = fmtMinor(x, dp); row.gross = fmtMinor(n + x, dp);
+        if (it.included) {
+          net += n; tax += x; gross += n + x;
+          const key = t + (t === 'taxable' ? ':' + fmtExact(rate) : '');
+          const g = groups[key] || (groups[key] = { treatment: t, rate: t === 'taxable' ? fmtExact(rate) : '', net: 0n, tax: 0n });
+          g.net += n; g.tax += x;
+        }
+      }
+    }
+    lines[it.id] = row;
+  }
+  const included = doc.items.filter(i => i.included);
+  const status = dp == null ? 'currency_unresolved' : !included.length ? 'no_items' : invalid.length ? 'incomplete' : taxUnres.length ? 'tax_unresolved' : 'complete';
+  const complete = status === 'complete';
+  const totals = { status, currency: cur, dp,
+    net: complete ? fmtMinor(net, dp) : null, tax: complete ? fmtMinor(tax, dp) : null, gross: complete ? fmtMinor(gross, dp) : null,
+    taxGroups: complete ? Object.values(groups).map(g => ({ treatment: g.treatment, rate: g.rate, net: fmtMinor(g.net, dp), tax: fmtMinor(g.tax, dp) })) : [],
+    invalidItems: invalid, taxUnresolvedItems: taxUnres, includedCount: included.length, excludedCount: doc.items.length - included.length };
+  const ms = doc.paymentTerms.milestones || [];
+  const pcts = ms.map(m => m.pct ? parseDec(m.pct, 2) : null);
+  let pctOk = ms.length > 0 && pcts.every(Boolean);
+  if (pctOk) { const sum = pcts.reduce((a, f) => ({ n: a.n * f.d + f.n * a.d, d: a.d * f.d }), { n: 0n, d: 1n }); pctOk = cmp(sum, { n: 100n, d: 1n }) === 0; }
+  let msOut;
+  if (complete && pctOk) {
+    let alloc = 0n; const scale = 10n ** BigInt(dp);
+    msOut = ms.map((m, k) => { const a = k === ms.length - 1 ? gross - alloc : roundHalfUp({ n: gross * pcts[k].n, d: scale * pcts[k].d * 100n }, dp); alloc += a; return { id: m.id, pct: m.pct, amount: fmtMinor(a, dp) }; });
+  } else msOut = ms.map(m => ({ id: m.id, pct: m.pct, amount: null }));
+  return { lines, totals, milestones: msOut, milestonePctValid: pctOk };
+}
+function readiness(doc, c) {
+  const b = [];
+  const add = (code, message) => b.push({ code, message });
+  add('issuance_not_available', 'Issuing POs is not available in Phase 1 (drafts only).');
+  add('buyer_unconfirmed', 'Buyer company name, VAT number and address have not been confirmed.');
+  add('po_number_format_unconfirmed', 'PO number format and starting number have not been confirmed.');
+  if (!doc.supplier) add('supplier_missing', 'No Daftra supplier selected.');
+  if (!doc.currency) add('currency_missing', 'Currency not selected.');
+  const t = c.totals;
+  if (!t.includedCount) add('no_included_items', 'No included items.');
+  if (t.invalidItems.length) add('item_invalid', `${t.invalidItems.length} included item(s) missing description, unit, quantity or unit price.`);
+  if (t.taxUnresolvedItems.length) add('tax_unresolved', `Tax treatment unresolved on ${t.taxUnresolvedItems.length} included item(s).`);
+  if ((doc.paymentTerms.balanceTrigger || 'undecided') === 'undecided') add('payment_trigger_undecided', 'Balance payment trigger (delivery vs delivery + written acceptance) not decided.');
+  if (!c.milestonePctValid) add('payment_pct_invalid', 'Payment milestone percentages must be filled in and add up to 100%.');
+  return b;
+}
+
+// ── API ────────────────────────────────────────────────────────────────────
+async function api(method, path, body, rev) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (rev != null) headers['If-Match'] = String(rev);
+  let r;
+  try { r = await fetch(path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined, cache: 'no-store' }); }
+  catch (e) { return { status: 0, json: { ok: false, error: 'The local Vista server is not reachable. Nothing was saved.' } }; }
+  let json = null;
+  try { json = await r.json(); } catch (e) { json = { ok: false, error: r.status === 404 ? 'PO storage is not available on this server — restart the local Vista server (proxy.py) so it loads the PO routes.' : 'Unexpected response from the local server.' }; }
+  return { status: r.status, json };
+}
+
+async function checkConnection() {
+  const { status, json } = await api('GET', '/api/po/status');
+  const el = $('connState');
+  if (status === 200 && json.ok) {
+    const dt = json.data.defaults && json.data.defaults.newItemTax;
+    if (dt && TAX_LABELS[dt.treatment]) DEFAULT_ITEM_TAX = { treatment: dt.treatment, rate: String(dt.rate || ''), origin: 'default' };
+    el.className = 'conn chip-ok'; el.textContent = `PO storage connected · ${json.data.counts.drafts} draft(s) · Phase 1 (no issuance)`; return true; }
+  el.className = 'conn chip-bad'; el.textContent = json && json.error ? json.error : 'PO storage unavailable.';
+  return false;
+}
+async function loadDraftList() {
+  const { status, json } = await api('GET', '/api/po/drafts');
+  if (status === 200 && json.ok) {
+    S.drafts = json.data;
+    const el = $('connState'); el.className = 'conn chip-ok';
+    el.textContent = `PO storage connected · ${S.drafts.length} draft(s) · Phase 1 (no issuance)`;
+  }
+  renderDraftList();
+}
+
+function newDraftDoc() {
+  const ts = new Date().toISOString();
+  return {
+    id: rid('po_', 20), schema: 1, status: 'draft', title: '', currency: '', priceTaxBasis: 'unresolved',
+    supplier: null, items: [],
+    paymentTerms: { text: DEFAULT_PAYMENT_TEXT, isDraftDefault: true, balanceTrigger: 'undecided',
+      milestones: [ { id: 'ms_advance', pct: '50', label: 'Advance payment' },
+                    { id: 'ms_balance', pct: '50', label: 'Balance — one calendar month after delivery' } ] },
+    projectRef: '', deliveryLocation: '', notes: '', createdAt: ts, updatedAt: ts,
+  };
+}
+function newItem() {
+  return { id: rid('it_', 12), description: '', unit: '', qty: '', unitPrice: '', included: true,
+           tax: { ...DEFAULT_ITEM_TAX }, source: 'manual', createdAt: new Date().toISOString(), excludedAt: '' };
+}
+
+async function createDraft() {
+  if (!confirmDiscard()) return;
+  const doc = newDraftDoc();
+  const { status, json } = await api('POST', '/api/po/drafts', doc);
+  if (status === 201 && json.ok) { applyServer(json.data, true); history.replaceState(null, '', '?draft=' + encodeURIComponent(doc.id)); await loadDraftList(); toast('New PO draft created'); }
+  else showBanner('bad', esc(json.error || 'Could not create the draft.'));
+}
+async function openDraft(id, force) {
+  if (!force && !confirmDiscard()) return;
+  const { status, json } = await api('GET', '/api/po/drafts/' + encodeURIComponent(id));
+  if (status === 200 && json.ok) {
+    applyServer(json.data, true);
+    history.replaceState(null, '', '?draft=' + encodeURIComponent(id));
+  } else {
+    S.draft = null; renderMain();
+    showBanner('bad', esc(json.error || 'Could not open the draft.'));
+  }
+  renderDraftList();
+}
+function applyServer(d, replaceDoc) {
+  if (replaceDoc) { S.draft = d.data; S.dirty = false; S.banner = null; S.fieldErrors = {}; S.sup.changing = false; S.sup.review = null; }
+  S.rev = d.rev; S.server = { computed: d.computed, readiness: d.readiness, rev: d.rev };
+  renderMain();
+}
+
+async function saveDraft() {
+  if (!S.draft || S.saving) return;
+  const errs = clientErrors();
+  if (errs.length) { showBanner('bad', 'Fix these values before saving (nothing was saved):<ul>' + errs.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul>'); return; }
+  S.saving = true; updateSaveState();
+  const sent = JSON.stringify(S.draft);
+  const { status, json } = await api('PUT', '/api/po/drafts/' + encodeURIComponent(S.draft.id), S.draft, S.rev);
+  S.saving = false;
+  if (status === 200 && json.ok) {
+    const unchangedSince = JSON.stringify(S.draft) === sent;
+    S.fieldErrors = {};
+    if (unchangedSince) applyServer(json.data, true);
+    else { S.rev = json.data.rev; S.server = { computed: json.data.computed, readiness: json.data.readiness, rev: json.data.rev }; renderMain(); }
+    S.banner = null; renderBanner();
+    await loadDraftList();
+    toast('Draft saved · revision ' + json.data.rev);
+  } else if (status === 409 && json.code === 'rev_conflict') {
+    showBanner('bad', `<b>Not saved — this draft was changed in another tab or session.</b> The saved version is now revision ${esc(json.currentRev)}; this tab loaded revision ${esc(S.rev)}. Nothing was overwritten, and your unsaved changes are still on this screen.
+      <div class="acts"><button class="btn btn-sm" data-act="reload-latest">Load latest saved version (discard my changes)</button>
+      <button class="btn btn-sm btn-ghost" data-act="download-copy">Download my unsaved copy (JSON)</button></div>`);
+    loadDraftList();
+  } else if (status === 400 && json.code === 'invalid') {
+    S.fieldErrors = {}; (json.errors || []).forEach(e => { S.fieldErrors[e.path] = e.message; });
+    showBanner('bad', esc(json.error) + '<ul>' + (json.errors || []).map(e => `<li><code>${esc(e.path)}</code> — ${esc(e.message)}</li>`).join('') + '</ul>');
+  } else {
+    showBanner('bad', esc(json.error || 'Save failed. Nothing was saved.'));
+  }
+  updateSaveState();
+}
+function downloadCopy() {
+  const blob = new Blob([JSON.stringify(S.draft, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = S.draft.id + '-unsaved.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function confirmDiscard() { return !S.dirty || confirm('This draft has unsaved changes. Discard them?'); }
+function markDirty() { S.dirty = true; updateSaveState(); }
+
+// ── Daftra suppliers (GET-only local proxy) ────────────────────────────────
+function pickSupplier(x) {   // whitelist — never keep password / login / IP fields
+  x = x || {};
+  const name = (x.business_name || '').trim() || [x.first_name, x.last_name].filter(Boolean).join(' ').trim();
+  return {
+    id: String(x.id || ''), supplierNumber: String(x.supplier_number || ''), name,
+    snapshot: {
+      businessName: x.business_name || '', firstName: x.first_name || '', lastName: x.last_name || '',
+      email: x.email || '', phone1: x.phone1 || '', phone2: x.phone2 || '',
+      address1: x.address1 || '', address2: x.address2 || '', city: x.city || '', state: x.state || '',
+      postalCode: x.postal_code || '', countryCode: x.country_code || '',
+      vatNumber: x.bn1 || '', vatLabel: x.bn1_label || '', crNumber: x.bn2 || '', crLabel: x.bn2_label || '',
+      defaultCurrency: x.default_currency_code || '',
+    },
+  };
+}
+function daftraError(status, json) {
+  if (status === 0) return 'The local Vista server is not reachable.';
+  if (status === 503) return 'Daftra is not configured on the local server (config.json).';
+  if (status === 502) return 'The local server could not reach Daftra (network or Daftra outage).';
+  if (status === 401 || status === 403) return 'Daftra refused the request — check the API key configured on the local server.';
+  if (status === 404) return 'Daftra returned "not found".';
+  return `Daftra returned an error (HTTP ${status}).`;
+}
+async function daftraGet(path) {
+  let r;
+  try { r = await fetch('/daftra' + path, { cache: 'no-store' }); } catch (e) { return { status: 0, json: null }; }
+  let json = null; try { json = await r.json(); } catch (e) {}
+  return { status: r.status, json };
+}
+async function loadSuppliers() {
+  const s = S.sup;
+  s.status = 'loading'; s.error = ''; s.list = []; s.page = 0; s.pageCount = 0; s.partial = false;
+  renderSupplier();
+  let page = 1, pageCount = 1;
+  const list = [];
+  while (page <= pageCount && page <= SUPPLIER_MAX_PAGES) {
+    const { status, json } = await daftraGet(`/suppliers.json?limit=${SUPPLIER_PAGE_SIZE}&page=${page}`);
+    if (status !== 200 || !json || !Array.isArray(json.data)) { s.status = 'error'; s.error = daftraError(status, json); renderSupplier(); return; }
+    json.data.forEach(row => { const p = pickSupplier(row.Supplier || row); if (p.id) list.push(p); });
+    pageCount = parseInt(json.pagination && json.pagination.page_count, 10) || 1;
+    s.page = page; s.pageCount = pageCount; renderSupplier();
+    page++;
+  }
+  s.partial = pageCount > SUPPLIER_MAX_PAGES;
+  s.list = list; s.status = 'ready'; renderSupplier();
+}
+function normSearch(s) {
+  return normDigits(s).toLowerCase().replace(/[ً-ٰٟـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim();
+}
+function supplierMatches(p, q) {
+  if (!q) return true;
+  const hay = normSearch([p.name, p.supplierNumber, p.id, p.snapshot.vatNumber, p.snapshot.crNumber, p.snapshot.email, p.snapshot.phone1, p.snapshot.phone2, p.snapshot.city].join(' '));
+  return normSearch(q).split(' ').every(t => hay.includes(t));
+}
+async function reviewSupplier(id) {
+  const s = S.sup;
+  s.review = null; s.reviewStatus = 'loading'; s.reviewError = ''; s.reviewId = id; renderSupplier();
+  const { status, json } = await daftraGet(`/suppliers/${encodeURIComponent(id)}.json`);
+  if (s.reviewId !== id) return;
+  if (status === 200 && json && json.data && json.data.Supplier) { s.review = pickSupplier(json.data.Supplier); s.reviewStatus = 'ready'; }
+  else { s.reviewStatus = 'error'; s.reviewError = daftraError(status, json); }
+  renderSupplier();
+}
+function confirmSupplier() {
+  const r = S.sup.review; if (!r) return;
+  if (S.draft.supplier && S.draft.supplier.daftraId !== r.id &&
+      !confirm(`Replace the selected supplier "${S.draft.supplier.name}" with "${r.name}"?`)) return;
+  S.draft.supplier = { daftraId: r.id, name: r.name, supplierNumber: r.supplierNumber, confirmedAt: new Date().toISOString(), snapshot: r.snapshot };
+  S.sup.review = null; S.sup.reviewStatus = 'idle'; S.sup.changing = false;
+  markDirty(); renderSupplier(); refreshDerived();
+  toast('Supplier selected — save the draft to keep it');
+}
+
+// ── rendering ──────────────────────────────────────────────────────────────
+function renderDraftList() {
+  const el = $('draftList');
+  if (!S.drafts.length) { el.innerHTML = '<div class="muted small" style="padding:8px 2px">No drafts yet.</div>'; return; }
+  el.innerHTML = S.drafts.map(d => `<button class="draft-row ${S.draft && S.draft.id === d.id ? 'active' : ''}" data-act="open" data-id="${esc(d.id)}">
+      <div class="t" dir="auto">${esc(d.title || '(untitled draft)')}</div>
+      <div class="s" dir="auto">${esc(d.supplierName || 'No supplier')} · ${esc(d.itemCount)} item(s)${d.currency ? ' · ' + esc(d.currency) : ''}</div>
+      <div class="s">Rev ${esc(d.rev)} · ${esc(fmtTime(d.updatedAt))}</div></button>`).join('');
+}
+
+function showBanner(kind, html) { S.banner = { kind, html }; renderBanner(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function renderBanner() {
+  const el = $('bannerArea'); if (!el) return;
+  el.innerHTML = S.banner ? `<div class="banner banner-${S.banner.kind}">${S.banner.html}</div>` : '';
+}
+function updateSaveState() {
+  const el = $('saveState'); if (!el) return;
+  if (S.saving) { el.className = 'savestate'; el.textContent = 'Saving…'; }
+  else if (S.dirty) { el.className = 'savestate dirty'; el.textContent = 'Unsaved changes'; }
+  else { el.className = 'savestate'; el.textContent = `Saved · revision ${S.rev}`; }
+  const b = $('saveBtn'); if (b) b.disabled = S.saving || !S.dirty;
+}
+
+function renderMain() {
+  const m = $('main');
+  if (!S.draft) {
+    m.innerHTML = `<div class="pagehead"><h1>PO Generator</h1></div><div id="bannerArea"></div>
+      <div class="card"><div class="card-b">
+        <p style="margin-bottom:10px">Create a purchase-order draft, choose the Daftra supplier, enter the items and review totals and payment terms. Drafts are saved on this PC and can be resumed at any time.</p>
+        <p class="muted small" style="margin-bottom:14px">Phase 1: drafts only. Uploading a supplier quotation (Phase 2) and issuing / exporting a final PO come later.</p>
+        <button class="btn" data-act="new">+ New PO draft</button></div></div>`;
+    renderBanner(); return;
+  }
+  const d = S.draft;
+  m.innerHTML = `
+    <div class="pagehead">
+      <h1>PO draft</h1>
+      <span class="chip chip-warn">Draft · not issued</span>
+      <div class="savebar"><span id="saveState" class="savestate"></span><button class="btn" id="saveBtn" data-act="save">Save draft</button></div>
+    </div>
+    <div id="bannerArea"></div>
+
+    <div class="card"><div class="card-b grid2">
+      <label class="field"><span class="lbl">Draft title (internal)</span><input class="inp" dir="auto" data-f="title" maxlength="200" value="${esc(d.title)}" placeholder="e.g. Signage fabrication — Riyadh showroom"></label>
+      <div class="field"><span class="lbl">Draft reference</span><div class="small muted" style="padding-top:6px">${esc(d.id)} · created ${esc(fmtTime(d.createdAt))}<br>No PO number is assigned until final issue (not available in Phase 1).</div></div>
+    </div></div>
+
+    <div class="card"><div class="card-h"><span class="step">00</span><h3>Supplier quotation</h3><span class="chip chip-info">Phase 2</span></div>
+      <div class="card-b"><div class="phase">Uploading and reading the supplier's quotation (original pages beside the extracted values) arrives in Phase 2. In this phase, items are entered manually.</div></div></div>
+
+    <div class="card"><div class="card-h"><span class="step">01</span><h3>Buyer</h3><span class="chip chip-warn">Not confirmed</span></div>
+      <div class="card-b small">Buyer company name, VAT number, CR number and address have <b>not been confirmed</b> for purchase orders. They will be set and confirmed before issuing is enabled. Defaults found elsewhere on the platform are not treated as verified.</div></div>
+
+    <div class="card"><div class="card-h"><span class="step">02</span><h3>Supplier (Daftra)</h3><span id="supChip"></span></div>
+      <div class="card-b" id="supplierArea"></div></div>
+
+    <div class="card"><div class="card-h"><span class="step">03</span><h3>Items</h3><span id="itemsChip"></span>
+      <div style="margin-left:auto"><button class="btn btn-sm" data-act="add-item">+ Add item</button></div></div>
+      <div class="card-b" id="itemsArea"></div></div>
+
+    <div class="card"><div class="card-h"><span class="step">04</span><h3>Currency, tax &amp; totals</h3></div>
+      <div class="card-b" id="totalsArea"></div></div>
+
+    <div class="card"><div class="card-h"><span class="step">05</span><h3>Payment terms</h3><span class="chip chip-warn">Editable draft default · not confirmed</span></div>
+      <div class="card-b" id="paymentArea"></div></div>
+
+    <div class="card"><div class="card-h"><span class="step">06</span><h3>Delivery &amp; reference</h3></div>
+      <div class="card-b grid2">
+        <label class="field"><span class="lbl">Project reference (optional)</span><input class="inp" dir="auto" data-f="projectRef" maxlength="200" value="${esc(d.projectRef)}"></label>
+        <label class="field"><span class="lbl">Delivery location (optional)</span><input class="inp" dir="auto" data-f="deliveryLocation" maxlength="500" value="${esc(d.deliveryLocation)}"></label>
+        <label class="field" style="grid-column:1/-1"><span class="lbl">Internal notes (not printed)</span><textarea class="inp" dir="auto" rows="3" data-f="notes" maxlength="5000">${esc(d.notes)}</textarea></label>
+      </div></div>
+
+    <div class="card"><div class="card-h"><span class="step">07</span><h3>Review &amp; issue</h3></div>
+      <div class="card-b" id="readinessArea"></div></div>`;
+  renderBanner(); renderSupplier(); renderItems(); renderTotals(); renderPayment(); refreshDerived(); updateSaveState();
+}
+
+function kvSupplier(p) {
+  const s = p.snapshot, row = (k, v) => v ? `<dt>${esc(k)}</dt><dd dir="auto">${esc(v)}</dd>` : '';
+  const addr = [s.address1, s.address2, s.city, s.state, s.postalCode, s.countryCode].filter(Boolean).join(', ');
+  const person = [s.firstName, s.lastName].filter(Boolean).join(' ');
+  return `<dl class="kv">
+    <dt>Daftra name</dt><dd dir="auto"><b>${esc(p.name || '(no name in Daftra)')}</b></dd>
+    <dt>Daftra supplier ID</dt><dd>${esc(p.id || p.daftraId)}${p.supplierNumber ? ' · supplier no. ' + esc(p.supplierNumber) : ''}</dd>
+    ${row('Contact person', person && person !== p.name ? person : '')}
+    <dt>${esc(s.vatLabel || 'VAT number')}</dt><dd>${s.vatNumber ? esc(s.vatNumber) : '<span class="chip chip-warn">Not recorded in Daftra</span>'}</dd>
+    ${row(s.crLabel || 'CR number', s.crNumber)}
+    <dt>Address</dt><dd dir="auto">${addr ? esc(addr) : '<span class="muted">Not recorded in Daftra</span>'}</dd>
+    ${row('Phone', [s.phone1, s.phone2].filter(Boolean).join(' / '))}
+    ${row('Email', s.email)}
+    ${row('Default currency', s.defaultCurrency)}
+  </dl>`;
+}
+
+function renderSupplier() {
+  const area = $('supplierArea'); if (!area || !S.draft) return;
+  const d = S.draft, s = S.sup;
+  const chip = $('supChip');
+  if (chip) chip.innerHTML = d.supplier ? '<span class="chip chip-ok">Selected</span>' : '<span class="chip chip-bad">Required</span>';
+  if (d.supplier && !s.changing) {
+    const sup = { ...d.supplier, id: d.supplier.daftraId };
+    area.innerHTML = kvSupplier(sup) + `<p class="small muted" style="margin-top:10px">Snapshot taken from Daftra on ${esc(fmtTime(d.supplier.confirmedAt))}. Daftra records are never created or changed from here.</p>
+      <div style="margin-top:10px"><button class="btn btn-sm btn-ghost" data-act="change-supplier">Change supplier</button></div>`;
+    return;
+  }
+  if (s.status === 'idle') { loadSuppliers(); return; }
+  let body = '';
+  if (s.status === 'loading') body = `<div class="state">Loading suppliers from Daftra…${s.pageCount > 1 ? ` page ${esc(s.page)} of ${esc(s.pageCount)}` : ''}</div>`;
+  else if (s.status === 'error') body = `<div class="banner banner-bad" style="margin:0"><b>Daftra suppliers unavailable.</b> ${esc(s.error)}<div class="acts"><button class="btn btn-sm" data-act="retry-suppliers">Retry</button></div></div>`;
+  else if (!s.list.length) body = `<div class="state">Daftra returned no suppliers. Suppliers are not created from here — add the supplier in Daftra, then <button class="link" data-act="retry-suppliers">refresh</button>.</div>`;
+  else {
+    const matches = s.list.filter(p => supplierMatches(p, s.query));
+    const shown = matches.slice(0, 50);
+    body = `<div class="small muted" style="margin-top:6px">${esc(s.list.length)} supplier(s) loaded from Daftra${s.pageCount > 1 ? ` (${esc(s.pageCount)} pages)` : ''}${s.partial ? ' — <b>list truncated</b>, refine your search in Daftra' : ''} · <button class="link" data-act="retry-suppliers">Refresh</button></div>`;
+    body += matches.length
+      ? `<div class="sup-results">${shown.map(p => `<div class="sup-row"><div><div class="n" dir="auto">${esc(p.name || '(no name)')}</div>
+          <div class="m" dir="auto">ID ${esc(p.id)}${p.supplierNumber ? ' · no. ' + esc(p.supplierNumber) : ''}${p.snapshot.vatNumber ? ' · VAT ' + esc(p.snapshot.vatNumber) : ''}${p.snapshot.city ? ' · ' + esc(p.snapshot.city) : ''}</div></div>
+          <button class="btn btn-sm btn-ghost" data-act="review-supplier" data-id="${esc(p.id)}">Review</button></div>`).join('')}</div>
+          ${matches.length > shown.length ? `<div class="small muted" style="margin-top:6px">Showing ${shown.length} of ${matches.length} — refine the search.</div>` : ''}`
+      : `<div class="state">No Daftra supplier matches “${esc(s.query)}”. Suppliers are not created or renamed from here — add or correct it in Daftra, then refresh.</div>`;
+  }
+  let review = '';
+  if (s.reviewStatus === 'loading') review = '<div class="state">Reading the latest supplier record from Daftra…</div>';
+  else if (s.reviewStatus === 'error') review = `<div class="banner banner-bad" style="margin:10px 0 0">${esc(s.reviewError)}<div class="acts"><button class="btn btn-sm" data-act="review-supplier" data-id="${esc(s.reviewId)}">Retry</button></div></div>`;
+  else if (s.reviewStatus === 'ready' && s.review) review = `<div class="card" style="margin:12px 0 0;border-color:var(--dark)"><div class="card-h"><span class="lbl">Confirm supplier details</span></div><div class="card-b">
+      ${kvSupplier(s.review)}
+      <div style="margin-top:12px;display:flex;gap:8px"><button class="btn btn-sm" data-act="confirm-supplier">Use this supplier</button><button class="btn btn-sm btn-ghost" data-act="cancel-review">Cancel</button></div></div></div>`;
+  area.innerHTML = `<div style="display:flex;gap:8px;align-items:center">
+      <input class="inp" id="supSearch" dir="auto" placeholder="Search by name, VAT, supplier no., phone, email…" value="${esc(s.query)}" ${s.status !== 'ready' ? 'disabled' : ''}>
+      ${d.supplier ? '<button class="btn btn-sm btn-ghost" data-act="keep-supplier">Keep current</button>' : ''}</div>${body}${review}`;
+  const inp = $('supSearch');
+  if (inp && document.activeElement !== inp && s.status === 'ready' && s._focus) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); s._focus = false; }
+}
+
+function taxCell(it) {
+  return `<select class="inp" data-item="${esc(it.id)}" data-if="treatment">${Object.entries(TAX_LABELS).map(([k, v]) => `<option value="${k}" ${it.tax.treatment === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
+    <input class="inp" style="margin-top:4px" data-item="${esc(it.id)}" data-if="rate" inputmode="decimal" placeholder="rate %" value="${esc(it.tax.rate)}" ${it.tax.treatment === 'taxable' ? '' : 'disabled'}>
+    <div class="src" id="taxorig-${esc(it.id)}">${taxOriginLabel(it)}</div>`;
+}
+function taxOriginLabel(it) {
+  if (it.tax.origin === 'default') return 'Default VAT — editable';
+  if (it.tax.origin === 'user') return 'Set by you';
+  return '';
+}
+function updateTaxOrigin(it) { const el = $('taxorig-' + it.id); if (el) el.textContent = taxOriginLabel(it); }
+function renderItems() {
+  const area = $('itemsArea'); if (!area) return;
+  const inc = S.draft.items.filter(i => i.included), exc = S.draft.items.filter(i => !i.included);
+  const f = (label, html, cls) => `<label class="ifield ${cls || ''}"><span class="lbl">${label}</span>${html}</label>`;
+  const rows = inc.map((it, i) => `<div class="item" data-row="${esc(it.id)}">
+      <div class="item-top">
+        <input type="checkbox" checked data-act="exclude" data-id="${esc(it.id)}" title="Untick to exclude from the PO" aria-label="Included in PO">
+        <span class="item-no">${i + 1}</span>
+        <div class="item-desc"><textarea class="inp" dir="auto" rows="2" data-item="${esc(it.id)}" data-if="description" maxlength="5000" placeholder="Full description / specification (multiple lines allowed)" aria-label="Description">${esc(it.description)}</textarea>
+          <div class="src">Manual entry</div><div class="iss" id="iss-${esc(it.id)}"></div></div>
+        <button class="btn btn-sm btn-ghost" data-act="exclude" data-id="${esc(it.id)}" tabindex="-1" title="Exclude (keyboard: untick the checkbox)">Exclude</button>
+      </div>
+      <div class="item-fields">
+        ${f('Unit', `<input class="inp" dir="auto" data-item="${esc(it.id)}" data-if="unit" maxlength="40" value="${esc(it.unit)}" placeholder="pcs">`)}
+        ${f('Quantity', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="qty" value="${esc(it.qty)}">`)}
+        ${f('Unit price', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="unitPrice" value="${esc(it.unitPrice)}">`)}
+        ${f('Tax treatment', taxCell(it), 'ifield-tax')}
+        <div class="ifield"><span class="lbl" style="text-align:right">Line amount</span><div class="calc amt" id="amt-${esc(it.id)}"></div></div>
+      </div></div>`).join('');
+  const excRows = exc.map(it => `<div class="item excluded">
+      <div class="item-top"><span></span><span class="item-no">—</span>
+        <div class="item-desc"><div class="desc-ro" dir="auto">${esc(it.description || '(no description)')}</div>
+          <div class="small muted" style="margin-top:4px">${esc(it.unit || '—')} · qty ${esc(it.qty || '—')} · unit price ${esc(it.unitPrice || '—')} · ${esc(TAX_LABELS[it.tax.treatment])}${it.tax.rate ? ' ' + esc(it.tax.rate) + '%' : ''}</div>
+          <div class="src">Excluded ${esc(fmtTime(it.excludedAt))} — kept in the draft, omitted from PO totals</div></div>
+        <button class="btn btn-sm" data-act="restore" data-id="${esc(it.id)}">Restore</button></div></div>`).join('');
+  area.innerHTML = (inc.length ? `<div class="items">${rows}</div>`
+      : `<div class="state">No included items. Add items manually${exc.length ? ' or restore an excluded item' : ''}.</div>`)
+    + (exc.length ? `<details style="margin-top:14px" open><summary class="lbl" style="cursor:pointer">Excluded items (${exc.length})</summary><div class="items">${excRows}</div></details>` : '');
+  const chip = $('itemsChip');
+  if (chip) chip.innerHTML = `<span class="chip chip-info">${inc.length} included · ${exc.length} excluded</span>`;
+}
+
+function renderTotals() {
+  const area = $('totalsArea'); if (!area) return;
+  const d = S.draft;
+  const supCur = d.supplier && d.supplier.snapshot.defaultCurrency;
+  area.innerHTML = `<div class="grid2">
+      <label class="field"><span class="lbl">PO currency</span>
+        <select class="inp" data-f="currency"><option value="" ${!d.currency ? 'selected' : ''}>— Not selected (unresolved) —</option>${Object.keys(CURRENCIES).map(c => `<option ${d.currency === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
+        ${supCur && supCur !== d.currency && CURRENCIES[supCur] != null ? `<button class="link" data-act="use-sup-currency" style="align-self:flex-start">Use the supplier's Daftra default (${esc(supCur)})</button>` : ''}</label>
+      <label class="field"><span class="lbl">Unit prices are…</span>
+        <select class="inp" data-f="priceTaxBasis">
+          <option value="unresolved" ${d.priceTaxBasis === 'unresolved' ? 'selected' : ''}>— Not decided (unresolved) —</option>
+          <option value="exclusive" ${d.priceTaxBasis === 'exclusive' ? 'selected' : ''}>Exclusive of tax (tax added on top)</option>
+          <option value="inclusive" ${d.priceTaxBasis === 'inclusive' ? 'selected' : ''}>Inclusive of tax (tax already in the price)</option></select></label>
+    </div>
+    <div style="margin-top:12px;padding:10px 12px;background:var(--cream);border:1px solid var(--rule);display:flex;gap:8px;align-items:center;flex-wrap:wrap" class="small">
+      <span class="lbl">Set tax treatment on all included items</span>
+      <select class="inp" id="bulkTreat" style="width:auto">${Object.entries(TAX_LABELS).filter(([k]) => k !== 'unresolved').map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('')}</select>
+      <input class="inp" id="bulkRate" style="width:80px" inputmode="decimal" placeholder="rate %">
+      <button class="btn btn-sm btn-ghost" data-act="bulk-tax">Apply</button>
+      <span class="muted">New items start at standard VAT ${esc(DEFAULT_ITEM_TAX.rate)}% (editable). Saved choices — including “Unresolved” — are never changed automatically.</span></div>
+    <div style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap">
+      <details class="policy" style="flex:1;min-width:260px"><summary>How totals are calculated (rounding policy)</summary>
+        <ul style="margin:6px 0 0 16px">
+          <li>Quantity: above 0, up to 3 decimals. Unit price: up to 4 decimals. Digits and one dot only (Arabic-Indic digits are converted).</li>
+          <li>Line amount = quantity × unit price, rounded once to the currency's smallest unit (half-up).</li>
+          <li>Tax is calculated and rounded per line. Exclusive prices: tax = line × rate. Inclusive prices: net = line × 100 ÷ (100 + rate), tax = line − net — VAT is never added on top of an inclusive price.</li>
+          <li>The inclusive/exclusive choice is separate from the VAT rate and must be set explicitly.</li>
+          <li>Totals are sums of the rounded lines. Excluded items are never counted.</li>
+          <li>Nothing is rounded until a currency is chosen. The server recalculates everything on each save.</li>
+        </ul></details>
+      <div class="totals" id="totalsBox" style="flex:1;min-width:280px"></div>
+    </div>`;
+}
+
+function autoGrow(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+window.addEventListener('resize', () => document.querySelectorAll('[data-mf="label"]').forEach(autoGrow));
+function renderPayment() {
+  const area = $('paymentArea'); if (!area) return;
+  const pt = S.draft.paymentTerms;
+  const trig = (v, label, note) => `<label class="radio"><input type="radio" name="trig" data-f="balanceTrigger" value="${v}" ${pt.balanceTrigger === v ? 'checked' : ''}><span>${label}${note ? `<br><span class="muted small">${note}</span>` : ''}</span></label>`;
+  area.innerHTML = `<div class="grid2">
+      <div class="field"><span class="lbl">Payment terms wording</span>
+        <textarea class="inp" dir="auto" rows="3" data-f="paymentText" maxlength="2000">${esc(pt.text)}</textarea>
+        <span class="small muted">${pt.isDraftDefault ? 'Editable draft default — not a confirmed choice.' : 'Edited wording.'} “One calendar month” is kept as written; it is not converted to 30 days.</span>
+        <div id="wordingHint"></div></div>
+      <div class="field"><span class="lbl">Balance payment is due after…</span>
+        ${trig('undecided', '<b>Not decided yet</b>', 'Blocks final issue until chosen.')}
+        ${trig('delivery', 'Delivery date + one calendar month', '')}
+        ${trig('delivery_written_acceptance', 'Delivery <b>and written acceptance</b> + one calendar month', 'Proposed as the more protective option — your decision.')}
+      </div></div>
+    <div class="ms-list">
+      <div class="ms-row ms-head"><span class="lbl">Milestone</span><span class="lbl ms-r">%</span><span class="lbl ms-r">Amount</span><span class="lbl">Due date</span></div>
+      ${pt.milestones.map((m, k) => `<div class="ms-row">
+        <label class="ms-label"><span class="lbl ms-mlbl">Milestone</span><textarea class="inp" dir="auto" rows="1" data-ms="${esc(m.id)}" data-mf="label" maxlength="200">${esc(m.label)}</textarea></label>
+        <label class="ms-pct"><span class="lbl ms-mlbl">%</span><input class="inp" style="text-align:right" inputmode="decimal" data-ms="${esc(m.id)}" data-mf="pct" value="${esc(m.pct)}"></label>
+        <div class="ms-amt"><span class="lbl ms-mlbl">Amount</span><div class="calc ms-r" id="msamt-${esc(m.id)}"></div></div>
+        <div class="ms-due small muted"><span class="lbl ms-mlbl">Due date</span>${k === 0 ? 'On PO acceptance (to be confirmed)' : 'Set once the delivery / acceptance date exists'}</div>
+      </div>`).join('')}
+    </div>
+    <div id="msNote" class="small" style="margin-top:6px"></div>`;
+  area.querySelectorAll('[data-mf="label"]').forEach(autoGrow);
+}
+
+// Recompute derived values without re-rendering inputs (keeps focus/caret).
+function refreshDerived() {
+  if (!S.draft) return;
+  const d = S.draft, c = compute(d), cur = d.currency;
+  d.items.forEach(it => {
+    const row = c.lines[it.id], el = $('amt-' + it.id), iss = $('iss-' + it.id);
+    const fe = itemFieldErrors(it);
+    ['qty', 'unitPrice', 'rate'].forEach(f => { const inp = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="${f}"]`); if (inp) inp.classList.toggle('err', !!fe[f] || !!S.fieldErrors[`items[${d.items.indexOf(it)}].${f === 'rate' ? 'tax.rate' : f}`]); });
+    if (el) {
+      if (row.amount != null) el.innerHTML = `${esc(money(row.amount))}<div class="src">calculated</div>` + (row.tax != null ? `<div class="small muted">tax ${esc(money(row.tax))}</div>` : '');
+      else if (row.exact != null) el.innerHTML = `${esc(row.exact)}<div class="src">exact · choose currency</div>`;
+      else el.innerHTML = '<span class="muted">—</span>';
+    }
+    if (iss) iss.textContent = [...Object.values(fe), ...row.issues].join(' · ');
+  });
+  const box = $('totalsBox');
+  if (box) {
+    const t = c.totals;
+    const msgs = { currency_unresolved: 'Select a currency to calculate totals.', no_items: 'No included items.',
+      incomplete: `${t.invalidItems.length} included item(s) are incomplete — totals are not calculated.`,
+      tax_unresolved: `Tax treatment unresolved on ${t.taxUnresolvedItems.length} item(s) — tax and total remain unresolved.` };
+    let html = `<div class="row"><span>Included items</span><span>${t.includedCount}${t.excludedCount ? ` <span class="muted small">(${t.excludedCount} excluded, not counted)</span>` : ''}</span></div>`;
+    if (t.status === 'complete') {
+      html += `<div class="row"><span>Net (before tax)</span><span class="calc">${esc(money(t.net, cur))}</span></div>`;
+      html += t.taxGroups.map(g => `<div class="row small"><span>Tax · ${esc(TAX_LABELS[g.treatment])}${g.rate ? ' ' + esc(g.rate) + '%' : ''} on ${esc(money(g.net))}</span><span class="calc">${esc(money(g.tax, cur))}</span></div>`).join('');
+      html += `<div class="row grand"><span>PO total</span><span class="calc">${esc(money(t.gross, cur))}</span></div>`;
+    } else html += `<div class="banner banner-warn" style="margin:8px 0 0">${esc(msgs[t.status])}</div>`;
+    const sc = S.server && S.server.computed;
+    if (sc && !S.dirty) {
+      const same = sc.totals.status === t.status && sc.totals.gross === t.gross && sc.totals.net === t.net && sc.totals.tax === t.tax;
+      html += `<div class="small" style="margin-top:8px">${same ? '<span class="chip chip-ok">Server check matches</span>' : '<span class="chip chip-bad">Server calculation differs — do not rely on these totals</span>'} <span class="muted">(revision ${esc(S.server.rev)})</span></div>`;
+    } else if (S.dirty) html += '<div class="small muted" style="margin-top:8px">Server check runs on save.</div>';
+    box.innerHTML = html;
+  }
+  c.milestones.forEach(m => { const el = $('msamt-' + m.id); if (el) el.textContent = m.amount != null ? money(m.amount, cur) : '—'; });
+  const note = $('msNote');
+  if (note) note.innerHTML = !c.milestonePctValid ? '<span class="chip chip-bad">Percentages must add up to 100%</span>' : c.totals.status !== 'complete' ? '<span class="muted">Amounts appear once the PO total is fully resolved.</span>' : '';
+  const hint = $('wordingHint'), pt = d.paymentTerms;
+  if (hint) hint.innerHTML = (pt.balanceTrigger === 'delivery_written_acceptance' && !/acceptance/i.test(pt.text))
+    ? '<div class="banner banner-warn" style="margin:6px 0 0">The wording does not mention written acceptance, but that trigger is selected. <button class="link" data-act="acceptance-wording">Use suggested wording</button></div>'
+    : (pt.balanceTrigger === 'delivery' && /acceptance/i.test(pt.text))
+    ? '<div class="banner banner-warn" style="margin:6px 0 0">The wording mentions acceptance, but the selected trigger is delivery only.</div>' : '';
+  const ra = $('readinessArea');
+  if (ra) {
+    const blockers = readiness(d, c);
+    ra.innerHTML = `<ul class="blockers">${blockers.map(b => `<li><span class="chip ${b.code === 'issuance_not_available' ? 'chip-info' : 'chip-bad'}">Blocks issue</span><span>${esc(b.message)}</span></li>`).join('')}</ul>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn" disabled>Issue PO</button><span class="small muted">Issuing, PO numbering and PDF export are not part of Phase 1.</span></div>`;
+  }
+}
+
+// ── events ─────────────────────────────────────────────────────────────────
+function findItem(id) { return S.draft.items.find(i => i.id === id); }
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'supSearch') { S.sup.query = t.value; S.sup._focus = true; renderSupplier(); return; }
+  if (!S.draft) return;
+  if (t.dataset.f) {
+    const f = t.dataset.f, d = S.draft;
+    if (f === 'paymentText') { d.paymentTerms.text = t.value; d.paymentTerms.isDraftDefault = false; }
+    else if (f === 'balanceTrigger') d.paymentTerms.balanceTrigger = t.value;
+    else d[f] = t.value;
+    markDirty(); refreshDerived(); return;
+  }
+  if (t.dataset.item) {
+    const it = findItem(t.dataset.item); if (!it) return;
+    const f = t.dataset.if;
+    if (f === 'treatment') {
+      it.tax.treatment = t.value; it.tax.origin = 'user';
+      if (t.value !== 'taxable') it.tax.rate = '';
+      else if (!it.tax.rate && DEFAULT_ITEM_TAX.treatment === 'taxable') it.tax.rate = DEFAULT_ITEM_TAX.rate;   // pre-fill standard rate, still editable
+      const r = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="rate"]`);
+      if (r) { r.disabled = t.value !== 'taxable'; r.value = it.tax.rate; }
+      updateTaxOrigin(it);
+    }
+    else if (f === 'rate') { it.tax.rate = t.value; it.tax.origin = 'user'; updateTaxOrigin(it); }
+    else it[f] = t.value;
+    markDirty(); refreshDerived(); return;
+  }
+  if (t.dataset.ms) {
+    const m = S.draft.paymentTerms.milestones.find(x => x.id === t.dataset.ms); if (!m) return;
+    m[t.dataset.mf] = t.value; if (t.dataset.mf === 'label') autoGrow(t); markDirty(); refreshDerived();
+  }
+});
+document.addEventListener('change', e => {   // normalise Arabic-Indic digits once the field is left
+  const t = e.target;
+  if (!S.draft) return;
+  if (t.dataset.item && ['qty', 'unitPrice', 'rate'].includes(t.dataset.if)) {
+    const it = findItem(t.dataset.item); const v = normDigits(t.value);
+    if (v !== t.value) { t.value = v; if (t.dataset.if === 'rate') it.tax.rate = v; else it[t.dataset.if] = v; refreshDerived(); }
+  }
+  if (t.dataset.ms && t.dataset.mf === 'pct') { const v = normDigits(t.value); if (v !== t.value) { t.value = v; S.draft.paymentTerms.milestones.find(x => x.id === t.dataset.ms).pct = v; refreshDerived(); } }
+  if (t.dataset.f === 'currency' || t.dataset.f === 'priceTaxBasis') renderItems(), refreshDerived();
+});
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id;
+  if (act === 'new') return createDraft();
+  if (act === 'open') return openDraft(id);
+  if (act === 'save') return saveDraft();
+  if (act === 'reload-latest') { if (confirm('Load the latest saved version? Your unsaved changes on this screen will be discarded.')) { S.dirty = false; return openDraft(S.draft.id, true); } return; }
+  if (act === 'download-copy') return downloadCopy();
+  if (act === 'retry-suppliers') return loadSuppliers();
+  if (act === 'review-supplier') return reviewSupplier(id);
+  if (act === 'cancel-review') { S.sup.review = null; S.sup.reviewStatus = 'idle'; return renderSupplier(); }
+  if (act === 'confirm-supplier') return confirmSupplier();
+  if (act === 'change-supplier') { S.sup.changing = true; return renderSupplier(); }
+  if (act === 'keep-supplier') { S.sup.changing = false; S.sup.review = null; S.sup.reviewStatus = 'idle'; return renderSupplier(); }
+  if (act === 'use-sup-currency') { S.draft.currency = S.draft.supplier.snapshot.defaultCurrency; markDirty(); renderTotals(); renderItems(); return refreshDerived(); }
+  if (act === 'add-item') { const it = newItem(); S.draft.items.push(it); markDirty(); renderItems(); refreshDerived(); const el = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="description"]`); if (el) el.focus(); return; }
+  if (act === 'exclude') { e.preventDefault(); const it = findItem(id); if (it) { it.included = false; it.excludedAt = new Date().toISOString(); markDirty(); renderItems(); refreshDerived(); toast('Item excluded — kept in the draft'); } return; }
+  if (act === 'restore') { const it = findItem(id); if (it) { it.included = true; it.excludedAt = ''; markDirty(); renderItems(); refreshDerived(); toast('Item restored'); } return; }
+  if (act === 'acceptance-wording') { const pt = S.draft.paymentTerms; pt.text = ACCEPTANCE_PAYMENT_TEXT; pt.isDraftDefault = false; const bal = pt.milestones.find(m => m.id === 'ms_balance'); if (bal) bal.label = 'Balance — one calendar month after delivery and written acceptance'; markDirty(); renderPayment(); return refreshDerived(); }
+  if (act === 'bulk-tax') {
+    const treat = $('bulkTreat').value, rate = normDigits($('bulkRate').value);
+    if (treat === 'taxable') { const r = parseDec(rate, 2); if (!r || isZero(r) || cmp(r, { n: 100n, d: 1n }) > 0) { toast('Enter a valid tax rate first'); return; } }
+    const inc = S.draft.items.filter(i => i.included);
+    if (!inc.length) { toast('No included items'); return; }
+    if (!confirm(`Set tax treatment to "${TAX_LABELS[treat]}${treat === 'taxable' ? ' ' + rate + '%' : ''}" on ${inc.length} included item(s)?`)) return;
+    inc.forEach(i => { i.tax.treatment = treat; i.tax.rate = treat === 'taxable' ? rate : ''; i.tax.origin = 'user'; });
+    markDirty(); renderItems(); refreshDerived(); return;
+  }
+});
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveDraft(); } });
+window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
+$('newDraftBtn').addEventListener('click', createDraft);
+
+(async function init() {
+  renderMain();
+  const ok = await checkConnection();
+  if (!ok) return;
+  await loadDraftList();
+  const want = qs.get('draft');
+  if (want) await openDraft(want, true);
+})();
+</script>
+</body>
+</html>

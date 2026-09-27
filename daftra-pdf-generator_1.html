@@ -670,6 +670,7 @@ function buildTabsHTML() {
   return `<div class="tab-row">
     <button class="tab ${currentTab==='invoices'?'active':''}" onclick="switchTab('invoices')">Invoices (${allInvoices.length})</button>
     <button class="tab ${currentTab==='estimates'?'active':''}" onclick="switchTab('estimates')">Quotations (${allEstimates.length})</button>
+    <a class="tab" href="po-generator.html" style="text-decoration:none">PO Generator</a>
     <button class="tab ${currentTab==='delivery_note'?'active':''}" onclick="switchTab('delivery_note')">Delivery Note</button>
     <button class="tab ${currentTab==='receipt_voucher'?'active':''}" onclick="switchTab('receipt_voucher')">Receipt Voucher</button>
     <button class="tab ${currentTab==='purchasing_invoices'?'active':''}" onclick="switchTab('purchasing_invoices')">Purchasing Invoices</button>

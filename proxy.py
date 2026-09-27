@@ -134,6 +134,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if self.path.startswith('/api/po/'):
+            import po_storage_api
+            return po_storage_api.handle_get(self)
         if self.path.startswith('/purchasing-invoices/'):
             self._handle_purchasing_get()
         elif self.path.startswith('/api/setup/'):
@@ -176,6 +179,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_POST(self):
+        if self.path.startswith('/api/po/'):
+            import po_storage_api
+            return po_storage_api.handle_post(self)
         if self.path.startswith('/purchasing-invoices/combine'):
             self._combine_purchasing()
         elif self.path.startswith('/purchasing-invoices/upload'):
@@ -218,6 +224,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         else:
             self._block_daftra_write()
     def do_PUT(self):
+        if self.path.startswith('/api/po/'):
+            import po_storage_api
+            return po_storage_api.handle_put(self)
         if self.path.startswith('/api/sqi/'):
             import sqi_storage_api
             sqi_storage_api.handle_put(self)
