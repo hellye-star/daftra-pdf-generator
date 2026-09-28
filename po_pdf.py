@@ -173,7 +173,17 @@ def build_html(doc, computed, settings, issue=None, photo_bytes=None):
     t = computed['totals']
     lines = {ln['id']: ln for ln in computed['lines']}
     adj_rows = {a['id']: a for a in computed.get('adjustments', [])}
-    buyer = settings.get('buyer') or {}
+    buyer = {k: str(v).strip() for k, v in (settings.get('buyer') or {}).items() if v is not None}
+    # buyer details: each line (and its label) is printed only when the value is set
+    contact = ' · '.join(x for x in (buyer.get('phone'), buyer.get('email')) if x)
+    buyer_html = ''.join((
+        f'<div style="font-size:12pt;font-weight:700" dir="auto">{e(buyer["name"])}</div>' if buyer.get('name') else '',
+        f'<div dir="rtl">{e(buyer["nameAr"])}</div>' if buyer.get('nameAr') else '',
+        f'<div class="muted" dir="auto">{e(buyer["address"])}</div>' if buyer.get('address') else '',
+        f'<div class="muted">VAT No.: {e(buyer["vat"])}</div>' if buyer.get('vat') else '',
+        f'<div class="muted">CR No.: {e(buyer["cr"])}</div>' if buyer.get('cr') else '',
+        f'<div class="muted">{e(contact)}</div>' if contact else '',
+    ))
     sup = doc.get('supplier') or {}
     snap = sup.get('snapshot') or {}
     q = doc.get('quotation') or {}
@@ -286,11 +296,7 @@ table.ms {{ width: 100%; border-collapse: collapse; margin-top: 4px; }} table.ms
 {'<div class="wm">DRAFT</div>' if is_draft else ''}
 {'<div class="test">TEST DOCUMENT — fictional settings — not a valid purchase order</div>' if settings.get('testMode') else ''}
 <div class="top"><div><div class="logo"><img src="{logo_data_uri()}" alt="Vista United"></div>
-  <div style="font-size:12pt;font-weight:700" dir="auto">{e(buyer.get("name"))}</div>
-  {f'<div dir="rtl">{e(buyer.get("nameAr"))}</div>' if buyer.get("nameAr") else ''}
-  <div class="muted" dir="auto">{e(buyer.get("address"))}</div>
-  <div class="muted">VAT {e(buyer.get("vat"))}{(" · CR " + e(buyer.get("cr"))) if buyer.get("cr") else ""}</div>
-  <div class="muted">{e(" · ".join(x for x in (buyer.get("phone"), buyer.get("email")) if x))}</div></div>
+  {buyer_html}</div>
   <div class="r"><h1>PURCHASE ORDER</h1><div class="nti">Not a tax invoice</div><div><b>{number}</b></div>
   <div class="muted">{("Date " + e(_date(issue["issuedAt"]))) if issue else "Not a valid purchase order until issued"}</div></div></div>
 {rev_html}
@@ -310,7 +316,7 @@ table.ms {{ width: 100%; border-collapse: collapse; margin-top: 4px; }} table.ms
   {f'<div class="lbl" style="margin-top:8px">Notes</div><div dir="auto" style="white-space:pre-wrap">{e(doc.get("poNotes"))}</div>' if doc.get("poNotes") else ''}</div>
   <div>{tot_html}</div></div>
 {approval}
-<div class="sign"><div>Authorised signature — {e(buyer.get("name"))}</div><div>Supplier acknowledgement</div></div>
+<div class="sign"><div>Authorised signature{(" — " + e(buyer["name"])) if buyer.get("name") else ""}</div><div>Supplier acknowledgement</div></div>
 <div class="foot">{number} · {e(TEMPLATE_VERSION)}{(" · " + e(issue.get("displayNo")) + " issued " + e(_date(issue["issuedAt"]))) if issue else " · draft preview — not issued"}</div>
 </body></html>'''
 

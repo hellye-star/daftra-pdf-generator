@@ -235,6 +235,20 @@ class PdfLayout(unittest.TestCase):
         self.assertIn('Totals not calculated', hb)
         self.assertIn('Item 1 (Lobby sign): unit price missing', hb)
         self.assertNotIn('Total including VAT', hb)
+        # buyer details: a line and its label only when the value is set
+        self.assertIn('VAT No.: 399999999900003', h)
+        self.assertIn('CR No.: 0000000000', h)
+        self.assertIn('Authorised signature — Example Trading Test Co.', h)
+        blank = dict(FICTIONAL, buyer={'name': '', 'nameAr': '', 'vat': ' ', 'cr': '', 'address': '', 'phone': '', 'email': ''})
+        hbl = po_pdf.build_html(d, po_model.compute(d), blank, None, {})
+        for gone in ('VAT No.', 'CR No.', 'Authorised signature —'):
+            self.assertNotIn(gone, hbl)
+        head = hbl[hbl.index('<div class="top">'):hbl.index('<h1>')]
+        self.assertIn('class="logo"', head)
+        self.assertNotIn('class="muted"', head, 'no empty buyer lines under the logo')
+        self.assertIn('Authorised signature</div>', hbl)
+        self.assertIn('VAT 300000000000003', hbl, 'supplier VAT stays')
+        self.assertIn('Total including VAT (SAR)', hbl, 'VAT calculations stay')
         # a blank unit label: totals are printed, with the gap as a separate review warning
         nu = draft(items=[dict(it, unit='')], photos=[])
         hn = po_pdf.build_html(nu, po_model.compute(nu), FICTIONAL, None, {})
