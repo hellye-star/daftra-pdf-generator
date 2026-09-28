@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!-- SYNTHETIC TEST FIXTURE — selectable header/totals text + an IMAGE-ONLY item table on the same page.
+     The table image (quote_mixed_table.png) is produced by make_fixtures.py. Fictional supplier. -->
+<html lang="en"><head><meta charset="utf-8"><title>Synthetic mixed quotation</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  body { font-family: Arial, sans-serif; font-size: 10.5pt; color: #111; }
+  .co { font-size: 20pt; font-weight: bold; }
+  p { margin: 3px 0; }
+  img { width: 100%; display: block; margin: 14px 0; }
+</style></head>
+<body>
+<div class="co">Northwind Flags Est.</div>
+<p>VAT No: 311122233300003</p>
+<h2 style="margin:12px 0 6px">QUOTATION</h2>
+<p>Quotation No: NF-3090 &nbsp;&nbsp;&nbsp; Date: 22/09/2026</p>
+<img src="quote_mixed_table.png" alt="">
+<p>Subtotal: 1,500.00</p>
+<p>Discount: 100.00</p>
+<p>VAT 15%: 210.00</p>
+<p>Grand Total: 1,610.00</p>
+<p>All prices are in SAR and exclusive of VAT.</p>
+</body></html>

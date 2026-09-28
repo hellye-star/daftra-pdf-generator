@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PO Generator — Vista United</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&family=Cairo:wght@300;400;600&display=swap" rel="stylesheet">
+<!-- Phase 2 (local reading of supplier quotations): the libraries are loaded from the CDN; documents are
+     processed in this browser only. Tesseract downloads its eng/ara language models, never the document. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="po-extract.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -99,10 +104,31 @@
   table.items td.num, table.items th.num { text-align: right; }
   .item { border-bottom: 1px solid #EEECE8; padding: 12px 0; }
   .item:first-child { padding-top: 2px; }
-  .item-top { display: grid; grid-template-columns: 20px 22px 1fr auto; gap: 8px; align-items: start; }
+  .item-top { display: grid; grid-template-columns: 20px 22px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
   .item-top input[type=checkbox] { margin-top: 9px; }
   .item-no { color: var(--mid); padding-top: 6px; font-size: 12px; }
   .item-desc textarea { min-height: 52px; }
+  .item-body { padding-left: 58px; margin-top: 6px; }
+  .item-body > .dims { margin-top: 0; margin-bottom: 8px; }
+  .item-body .item-fields { margin: 0; }
+  .item-body .spec { margin-top: 6px; }
+  .item-body .phs { margin-top: 8px; }
+  @media (max-width: 640px) { .item-body { padding-left: 0; } }
+  .item-name { font-weight: 500; font-size: 13px; }
+  .spec { margin-top: 5px; }
+  .spec summary { font-size: 10.5px; color: var(--mid); cursor: pointer; }
+  .spec textarea { margin-top: 4px; }
+  .dims { margin-top: 6px; padding: 6px 8px; border: 1px solid var(--rule); background: var(--cream); }
+  .dims.conflict { border-color: var(--bad); background: var(--bad-bg); }
+  .dims .chip { white-space: normal; }
+  .dims-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 3px; }
+  .dimf { display: flex; flex-direction: column; font-size: 10px; color: var(--mid); width: 74px; }
+  .dimf.unit { width: 96px; }
+  .dimf input { text-align: right; }
+  .dimf.unit input { text-align: left; }
+  .dims-des { margin-top: 6px; }
+  .dimx { display: flex; flex-direction: column; font-size: 10px; color: var(--mid); margin-top: 4px; }
+  .dims > .chip { margin-top: 6px; }
   .item-fields { display: grid; grid-template-columns: minmax(60px,.7fr) minmax(76px,.9fr) minmax(90px,1fr) minmax(140px,1.4fr) minmax(100px,1fr); gap: 8px 10px; margin: 8px 0 0 50px; align-items: start; }
   .ifield { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .ifield .inp { min-width: 0; }
@@ -120,6 +146,43 @@
   .policy { font-size: 11px; color: var(--mid); line-height: 1.6; margin-top: 10px; }
   .policy summary { cursor: pointer; }
 
+  /* ── Phase 2: supplier quotation upload / review ── */
+  .drop { display: block; border: 1px dashed var(--light); background: var(--cream); padding: 16px; text-align: center; font-size: 12px; color: var(--mid); cursor: pointer; }
+  .drop.over { border-color: var(--dark); background: #fff; color: var(--dark); }
+  .src-row { border: 1px solid var(--rule); padding: 10px 12px; margin-top: 10px; background: #fff; }
+  .src-row .n { font-weight: 500; overflow-wrap: anywhere; }
+  .src-row .m { font-size: 11px; color: var(--mid); margin-top: 2px; overflow-wrap: anywhere; }
+  .src-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .progress { height: 4px; background: var(--rule); margin-top: 8px; }
+  .progress > div { height: 100%; background: var(--dark); width: 0; transition: width .2s; }
+  .rv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 12px; align-items: start; }
+  .rv-view { position: sticky; top: 8px; border: 1px solid var(--rule); background: #EDEBE7; }
+  .rv-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: #fff; border-bottom: 1px solid var(--rule); font-size: 11px; flex-wrap: wrap; }
+  .rv-canvas { position: relative; overflow: auto; max-height: 78vh; }
+  .rv-canvas canvas { display: block; margin: 0 auto; background: #fff; }
+  .rv-hl { position: absolute; border: 2px solid #D9822B; background: rgba(217,130,43,.18); pointer-events: none; }
+  .rv-data { min-width: 0; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+  .tabs button { background: none; border: none; border-bottom: 2px solid transparent; padding: 7px 10px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--mid); cursor: pointer; }
+  .tabs button.on { color: var(--dark); border-bottom-color: var(--dark); }
+  .fx { border-bottom: 1px solid #EEECE8; padding: 8px 0; display: grid; grid-template-columns: 22px 130px minmax(0,1fr); gap: 8px; font-size: 12px; align-items: start; }
+  .fx .v { overflow-wrap: anywhere; white-space: pre-wrap; }
+  .fx .raw { font-size: 10.5px; color: var(--mid); margin-top: 2px; overflow-wrap: anywhere; }
+  .flag { display: inline-block; font-size: 9px; padding: 1px 5px; margin: 2px 3px 0 0; background: var(--warn-bg); color: var(--warn); letter-spacing: .04em; }
+  .flag.bad { background: var(--bad-bg); color: var(--bad); }
+  .flag.info { background: var(--info-bg); color: var(--mid); }
+  .xrow { border: 1px solid var(--rule); padding: 8px 10px; margin-top: 8px; background: #fff; }
+  .xrow.off { background: #F7F6F3; }
+  .xrow .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 4px 10px; margin-top: 6px; font-size: 11.5px; }
+  .xrow .grid .k { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--light); }
+  .lowc { text-decoration: underline dotted var(--bad); }
+  .applybar { position: sticky; bottom: 0; background: #fff; border: 1px solid var(--dark); padding: 10px 12px; margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+  .origbox { font-size: 11px; margin-top: 4px; }
+  .origbox table { border-collapse: collapse; width: 100%; }
+  .origbox td { padding: 2px 6px 2px 0; vertical-align: top; overflow-wrap: anywhere; }
+  .edited { color: var(--warn); font-weight: 500; white-space: nowrap; }
+  .main, .rv-view, .rv-data { min-width: 0; }
+  @media (max-width: 1100px) { .rv { grid-template-columns: minmax(0, 1fr); } .rv-view { position: static; } }
   .ms-list { margin-top: 14px; }
   .ms-row { display: grid; grid-template-columns: minmax(180px, 1fr) 76px 120px minmax(150px, 30%); gap: 10px; align-items: start; padding: 7px 0; border-bottom: 1px solid #EEECE8; }
   .ms-head { border-bottom-color: var(--rule); padding-bottom: 5px; }
@@ -134,9 +197,29 @@
   .toast { position: fixed; bottom: 20px; right: 20px; background: var(--dark); color: #fff; padding: 10px 16px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 380px; }
   .toast.show { opacity: 1; }
   .phase { border: 1px dashed var(--rule); padding: 12px 14px; color: var(--mid); font-size: 12px; }
+  .phs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .ph { border: 1px solid var(--rule); background: #fff; padding: 4px; width: 158px; font-size: 10.5px; }
+  .ph.unc { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
+  .ph.conf { border-color: var(--ok); }
+  .ph img { display: block; width: 100%; height: 96px; object-fit: contain; background: #F3F1EC; cursor: zoom-in; }
+  .ph-m { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+  .ph-r { color: var(--mid); margin-top: 2px; overflow-wrap: anywhere; }
+  .ph-pdf { display: flex; gap: 5px; align-items: center; margin-top: 4px; cursor: pointer; }
+  .ph-a { display: flex; gap: 10px; margin-top: 3px; }
+  .ph-mv { margin-top: 4px; font-size: 10.5px; padding: 3px 4px; }
+  .phs.sm img { width: 64px; height: 44px; object-fit: contain; background: #F3F1EC; border: 1px solid var(--rule); cursor: pointer; }
+  .phs.sm img.unc { border-color: var(--bad); }
+  .item-btns { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+  .phm { position: fixed; inset: 0; background: rgba(28,28,26,.55); display: flex; align-items: center; justify-content: center; z-index: 60; padding: 16px; }
+  .phm-b { background: #fff; width: min(960px, 100%); max-height: 92vh; overflow: auto; padding: 0 16px 16px; }
+  .phm-b .card-h { padding-left: 0; padding-right: 0; }
+  .phm-img { display: block; width: min(100%, 720px); height: auto; max-height: 62vh; object-fit: contain; margin: 12px auto 0; background: #F3F1EC; }
+  .phm-crop { position: relative; overflow: auto; max-height: 66vh; background: #EDEBE7; margin-top: 8px; }
+  .phm-crop canvas { display: block; margin: 0 auto; cursor: crosshair; touch-action: none; }
+  .phm-sel { position: absolute; border: 2px solid #D9822B; background: rgba(217,130,43,.15); pointer-events: none; }
 
   @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; }
+    .layout { grid-template-columns: minmax(0, 1fr); }
     .side { border-right: none; border-bottom: 1px solid var(--rule); }
     .main { padding: 18px 16px 60px; }
     .grid2 { grid-template-columns: 1fr; }
@@ -211,6 +294,12 @@ const S = {
   fieldErrors: {},       // server validation errors keyed by path
   sup: { status: 'idle', list: [], error: '', query: '', page: 0, pageCount: 0, partial: false,
          review: null, reviewStatus: 'idle', reviewError: '', changing: false },
+  // Phase 2 — supplier quotation documents
+  src: { draftId: null, list: [], extractions: {}, status: 'idle', error: '' },
+  job: null,             // running extraction {sourceId, stage, page, total, progress, cancel}
+  rv: null,              // open review {ex, source, tab, page, zoom, highlight, selRows:Set, selOther:Set, headerKeys:Set, applyCurrency, applyTaxBasis}
+  ph: { draftId: null, list: [], modal: null },   // stored item photos of this draft's documents; open photo dialog
+  specOpen: new Set(),   // items whose internal specification is expanded
 };
 
 // ── utils ──────────────────────────────────────────────────────────────────
@@ -292,7 +381,7 @@ function compute(doc) {
     const row = { exact: null, amount: null, net: null, tax: null, gross: null, issues: [] };
     const q = it.qty ? parseDec(it.qty, 3) : null;
     const p = it.unitPrice !== '' ? parseDec(it.unitPrice, 4) : null;
-    if (!it.description.trim()) row.issues.push('description missing');
+    if (!(it.name || '').trim() && !it.description.trim()) row.issues.push('item name missing');
     if (!it.unit.trim()) row.issues.push('unit missing');
     if (!q || isZero(q)) row.issues.push('quantity missing');
     if (!p) row.issues.push('unit price missing');
@@ -332,6 +421,9 @@ function compute(doc) {
     net: complete ? fmtMinor(net, dp) : null, tax: complete ? fmtMinor(tax, dp) : null, gross: complete ? fmtMinor(gross, dp) : null,
     taxGroups: complete ? Object.values(groups).map(g => ({ treatment: g.treatment, rate: g.rate, net: fmtMinor(g.net, dp), tax: fmtMinor(g.tax, dp) })) : [],
     invalidItems: invalid, taxUnresolvedItems: taxUnres, includedCount: included.length, excludedCount: doc.items.length - included.length };
+  // provisional: quotation discounts/charges not applied by this PO (mirrors po_model.ADJUSTMENT_FLAGS)
+  totals.provisionalItems = included.filter(i => (i.reviewFlags || []).some(f => f === 'line_discount_present' || f === 'document_adjustments_unapplied')).map(i => i.id);
+  totals.provisional = totals.provisionalItems.length > 0;
   const ms = doc.paymentTerms.milestones || [];
   const pcts = ms.map(m => m.pct ? parseDec(m.pct, 2) : null);
   let pctOk = ms.length > 0 && pcts.every(Boolean);
@@ -353,8 +445,18 @@ function readiness(doc, c) {
   if (!doc.currency) add('currency_missing', 'Currency not selected.');
   const t = c.totals;
   if (!t.includedCount) add('no_included_items', 'No included items.');
-  if (t.invalidItems.length) add('item_invalid', `${t.invalidItems.length} included item(s) missing description, unit, quantity or unit price.`);
+  if (t.invalidItems.length) add('item_invalid', `${t.invalidItems.length} included item(s) missing name/description, unit, quantity or unit price.`);
   if (t.taxUnresolvedItems.length) add('tax_unresolved', `Tax treatment unresolved on ${t.taxUnresolvedItems.length} included item(s).`);
+  // mirrors po_model.readiness (the server list is authoritative)
+  if (t.provisional) add('adjustments_unapplied', `The quotation has discounts or charges affecting ${t.provisionalItems.length} included item(s) that this PO does not apply yet — PO totals are provisional and are not the quotation's payable total.`);
+  const inc = doc.items.filter(i => i.included && (i.reviewFlags || []).includes('from_incomplete_extraction')).length;
+  if (inc) add('incomplete_source_document', `${inc} included item(s) come from an extraction that did not read every page of the supplier document.`);
+  const unrev = doc.items.filter(i => i.included && (i.reviewFlags || []).includes(DEFAULT_TAX_FLAG)).length;
+  if (unrev) add('default_tax_unreviewed', `${unrev} imported item(s) use the default VAT 15% because the quotation states no tax treatment — review and confirm or change it.`);
+  const dimsOpen = doc.items.filter(i => i.included && i.dimensions && i.dimensions.status === 'needs_confirmation').length;
+  if (dimsOpen) add('dimensions_unconfirmed', `${dimsOpen} included item(s) have conflicting source dimensions — confirm the dimensions to print on the PO.`);
+  const phOpen = (doc.photos || []).filter(a => a.status !== 'removed' && (a.status === 'uncertain' || (a.includeInPdf && !a.target))).length;
+  if (phOpen) add('photos_unconfirmed', `${phOpen} item photo(s) have an uncertain or missing item association — confirm, reassign or remove them.`);
   if ((doc.paymentTerms.balanceTrigger || 'undecided') === 'undecided') add('payment_trigger_undecided', 'Balance payment trigger (delivery vs delivery + written acceptance) not decided.');
   if (!c.milestonePctValid) add('payment_pct_invalid', 'Payment milestone percentages must be filled in and add up to 100%.');
   return b;
@@ -379,7 +481,7 @@ async function checkConnection() {
   if (status === 200 && json.ok) {
     const dt = json.data.defaults && json.data.defaults.newItemTax;
     if (dt && TAX_LABELS[dt.treatment]) DEFAULT_ITEM_TAX = { treatment: dt.treatment, rate: String(dt.rate || ''), origin: 'default' };
-    el.className = 'conn chip-ok'; el.textContent = `PO storage connected · ${json.data.counts.drafts} draft(s) · Phase 1 (no issuance)`; return true; }
+    el.className = 'conn chip-ok'; el.textContent = `PO storage connected · ${json.data.counts.drafts} draft(s) · no issuance yet`; return true; }
   el.className = 'conn chip-bad'; el.textContent = json && json.error ? json.error : 'PO storage unavailable.';
   return false;
 }
@@ -388,7 +490,7 @@ async function loadDraftList() {
   if (status === 200 && json.ok) {
     S.drafts = json.data;
     const el = $('connState'); el.className = 'conn chip-ok';
-    el.textContent = `PO storage connected · ${S.drafts.length} draft(s) · Phase 1 (no issuance)`;
+    el.textContent = `PO storage connected · ${S.drafts.length} draft(s) · no issuance yet`;
   }
   renderDraftList();
 }
@@ -401,11 +503,11 @@ function newDraftDoc() {
     paymentTerms: { text: DEFAULT_PAYMENT_TEXT, isDraftDefault: true, balanceTrigger: 'undecided',
       milestones: [ { id: 'ms_advance', pct: '50', label: 'Advance payment' },
                     { id: 'ms_balance', pct: '50', label: 'Balance — one calendar month after delivery' } ] },
-    projectRef: '', deliveryLocation: '', notes: '', createdAt: ts, updatedAt: ts,
+    projectRef: '', deliveryLocation: '', notes: '', photos: [], createdAt: ts, updatedAt: ts,
   };
 }
 function newItem() {
-  return { id: rid('it_', 12), description: '', unit: '', qty: '', unitPrice: '', included: true,
+  return { id: rid('it_', 12), name: '', description: '', dimensions: null, unit: '', qty: '', unitPrice: '', included: true,
            tax: { ...DEFAULT_ITEM_TAX }, source: 'manual', createdAt: new Date().toISOString(), excludedAt: '' };
 }
 
@@ -429,7 +531,11 @@ async function openDraft(id, force) {
   renderDraftList();
 }
 function applyServer(d, replaceDoc) {
-  if (replaceDoc) { S.draft = d.data; S.dirty = false; S.banner = null; S.fieldErrors = {}; S.sup.changing = false; S.sup.review = null; }
+  if (replaceDoc) {
+    S.draft = d.data; S.dirty = false; S.banner = null; S.fieldErrors = {}; S.sup.changing = false; S.sup.review = null;
+    if (S.rv && S.rv.src.draftId !== S.draft.id) S.rv = null;           // a review belongs to one draft
+    if (S.rv) S.rv.inDraft = alreadyInDraft(S.rv.ex, S.rv.id);
+  }
   S.rev = d.rev; S.server = { computed: d.computed, readiness: d.readiness, rev: d.rev };
   renderMain();
 }
@@ -592,8 +698,8 @@ function renderMain() {
       <div class="field"><span class="lbl">Draft reference</span><div class="small muted" style="padding-top:6px">${esc(d.id)} · created ${esc(fmtTime(d.createdAt))}<br>No PO number is assigned until final issue (not available in Phase 1).</div></div>
     </div></div>
 
-    <div class="card"><div class="card-h"><span class="step">00</span><h3>Supplier quotation</h3><span class="chip chip-info">Phase 2</span></div>
-      <div class="card-b"><div class="phase">Uploading and reading the supplier's quotation (original pages beside the extracted values) arrives in Phase 2. In this phase, items are entered manually.</div></div></div>
+    <div class="card"><div class="card-h"><span class="step">00</span><h3>Supplier quotation</h3><span class="chip chip-info">Read on this PC</span></div>
+      <div class="card-b" id="sourceArea"></div></div>
 
     <div class="card"><div class="card-h"><span class="step">01</span><h3>Buyer</h3><span class="chip chip-warn">Not confirmed</span></div>
       <div class="card-b small">Buyer company name, VAT number, CR number and address have <b>not been confirmed</b> for purchase orders. They will be set and confirmed before issuing is enabled. Defaults found elsewhere on the platform are not treated as verified.</div></div>
@@ -620,7 +726,7 @@ function renderMain() {
 
     <div class="card"><div class="card-h"><span class="step">07</span><h3>Review &amp; issue</h3></div>
       <div class="card-b" id="readinessArea"></div></div>`;
-  renderBanner(); renderSupplier(); renderItems(); renderTotals(); renderPayment(); refreshDerived(); updateSaveState();
+  renderBanner(); renderSources(); renderSupplier(); renderItems(); renderTotals(); renderPayment(); refreshDerived(); updateSaveState();
 }
 
 function kvSupplier(p) {
@@ -647,7 +753,7 @@ function renderSupplier() {
   if (chip) chip.innerHTML = d.supplier ? '<span class="chip chip-ok">Selected</span>' : '<span class="chip chip-bad">Required</span>';
   if (d.supplier && !s.changing) {
     const sup = { ...d.supplier, id: d.supplier.daftraId };
-    area.innerHTML = kvSupplier(sup) + `<p class="small muted" style="margin-top:10px">Snapshot taken from Daftra on ${esc(fmtTime(d.supplier.confirmedAt))}. Daftra records are never created or changed from here.</p>
+    area.innerHTML = supplierHintsHtml() + kvSupplier(sup) + `<p class="small muted" style="margin-top:10px">Snapshot taken from Daftra on ${esc(fmtTime(d.supplier.confirmedAt))}. Daftra records are never created or changed from here.</p>
       <div style="margin-top:10px"><button class="btn btn-sm btn-ghost" data-act="change-supplier">Change supplier</button></div>`;
     return;
   }
@@ -673,7 +779,7 @@ function renderSupplier() {
   else if (s.reviewStatus === 'ready' && s.review) review = `<div class="card" style="margin:12px 0 0;border-color:var(--dark)"><div class="card-h"><span class="lbl">Confirm supplier details</span></div><div class="card-b">
       ${kvSupplier(s.review)}
       <div style="margin-top:12px;display:flex;gap:8px"><button class="btn btn-sm" data-act="confirm-supplier">Use this supplier</button><button class="btn btn-sm btn-ghost" data-act="cancel-review">Cancel</button></div></div></div>`;
-  area.innerHTML = `<div style="display:flex;gap:8px;align-items:center">
+  area.innerHTML = supplierHintsHtml() + `<div style="display:flex;gap:8px;align-items:center">
       <input class="inp" id="supSearch" dir="auto" placeholder="Search by name, VAT, supplier no., phone, email…" value="${esc(s.query)}" ${s.status !== 'ready' ? 'disabled' : ''}>
       ${d.supplier ? '<button class="btn btn-sm btn-ghost" data-act="keep-supplier">Keep current</button>' : ''}</div>${body}${review}`;
   const inp = $('supSearch');
@@ -683,42 +789,134 @@ function renderSupplier() {
 function taxCell(it) {
   return `<select class="inp" data-item="${esc(it.id)}" data-if="treatment">${Object.entries(TAX_LABELS).map(([k, v]) => `<option value="${k}" ${it.tax.treatment === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
     <input class="inp" style="margin-top:4px" data-item="${esc(it.id)}" data-if="rate" inputmode="decimal" placeholder="rate %" value="${esc(it.tax.rate)}" ${it.tax.treatment === 'taxable' ? '' : 'disabled'}>
-    <div class="src" id="taxorig-${esc(it.id)}">${taxOriginLabel(it)}</div>`;
+    <div class="src" id="taxorig-${esc(it.id)}">${esc(taxOriginLabel(it))}${hasFlag(it, DEFAULT_TAX_FLAG) ? ` <button class="link" data-act="confirm-tax" data-id="${esc(it.id)}">Confirm</button>` : ''}</div>`;
 }
 function taxOriginLabel(it) {
+  if (hasFlag(it, DEFAULT_TAX_FLAG)) return 'Default VAT — quotation states none · review required';
   if (it.tax.origin === 'default') return 'Default VAT — editable';
   if (it.tax.origin === 'user') return 'Set by you';
+  if (it.tax.origin === 'extracted') return 'Stated in quotation';
   return '';
 }
-function updateTaxOrigin(it) { const el = $('taxorig-' + it.id); if (el) el.textContent = taxOriginLabel(it); }
+function updateTaxOrigin(it) {
+  const el = $('taxorig-' + it.id);
+  if (el) el.innerHTML = esc(taxOriginLabel(it)) + (hasFlag(it, DEFAULT_TAX_FLAG)
+    ? ` <button class="link" data-act="confirm-tax" data-id="${esc(it.id)}">Confirm</button>` : '');
+}
+const DEFAULT_TAX_FLAG = 'default_tax_requires_review';
+const hasFlag = (it, f) => Array.isArray(it.reviewFlags) && it.reviewFlags.includes(f);
+function dropFlag(it, f) { if (hasFlag(it, f)) { it.reviewFlags = it.reviewFlags.filter(x => x !== f); if (!it.reviewFlags.length) delete it.reviewFlags; } }
+const FLAG_TEXT = {
+  default_tax_requires_review: 'Default VAT — review', low_confidence: 'Low OCR confidence', ambiguous_number: 'Ambiguous number',
+  unreadable_number: 'Unreadable number', line_total_mismatch: 'Qty × price ≠ printed total', line_total_may_include_tax: 'Printed total may include VAT',
+  lump_sum: 'Lump sum', lump_sum_or_missing_breakdown: 'Lump sum / no qty-price breakdown', possible_duplicate: 'Possible duplicate',
+  multiline: 'Multi-line description', no_numbers: 'No quantity/price on this line', optional_selected: 'Optional item — selected by you',
+  alternative_selected: 'Alternative item — selected by you', unit_from_quantity_cell: 'Unit taken from quantity cell',
+  continues_next_page: 'Continues on next page', tax_amount_without_rate: 'Tax amount printed without a rate', line_discount_present: 'Line discount in quotation (not applied)',
+  missing: 'Missing', heuristic_supplier_name: 'Name guessed from letterhead', ambiguous_date: 'Ambiguous date', hijri_not_converted: 'Hijri — not converted',
+  month_first_format: 'Month-first date', two_digit_year: 'Two-digit year', conflicting_dates: 'Conflicting dates', calendar_unknown: 'Calendar unknown',
+  currency_inferred_from_SR: 'Currency read from “SR”', currency_from_symbol_only: 'Currency from symbol only', multiple_currencies: 'Several currencies',
+  not_saudi_vat_format: 'Not a Saudi VAT format', conflicting_tax_statements: 'Conflicting tax statements', negative: 'Negative amount',
+  multiple_candidates: 'Several candidates', no_table_detected: 'No table detected',
+  same_as_existing_item: 'Same values as another draft item', document_adjustments_unapplied: 'Quotation discounts/charges not applied — total provisional',
+  from_incomplete_extraction: 'From an INCOMPLETE extraction',
+  spec_dimension_conflict: 'Size in description ≠ dimension columns', dash_amount: 'Amount printed as “-”',
+  no_amount: 'No quantity / amount printed — not selected', same_values_as_other_row: 'Same values as another numbered row (kept)',
+  component_of_item: 'Component of a titled item', filename_date_differs: 'File-name date differs from the printed date (file name ignored)',
+  from_total_line: 'Read from the unlabelled “Total” line', digits_spaced_in_source: 'Digits printed with spaces',
+  name_from_website: 'Name taken from the website / e-mail domain', from_buyer_block: 'Read from the addressee block',
+  value_on_next_line: 'Value read from the next line',
+};
+const flagChip = f => { const bad = /mismatch|ambiguous|unreadable|conflict|missing|low_confidence|default_tax|discount|adjustments|incomplete|filename_date|no_amount|dash_amount|name_from_website/.test(f);
+  return `<span class="flag ${bad ? 'bad' : ''}" title="${esc(f)}">${esc(FLAG_TEXT[f] || f.replace(/_/g, ' '))}</span>`; };
+function itemProvenance(it) {
+  if (it.source !== 'extracted' || !it.orig) return '<div class="src">Manual entry</div>';
+  // "edited" = changed by the user after import: numbers compare by value ("27,360.00" = "27360.00"),
+  // the description compares with the text first proposed at import (parent title / dimensions added)
+  const o = it.orig, num = v => { const t = String(v || '').replace(/,/g, '').trim(); return t !== '' && isFinite(t) ? Number(t) : null; };
+  const ch = (k, cur) => {
+    if (k === 'qty' || k === 'unitPrice') { const a = num(o[k]), c = num(cur); if (a != null || c != null) return a !== c; }
+    const base = k === 'description' && o.proposedDescription ? o.proposedDescription : o[k];
+    return String(base || '').trim() !== String(cur || '').trim();
+  };
+  const rows = [['Description', 'description', it.description], ['Unit', 'unit', it.unit], ['Quantity', 'qty', it.qty],
+                ['Unit price', 'unitPrice', it.unitPrice], ['Line total (printed)', 'lineTotal', null], ['Discount (printed)', 'discount', null], ['Tax (printed)', 'tax', null],
+                ['Parent item (printed)', 'parent', null], ['Dimensions (printed columns)', 'dimensions', it.dimensions ? dimsText({ values: it.dimensions.values, unit: '' }).replace(/\s+$/, '') : null]]
+    .filter(([, k, cur]) => o[k] || cur);
+  return `<div class="src">Imported from supplier quotation · row ${esc(it.sourceRef ? it.sourceRef.rowId : '')}
+      <button class="link" style="font-size:10px" data-act="show-source-row" data-id="${esc(it.id)}">show in document</button></div>
+    <div id="flags-${esc(it.id)}">${(it.reviewFlags || []).map(flagChip).join('')}</div>
+    <details class="origbox"><summary class="small muted" style="cursor:pointer">Original extracted values (unchanged by edits)</summary><table>
+      ${rows.map(([label, k, cur]) => `<tr><td class="muted" style="width:120px">${esc(label)}</td><td dir="auto" style="white-space:pre-wrap">${esc(o[k] || '—')}</td>
+        <td>${cur !== null && ch(k, cur) ? '<span class="edited">edited in PO</span>' : ''}</td></tr>`).join('')}</table></details>`;
+}
+// ── item name + dimensions (what the PO prints) ────────────────────────────
+// The PO prints the item NAME and its DIMENSIONS; the long description stays
+// internal. Dimension labels and values are kept as printed (blank = blank),
+// the unit only when printed or typed — never inferred. Conflicting source
+// values must be confirmed before issuance.
+const DIM_STATUS_TEXT = { as_printed: 'As printed in the quotation', needs_confirmation: 'Source conflict — confirm what to print', confirmed: 'Confirmed' };
+const itemTitle = it => (it.name || '').trim() || String(it.description || '').split('\n')[0].trim() || '(no name)';
+const dimsText = d => Object.entries(d.values).map(([k, v]) => k + ' ' + (v || '(blank)')).join(' × ') + (d.unit ? ' ' + d.unit : '');
+function dimsHtml(it) {
+  const d = it.dimensions;
+  if (!d) return `<div class="dims"><button class="link" data-act="dims-add" data-id="${esc(it.id)}">Add dimensions</button></div>`;
+  const conflict = d.status === 'needs_confirmation', hasConflict = (d.conflicts || []).length > 0;
+  const des = d.described || { main: '', additional: [] };
+  const desRow = (label, key, v) => `<label class="dimx"><span>${esc(label)}</span><input class="inp" dir="auto" data-dim="${esc(it.id)}" data-dl="${esc(key)}" maxlength="300" value="${esc(v)}" aria-label="${esc(label)}"></label>`;
+  return `<div class="dims ${conflict ? 'conflict' : ''}" id="dims-${esc(it.id)}"><span class="lbl">Dimensions — printed on the PO</span>
+    ${Object.keys(d.values).length ? `<div class="dims-row">${Object.entries(d.values).map(([k, v]) => `<label class="dimf"><span>${esc(k)}</span><input class="inp" inputmode="decimal" data-dim="${esc(it.id)}" data-dl="${esc(k)}" value="${esc(v)}" placeholder="blank" aria-label="${esc(k)}"></label>`).join('')}
+      <label class="dimf unit"><span>Unit</span><input class="inp" data-dim="${esc(it.id)}" data-dl="unit" maxlength="20" value="${esc(d.unit)}" placeholder="not printed" aria-label="Dimension unit"></label></div>` : ''}
+    ${des.main || des.additional.length ? `<div class="dims-des"><div class="small muted">Also printed in the supplier's description — kept word for word, with its own labels and units:</div>
+      ${des.main ? desRow('Size as described', 'des:main', des.main) : ''}${des.additional.map((x, j) => desRow('Additional measurement', 'des:' + j, x)).join('')}</div>` : ''}
+    <span class="chip ${conflict ? 'chip-bad' : d.status === 'confirmed' ? 'chip-ok' : 'chip-info'}" id="dimst-${esc(it.id)}">${esc(DIM_STATUS_TEXT[d.status])}</span>
+    ${hasConflict ? `<div class="small" style="margin-top:4px">The quotation disagrees with itself: the dimension columns show <b>${esc(it.orig && it.orig.dimensions || dimsText({ values: d.values, unit: '' }))}</b>,
+      the description says “${esc((des.main || String(it.orig && it.orig.description || it.description).split('\n').find(l => /size/i.test(l)) || d.conflicts.map(c => c.dim + ' ' + c.description).join(', ')).trim())}”. Nothing was corrected — set what to print, then confirm.
+      <button class="btn btn-sm" data-act="dims-confirm" data-id="${esc(it.id)}" id="dimcf-${esc(it.id)}" ${conflict ? '' : 'hidden'}>Confirm these dimensions</button></div>` : ''}
+    ${it.orig && it.orig.dimensions && d.origin === 'user' ? `<div class="raw">printed columns: ${esc(it.orig.dimensions)}</div>` : ''}</div>`;
+}
 function renderItems() {
   const area = $('itemsArea'); if (!area) return;
   const inc = S.draft.items.filter(i => i.included), exc = S.draft.items.filter(i => !i.included);
   const f = (label, html, cls) => `<label class="ifield ${cls || ''}"><span class="lbl">${label}</span>${html}</label>`;
+  // Card order = PO order: 1 name · 2 dimensions & measurements · 3 unit/qty/price/tax/line total ·
+  // (review notes, internal specification collapsed) · 4 photos
   const rows = inc.map((it, i) => `<div class="item" data-row="${esc(it.id)}">
       <div class="item-top">
         <input type="checkbox" checked data-act="exclude" data-id="${esc(it.id)}" title="Untick to exclude from the PO" aria-label="Included in PO">
         <span class="item-no">${i + 1}</span>
-        <div class="item-desc"><textarea class="inp" dir="auto" rows="2" data-item="${esc(it.id)}" data-if="description" maxlength="5000" placeholder="Full description / specification (multiple lines allowed)" aria-label="Description">${esc(it.description)}</textarea>
-          <div class="src">Manual entry</div><div class="iss" id="iss-${esc(it.id)}"></div></div>
-        <button class="btn btn-sm btn-ghost" data-act="exclude" data-id="${esc(it.id)}" tabindex="-1" title="Exclude (keyboard: untick the checkbox)">Exclude</button>
+        <div class="item-desc"><input class="inp item-name" dir="auto" data-item="${esc(it.id)}" data-if="name" maxlength="300" value="${esc(it.name || '')}" placeholder="Item name — printed on the PO${it.name ? '' : ' (empty: first line of the specification is used)'}" aria-label="Item name"></div>
+        <div class="item-btns"><button class="btn btn-sm btn-ghost" data-act="exclude" data-id="${esc(it.id)}" tabindex="-1" title="Exclude (keyboard: untick the checkbox)">Exclude</button>
+          <button class="btn btn-sm btn-ghost" data-act="ph-add" data-id="${esc(it.id)}" title="Attach a photo from the original">Add photo</button></div>
       </div>
-      <div class="item-fields">
-        ${f('Unit', `<input class="inp" dir="auto" data-item="${esc(it.id)}" data-if="unit" maxlength="40" value="${esc(it.unit)}" placeholder="pcs">`)}
-        ${f('Quantity', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="qty" value="${esc(it.qty)}">`)}
-        ${f('Unit price', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="unitPrice" value="${esc(it.unitPrice)}">`)}
-        ${f('Tax treatment', taxCell(it), 'ifield-tax')}
-        <div class="ifield"><span class="lbl" style="text-align:right">Line amount</span><div class="calc amt" id="amt-${esc(it.id)}"></div></div>
+      <div class="item-body">
+        ${dimsHtml(it)}
+        <div class="item-fields">
+          ${f('Unit', `<input class="inp" dir="auto" data-item="${esc(it.id)}" data-if="unit" maxlength="40" value="${esc(it.unit)}" placeholder="pcs">`)}
+          ${f('Quantity', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="qty" value="${esc(it.qty)}">`)}
+          ${f('Unit price', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="unitPrice" value="${esc(it.unitPrice)}">`)}
+          ${f('Tax treatment', taxCell(it), 'ifield-tax')}
+          <div class="ifield"><span class="lbl" style="text-align:right">Line amount</span><div class="calc amt" id="amt-${esc(it.id)}"></div></div>
+        </div>
+        <div class="iss" id="iss-${esc(it.id)}"></div>
+        ${itemProvenance(it)}
+        <details class="spec" data-spec="${esc(it.id)}" ${S.specOpen.has(it.id) || (!it.name && !it.description) ? 'open' : ''}><summary>Specification &amp; source description — internal, not printed on the PO</summary>
+          <textarea class="inp" dir="auto" rows="3" data-item="${esc(it.id)}" data-if="description" maxlength="5000" placeholder="Full description / material specification (kept with the draft and its source evidence)" aria-label="Specification (internal)">${esc(it.description)}</textarea></details>
+        ${photoStrip(it)}
       </div></div>`).join('');
   const excRows = exc.map(it => `<div class="item excluded">
       <div class="item-top"><span></span><span class="item-no">—</span>
-        <div class="item-desc"><div class="desc-ro" dir="auto">${esc(it.description || '(no description)')}</div>
-          <div class="small muted" style="margin-top:4px">${esc(it.unit || '—')} · qty ${esc(it.qty || '—')} · unit price ${esc(it.unitPrice || '—')} · ${esc(TAX_LABELS[it.tax.treatment])}${it.tax.rate ? ' ' + esc(it.tax.rate) + '%' : ''}</div>
-          <div class="src">Excluded ${esc(fmtTime(it.excludedAt))} — kept in the draft, omitted from PO totals</div></div>
-        <button class="btn btn-sm" data-act="restore" data-id="${esc(it.id)}">Restore</button></div></div>`).join('');
+        <div class="item-desc"><div class="desc-ro" dir="auto"><b>${esc(itemTitle(it))}</b></div></div>
+        <button class="btn btn-sm" data-act="restore" data-id="${esc(it.id)}">Restore</button></div>
+      <div class="item-body">
+        ${it.dimensions ? `<div class="small">${esc(Object.keys(it.dimensions.values).length ? dimsText(it.dimensions) : '')}${[it.dimensions.described && it.dimensions.described.main].concat(it.dimensions.described ? it.dimensions.described.additional : []).filter(Boolean).map(x => ' · ' + esc(x)).join('')}</div>` : ''}
+        <div class="small muted" style="margin-top:4px">${esc(it.unit || '—')} · qty ${esc(it.qty || '—')} · unit price ${esc(it.unitPrice || '—')} · ${esc(TAX_LABELS[it.tax.treatment])}${it.tax.rate ? ' ' + esc(it.tax.rate) + '%' : ''}</div>
+        <div class="src">Excluded ${esc(fmtTime(it.excludedAt))} — kept in the draft, omitted from PO totals</div>
+        ${photoStrip(it)}</div></div>`).join('');
   area.innerHTML = (inc.length ? `<div class="items">${rows}</div>`
       : `<div class="state">No included items. Add items manually${exc.length ? ' or restore an excluded item' : ''}.</div>`)
-    + (exc.length ? `<details style="margin-top:14px" open><summary class="lbl" style="cursor:pointer">Excluded items (${exc.length})</summary><div class="items">${excRows}</div></details>` : '');
+    + (exc.length ? `<details style="margin-top:14px" open><summary class="lbl" style="cursor:pointer">Excluded items (${exc.length})</summary><div class="items">${excRows}</div></details>` : '')
+    + photosAside();
   const chip = $('itemsChip');
   if (chip) chip.innerHTML = `<span class="chip chip-info">${inc.length} included · ${exc.length} excluded</span>`;
 }
@@ -811,8 +1009,14 @@ function refreshDerived() {
     if (t.status === 'complete') {
       html += `<div class="row"><span>Net (before tax)</span><span class="calc">${esc(money(t.net, cur))}</span></div>`;
       html += t.taxGroups.map(g => `<div class="row small"><span>Tax · ${esc(TAX_LABELS[g.treatment])}${g.rate ? ' ' + esc(g.rate) + '%' : ''} on ${esc(money(g.net))}</span><span class="calc">${esc(money(g.tax, cur))}</span></div>`).join('');
-      html += `<div class="row grand"><span>PO total</span><span class="calc">${esc(money(t.gross, cur))}</span></div>`;
+      html += `<div class="row grand"><span>PO total${t.provisional ? ' <span class="chip chip-bad">Provisional</span>' : ''}</span><span class="calc">${esc(money(t.gross, cur))}</span></div>`;
     } else html += `<div class="banner banner-warn" style="margin:8px 0 0">${esc(msgs[t.status])}</div>`;
+    if (t.provisional) {
+      const q = d.quotation, qt = q && q.totals && (q.totals.grandTotal || q.totals.total);
+      html += `<div class="banner banner-bad" style="margin:8px 0 0"><b>Provisional:</b> the supplier quotation has discounts or charges that this PO does not apply yet
+        (${t.provisionalItems.length} item(s) affected). This PO total is <b>not</b> the quotation's payable total${qt ? ` (printed on the quotation: ${esc(qt)})` : ''}.
+        The quotation's values are kept with each item for reconciliation.</div>`;
+    }
     const sc = S.server && S.server.computed;
     if (sc && !S.dirty) {
       const same = sc.totals.status === t.status && sc.totals.gross === t.gross && sc.totals.net === t.net && sc.totals.tax === t.tax;
@@ -836,6 +1040,1189 @@ function refreshDerived() {
   }
 }
 
+// ══ Phase 2 — supplier quotation: upload, local extraction, review, apply ══
+// The original is stored unchanged by the server (content-addressed, re-hashed
+// on read). Reading happens here in the browser: pdf.js text layer first; only
+// pages without usable text go through local Tesseract OCR (eng+ara). Results
+// are stored as an immutable extraction; nothing reaches the PO draft until the
+// user applies selected rows/fields, and applying never changes existing items.
+const PDF_OK = typeof pdfjsLib !== 'undefined';
+if (PDF_OK) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const OCR_OK = typeof Tesseract !== 'undefined';
+const EXTRACT_OK = typeof POExtract !== 'undefined';
+const UPLOAD_MAX = 25 * 1024 * 1024;
+const UPLOAD_TYPES = { 'application/pdf': 'PDF', 'image/png': 'PNG', 'image/jpeg': 'JPEG' };
+const MAX_PAGES = 60, SPARSE_TEXT = 25, OCR_SCALE = 2.2;
+const ENGINE = 'po-extract-5 · pdf.js 3.11.174 · tesseract.js 5.1.1 (eng+ara)';
+const HEADER_LABELS = {
+  quotationRef: 'Quotation reference', quotationDate: 'Quotation date', validity: 'Validity', supplierName: 'Supplier name (as printed)',
+  supplierVat: 'Supplier VAT no.', supplierCr: 'Supplier CR no.', supplierEmail: 'Supplier email', supplierPhone: 'Supplier phone',
+  currency: 'Currency', taxBasis: 'Prices incl. / excl. VAT', paymentTerms: 'Supplier payment terms', delivery: 'Delivery / lead time',
+  exclusions: 'Exclusions', notes: 'Notes', customerName: 'Addressed to (customer, as printed)', projectName: 'Project (as printed)',
+};
+const KIND_TEXT = { optional: 'Optional', alternative: 'Alternative', repeated_header: 'Repeated header', carried_forward: 'Carried / brought forward',
+  subtotal: 'Subtotal', grand_total: 'Grand total', total: 'Total', vat: 'Tax line', discount: 'Discount', delivery: 'Delivery charge',
+  installation: 'Installation charge', section_heading: 'Section heading', unclassified: 'Unclassified', unstructured: 'Unstructured line',
+  end_marker: 'Table end marker', item_heading: 'Item heading (priced as components)' };
+const srcCache = new Map();          // sourceId → { bytes, pdf, img }
+let ocrWorker = null, viewerToken = 0;
+const fmtSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+const lowc = ef => ef && (ef.flags || []).some(f => /low_confidence|ambiguous|unreadable/.test(f)) ? 'lowc' : '';
+
+async function loadSources(force) {
+  const d = S.draft; if (!d) return;
+  if (!force && S.src.draftId === d.id && S.src.status === 'ready') return;
+  S.src = { draftId: d.id, list: S.src.draftId === d.id ? S.src.list : [], extractions: S.src.draftId === d.id ? S.src.extractions : {}, status: 'loading', error: '' };
+  renderSources();
+  const { status, json } = await api('GET', '/api/po/sources?draftId=' + encodeURIComponent(d.id));
+  if (!S.draft || S.draft.id !== d.id) return;
+  if (status !== 200 || !json.ok) { S.src.status = 'error'; S.src.error = json.error || 'Could not load the documents.'; renderSources(); return; }
+  const ex = {};
+  for (const s of json.data) {
+    const r = await api('GET', '/api/po/extractions?sourceId=' + encodeURIComponent(s.id));
+    ex[s.id] = r.status === 200 && r.json.ok ? r.json.data : [];
+  }
+  if (!S.draft || S.draft.id !== d.id) return;
+  S.src.list = json.data; S.src.extractions = ex; S.src.status = 'ready';
+  renderSources();
+  loadPhotos();
+}
+
+function renderSources() {
+  const area = $('sourceArea'); if (!area || !S.draft) return;
+  if (S.src.draftId !== S.draft.id) { loadSources(); return; }
+  const missingLibs = [!PDF_OK && 'PDF reader', !OCR_OK && 'OCR', !EXTRACT_OK && 'extraction engine'].filter(Boolean);
+  let html = `<label class="drop" id="dropZone"><input type="file" id="srcFile" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" hidden>
+      <b>Upload a supplier quotation</b> — drop the file here or click to choose<br>
+      <span class="small">PDF (text or scanned), PNG or JPEG · max 25 MB · the original is kept unchanged with its SHA-256 hash.<br>
+      Reading happens on this PC (PDF text layer + local Arabic/English OCR). The document is not sent to any AI service.</span></label>`;
+  if (missingLibs.length) html += `<div class="banner banner-warn" style="margin-top:10px">Not loaded: ${esc(missingLibs.join(', '))} (was the internet unavailable when the page opened?). Files can still be uploaded and kept; reload the page to extract.</div>`;
+  if (S.src.status === 'loading' && !S.src.list.length) html += '<div class="state">Loading documents…</div>';
+  if (S.src.status === 'error') html += `<div class="banner banner-bad" style="margin-top:10px">${esc(S.src.error)} <button class="link" data-act="src-reload">Retry</button></div>`;
+  for (const s of S.src.list) {
+    const exs = S.src.extractions[s.id] || [];
+    const job = S.job && S.job.sourceId === s.id ? S.job : null;
+    const canRun = !S.job && EXTRACT_OK && (s.mime === 'application/pdf' ? PDF_OK : OCR_OK);
+    html += `<div class="src-row"><div class="n" dir="auto">${esc(s.name)}</div>
+      <div class="m">${esc(UPLOAD_TYPES[s.mime] || s.mime)} · ${esc(fmtSize(s.size))} · SHA-256 ${esc(s.sha256.slice(0, 16))}… · uploaded ${esc(fmtTime(s.createdAt))}</div>
+      <div class="m">${exs.length ? exs.map((x, i) => `Extraction ${i + 1} · ${esc(fmtTime(x.createdAt))} · ${esc(x.summary.rows)} item row(s), ${esc(x.summary.otherRows)} other · ${esc((x.summary.methods || []).join(' + '))}
+          ${x.summary.complete === false ? `· <b style="color:var(--bad)">INCOMPLETE: ${esc(x.summary.pages)} of ${esc(x.summary.totalPages)} pages read</b>` : x.summary.totalPages ? `· ${esc(x.summary.totalPages)} page(s) read` : ''}
+          ${/every page/.test(x.engine || '') ? '· OCR on every page' : ''}
+          · <button class="link" data-act="rv-open" data-id="${esc(x.id)}" data-src="${esc(s.id)}">${S.rv && S.rv.id === x.id ? 'open below' : 'review'}</button>`).join('<br>') : 'Not extracted yet.'}</div>
+      ${job ? `<div class="small" style="margin-top:6px" id="jobStage">${esc(job.stage)}</div><div class="progress"><div id="jobBar" style="width:${Math.round((job.progress || 0) * 100)}%"></div></div>` : ''}
+      <div class="src-acts">
+        ${job ? '<button class="btn btn-sm btn-ghost" data-act="job-cancel">Cancel extraction</button>'
+              : `<button class="btn btn-sm" data-act="src-extract" data-id="${esc(s.id)}" ${canRun ? '' : 'disabled'}>${exs.length ? 'Re-run extraction' : 'Extract'}</button>
+                 ${s.mime === 'application/pdf' ? `<button class="btn btn-sm btn-ghost" data-act="src-extract-ocr" data-id="${esc(s.id)}" ${canRun && OCR_OK ? '' : 'disabled'}
+                    title="Also OCR every page — use when part of a page (e.g. a table) is an image the automatic check missed">Re-run with OCR on every page</button>` : ''}`}
+        <a class="btn btn-sm btn-ghost" style="text-decoration:none" href="/api/po/sources/${encodeURIComponent(s.id)}/file" download>Download original</a>
+      </div></div>`;
+  }
+  if (!S.src.list.length && S.src.status === 'ready') html += '<div class="small muted" style="margin-top:8px">No supplier document uploaded for this draft. Items can still be entered manually.</div>';
+  html += '<div id="reviewArea"></div>';
+  area.innerHTML = html;
+  renderReview();
+}
+function setJob(stage, progress) {
+  if (!S.job) return;
+  if (stage != null) S.job.stage = stage;
+  if (progress != null) S.job.progress = progress;
+  const st = $('jobStage'), bar = $('jobBar');
+  if (st && bar) { st.textContent = S.job.stage; bar.style.width = Math.round((S.job.progress || 0) * 100) + '%'; }
+  else renderSources();
+}
+
+async function uploadFile(file) {
+  if (!file || !S.draft) return;
+  const byExt = /\.pdf$/i.test(file.name) ? 'application/pdf' : /\.png$/i.test(file.name) ? 'image/png' : /\.jpe?g$/i.test(file.name) ? 'image/jpeg' : '';
+  const type = UPLOAD_TYPES[file.type] ? file.type : byExt;
+  if (!UPLOAD_TYPES[type]) return showBanner('bad', 'Only PDF, PNG or JPEG files can be uploaded. Nothing was stored.');
+  if (!file.size) return showBanner('bad', 'The file is empty. Nothing was stored.');
+  if (file.size > UPLOAD_MAX) return showBanner('bad', `The file is ${esc(fmtSize(file.size))}; the limit is 25 MB. Nothing was stored.`);
+  toast('Uploading the original…');
+  let r;
+  try {
+    r = await fetch('/api/po/sources?draftId=' + encodeURIComponent(S.draft.id) + '&name=' + encodeURIComponent(file.name),
+                    { method: 'POST', headers: { 'Content-Type': type }, body: file });
+  } catch (e) { return showBanner('bad', 'The local Vista server is not reachable. Nothing was stored.'); }
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (r.status !== 201 && r.status !== 200) return showBanner('bad', esc(j.error || ('Upload failed (HTTP ' + r.status + '). Nothing was stored.')));
+  toast(r.status === 200 ? 'This exact file is already stored for this draft' : 'Original stored unchanged');
+  await loadSources(true);
+  if (r.status === 201) { const s = S.src.list.find(x => x.id === j.data.id); if (s && !S.job) runExtraction(s); }
+}
+
+async function sourceBytes(src) {
+  const c = srcCache.get(src.id);
+  if (c && c.bytes) return c.bytes;
+  const r = await fetch('/api/po/sources/' + encodeURIComponent(src.id) + '/file', { cache: 'no-store' });
+  if (!r.ok) throw new Error(r.status === 500 ? 'the stored original failed its integrity check and was not served' : 'the stored original could not be read (HTTP ' + r.status + ')');
+  const b = await r.arrayBuffer();
+  const hex = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', b)), x => x.toString(16).padStart(2, '0')).join('');
+  if (hex !== src.sha256) throw new Error('the downloaded original does not match its recorded SHA-256');
+  srcCache.set(src.id, Object.assign(c || {}, { bytes: b }));
+  return b;
+}
+async function sourceDoc(src) {
+  const c = srcCache.get(src.id) || {};
+  if (src.mime === 'application/pdf') {
+    if (!c.pdf) {
+      const b = await sourceBytes(src);
+      c.pdf = await pdfjsLib.getDocument({ data: new Uint8Array(b.slice(0)), isEvalSupported: false }).promise;
+      srcCache.set(src.id, Object.assign(srcCache.get(src.id) || {}, { pdf: c.pdf }));
+    }
+    return { pdf: c.pdf, pages: c.pdf.numPages };
+  }
+  if (!c.img) {
+    const b = await sourceBytes(src);
+    c.img = await createImageBitmap(new Blob([b], { type: src.mime }));
+    srcCache.set(src.id, Object.assign(srcCache.get(src.id) || {}, { img: c.img }));
+  }
+  return { img: c.img, pages: 1 };
+}
+async function pdfTextItems(page) {
+  const vp = page.getViewport({ scale: 1 });
+  const tc = await page.getTextContent();
+  const items = [];
+  for (const it of tc.items) {
+    if (!it.str || !it.str.trim()) continue;
+    const tx = pdfjsLib.Util.transform(vp.transform, it.transform);
+    const h = Math.hypot(tx[2], tx[3]) || 10;
+    items.push({ str: it.str, x: tx[4], y: tx[5] - h, w: Math.max(2, it.width * vp.scale), h });
+  }
+  return { vp, items };
+}
+let ocrStarting = null;
+function withTimeout(p, ms, message) {
+  let t;
+  return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(message)), ms); })]).finally(() => clearTimeout(t));
+}
+async function getOcrWorker() {
+  if (ocrWorker) return ocrWorker;
+  if (!ocrStarting) {
+    ocrStarting = (async () => {
+      const w = await Tesseract.createWorker(['eng', 'ara'], 1, {
+        logger: m => { if (S.job && m.status === 'recognizing text') setJob(null, S.job.base + m.progress * S.job.span); },
+      });
+      // Automatic page layout (PSM 3): the library default reads a page as one
+      // block and loses bordered tables (verified on the scanned fixture).
+      await w.setParameters({ tessedit_pageseg_mode: '3', preserve_interword_spaces: '1' });
+      ocrWorker = w;
+      return w;
+    })().finally(() => { ocrStarting = null; });
+  }
+  return withTimeout(ocrStarting, 90000, 'the OCR engine did not start within 90 seconds (no internet to load its language models?)');
+}
+// Two OCR passes, merged: automatic layout (PSM 3) and single-column layout
+// (PSM 4). Measured on the fixtures, each pass drops short tokens in narrow
+// bordered columns that the other keeps ("#" vs "Qty"). A word from the second
+// pass is added only where the first found nothing, and only at ≥ 50% confidence.
+async function ocrCanvas(canvas, scale) {
+  const worker = await getOcrWorker();
+  const toWords = data => (data.words || []).filter(w => w.text && w.text.trim()).map(w => ({
+    str: w.text, x: w.bbox.x0 / scale, y: w.bbox.y0 / scale, w: (w.bbox.x1 - w.bbox.x0) / scale, h: (w.bbox.y1 - w.bbox.y0) / scale,
+    conf: Math.max(0, Math.min(1, (w.confidence || 0) / 100)) }));
+  const first = toWords((await worker.recognize(canvas)).data);
+  let second = [];
+  try {
+    await worker.setParameters({ tessedit_pageseg_mode: '4' });
+    second = toWords((await worker.recognize(canvas)).data);
+  } finally {
+    await worker.setParameters({ tessedit_pageseg_mode: '3' });
+  }
+  const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  const extra = second.filter(w => w.conf >= 0.5 && !first.some(f => overlap(w, f) > 0.3 * Math.min(w.w * w.h, f.w * f.h)));
+  return first.concat(extra);
+}
+
+// Embedded images on a page (in page units), from the operator list.
+async function pageImageBoxes(page, vp) {
+  const boxes = [];
+  try {
+    const ops = await page.getOperatorList();
+    const OPS = pdfjsLib.OPS, stack = [];
+    let m = vp.transform.slice();
+    const mul = (a, b) => [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3],
+                           a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i];
+      if (fn === OPS.save) stack.push(m.slice());
+      else if (fn === OPS.restore) m = stack.pop() || m;
+      else if (fn === OPS.transform) m = mul(m, ops.argsArray[i]);
+      else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintInlineImageXObject) {
+        const pts = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]);
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        const x = Math.max(0, Math.min(...xs)), y = Math.max(0, Math.min(...ys));
+        boxes.push({ x, y, w: Math.min(vp.width, Math.max(...xs)) - x, h: Math.min(vp.height, Math.max(...ys)) - y });
+      }
+    }
+  } catch (e) { /* no image information: treated as no images */ }
+  return boxes;
+}
+// Images large enough to hold a table and not already covered by text-layer words.
+function imageRegionsNeedingOcr(boxes, items, vp) {
+  const area = vp.width * vp.height;
+  return boxes.filter(b => b.w * b.h >= area * 0.06 && b.w > 60 && b.h > 25).filter(b => {
+    const inside = items.filter(i => i.x + i.w / 2 >= b.x && i.x + i.w / 2 <= b.x + b.w && i.y + i.h / 2 >= b.y && i.y + i.h / 2 <= b.y + b.h);
+    return inside.reduce((s, i) => s + i.str.replace(/\s/g, '').length, 0) < 15;
+  });
+}
+// OCR words that do not overlap any text-layer word (no duplicated evidence).
+function mergeOcrWords(textItems, words) {
+  const overlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return words.filter(w => !textItems.some(t => overlap(w, t) > 0.3 * w.w * w.h));
+}
+async function ocrPageRegions(page, regions) {
+  const cvp = page.getViewport({ scale: OCR_SCALE });
+  const full = document.createElement('canvas');
+  full.width = Math.ceil(cvp.width); full.height = Math.ceil(cvp.height);
+  // intent 'print': no requestAnimationFrame pacing, so rendering also completes
+  // while the tab is in the background (display intent stalls in hidden tabs).
+  await page.render({ canvasContext: full.getContext('2d'), viewport: cvp, intent: 'print' }).promise;
+  if (!regions) return ocrCanvas(full, OCR_SCALE);              // whole page
+  const words = [];
+  for (const r of regions) {
+    const pad = 16, sx = Math.max(0, Math.floor((r.x - pad) * OCR_SCALE)), sy = Math.max(0, Math.floor((r.y - pad) * OCR_SCALE));
+    const sw = Math.min(full.width - sx, Math.ceil((r.w + 2 * pad) * OCR_SCALE)), sh = Math.min(full.height - sy, Math.ceil((r.h + 2 * pad) * OCR_SCALE));
+    if (sw < 20 || sh < 20) continue;
+    const crop = document.createElement('canvas');
+    crop.width = sw; crop.height = sh;
+    crop.getContext('2d').drawImage(full, sx, sy, sw, sh, 0, 0, sw, sh);
+    for (const w of await ocrCanvas(crop, OCR_SCALE)) words.push(Object.assign(w, { x: w.x + sx / OCR_SCALE, y: w.y + sy / OCR_SCALE }));
+  }
+  return words;
+}
+
+async function runExtraction(src, opts) {
+  if (S.job) return;
+  opts = opts || {};
+  const job = S.job = { sourceId: src.id, stage: 'Opening the stored original…', progress: 0, cancel: false, base: 0, span: 1 };
+  renderSources();
+  const pages = [], extraWarn = [];
+  let totalPages = 1;
+  const alive = () => { if (S.job !== job || job.cancel) throw new Error('cancelled'); };
+  try {
+    const doc = await sourceDoc(src);
+    alive();
+    if (doc.pdf) {
+      const total = doc.pdf.numPages, n = Math.min(total, MAX_PAGES);
+      totalPages = total;
+      for (let p = 1; p <= n; p++) {
+        alive();
+        S.job.base = (p - 1) / n; S.job.span = 1 / n;
+        setJob(`Reading page ${p} of ${n}${total > n ? ` (document has ${total} pages; only ${n} will be read)` : ''} — text layer…`, S.job.base);
+        const page = await doc.pdf.getPage(p);
+        const { vp, items } = await pdfTextItems(page);
+        items.forEach(i => { i.src = 'text'; });
+        const images = await pageImageBoxes(page, vp);     // picture placements: item photos + image-only content
+        const chars = items.reduce((s, i) => s + i.str.replace(/\s/g, '').length, 0);
+        const sparse = chars < SPARSE_TEXT;
+        // Pages with a text layer can still carry an image-only table: OCR those image regions
+        // (or every page when explicitly requested) and add only non-overlapping OCR words.
+        const regions = sparse || opts.ocrAll ? null : imageRegionsNeedingOcr(images, items, vp);
+        const wantOcr = sparse || opts.ocrAll || (regions && regions.length);
+        if (!wantOcr) { pages.push({ page: p, width: vp.width, height: vp.height, method: 'text', items, images }); continue; }
+        if (!OCR_OK) {
+          pages.push({ page: p, width: vp.width, height: vp.height, method: sparse ? 'none' : 'text', items, images });
+          extraWarn.push({ code: 'ocr_unavailable', page: p, message: sparse ? `Page ${p} has no text layer and OCR is not loaded — it was not read.`
+            : `Page ${p} contains image content that may hold text, but OCR is not loaded — only its text layer was read.` });
+          continue;
+        }
+        setJob(sparse ? `Page ${p} of ${n} has no text layer — local OCR (Arabic + English)…`
+          : opts.ocrAll ? `Page ${p} of ${n}: OCR on the whole page (requested)…` : `Page ${p} of ${n}: text layer + OCR of ${regions.length} image region(s)…`, S.job.base);
+        const words = mergeOcrWords(items, (await ocrPageRegions(page, sparse || opts.ocrAll ? null : regions)).map(w => Object.assign(w, { src: 'ocr' })));
+        alive();
+        const merged = items.concat(words);
+        pages.push({ page: p, width: vp.width, height: vp.height, items: merged, images,
+                     method: !merged.length ? 'none' : !items.length ? 'ocr' : words.length ? 'mixed' : 'text',
+                     ocrRegions: regions ? regions.map(r => ({ x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) })) : 'page' });
+        if (words.length && items.length) extraWarn.push({ code: 'mixed_page', page: p,
+          message: `Page ${p}: text layer plus ${words.length} OCR word(s) from image content — OCR values are marked as such.` });
+      }
+    } else {
+      if (!OCR_OK) throw new Error('OCR is not loaded, so an image cannot be read');
+      setJob('Local OCR on the image (Arabic + English)…', 0);
+      const img = doc.img;
+      // Native resolution: upscaling a raster made Tesseract lose bordered tables
+      // (measured on the scanned fixture: ×1 read all rows, ×1.5 and ×2 read none).
+      const up = Math.min(1, 3500 / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * up); canvas.height = Math.round(img.height * up);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const words = (await ocrCanvas(canvas, up)).map(w => Object.assign(w, { src: 'ocr' }));
+      alive();
+      pages.push({ page: 1, width: img.width, height: img.height, method: words.length ? 'ocr' : 'none', items: words });
+    }
+    alive();
+    setJob('Structuring the text into fields and rows…', 1);
+    const result = POExtract.extract({ pages, document: { totalPages, fileName: src.name } });
+    result.warnings = result.warnings.concat(extraWarn);
+    result.options = { ocrAll: !!opts.ocrAll };
+    result.pages.forEach(pm => { const pg = pages.find(x => x.page === pm.page); if (pg && pg.ocrRegions) pm.ocrRegions = pg.ocrRegions; });
+    const { status, json } = await api('POST', '/api/po/extractions', { sourceId: src.id, engine: ENGINE + (opts.ocrAll ? ' · OCR on every page' : ''), result });
+    if (status !== 201) throw new Error(json.error || 'the extraction could not be stored');
+    let photoNote = '';
+    if ((result.photos || []).some(x => x.status === 'candidate')) {
+      setJob('Keeping the item pictures as photos (the original is not changed)…', 1);
+      try { const n = await storeExtractionPhotos(src, result, json.data.id); photoNote = n ? ` · ${n} item photo(s) stored` : ''; }
+      catch (err) { showBanner('warn', 'The extraction was stored, but its item photos could not be stored: ' + esc(err && err.message || err) + '. Re-run to try again.'); }
+    }
+    S.job = null;
+    await loadSources(true);
+    toast('Extraction stored' + photoNote + ' — review it before applying anything');
+    openReview(json.data.id, src.id);
+  } catch (err) {
+    if (S.job !== job || job.cancel) return;          // cancelled: the cancel action already reported it
+    S.job = null;
+    renderSources();
+    showBanner('bad', 'Extraction failed: ' + esc(err && err.message || err) + '. The original document is kept unchanged — retry, or enter the items manually.');
+  }
+}
+async function cancelJob() {
+  if (!S.job) return;
+  S.job.cancel = true;
+  S.job = null;                                        // abandoned at once; late results are ignored
+  renderSources();
+  showBanner('info', 'Extraction cancelled. The original document is kept; you can run it again.');
+  if (ocrWorker) { const w = ocrWorker; ocrWorker = null; try { await w.terminate(); } catch (e) {} }
+}
+
+// ── review ───────────────────────────────────────────────────────────────────
+function draftSig(desc, qty, price) { return [POExtract.normText(desc || ''), qty || '', price || ''].join('|'); }
+// Rows of this document already imported (by source row / printed row + occurrence).
+// Identical PO values alone never mark a row as imported — see similarToDraft.
+function alreadyInDraft(ex, exId) {
+  const out = new Set();
+  const srcId = S.rv && S.rv.id === exId ? S.rv.src.id : (S.src.list.find(s => (S.src.extractions[s.id] || []).some(x => x.id === exId)) || {}).id;
+  const bySource = new Set(S.draft.items.filter(i => i.sourceRef).map(i => i.sourceRef.extractionId + ':' + i.sourceRef.rowId));
+  for (const r of ex.rows) if (POExtract.alreadyImportedReason(ex, r, S.draft.items, exId, srcId)) out.add(r.id);
+  for (const o of ex.otherRows) if (bySource.has(exId + ':' + o.id)) out.add(o.id);
+  return out;
+}
+function similarToDraft(ex, inDraft) {
+  const sigs = new Set(S.draft.items.map(i => draftSig(i.description, i.qty, i.unitPrice)));
+  return new Set(ex.rows.filter(r => !inDraft.has(r.id) && r.fields.description.value &&
+    sigs.has(draftSig(r.fields.description.value, r.fields.qty.value || '', r.fields.unitPrice.value || ''))).map(r => r.id));
+}
+async function openReview(exId, srcId, highlightRowId) {
+  const src = S.src.list.find(s => s.id === srcId);
+  if (!src) return showBanner('bad', 'The source document for this extraction is not attached to this draft.');
+  const { status, json } = await api('GET', '/api/po/extractions/' + encodeURIComponent(exId));
+  if (status !== 200 || !json.ok) return showBanner('bad', esc(json.error || 'Could not open the extraction.'));
+  const ex = json.data.data;
+  const inDraft = alreadyInDraft(ex, exId);
+  // Values read by OCR start unticked: OCR confidence is not verified accuracy.
+  const cleanHeader = Object.keys(HEADER_LABELS).filter(k => ex.header[k] && ex.header[k].value != null &&
+    !(ex.header[k].flags || []).some(f => /ambiguous|conflicting|heuristic|multiple|low_confidence/.test(f)) &&
+    ex.header[k].method !== 'ocr' && ex.header[k].method !== 'mixed');
+  // printed totals start ticked only when read from the text layer (never from OCR / mixed sources)
+  const tk = ['subtotal', 'vat', 'grandTotal', 'total'].filter(k => ex.totals[k] && ex.totals[k].value != null);
+  const hasTotals = tk.length > 0 && !tk.some(k => ex.totals[k].method === 'ocr' || ex.totals[k].method === 'mixed');
+  S.rv = { id: exId, ex, src, createdAt: json.data.createdAt, tab: 'items', page: 1, zoom: 1, scale: 1, highlight: null, confirm: null,
+    selRows: new Set(ex.rows.filter(r => r.selectedByDefault && !inDraft.has(r.id)).map(r => r.id)), selOther: new Set(),
+    headerKeys: new Set(cleanHeader.concat(hasTotals ? ['totals'] : [])), applyCurrency: false, applyTaxBasis: false, inDraft,
+    similar: similarToDraft(ex, inDraft), ackIncomplete: false };
+  renderSources();
+  if (highlightRowId) showRegion(highlightRowId);
+  const el = $('reviewArea'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function regionFor(id) {
+  const ex = S.rv.ex;
+  const r = ex.rows.find(x => x.id === id) || ex.otherRows.find(x => x.id === id);
+  if (r) return { page: r.page, region: r.region };
+  const [kind, key, sub] = String(id).split(':');
+  if (kind === 'h' && ex.header[key]) return { page: ex.header[key].page, region: ex.header[key].region };
+  if (kind === 't' && ex.totals[key]) return { page: ex.totals[key].page, region: ex.totals[key].region };
+  if (kind === 'l') { const pt = ex.pageText.find(p => p.page === +key); const l = pt && pt.lines[+sub]; if (l) return { page: pt.page, region: l.region }; }
+  return null;
+}
+function showRegion(id) {
+  const hit = regionFor(id);
+  if (!hit || !hit.page) return toast('No position recorded for this value');
+  S.rv.highlight = hit;
+  if (S.rv.page !== hit.page) { S.rv.page = hit.page; drawViewer(); } else positionHighlight();
+  const v = document.querySelector('.rv-view'); if (v && window.innerWidth < 1100) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderReview() {
+  const el = $('reviewArea'); if (!el) return;
+  const rv = S.rv;
+  if (!rv || rv.src.draftId !== S.draft.id) { el.innerHTML = ''; return; }
+  const ex = rv.ex;
+  const conf = p => p.avgConfidence != null ? ' (OCR avg ' + Math.round(p.avgConfidence * 100) + '%)' : '';
+  const label = p => p.method === 'ocr' ? 'OCR' + conf(p) : p.method === 'mixed' ? 'text layer + OCR' + conf(p) : p.method === 'text' ? 'text layer' : 'unreadable';
+  const groups = [];                               // consecutive pages read the same way → one range
+  for (const p of ex.pages) {
+    const g = groups[groups.length - 1], l = label(p);
+    if (g && g.label === l && g.to === p.page - 1 && p.method === 'text') g.to = p.page; else groups.push({ from: p.page, to: p.page, label: l });
+  }
+  const methods = groups.map(g => `p${g.from}${g.to > g.from ? '–' + g.to : ''}: ${g.label}`).join(' · ');
+  const docInfo = ex.document || { totalPages: ex.pages.length, processedPages: ex.pages.map(p => p.page), complete: true };
+  const coverage = docInfo.complete
+    ? `<div class="small" style="margin-top:8px"><span class="chip chip-ok">All ${esc(docInfo.totalPages)} page(s) read</span></div>`
+    : `<div class="banner banner-bad" style="margin:10px 0 0"><b>INCOMPLETE EXTRACTION — ${esc(docInfo.processedPages.length)} of ${esc(docInfo.totalPages)} pages read</b>
+         (${esc(pageRange(docInfo.processedPages))}; pages ${esc((docInfo.processedPages.length ? Math.max(...docInfo.processedPages) : 0) + 1)}–${esc(docInfo.totalPages)} were NOT read).
+         Items, totals and terms on unread pages are missing. Applying requires an explicit acknowledgement below.</div>`;
+  const nPh = Array.isArray(ex.photos) ? ex.photos.filter(p => p.status === 'candidate').length : 0;
+  const tabs = [['items', `Items (${ex.rows.length})`], ['photos', `Photos (${nPh})`], ['other', `Other rows (${ex.otherRows.length})`], ['header', 'Quotation details'], ['totals', 'Printed totals'], ['text', 'Page text']]
+    .map(([k, l]) => `<button class="${rv.tab === k ? 'on' : ''}" data-act="rv-tab" data-tab="${k}">${esc(l)}</button>`).join('');
+  el.innerHTML = `<div class="card" style="margin:14px 0 0;border-color:var(--dark)">
+    <div class="card-h"><h3>Review extraction</h3><span class="chip chip-info" dir="auto">${esc(rv.src.name)}</span>
+      <span class="small muted">${esc(fmtTime(rv.createdAt))} · ${esc(methods)}</span>
+      <button class="btn btn-sm btn-ghost" style="margin-left:auto" data-act="rv-close">Close</button></div>
+    <div class="card-b">
+      <div class="small muted">Values are shown exactly as read, with their page and printed text; ✱ = low confidence / ambiguous. Nothing is added to the PO until you apply it below.
+        Extraction accuracy is not guaranteed — compare with the original on the left. This extraction record is never modified; re-running creates a new one.</div>
+      ${coverage}
+      ${ex.warnings.filter(w => w.code !== 'document_incomplete').length ? `<div class="banner banner-warn" style="margin:10px 0 0">${ex.warnings.filter(w => w.code !== 'document_incomplete').map(w => esc(w.message)).join('<br>')}</div>` : ''}
+      ${POExtract.unappliedAdjustments(ex).length ? `<div class="banner banner-bad" style="margin:10px 0 0"><b>The quotation has discounts / charges the PO does not apply yet:</b>
+         ${POExtract.unappliedAdjustments(ex).map(a => esc(a.label + ' ' + a.amount)).join(' · ')}. Imported items will be flagged and the PO total marked provisional — it will not equal the quotation's payable total.</div>` : ''}
+      <div class="rv">
+        <div class="rv-view">
+          <div class="rv-bar"><button class="btn btn-sm btn-ghost" data-act="rv-page" data-d="-1" aria-label="Previous page">‹</button>
+            <span id="rvPageLbl">Page ${esc(rv.page)}</span><button class="btn btn-sm btn-ghost" data-act="rv-page" data-d="1" aria-label="Next page">›</button>
+            <span style="margin-left:6px">Zoom</span><button class="btn btn-sm btn-ghost" data-act="rv-zoom" data-d="-1">−</button><button class="btn btn-sm btn-ghost" data-act="rv-zoom" data-d="1">+</button>
+            <span class="muted" id="rvMethod"></span></div>
+          <div class="rv-canvas" id="rvCanvasWrap"><canvas id="rvCanvas"></canvas><div class="rv-hl" id="rvHl" hidden></div></div>
+        </div>
+        <div class="rv-data"><div class="tabs">${tabs}</div><div id="rvTab"></div></div>
+      </div>
+      <div class="applybar" id="rvApply"></div>
+    </div></div>`;
+  renderReviewTab(); renderApplyBar(); drawViewer();
+}
+function efCell(label, ef, fmt) {
+  const v = ef && ef.value != null ? (fmt ? fmt(ef.value) : ef.value) : null;
+  return `<div><div class="k">${esc(label)}</div><div class="${lowc(ef)}" dir="auto">${v == null || v === '' ? '<span class="muted">—</span>' : esc(v) + (lowc(ef) ? ' ✱' : '')}</div>
+    ${ef && ef.raw && String(ef.raw) !== String(v) ? `<div class="raw" dir="auto">printed: ${esc(ef.raw)}</div>` : ''}</div>`;
+}
+const taxCellText = v => !v ? '' : v.treatment === 'taxable' ? v.rate + '%' : v.treatment === 'zero_rated' ? '0% (zero-rated)' : v.treatment === 'exempt' ? 'Exempt' : v.amount != null ? 'amount ' + v.amount : '';
+function dateText(d) {
+  if (!d) return '';
+  let s;
+  if (d.ambiguous) s = `${d.raw} — ambiguous${d.alternatives && d.alternatives.length ? ': ' + d.alternatives.join(' or ') : ''}`;
+  else if (d.calendar === 'hijri') s = `${d.raw} — Hijri ${d.hijri || ''} (not converted)`;
+  else s = `${d.raw}${d.iso ? ' → ' + d.iso : ''}${d.calendar === 'unknown' ? ' (calendar unknown)' : ''}`;
+  const also = (d.otherCalendars || []).map(o => `${o.raw} (${o.calendar === 'hijri' ? 'Hijri, not converted' : o.calendar})`);
+  return also.length ? `${s} · also printed: ${also.join(', ')}` : s;
+}
+function pageRange(pages) {
+  if (!pages || !pages.length) return 'none';
+  const out = []; let a = pages[0], b = pages[0];
+  for (const p of pages.slice(1).concat([null])) { if (p === b + 1) { b = p; continue; } out.push(a === b ? String(a) : a + '–' + b); a = b = p; }
+  return 'pages ' + out.join(', ');
+}
+function renderReviewTab() {
+  renderReviewTabBody();
+  fillLazyThumbs();
+}
+function renderReviewTabBody() {
+  const el = $('rvTab'); const rv = S.rv; if (!el || !rv) return;
+  const ex = rv.ex;
+  const showBtn = id => `<button class="link" style="font-size:10px" data-act="rv-show" data-id="${esc(id)}">show</button>`;
+  if (rv.tab === 'items') {
+    el.innerHTML = ex.rows.length ? ex.rows.map(r => {
+      const sel = rv.selRows.has(r.id), inD = rv.inDraft.has(r.id), f = r.fields;
+      return `<div class="xrow ${sel ? '' : 'off'}"><div style="display:flex;gap:8px;align-items:flex-start">
+        <input type="checkbox" data-rvrow="${esc(r.id)}" ${sel ? 'checked' : ''} aria-label="Import row ${esc(r.id)}" style="margin-top:3px">
+        <div style="flex:1;min-width:0">
+          <div class="small muted">Row ${esc(r.id)} · page ${esc(r.page)}${f.ref.value ? ' · no. ' + esc(f.ref.value) : ''}
+            ${r.kind !== 'item' ? `<span class="flag">${esc(KIND_TEXT[r.kind])} — not selected by default</span>` : ''}
+            ${inD ? '<span class="flag info">already in draft</span>' : ''}
+            ${rv.similar && rv.similar.has(r.id) ? '<span class="flag info">same values as an existing draft item — still importable</span>' : ''}
+            ${f.description.method === 'ocr' || f.unitPrice.method === 'ocr' || f.qty.method === 'ocr' || f.lineTotal.method === 'ocr' ? '<span class="flag info">read by OCR</span>' : ''}
+            ${showBtn(r.id)}</div>
+          ${r.parent ? `<div class="small" style="margin-top:3px">Component of item <b>${esc(r.parent.ref || '')}</b> — <span dir="auto">${esc(r.parent.title || '')}</span></div>` : ''}
+          <div dir="auto" class="${lowc(f.description)}" style="white-space:pre-wrap;margin-top:3px">${esc(f.description.value || '(no description)')}</div>
+          ${f.dimensions && f.dimensions.value ? `<div class="small" style="margin-top:3px">Dimensions (columns — not quantities): <b>${esc(Object.entries(f.dimensions.value).map(([k, v]) => k + ' ' + (v || '(blank)')).join(' × '))}</b> <span class="muted">as printed in the W/D/H columns</span>${
+            (f.dimensions.conflicts || []).length ? ` <span class="flag bad">description says ${esc(f.dimensions.conflicts.map(c => c.dim + ' ' + c.description).join(', '))} — not corrected</span>` : ''}</div>` : ''}
+          <div class="grid">${efCell('Unit', f.unit)}${efCell('Qty', f.qty)}${efCell('Unit price', f.unitPrice)}${efCell('Discount', f.discount)}${efCell('Tax', f.tax, taxCellText)}${efCell('Line total', f.lineTotal)}</div>
+          ${reviewRowPhotos(r)}
+          <div>${r.flags.map(flagChip).join('')}${r.duplicateOf ? ` <span class="small muted">same as row ${esc(r.duplicateOf)}</span>` : ''}${r.sameValuesAs ? ` <span class="small muted">same values as row ${esc(r.sameValuesAs)} — printed separately, kept</span>` : ''}</div>
+        </div></div></div>`;
+    }).join('') : '<div class="state">No item rows were recognised. Check “Other rows” and “Page text”, or enter items manually.</div>';
+  } else if (rv.tab === 'photos') {
+    el.innerHTML = reviewPhotosTab();
+  } else if (rv.tab === 'other') {
+    el.innerHTML = ex.otherRows.length ? `<div class="small muted" style="margin:8px 0">These lines were not treated as items. They are kept for review; tick one only if it really is an item (quantity and price stay blank).</div>` +
+      ex.otherRows.map(o => `<div class="xrow ${rv.selOther.has(o.id) ? '' : 'off'}"><div style="display:flex;gap:8px;align-items:flex-start">
+        <input type="checkbox" data-rvother="${esc(o.id)}" ${rv.selOther.has(o.id) ? 'checked' : ''} ${rv.inDraft.has(o.id) ? 'disabled' : ''} aria-label="Import line ${esc(o.id)} as an item" style="margin-top:3px">
+        <div style="flex:1;min-width:0"><div class="small muted"><b>${esc(KIND_TEXT[o.kind] || o.kind)}</b> · page ${esc(o.page)} ${showBtn(o.id)}</div>
+          <div dir="auto">${esc(o.text)}</div><div class="raw">${esc(o.reason || '')}${o.amount != null ? ' · amount ' + esc(o.amount) : ''}</div>
+          <div>${(o.flags || []).concat(o.amountFlags || []).filter(x => x !== 'missing').map(flagChip).join('')}</div></div></div></div>`).join('')
+      : '<div class="state">No other rows.</div>';
+  } else if (rv.tab === 'header') {
+    const h = ex.header;
+    el.innerHTML = `<div class="small muted" style="margin:8px 0">Ticked details are saved with the draft as the supplier's quotation terms (for comparison — they do not change the PO's own terms, dates or supplier). Flagged values start unticked.</div>` +
+      Object.entries(HEADER_LABELS).map(([k, label]) => {
+        const ef = h[k] || { value: null, flags: ['missing'] };
+        const val = k === 'quotationDate' ? dateText(ef.value) : ef.value;
+        const extra = k === 'currency' && ef.value && CURRENCIES[ef.value] != null
+          ? `<label class="small" style="display:block;margin-top:4px"><input type="checkbox" data-rvopt="currency" ${rv.applyCurrency ? 'checked' : ''}> also set the PO currency to ${esc(ef.value)}${S.draft.currency && S.draft.currency !== ef.value ? ` (currently ${esc(S.draft.currency)})` : ''}</label>` :
+          k === 'taxBasis' && (ef.value === 'inclusive' || ef.value === 'exclusive')
+          ? `<label class="small" style="display:block;margin-top:4px"><input type="checkbox" data-rvopt="taxBasis" ${rv.applyTaxBasis ? 'checked' : ''}> also set the PO unit prices as ${esc(ef.value)} of VAT${S.draft.priceTaxBasis !== 'unresolved' && S.draft.priceTaxBasis !== ef.value ? ` (currently ${esc(S.draft.priceTaxBasis)})` : ''}</label>` : '';
+        const rate = k === 'taxBasis' && h.taxRate && h.taxRate.value ? ` · VAT rate stated: ${esc(h.taxRate.value)}%` : '';
+        return `<div class="fx"><input type="checkbox" data-rvhdr="${k}" ${rv.headerKeys.has(k) ? 'checked' : ''} ${ef.value == null ? 'disabled' : ''} aria-label="Apply ${esc(label)}">
+          <div class="muted">${esc(label)}</div>
+          <div><div class="v ${lowc(ef)}" dir="auto">${val == null || val === '' ? '<span class="muted">Not found in the document</span>' : esc(val)}${rate}</div>
+            ${ef.raw && ef.value != null ? `<div class="raw" dir="auto">printed: ${esc(ef.raw)} ${ef.page ? '· page ' + esc(ef.page) : ''} ${showBtn('h:' + k)}</div>` : ''}
+            <div>${(ef.flags || []).filter(f => f !== 'missing' || ef.value == null).map(flagChip).join('')}
+              ${ef.value != null && (ef.method === 'ocr' || ef.method === 'mixed') ? '<span class="flag">read by OCR — verify against the original</span>' : ''}</div>${extra}</div></div>`;
+      }).join('') +
+      `<div class="small muted" style="margin-top:8px">The quotation date is the supplier's date. It is never used as the PO issue date or a delivery date. Hijri dates are shown as printed and not converted.</div>`;
+  } else if (rv.tab === 'totals') {
+    const t = ex.totals;
+    const rows = [['subtotal', 'Subtotal'], ['discount', 'Discount'], ['delivery', 'Delivery / shipping'], ['installation', 'Installation'], ['vat', 'VAT / tax'], ['grandTotal', 'Grand total'], ['total', 'Total (unlabelled)']];
+    el.innerHTML = `<div class="fx"><input type="checkbox" data-rvhdr="totals" ${rv.headerKeys.has('totals') ? 'checked' : ''} aria-label="Keep printed totals"><div class="muted">Keep with draft</div>
+        <div class="small">Save the printed totals with the draft for later reconciliation. They are never used to change item values.</div></div>` +
+      rows.map(([k, l]) => { const ef = t[k]; return `<div class="fx"><span></span><div class="muted">${esc(l)}</div><div>${ef && ef.value != null ? `<div class="v">${esc(ef.value)}</div><div class="raw" dir="auto">printed: ${esc(ef.raw)} · page ${esc(ef.page)} ${showBtn('t:' + k)}</div>` : '<span class="muted">Not found</span>'}
+        <div>${ef ? (ef.flags || []).filter(f => f !== 'missing').map(flagChip).join('') : ''}</div></div></div>`; }).join('') +
+      (t.carriedForward.length ? `<div class="small muted" style="margin-top:6px">Carried/brought-forward lines: ${t.carriedForward.map(c => esc(c.raw)).join(' · ')} (running subtotals — not added).</div>` : '') +
+      (t.otherCharges.length ? `<div class="small" style="margin-top:6px">Other charges: ${t.otherCharges.map(c => esc(c.raw)).join(' · ')}</div>` : '') +
+      `<div style="margin-top:10px">${(t.checks || []).map(c => `<div class="small"><span class="chip ${c.ok ? 'chip-ok' : 'chip-bad'}">${c.ok ? 'Consistent' : 'Mismatch'}</span> ${esc(c.check)}: calculated ${esc(c.expected)} · printed ${esc(c.printed)}${c.note ? ` <span class="muted">(${esc(c.note)} Rows: ${esc((c.excludedRows || []).join(', '))})</span>` : ''}</div>`).join('') || '<div class="small muted">Not enough printed totals to cross-check.</div>'}
+        <div class="small muted" style="margin-top:4px">Checks are reported only; nothing is recalculated or changed to force a match.</div></div>`;
+  } else {
+    const pt = ex.pageText.find(p => p.page === rv.page) || { lines: [] };
+    el.innerHTML = `<div class="small muted" style="margin:8px 0">Raw text of page ${esc(rv.page)} (${esc(pt.method || '')}). Click a line to highlight it.</div>` +
+      (pt.lines.length ? pt.lines.map((l, i) => `<div class="fx" style="grid-template-columns:1fr auto"><div class="v ${l.conf != null && l.conf < 0.6 ? 'lowc' : ''}" dir="auto">${esc(l.text)}</div>${showBtn('l:' + rv.page + ':' + i)}</div>`).join('')
+        : '<div class="state">No text on this page.</div>');
+  }
+}
+function renderApplyBar() {
+  const el = $('rvApply'); const rv = S.rv; if (!el || !rv) return;
+  const nRows = rv.selRows.size, nOther = rv.selOther.size, nHdr = rv.headerKeys.size;
+  if (rv.confirm) {
+    const p = rv.confirm;
+    el.innerHTML = `<div style="flex:1;min-width:240px"><b>Apply to the PO draft?</b>
+        ${p.warnings.length ? `<div class="banner banner-bad" style="margin:6px 0">${p.warnings.map(w => '⚠ ' + esc(w)).join('<br>')}</div>` : ''}
+        <ul style="margin:4px 0 0 18px">${p.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+        <div class="small muted" style="margin-top:4px">Existing items are never changed. The draft is saved only when you press Save.</div></div>
+      <button class="btn btn-sm" data-act="rv-apply-confirm">Apply now</button><button class="btn btn-sm btn-ghost" data-act="rv-apply-cancel">Cancel</button>`;
+    return;
+  }
+  const doc = rv.ex.document;
+  const incomplete = !!(doc && doc.complete === false);
+  el.innerHTML = `${incomplete ? `<label class="small" style="flex-basis:100%;color:var(--bad)"><input type="checkbox" data-rvopt="ackIncomplete" ${rv.ackIncomplete ? 'checked' : ''}>
+        I understand this extraction is INCOMPLETE: only ${esc(doc.processedPages.length)} of ${esc(doc.totalPages)} pages were read, so items, totals and terms on the other pages are missing.</label>` : ''}
+    <span>${nRows} item row(s)${nOther ? ` + ${nOther} other line(s)` : ''} and ${nHdr} quotation detail(s) selected</span>
+    <button class="btn btn-sm" style="margin-left:auto" data-act="rv-apply-preview" ${nRows + nOther + nHdr && (!incomplete || rv.ackIncomplete) ? '' : 'disabled'}>Review &amp; apply…</button>`;
+}
+function planFromReview() {
+  const rv = S.rv;
+  return POExtract.planImport(rv.ex, S.draft, { extractionId: rv.id, sourceId: rv.src.id, selectedRowIds: [...rv.selRows], selectedOtherIds: [...rv.selOther],
+    headerKeys: [...rv.headerKeys], applyCurrency: rv.applyCurrency, applyTaxBasis: rv.applyTaxBasis, acknowledgeIncomplete: rv.ackIncomplete,
+    newId: () => rid('it_', 12), now: new Date().toISOString() });
+}
+function previewApply() {
+  const d = S.draft, plan = planFromReview(), lines = [], warnings = [];
+  if (plan.blocked === 'incomplete_not_acknowledged') return showBanner('bad', 'This extraction did not read every page. Tick the incomplete-document acknowledgement before applying anything.');
+  if (plan.incomplete) warnings.push(`Incomplete document: only ${plan.items.length ? 'part of' : ''} the quotation was read (${pageRange(S.rv.ex.document.processedPages)} of ${S.rv.ex.document.totalPages}). Imported items are flagged.`);
+  const lineDisc = plan.items.filter(i => hasFlag(i, 'line_discount_present')).length;
+  if (lineDisc) warnings.push(`${lineDisc} item(s) carry a line discount in the quotation that is NOT applied to the PO price. The discount is kept with the item for reconciliation.`);
+  if (plan.adjustments.length && (plan.items.length || plan.quotation)) warnings.push(`Document-level adjustments are NOT applied: ${plan.adjustments.map(a => a.label + ' ' + a.amount).join(', ')}.`);
+  if (lineDisc || (plan.adjustments.length && plan.items.length)) warnings.push('The PO total will be PROVISIONAL and will not equal the quotation\'s payable total until these adjustments are reconciled.');
+  if (plan.items.length) lines.push(`${plan.items.length} new item(s) will be added to the draft.`);
+  const ocrRows = plan.items.filter(i => { const r = S.rv.ex.rows.find(x => x.id === i.sourceRef.rowId);
+    return r && ['description', 'qty', 'unitPrice', 'lineTotal'].some(k => r.fields[k].method === 'ocr' || r.fields[k].method === 'mixed'); }).length;
+  if (ocrRows) warnings.push(`${ocrRows} item(s) were read by OCR. OCR confidence is not verified accuracy — check every description, quantity and price against the original.`);
+  const same = plan.items.filter(i => hasFlag(i, 'same_as_existing_item')).length;
+  if (same) lines.push(`${same} of them have the same description, quantity and price as an item already in the draft (flagged, not dropped).`);
+  const opt = plan.items.filter(i => hasFlag(i, 'optional_selected') || hasFlag(i, 'alternative_selected')).length;
+  if (opt) lines.push(`${opt} of them are optional/alternative items you selected.`);
+  const defTax = plan.items.filter(i => hasFlag(i, DEFAULT_TAX_FLAG)).length;
+  if (defTax) lines.push(`${defTax} item(s) get the default VAT 15% flagged for review (the quotation states no tax treatment).`);
+  const blanks = plan.items.filter(i => !i.qty || !i.unitPrice).length;
+  if (blanks) lines.push(`${blanks} item(s) have a blank quantity or unit price (missing/ambiguous in the document — not guessed).`);
+  if (plan.skipped.length) lines.push(`${plan.skipped.length} selected row(s) skipped — already in the draft.`);
+  const phPlan = planPhotosFor(plan.items);
+  if (phPlan.length) lines.push(`${phPlan.length} item photo(s) will be attached as suggestions${phPlan.some(a => a.status === 'uncertain') ? ` (${phPlan.filter(a => a.status === 'uncertain').length} marked “Check association”)` : ''} — not included in the PO PDF until you tick it per photo.`);
+  if (plan.quotation) lines.push(d.quotation ? 'The saved quotation details will be REPLACED by the ticked details from this extraction.' : 'The ticked quotation details will be saved with the draft.');
+  if (plan.currency && plan.currency !== d.currency) lines.push(`PO currency: ${d.currency || 'not set'} → ${plan.currency}.`);
+  if (plan.priceTaxBasis && plan.priceTaxBasis !== d.priceTaxBasis) lines.push(`PO unit prices: ${d.priceTaxBasis} → ${plan.priceTaxBasis} of VAT.`);
+  if (!lines.length) return toast('Nothing new to apply');
+  S.rv.confirm = { lines, warnings, plan };
+  renderApplyBar();
+}
+function planPhotosFor(newItems) {
+  const rv = S.rv, d = S.draft;
+  if (!Array.isArray(rv.ex.photos)) return [];
+  return POExtract.planPhotos(rv.ex, d, { extractionId: rv.id, sourceId: rv.src.id, items: d.items.concat(newItems),
+    stored: S.ph.list.filter(p => p.sourceId === rv.src.id), newId: () => rid('pa_', 16), now: new Date().toISOString() });
+}
+function confirmApply() {
+  const rv = S.rv, d = S.draft;
+  const plan = planFromReview();     // recomputed at confirm time against the current draft
+  if (plan.blocked) return showBanner('bad', 'Nothing was applied: the incomplete-document acknowledgement is required.');
+  const phPlan = planPhotosFor(plan.items);
+  d.items.push(...plan.items);
+  d.photos = (d.photos || []).concat(phPlan);
+  if (plan.quotation) d.quotation = plan.quotation;
+  if (plan.currency) d.currency = plan.currency;
+  if (plan.priceTaxBasis) d.priceTaxBasis = plan.priceTaxBasis;
+  for (const it of plan.items) { rv.selRows.delete(it.sourceRef.rowId); rv.selOther.delete(it.sourceRef.rowId); }
+  rv.inDraft = alreadyInDraft(rv.ex, rv.id);
+  rv.similar = similarToDraft(rv.ex, rv.inDraft);
+  rv.confirm = null;
+  markDirty(); renderItems(); renderTotals(); renderSupplier(); refreshDerived(); renderReviewTab(); renderApplyBar();
+  toast(`${plan.items.length} item(s) added${plan.skipped.length ? ', ' + plan.skipped.length + ' skipped' : ''} — press Save to keep them`);
+}
+
+// ── item photos ──────────────────────────────────────────────────────────────
+// Photos are image regions of an ORIGINAL document (the original is never
+// changed): embedded pictures as placed on the page, or a user-selected
+// "source crop". Each is stored once in PO storage (po_photos, stable id per
+// source + page + region). Which item a photo belongs to is part of the draft
+// (draft.photos) and is saved with the draft.
+const PH_STATUS = { suggested: 'Suggested', uncertain: 'Check association', confirmed: 'Confirmed', removed: 'Removed' };
+const PH_REASON = { inside_item_block: 'inside this item’s block on the page', inside_parent_item_block: 'inside the parent item’s block (shared by its priced components)',
+  overlaps_next_item: 'overlaps the next item', starts_above_item: 'starts above the item', before_first_item_on_page: 'at the top of a page, before any item',
+  continues_from_previous_page: 'assumed to continue the last item of the previous page' };
+const PH_EXCLUDE = { repeated_on_pages: 'repeated on several pages (logo / letterhead)', header_or_footer_area: 'header / footer area', too_small: 'too small (icon / decoration)',
+  decorative_strip: 'decorative strip', page_background: 'page background / scan', above_item_table: 'above the item table (letterhead / logo)',
+  after_item_table: 'after the item table (signature / stamp area)', outside_item_table: 'outside the item table' };
+const phUrl = id => '/api/po/photos/' + encodeURIComponent(id) + '/file';
+const phLazy = new Map();          // rendered previews of NOT yet stored regions (browser only, never saved)
+
+async function loadPhotos() {
+  const d = S.draft; if (!d) return;
+  const list = [];
+  for (const s of S.src.list) {
+    const { status, json } = await api('GET', '/api/po/photos?sourceId=' + encodeURIComponent(s.id));
+    if (status === 200 && json.ok) list.push(...json.data);
+  }
+  if (!S.draft || S.draft.id !== d.id) return;
+  S.ph.list = list; S.ph.draftId = d.id;
+  renderItems(); refreshDerived();      // re-rendered cards need their line amounts and issues filled again
+  if (S.rv) renderReviewTab();
+}
+const storedPhotoFor = (sourceId, page, region, kind) => S.ph.list.find(p => p.sourceId === sourceId && p.page === page && (!kind || p.kind === kind) &&
+  ['x', 'y', 'w', 'h'].every(k => Math.abs(p.region[k] - region[k]) <= 0.15));
+
+// Render one page of a stored original to a canvas (print intent: completes in hidden tabs too).
+async function renderSourcePage(src, pageNo, scale) {
+  const doc = await sourceDoc(src);
+  const c = document.createElement('canvas');
+  if (doc.pdf) {
+    const page = await doc.pdf.getPage(pageNo);
+    const vp = page.getViewport({ scale });
+    c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp, intent: 'print' }).promise;
+  } else {
+    c.width = Math.ceil(doc.img.width * scale); c.height = Math.ceil(doc.img.height * scale);
+    c.getContext('2d').drawImage(doc.img, 0, 0, c.width, c.height);
+  }
+  return c;
+}
+function cropCanvas(pageCanvas, region, scale) {
+  const c = document.createElement('canvas');
+  const sx = Math.max(0, Math.floor(region.x * scale)), sy = Math.max(0, Math.floor(region.y * scale));
+  const sw = Math.min(pageCanvas.width - sx, Math.ceil(region.w * scale)), sh = Math.min(pageCanvas.height - sy, Math.ceil(region.h * scale));
+  c.width = Math.max(1, sw); c.height = Math.max(1, sh);
+  c.getContext('2d').drawImage(pageCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  return c;
+}
+// Render ONLY one region of a page, at a resolution suited to its size (small pictures get a higher scale).
+const regionScale = region => Math.min(8, Math.max(3, 1000 / Math.max(region.w, region.h)));
+async function renderRegion(src, pageNo, region) {
+  const doc = await sourceDoc(src);
+  const scale = regionScale(region);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(region.w * scale)); c.height = Math.max(1, Math.ceil(region.h * scale));
+  if (doc.pdf) {
+    const page = await doc.pdf.getPage(pageNo);
+    const vp = page.getViewport({ scale, offsetX: -region.x * scale, offsetY: -region.y * scale });
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp, intent: 'print' }).promise;
+  } else {
+    c.getContext('2d').drawImage(doc.img, region.x, region.y, region.w, region.h, 0, 0, c.width, c.height);
+  }
+  return c;
+}
+const canvasPng = c => new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('image could not be encoded')), 'image/png'));
+async function uploadPhoto(src, page, region, kind, blob, extractionId) {
+  const q = new URLSearchParams({ sourceId: src.id, page: String(page), x: String(region.x), y: String(region.y), w: String(region.w), h: String(region.h), kind });
+  if (extractionId) q.set('extractionId', extractionId);
+  const r = await fetch('/api/po/photos?' + q.toString(), { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob, cache: 'no-store' });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 409 && j.code === 'photo_conflict' && j.existing) {
+    // a DIFFERENT image is already stored under this photo id: it was kept; nothing new was stored
+    const e = new Error(j.error || 'a different image is already stored for this photo'); e.conflict = j.existing; throw e;
+  }
+  if (!(r.status === 201 || r.status === 200) || !j.ok) throw new Error(j.error || 'the photo could not be stored');
+  return j.data;
+}
+// Explain a refused re-store: the existing photo stays exactly as stored and is NOT replaced.
+function photoConflictNotice(existing, what) {
+  if (!S.ph.list.some(x => x.id === existing.id)) S.ph.list.push(existing);
+  showBanner('warn', `${esc(what)} was not stored: a different image is already stored for exactly this region of page ${esc(existing.page)}
+    (photo ${esc(existing.id)}, stored ${esc(fmtTime(existing.createdAt))}). The existing photo was kept unchanged and nothing was attached.
+    To use it, choose it under “Add photo” → stored photos. A replacement image would have to be stored as a new photo.`);
+}
+// After an extraction is stored: keep each candidate item picture as its own photo record.
+async function storeExtractionPhotos(src, result, exId) {
+  const cands = (result.photos || []).filter(p => p.status === 'candidate');
+  let stored = 0, kept = 0;
+  for (const p of cands) {
+    if (storedPhotoFor(src.id, p.page, p.region, 'embedded')) continue;
+    try {
+      const meta = await uploadPhoto(src, p.page, p.region, 'embedded', await canvasPng(await renderRegion(src, p.page, p.region)), exId);
+      S.ph.list.push(meta); stored++;
+    } catch (err) {
+      if (!err.conflict) throw err;
+      if (!S.ph.list.some(x => x.id === err.conflict.id)) S.ph.list.push(err.conflict);
+      kept++;                                       // existing photo kept as stored — not counted as stored
+    }
+  }
+  if (kept) showBanner('warn', `${kept} item photo(s) were already stored with a different image for the same region. The existing photos were kept unchanged; the new renderings were not stored.`);
+  return stored;
+}
+// Preview of a region that is not stored (excluded pictures in review): rendered in the browser only.
+async function fillLazyThumbs() {
+  const imgs = [...document.querySelectorAll('img[data-lazy]')];
+  const byPage = new Map();
+  for (const im of imgs) { const [sid, pg] = im.dataset.lazy.split('|'); const k = sid + '|' + pg; if (!byPage.has(k)) byPage.set(k, []); byPage.get(k).push(im); }
+  for (const [k, list] of byPage) {
+    const [sid, pg] = k.split('|');
+    const src = S.src.list.find(s => s.id === sid); if (!src) continue;
+    let canvas = null;
+    for (const im of list) {
+      const key = im.dataset.lazy;
+      if (!phLazy.has(key)) {
+        canvas = canvas || await renderSourcePage(src, +pg, 2);
+        const [, , x, y, w, h] = key.split('|').map(Number);
+        phLazy.set(key, cropCanvas(canvas, { x, y, w, h }, 2).toDataURL('image/png'));
+      }
+      im.src = phLazy.get(key); im.removeAttribute('data-lazy');
+    }
+  }
+}
+function phThumb(sourceId, page, region, attrs) {
+  const st = storedPhotoFor(sourceId, page, region, 'embedded');
+  return st ? `<img src="${esc(phUrl(st.id))}" alt="Item photo, page ${esc(page)}" ${attrs || ''}>`
+    : `<img alt="Picture on page ${esc(page)} (not stored)" data-lazy="${esc([sourceId, page, region.x, region.y, region.w, region.h].join('|'))}" ${attrs || ''}>`;
+}
+
+// labels
+function itemLabel(it) {
+  const inc = S.draft.items.filter(i => i.included);
+  const n = inc.indexOf(it);
+  const first = itemTitle(it);
+  return (n >= 0 ? '#' + (n + 1) : 'excluded') + ' — ' + (first.length > 60 ? first.slice(0, 60) + '…' : first);
+}
+function targetLabel(t) {
+  if (!t) return 'Not assigned';
+  if (t.kind === 'group') {
+    const n = S.draft.items.filter(i => i.orig && i.sourceRef && i.sourceRef.sourceId === t.sourceId && (i.orig.parent || '').trim() === t.parent).length;
+    return `Parent item “${t.parent}” — shared by ${n} priced component(s)`;
+  }
+  const it = findItem(t.itemId);
+  return it ? 'Item ' + itemLabel(it) : 'Missing item';
+}
+function draftGroups() {
+  const m = new Map();
+  for (const i of S.draft.items) if (i.orig && i.orig.parent && i.sourceRef) m.set(i.sourceRef.sourceId + '|' + i.orig.parent.trim(), { sourceId: i.sourceRef.sourceId, parent: i.orig.parent.trim() });
+  return [...m.values()];
+}
+function moveOptions(a) {
+  const cur = a.target ? (a.target.kind === 'item' ? 'item:' + a.target.itemId : 'group:' + a.target.sourceId + '|' + a.target.parent) : 'none';
+  const opt = (v, l) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`;
+  return `<option value="">Move to…</option>` + S.draft.items.map(i => opt('item:' + i.id, 'Item ' + itemLabel(i))).join('') +
+    draftGroups().map(g => opt('group:' + g.sourceId + '|' + g.parent, 'Parent item: ' + g.parent)).join('') + opt('none', 'Not assigned (keep aside)');
+}
+
+// PO draft: the photos of one item (its own, plus its parent item's photos shown with the first component)
+function photoStrip(it) {
+  const d = S.draft; if (!d.photos || !d.photos.length || !EXTRACT_OK) return '';
+  const all = POExtract.photosForItem(d, it).filter(a => a.status !== 'removed');
+  const own = all.filter(a => a.target.kind === 'item');
+  const group = all.filter(a => a.target.kind === 'group');
+  let shownGroup = [], note = '';
+  if (group.length) {
+    const members = d.items.filter(i => i.orig && i.sourceRef && i.sourceRef.sourceId === group[0].target.sourceId && (i.orig.parent || '').trim() === group[0].target.parent);
+    const firstShown = members.find(i => i.included) || members[0];
+    if (firstShown === it) shownGroup = group;
+    else note = `<div class="small muted" style="margin-top:4px">${group.length} photo(s) of parent item “${esc(group[0].target.parent)}” are shown with ${esc(itemLabel(firstShown))} — not assigned to one component.</div>`;
+  }
+  const list = own.concat(shownGroup);
+  return (list.length ? `<div class="phs">${list.map(photoCard).join('')}</div>` : '') + note;
+}
+function photoCard(a) {
+  const shared = a.target && a.target.kind === 'group';
+  return `<div class="ph ${a.status === 'uncertain' ? 'unc' : a.status === 'confirmed' ? 'conf' : ''}">
+    <img src="${esc(phUrl(a.photoId))}" alt="Item photo" data-act="ph-view" data-id="${esc(a.id)}" title="Enlarge">
+    <div class="ph-m"><span class="chip ${a.status === 'confirmed' ? 'chip-ok' : a.status === 'uncertain' ? 'chip-bad' : 'chip-info'}">${esc(PH_STATUS[a.status])}</span>
+      ${a.kind === 'source_crop' ? '<span class="flag info">source crop</span>' : ''}${shared ? '<span class="flag info">shared by parent item</span>' : ''}</div>
+    ${a.status === 'uncertain' && a.reasons.length ? `<div class="ph-r">${esc(a.reasons.map(r => PH_REASON[r] || r).join('; '))}</div>` : ''}
+    <label class="ph-pdf"><input type="checkbox" data-phpdf="${esc(a.id)}" ${a.includeInPdf ? 'checked' : ''}> Include in PO PDF</label>
+    <div class="ph-a">${a.status !== 'confirmed' && a.target ? `<button class="link" data-act="ph-confirm" data-id="${esc(a.id)}">Confirm</button>` : ''}
+      <button class="link" data-act="ph-remove" data-id="${esc(a.id)}">Remove</button></div>
+    <select class="inp ph-mv" data-phmove="${esc(a.id)}" aria-label="Move photo to another item">${moveOptions(a)}</select></div>`;
+}
+function photosAside() {
+  const d = S.draft; if (!d.photos || !EXTRACT_OK) return '';
+  const loose = d.photos.filter(a => a.status !== 'removed' && !a.target);
+  const removed = d.photos.filter(a => a.status === 'removed');
+  const need = d.photos.filter(a => a.status === 'uncertain' && a.target).length;
+  let h = '';
+  if (need) h += `<div class="banner banner-warn" style="margin-top:12px">${need} photo association(s) are uncertain — check them against the original and confirm, move or remove them.</div>`;
+  if (loose.length) h += `<details open style="margin-top:12px"><summary class="lbl" style="cursor:pointer">Photos not assigned to an item (${loose.length})</summary><div class="phs">${loose.map(photoCard).join('')}</div></details>`;
+  if (removed.length) h += `<details style="margin-top:12px"><summary class="lbl" style="cursor:pointer">Removed photos (${removed.length}) — kept so a re-run does not suggest them again</summary><div class="phs">${removed.map(a =>
+    `<div class="ph"><img src="${esc(phUrl(a.photoId))}" alt="Removed photo" data-act="ph-view" data-id="${esc(a.id)}"><div class="ph-a"><button class="link" data-act="ph-restore" data-id="${esc(a.id)}">Restore</button></div></div>`).join('')}</div></details>`;
+  return h;
+}
+function phAssoc(id) { return (S.draft.photos || []).find(a => a.id === id); }
+function phTouch(a) { a.updatedAt = new Date().toISOString(); markDirty(); renderItems(); refreshDerived(); if (S.ph.modal) renderPhotoModal(); }
+
+// review: photos of the extraction
+function reviewPhotoLabel(ex, t) {
+  if (!t) return '';
+  if (t.kind === 'group') return `Parent item ${t.parentRef ? esc(t.parentRef) + ' — ' : ''}${esc(t.parentTitle)} · shared by ${esc((t.rowIds || []).length)} priced component(s) — not assigned to one component`;
+  const r = ex.rows.find(x => x.id === t.rowId);
+  return r ? `Row ${esc(r.id)}${r.fields.ref.value ? ' · no. ' + esc(r.fields.ref.value) : ''} — ${esc(String(r.fields.description.value || '').split('\n')[0])}` : esc(t.rowId);
+}
+function draftAssocForRegion(sourceId, page, region) {
+  const st = storedPhotoFor(sourceId, page, region);
+  return st ? (S.draft.photos || []).find(a => a.photoId === st.id) : null;
+}
+function reviewPhotosTab() {
+  const rv = S.rv, ex = rv.ex;
+  if (!Array.isArray(ex.photos)) return '<div class="state">This extraction was made before photo detection existed. Re-run the extraction to find item photos.</div>';
+  const cands = ex.photos.filter(p => p.status === 'candidate'), excl = ex.photos.filter(p => p.status !== 'candidate');
+  const groups = new Map();
+  for (const p of cands) { const k = p.target.kind === 'group' ? 'g:' + p.target.parent : 'r:' + p.target.rowId; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
+  const pending = POExtract.planPhotos(ex, S.draft, { extractionId: rv.id, sourceId: rv.src.id, items: S.draft.items,
+    stored: S.ph.list.filter(p => p.sourceId === rv.src.id), newId: () => 'pa_preview', now: '' });
+  const unc = cands.filter(p => p.confidence !== 'high').length;
+  return `<div class="small muted" style="margin:8px 0">Pictures found in the original, grouped by the item block they sit in (page position and item boundaries).
+      A picture inside a titled item whose price is split into components stays with the <b>parent item</b>. Logos, letterhead, signature areas and decorations are not suggested.
+      Photos are attached to draft items only when those items are in the draft; each can be enlarged, confirmed, moved or removed there.</div>
+    ${unc ? `<div class="banner banner-warn" style="margin:6px 0">${unc} picture(s) have an uncertain position — they will be attached as “Check association”.</div>` : ''}
+    <div class="acts" style="margin:6px 0">${pending.length ? `<button class="btn btn-sm" data-act="rv-photos-attach">Attach ${pending.length} suggested photo(s) to items already in the draft</button>` : '<span class="small muted">No new photo suggestions for items already in the draft.</span>'}</div>
+    ${[...groups.values()].map(list => `<div class="xrow"><div class="small"><b>${reviewPhotoLabel(ex, list[0].target)}</b></div>
+      <div class="phs">${list.map(p => { const a = draftAssocForRegion(rv.src.id, p.page, p.region);
+        return `<div class="ph ${p.confidence !== 'high' ? 'unc' : ''}">${phThumb(rv.src.id, p.page, p.region, `data-act="rv-photo-show" data-page="${esc(p.page)}" data-key="${esc(p.key)}"`)}
+          <div class="ph-m">page ${esc(p.page)} · <span class="chip ${p.confidence === 'high' ? 'chip-info' : 'chip-bad'}">${p.confidence === 'high' ? 'position clear' : 'check'}</span></div>
+          <div class="ph-r">${esc(p.reasons.map(r => PH_REASON[r] || r).join('; '))}</div>
+          ${a ? `<div class="ph-m"><span class="flag info">in draft: ${esc(PH_STATUS[a.status])}</span></div>` : ''}</div>`; }).join('')}</div></div>`).join('') || '<div class="state">No item pictures were found.</div>'}
+    ${excl.length ? `<details style="margin-top:10px"><summary class="lbl" style="cursor:pointer">Not suggested (${excl.length})</summary><div class="phs">${excl.map(p =>
+      `<div class="ph">${phThumb(rv.src.id, p.page, p.region, `data-act="rv-photo-show" data-page="${esc(p.page)}" data-key="${esc(p.key)}"`)}<div class="ph-r">page ${esc(p.page)} · ${esc(PH_EXCLUDE[p.exclude] || p.exclude)}</div></div>`).join('')}</div>
+      <div class="small muted">Any of these can still be attached from an item in the PO draft (“Add photo”).</div></details>` : ''}`;
+}
+function reviewRowPhotos(r) {
+  const rv = S.rv, ex = rv.ex; if (!Array.isArray(ex.photos)) return '';
+  const own = ex.photos.filter(p => p.status === 'candidate' && p.target.kind === 'row' && p.target.rowId === r.id);
+  const grp = ex.photos.filter(p => p.status === 'candidate' && p.target.kind === 'group' && (p.target.rowIds || []).includes(r.id));
+  const first = grp.length && grp[0].target.rowIds[0] === r.id;
+  return (own.length || first ? `<div class="phs sm">${own.concat(first ? grp : []).map(p => phThumb(rv.src.id, p.page, p.region, `class="${p.confidence !== 'high' ? 'unc' : ''}" data-act="rv-photo-show" data-page="${esc(p.page)}" data-key="${esc(p.key)}" title="Show on the page"`)).join('')}</div>` : '') +
+    (first ? `<div class="small muted">${grp.length} photo(s) of the parent item — shared by its priced components</div>` : grp.length ? `<div class="small muted">Parent item photos: shown with the first component</div>` : '');
+}
+
+// modal: enlarge · pick · crop
+function openPhotoModal(m) { S.ph.modal = m; renderPhotoModal(); }
+function closePhotoModal() { S.ph.modal = null; const el = $('phModal'); if (el) el.remove(); }
+function renderPhotoModal() {
+  const m = S.ph.modal; if (!m) return closePhotoModal();
+  let el = $('phModal');
+  if (!el) { el = document.createElement('div'); el.id = 'phModal'; el.className = 'phm'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); }
+  let body = '';
+  if (m.type === 'view') {
+    const a = phAssoc(m.id); if (!a) return closePhotoModal();
+    const src = S.src.list.find(s => s.id === a.sourceId);
+    body = `<div class="card-h"><h3>Item photo</h3><button class="btn btn-sm btn-ghost" style="margin-left:auto" data-act="ph-close">Close</button></div>
+      <img class="phm-img" src="${esc(phUrl(a.photoId))}" alt="Item photo">
+      <div class="small" style="margin-top:8px">${esc(targetLabel(a.target))} · <b>${esc(PH_STATUS[a.status])}</b>${a.status === 'uncertain' && a.reasons.length ? ' — ' + esc(a.reasons.map(r => PH_REASON[r] || r).join('; ')) : ''}</div>
+      <div class="small muted">${a.kind === 'source_crop' ? 'SOURCE CROP — a region of the original page selected by you' : 'Picture embedded in the original'} · page ${esc(a.page)} of <span dir="auto">${esc(src ? src.name : a.sourceId)}</span>
+        · region x ${esc(a.region.x)}, y ${esc(a.region.y)}, ${esc(a.region.w)} × ${esc(a.region.h)} pt · photo id ${esc(a.photoId)}</div>`;
+  } else if (m.type === 'pick') {
+    const it = findItem(m.itemId); if (!it) return closePhotoModal();
+    const used = new Map((S.draft.photos || []).map(a => [a.photoId, a]));
+    const free = S.ph.list.filter(p => !used.has(p.id) || !used.get(p.id).target || used.get(p.id).status === 'removed');
+    const excl = [];
+    for (const s of S.src.list) {
+      const ex = m.extractions && m.extractions[s.id];
+      if (ex && Array.isArray(ex.photos)) for (const p of ex.photos) if (!storedPhotoFor(s.id, p.page, p.region, 'embedded')) excl.push({ s, p });
+    }
+    body = `<div class="card-h"><h3>Add a photo to ${esc(itemLabel(it))}</h3><button class="btn btn-sm btn-ghost" style="margin-left:auto" data-act="ph-close">Close</button></div>
+      <div class="small muted" style="margin:6px 0">Choose a stored photo, a picture from the original that was not suggested, or crop a region of the original page.</div>
+      ${free.length ? `<div class="lbl" style="margin-top:8px">Stored photos not attached to an item</div><div class="phs">${free.map(p => `<div class="ph"><img src="${esc(phUrl(p.id))}" alt="Stored photo" data-act="ph-pick" data-id="${esc(p.id)}" title="Attach">
+        <div class="ph-r">page ${esc(p.page)}${p.kind === 'source_crop' ? ' · source crop' : ''}${used.has(p.id) ? ' · ' + esc(PH_STATUS[used.get(p.id).status].toLowerCase()) : ''}</div></div>`).join('')}</div>` : ''}
+      ${excl.length ? `<div class="lbl" style="margin-top:8px">Other pictures in the original</div><div class="phs">${excl.map(({ s, p }) => `<div class="ph">${phThumb(s.id, p.page, p.region, `data-act="ph-pick-region" data-src="${esc(s.id)}" data-page="${esc(p.page)}" data-key="${esc(p.key)}" title="Attach"`)}
+        <div class="ph-r">page ${esc(p.page)} · ${esc(p.status === 'candidate' ? 'item picture' : PH_EXCLUDE[p.exclude] || p.exclude)}</div></div>`).join('')}</div>` : ''}
+      ${!free.length && !excl.length ? '<div class="state">No other pictures were found in the original.</div>' : ''}
+      <div class="acts" style="margin-top:10px">${S.src.list.length ? `<button class="btn btn-sm" data-act="ph-crop-start">Crop a region of the original page…</button>` : '<span class="small muted">Upload the supplier document first to crop from it.</span>'}</div>`;
+  } else if (m.type === 'crop') {
+    const it = findItem(m.itemId); if (!it) return closePhotoModal();
+    const src = S.src.list.find(s => s.id === m.sourceId) || S.src.list[0];
+    body = `<div class="card-h"><h3>Source crop for ${esc(itemLabel(it))}</h3><button class="btn btn-sm btn-ghost" style="margin-left:auto" data-act="ph-close">Close</button></div>
+      <div class="rv-bar">${S.src.list.length > 1 ? `<select class="inp" style="width:auto" data-phsrc="1">${S.src.list.map(s => `<option value="${esc(s.id)}" ${s.id === src.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select>` : `<span dir="auto">${esc(src.name)}</span>`}
+        <button class="btn btn-sm btn-ghost" data-act="ph-crop-page" data-d="-1">‹</button><span id="phCropLbl">Page ${esc(m.page)}</span><button class="btn btn-sm btn-ghost" data-act="ph-crop-page" data-d="1">›</button>
+        <button class="btn btn-sm btn-ghost" data-act="ph-crop-zoom" data-d="-1" aria-label="Zoom out">−</button><span>Zoom ${esc(Math.round((m.zoom || 1) * 100))}%</span><button class="btn btn-sm btn-ghost" data-act="ph-crop-zoom" data-d="1" aria-label="Zoom in">+</button>
+        <span class="muted">Drag a rectangle around the picture.</span></div>
+      <div class="phm-crop" id="phCropWrap"><canvas id="phCropCanvas"></canvas><div class="phm-sel" id="phCropSel" hidden></div></div>
+      <div class="acts" style="margin-top:8px"><button class="btn btn-sm" data-act="ph-crop-save" ${m.sel ? '' : 'disabled'}>Save crop and attach</button>
+        <span class="small muted">Stored as a SOURCE CROP of page ${esc(m.page)}; the original document is not changed.</span></div>`;
+  }
+  el.innerHTML = `<div class="phm-b">${body}</div>`;
+  if (m.type === 'crop') drawCropPage();
+  else fillLazyThumbs();
+}
+async function drawCropPage() {
+  const m = S.ph.modal, cv = $('phCropCanvas'), wrap = $('phCropWrap'); if (!m || !cv) return;
+  const src = S.src.list.find(s => s.id === m.sourceId) || S.src.list[0];
+  const doc = await sourceDoc(src);
+  m.total = doc.pages; m.page = Math.min(Math.max(1, m.page), doc.pages);
+  m.pageW = doc.pdf ? (await doc.pdf.getPage(m.page)).getViewport({ scale: 1 }).width : doc.img.width;
+  m.scale = Math.max(0.3, (wrap.clientWidth - 22) / m.pageW) * (m.zoom || 1);
+  const canvas = await renderSourcePage(src, m.page, m.scale * (window.devicePixelRatio || 1));
+  cv.width = canvas.width; cv.height = canvas.height; cv.getContext('2d').drawImage(canvas, 0, 0);
+  cv.style.width = Math.round(canvas.width / (window.devicePixelRatio || 1)) + 'px';
+  const lbl = $('phCropLbl'); if (lbl) lbl.textContent = `Page ${m.page} of ${m.total}`;
+  showCropSel();
+}
+// page points per displayed pixel come from the canvas's actual on-screen size, so the
+// selection stays exact at any zoom or CSS scaling
+const cropPx = cv => cv.getBoundingClientRect().width / (S.ph.modal.pageW || 1);
+function showCropSel() {
+  const m = S.ph.modal, sel = $('phCropSel'), cv = $('phCropCanvas'); if (!m || !sel || !cv) return;
+  if (!m.sel) { sel.hidden = true; return; }
+  const s = cropPx(cv);
+  sel.hidden = false;
+  sel.style.left = (cv.offsetLeft + m.sel.x * s) + 'px'; sel.style.top = (cv.offsetTop + m.sel.y * s) + 'px';
+  sel.style.width = (m.sel.w * s) + 'px'; sel.style.height = (m.sel.h * s) + 'px';
+}
+document.addEventListener('pointerdown', e => {
+  const m = S.ph && S.ph.modal; if (!m || m.type !== 'crop' || e.target.id !== 'phCropCanvas') return;
+  const r = e.target.getBoundingClientRect(), s = cropPx(e.target);
+  m.drag = { x0: (e.clientX - r.left) / s, y0: (e.clientY - r.top) / s };
+  e.target.setPointerCapture(e.pointerId);
+});
+document.addEventListener('pointermove', e => {
+  const m = S.ph && S.ph.modal; if (!m || !m.drag || e.target.id !== 'phCropCanvas') return;
+  const r = e.target.getBoundingClientRect(), s = cropPx(e.target);
+  const x1 = (e.clientX - r.left) / s, y1 = (e.clientY - r.top) / s;
+  m.sel = { x: Math.round(Math.min(m.drag.x0, x1) * 10) / 10, y: Math.round(Math.min(m.drag.y0, y1) * 10) / 10,
+            w: Math.round(Math.abs(x1 - m.drag.x0) * 10) / 10, h: Math.round(Math.abs(y1 - m.drag.y0) * 10) / 10 };
+  showCropSel();
+});
+document.addEventListener('pointerup', () => {
+  const m = S.ph && S.ph.modal; if (!m || !m.drag) return;
+  m.drag = null;
+  if (m.sel && (m.sel.w < 6 || m.sel.h < 6)) m.sel = null;
+  const b = document.querySelector('[data-act="ph-crop-save"]'); if (b) b.disabled = !m.sel;
+  showCropSel();
+});
+function attachPhoto(meta, itemId) {
+  const d = S.draft; d.photos = d.photos || [];
+  let a = d.photos.find(x => x.photoId === meta.id);
+  if (a && a.target && a.status !== 'removed' && !(a.target.kind === 'item' && a.target.itemId === itemId)) {
+    if (!confirm('This photo is attached to ' + targetLabel(a.target) + '. Move it to this item?')) return false;
+  }
+  if (!a) { a = { id: rid('pa_', 16), photoId: meta.id, sourceId: meta.sourceId, page: meta.page, region: Object.assign({}, meta.region), kind: meta.kind,
+    target: null, status: 'confirmed', origin: 'user', includeInPdf: false, reasons: [], suggestion: null, updatedAt: '' }; d.photos.push(a); }
+  a.target = { kind: 'item', itemId }; a.status = 'confirmed'; a.origin = 'user'; a.reasons = [];
+  phTouch(a); return true;
+}
+async function handlePhotoAction(act, b) {
+  if (!act.startsWith('ph-') && act !== 'rv-photos-attach' && act !== 'rv-photo-show') return false;
+  const a = b.dataset.id ? phAssoc(b.dataset.id) : null;
+  if (act === 'ph-close') { closePhotoModal(); return true; }
+  if (act === 'ph-view' && a) { openPhotoModal({ type: 'view', id: a.id }); return true; }
+  if (act === 'ph-confirm' && a) { a.status = 'confirmed'; a.reasons = []; phTouch(a); toast('Photo association confirmed'); return true; }
+  if (act === 'ph-remove' && a) { a.status = 'removed'; a.includeInPdf = false; phTouch(a); toast('Photo removed — kept in “Removed photos”; press Save'); return true; }
+  if (act === 'ph-restore' && a) { a.status = a.target ? 'confirmed' : 'uncertain'; phTouch(a); toast('Photo restored'); return true; }
+  if (act === 'ph-add') {
+    const exs = {};
+    for (const s of S.src.list) {                           // latest extraction of each document: its pictures
+      const list = S.src.extractions[s.id] || [];
+      const last = list[list.length - 1];
+      if (last) { const r = await api('GET', '/api/po/extractions/' + encodeURIComponent(last.id)); if (r.status === 200 && r.json.ok) exs[s.id] = r.json.data.data; }
+    }
+    openPhotoModal({ type: 'pick', itemId: b.dataset.id, extractions: exs }); return true;
+  }
+  if (act === 'ph-pick') { const meta = S.ph.list.find(p => p.id === b.dataset.id); if (meta && attachPhoto(meta, S.ph.modal.itemId)) { closePhotoModal(); toast('Photo attached — press Save'); } return true; }
+  if (act === 'ph-pick-region') {
+    const src = S.src.list.find(s => s.id === b.dataset.src), ex = S.ph.modal.extractions[b.dataset.src];
+    const p = ex && ex.photos.find(x => x.key === b.dataset.key); if (!src || !p) return true;
+    try {
+      const meta = await uploadPhoto(src, p.page, p.region, 'embedded', await canvasPng(await renderRegion(src, p.page, p.region)), null);
+      if (!S.ph.list.some(x => x.id === meta.id)) S.ph.list.push(meta);
+      if (attachPhoto(meta, S.ph.modal.itemId)) { closePhotoModal(); toast('Photo stored and attached — press Save'); }
+    } catch (err) {
+      if (err.conflict) photoConflictNotice(err.conflict, 'The picture');
+      else showBanner('bad', 'The photo could not be stored: ' + esc(err.message || err) + '. Nothing was attached.');
+    }
+    return true;
+  }
+  if (act === 'ph-crop-start') { const m = S.ph.modal; openPhotoModal({ type: 'crop', itemId: m.itemId, sourceId: (S.src.list[0] || {}).id, page: 1, sel: null }); return true; }
+  if (act === 'ph-crop-zoom') { const m = S.ph.modal; m.zoom = Math.min(4, Math.max(1, (m.zoom || 1) + (+b.dataset.d) * 0.5)); renderPhotoModal(); return true; }
+  if (act === 'ph-crop-page') { const m = S.ph.modal; m.page = Math.min(Math.max(1, m.page + (+b.dataset.d)), m.total || 1); m.sel = null; renderPhotoModal(); return true; }
+  if (act === 'ph-crop-save') {
+    const m = S.ph.modal; if (!m || !m.sel) return true;
+    const src = S.src.list.find(s => s.id === m.sourceId) || S.src.list[0];
+    try {
+      const meta = await uploadPhoto(src, m.page, m.sel, 'source_crop', await canvasPng(await renderRegion(src, m.page, m.sel)), null);
+      if (!S.ph.list.some(x => x.id === meta.id)) S.ph.list.push(meta);
+      if (attachPhoto(meta, m.itemId)) { closePhotoModal(); toast('Source crop stored and attached — press Save'); }
+    } catch (err) {
+      if (err.conflict) { closePhotoModal(); photoConflictNotice(err.conflict, 'The crop'); }
+      else showBanner('bad', 'The crop could not be stored: ' + esc(err.message || err) + '. Nothing was attached.');
+    }
+    return true;
+  }
+  if (act === 'rv-photos-attach') {
+    const rv = S.rv, d = S.draft;
+    const add = POExtract.planPhotos(rv.ex, d, { extractionId: rv.id, sourceId: rv.src.id, items: d.items,
+      stored: S.ph.list.filter(p => p.sourceId === rv.src.id), newId: () => rid('pa_', 16), now: new Date().toISOString() });
+    d.photos = (d.photos || []).concat(add);
+    markDirty(); renderItems(); refreshDerived(); renderReviewTab();
+    toast(`${add.length} photo(s) attached${add.some(a => a.status === 'uncertain') ? ' — some need confirmation' : ''} — press Save`);
+    return true;
+  }
+  if (act === 'rv-photo-show') {
+    const p = S.rv && (S.rv.ex.photos || []).find(x => x.key === b.dataset.key);
+    if (p) { S.rv.highlight = { page: p.page, region: p.region }; S.rv.page = p.page; drawViewer(); }
+    return true;
+  }
+  return true;
+}
+document.addEventListener('change', e => {
+  const t = e.target; if (!S.draft) return;
+  if (t.dataset.phpdf) { const a = phAssoc(t.dataset.phpdf); if (a) { a.includeInPdf = t.checked; phTouch(a); } }
+  else if (t.dataset.phmove) {
+    const a = phAssoc(t.dataset.phmove); const v = t.value; if (!a || !v) return;
+    if (v === 'none') { a.target = null; a.status = 'uncertain'; a.includeInPdf = false; }
+    else if (v.startsWith('item:')) a.target = { kind: 'item', itemId: v.slice(5) };
+    else { const [sid, ...rest] = v.slice(6).split('|'); a.target = { kind: 'group', sourceId: sid, parent: rest.join('|') }; }
+    if (v !== 'none') { a.status = 'confirmed'; a.reasons = []; }
+    a.origin = 'user'; phTouch(a); toast('Photo moved — press Save');
+  } else if (t.dataset.phsrc && S.ph.modal) { S.ph.modal.sourceId = t.value; S.ph.modal.page = 1; S.ph.modal.sel = null; renderPhotoModal(); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.ph && S.ph.modal) closePhotoModal(); });
+
+// ── viewer ───────────────────────────────────────────────────────────────────
+async function drawViewer() {
+  const rv = S.rv, cv = $('rvCanvas'), wrap = $('rvCanvasWrap');
+  if (!rv || !cv || !wrap) return;
+  const token = ++viewerToken;
+  try {
+    const doc = await sourceDoc(rv.src);
+    rv.total = doc.pages;
+    rv.page = Math.min(Math.max(1, rv.page), doc.pages);
+    const avail = Math.max(240, wrap.clientWidth - 12);
+    const dpr = window.devicePixelRatio || 1;
+    let w, h;
+    if (doc.pdf) {
+      const page = await doc.pdf.getPage(rv.page);
+      const vp1 = page.getViewport({ scale: 1 });
+      rv.scale = (avail / vp1.width) * rv.zoom;
+      const vp = page.getViewport({ scale: rv.scale * dpr });
+      if (token !== viewerToken) return;
+      if (rv.task) { try { rv.task.cancel(); } catch (e) {} }
+      cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+      w = vp1.width * rv.scale; h = vp1.height * rv.scale;
+      rv.task = page.render({ canvasContext: cv.getContext('2d'), viewport: vp });
+      await rv.task.promise.catch(() => {});
+    } else {
+      rv.scale = (avail / doc.img.width) * rv.zoom;
+      w = doc.img.width * rv.scale; h = doc.img.height * rv.scale;
+      cv.width = Math.floor(w * dpr); cv.height = Math.floor(h * dpr);
+      cv.getContext('2d').drawImage(doc.img, 0, 0, cv.width, cv.height);
+    }
+    if (token !== viewerToken) return;
+    cv.style.width = Math.floor(w) + 'px'; cv.style.height = Math.floor(h) + 'px';
+    const lbl = $('rvPageLbl'); if (lbl) lbl.textContent = `Page ${rv.page} of ${rv.total}`;
+    const pm = rv.ex.pages.find(p => p.page === rv.page), m = $('rvMethod');
+    if (m) m.textContent = pm ? (pm.method === 'ocr' ? '· read by OCR' : pm.method === 'mixed' ? '· text layer + OCR of image content' : pm.method === 'text' ? '· text layer' : '· not readable')
+                              : '· NOT READ (beyond the page limit)';
+    positionHighlight();
+    if (rv.tab === 'text') renderReviewTab();
+  } catch (e) {
+    if (token === viewerToken) wrap.innerHTML = `<div class="banner banner-bad" style="margin:10px">The original could not be displayed: ${esc(e && e.message || e)}.</div>`;
+  }
+}
+function positionHighlight() {
+  const rv = S.rv, hl = $('rvHl'), cv = $('rvCanvas');
+  if (!rv || !hl || !cv) return;
+  const hit = rv.highlight;
+  if (!hit || hit.page !== rv.page || !hit.region) { hl.hidden = true; return; }
+  const r = hit.region, s = rv.scale;
+  hl.hidden = false;
+  hl.style.left = (cv.offsetLeft + r.x * s - 3) + 'px'; hl.style.top = (cv.offsetTop + r.y * s - 3) + 'px';
+  hl.style.width = (r.w * s + 6) + 'px'; hl.style.height = (r.h * s + 6) + 'px';
+  const wrap = $('rvCanvasWrap');
+  wrap.scrollTo({ top: Math.max(0, cv.offsetTop + r.y * s - 80), left: Math.max(0, cv.offsetLeft + r.x * s - 40), behavior: 'smooth' });
+}
+
+// ── supplier hints from the quotation (never auto-selected) ────────────────
+function quotationIdentity() {
+  const q = S.draft && S.draft.quotation;
+  if (q && (q.supplierName || q.supplierVat)) return { supplierName: { value: q.supplierName || null }, supplierVat: { value: q.supplierVat || null }, from: 'saved quotation details' };
+  if (S.rv && S.rv.src.draftId === S.draft.id) {
+    const h = S.rv.ex.header;
+    if ((h.supplierName && h.supplierName.value) || (h.supplierVat && h.supplierVat.value))
+      return { supplierName: h.supplierName, supplierVat: h.supplierVat, from: 'open extraction' };
+  }
+  return null;
+}
+function supplierHintsHtml() {
+  if (!EXTRACT_OK) return '';
+  const qi = quotationIdentity(); if (!qi) return '';
+  const d = S.draft, name = qi.supplierName && qi.supplierName.value, vat = qi.supplierVat && qi.supplierVat.value;
+  const who = `<span dir="auto">${esc(name || '—')}</span>${vat ? ' · VAT ' + esc(vat) : ''}`;
+  if (d.supplier && !S.sup.changing) {
+    const mm = POExtract.supplierMismatch(qi, { name: d.supplier.name, snapshot: d.supplier.snapshot });
+    return mm.length ? `<div class="banner banner-warn" style="margin:0 0 10px">Quotation shows ${who} (${esc(qi.from)}).<ul>${mm.map(m => `<li dir="auto">${esc(m.message)}</li>`).join('')}</ul>Check that the selected Daftra supplier is right. Nothing is changed automatically.</div>`
+      : `<div class="small muted" style="margin-bottom:8px"><span class="chip chip-ok">Matches quotation</span> ${who}</div>`;
+  }
+  if (S.sup.status !== 'ready') return `<div class="small muted" style="margin:6px 0">Quotation shows ${who}. Suggestions appear when the Daftra supplier list has loaded.</div>`;
+  const sug = POExtract.suggestSuppliers(qi, S.sup.list);
+  return `<div class="banner banner-info" style="margin:8px 0">Quotation shows ${who} (${esc(qi.from)}).
+    ${sug.length ? `Possible Daftra matches — review and confirm one; nothing is selected automatically:<div class="acts">${sug.map(s =>
+      `<button class="btn btn-sm btn-ghost" data-act="review-supplier" data-id="${esc(s.id)}" dir="auto">${esc(s.name)} · ${esc(s.reasons.join(', '))}</button>`).join('')}</div>`
+      : 'No Daftra supplier matches this name or VAT number. Search below, or add the supplier in Daftra first — suppliers are not created from here.'}</div>`;
+}
+
+async function handlePhase2Action(act, b, e) {
+  if (!act.startsWith('src-') && !act.startsWith('rv-') && act !== 'job-cancel' && act !== 'show-source-row') return false;
+  if (act === 'src-reload') { loadSources(true); return true; }
+  if (act === 'src-extract') { const s = S.src.list.find(x => x.id === b.dataset.id); if (s) runExtraction(s); return true; }
+  if (act === 'src-extract-ocr') { const s = S.src.list.find(x => x.id === b.dataset.id); if (s) runExtraction(s, { ocrAll: true }); return true; }
+  if (act === 'job-cancel') { await cancelJob(); return true; }
+  if (act === 'rv-open') { openReview(b.dataset.id, b.dataset.src); return true; }
+  if (act === 'rv-close') { S.rv = null; renderSources(); renderSupplier(); return true; }
+  if (!S.rv && act !== 'show-source-row') return true;
+  if (act === 'rv-tab') { S.rv.tab = b.dataset.tab; renderReview(); return true; }
+  if (act === 'rv-page') { S.rv.page = Math.min(Math.max(1, S.rv.page + (+b.dataset.d)), S.rv.total || 1); drawViewer(); return true; }
+  if (act === 'rv-zoom') { S.rv.zoom = Math.min(3, Math.max(0.5, S.rv.zoom + (+b.dataset.d) * 0.25)); drawViewer(); return true; }
+  if (act === 'rv-show') { showRegion(b.dataset.id); return true; }
+  if (act === 'rv-apply-preview') { previewApply(); return true; }
+  if (act === 'rv-apply-cancel') { S.rv.confirm = null; renderApplyBar(); return true; }
+  if (act === 'rv-apply-confirm') { confirmApply(); return true; }
+  if (act === 'show-source-row') {
+    const it = findItem(b.dataset.id); if (!it || !it.sourceRef) return true;
+    if (S.rv && S.rv.id === it.sourceRef.extractionId) showRegion(it.sourceRef.rowId);
+    else openReview(it.sourceRef.extractionId, it.sourceRef.sourceId, it.sourceRef.rowId);
+    return true;
+  }
+  return true;
+}
+function updateItemFlags(it) { const el = $('flags-' + it.id); if (el) el.innerHTML = (it.reviewFlags || []).map(flagChip).join(''); }
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'srcFile') { const f = t.files && t.files[0]; t.value = ''; uploadFile(f); return; }
+  if (!S.rv) return;
+  const toggle = (set, id) => { t.checked ? set.add(id) : set.delete(id); const row = t.closest('.xrow'); if (row) row.classList.toggle('off', !t.checked); S.rv.confirm = null; renderApplyBar(); };
+  if (t.dataset.rvrow) toggle(S.rv.selRows, t.dataset.rvrow);
+  else if (t.dataset.rvother) toggle(S.rv.selOther, t.dataset.rvother);
+  else if (t.dataset.rvhdr) toggle(S.rv.headerKeys, t.dataset.rvhdr);
+  else if (t.dataset.rvopt === 'currency') { S.rv.applyCurrency = t.checked; S.rv.confirm = null; renderApplyBar(); }
+  else if (t.dataset.rvopt === 'taxBasis') { S.rv.applyTaxBasis = t.checked; S.rv.confirm = null; renderApplyBar(); }
+  else if (t.dataset.rvopt === 'ackIncomplete') { S.rv.ackIncomplete = t.checked; S.rv.confirm = null; renderApplyBar(); }
+});
+['dragenter', 'dragover'].forEach(ev => document.addEventListener(ev, e => { const z = e.target.closest && e.target.closest('#dropZone'); if (z) { e.preventDefault(); z.classList.add('over'); } }));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => { const z = e.target.closest && e.target.closest('#dropZone'); if (z) { e.preventDefault(); z.classList.remove('over'); } }));
+document.addEventListener('drop', e => { const z = e.target.closest && e.target.closest('#dropZone'); if (z && e.dataTransfer && e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]); });
+window.addEventListener('resize', () => { if (S.rv) { clearTimeout(drawViewer._t); drawViewer._t = setTimeout(drawViewer, 200); } });
+
 // ── events ─────────────────────────────────────────────────────────────────
 function findItem(id) { return S.draft.items.find(i => i.id === id); }
 document.addEventListener('input', e => {
@@ -858,10 +2245,26 @@ document.addEventListener('input', e => {
       else if (!it.tax.rate && DEFAULT_ITEM_TAX.treatment === 'taxable') it.tax.rate = DEFAULT_ITEM_TAX.rate;   // pre-fill standard rate, still editable
       const r = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="rate"]`);
       if (r) { r.disabled = t.value !== 'taxable'; r.value = it.tax.rate; }
-      updateTaxOrigin(it);
+      dropFlag(it, DEFAULT_TAX_FLAG); updateTaxOrigin(it); updateItemFlags(it);
     }
-    else if (f === 'rate') { it.tax.rate = t.value; it.tax.origin = 'user'; updateTaxOrigin(it); }
+    else if (f === 'rate') { it.tax.rate = t.value; it.tax.origin = 'user'; dropFlag(it, DEFAULT_TAX_FLAG); updateTaxOrigin(it); updateItemFlags(it); }
     else it[f] = t.value;
+    markDirty(); refreshDerived(); return;
+  }
+  if (t.dataset.dim) {
+    const it = findItem(t.dataset.dim); if (!it || !it.dimensions) return;
+    const d = it.dimensions, dl = t.dataset.dl;
+    if (dl === 'unit') d.unit = t.value;
+    else if (dl.startsWith('des:')) {
+      d.described = d.described || { main: '', additional: [] };
+      if (dl === 'des:main') d.described.main = t.value; else d.described.additional[+dl.slice(4)] = t.value;
+    } else d.values[dl] = normDigits(t.value);
+    d.origin = 'user';
+    // while the source conflict remains, ANY change needs a fresh confirmation; without a conflict an edit is the user's decision
+    d.status = (d.conflicts || []).length ? 'needs_confirmation' : 'confirmed';
+    const st = $('dimst-' + it.id); if (st) { st.textContent = DIM_STATUS_TEXT[d.status]; st.className = 'chip ' + (d.status === 'needs_confirmation' ? 'chip-bad' : 'chip-ok'); }
+    const box = $('dims-' + it.id); if (box) box.classList.toggle('conflict', d.status === 'needs_confirmation');
+    const cf = $('dimcf-' + it.id); if (cf) cf.hidden = d.status !== 'needs_confirmation';
     markDirty(); refreshDerived(); return;
   }
   if (t.dataset.ms) {
@@ -894,7 +2297,12 @@ document.addEventListener('click', async e => {
   if (act === 'change-supplier') { S.sup.changing = true; return renderSupplier(); }
   if (act === 'keep-supplier') { S.sup.changing = false; S.sup.review = null; S.sup.reviewStatus = 'idle'; return renderSupplier(); }
   if (act === 'use-sup-currency') { S.draft.currency = S.draft.supplier.snapshot.defaultCurrency; markDirty(); renderTotals(); renderItems(); return refreshDerived(); }
-  if (act === 'add-item') { const it = newItem(); S.draft.items.push(it); markDirty(); renderItems(); refreshDerived(); const el = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="description"]`); if (el) el.focus(); return; }
+  if (act === 'dims-confirm') { const it = findItem(id); if (it && it.dimensions) { it.dimensions.status = 'confirmed'; it.dimensions.origin = 'user'; markDirty(); renderItems(); refreshDerived(); toast('Dimensions confirmed for printing — press Save'); } return; }
+  if (act === 'dims-add') { const it = findItem(id); if (it && !it.dimensions) { it.dimensions = { values: { W: '', D: '', H: '' }, unit: '', status: 'confirmed', origin: 'user', conflicts: [] }; markDirty(); renderItems(); refreshDerived(); } return; }
+  if (act === 'confirm-tax') { const it = findItem(id); if (it) { it.tax.origin = 'user'; dropFlag(it, DEFAULT_TAX_FLAG); markDirty(); updateTaxOrigin(it); updateItemFlags(it); refreshDerived(); toast('VAT confirmed for this item'); } return; }
+  if (await handlePhotoAction(act, b)) return;
+  if (await handlePhase2Action(act, b, e)) return;
+  if (act === 'add-item') { const it = newItem(); S.draft.items.push(it); markDirty(); renderItems(); refreshDerived(); const el = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="name"]`); if (el) el.focus(); return; }
   if (act === 'exclude') { e.preventDefault(); const it = findItem(id); if (it) { it.included = false; it.excludedAt = new Date().toISOString(); markDirty(); renderItems(); refreshDerived(); toast('Item excluded — kept in the draft'); } return; }
   if (act === 'restore') { const it = findItem(id); if (it) { it.included = true; it.excludedAt = ''; markDirty(); renderItems(); refreshDerived(); toast('Item restored'); } return; }
   if (act === 'acceptance-wording') { const pt = S.draft.paymentTerms; pt.text = ACCEPTANCE_PAYMENT_TEXT; pt.isDraftDefault = false; const bal = pt.milestones.find(m => m.id === 'ms_balance'); if (bal) bal.label = 'Balance — one calendar month after delivery and written acceptance'; markDirty(); renderPayment(); return refreshDerived(); }
@@ -904,11 +2312,12 @@ document.addEventListener('click', async e => {
     const inc = S.draft.items.filter(i => i.included);
     if (!inc.length) { toast('No included items'); return; }
     if (!confirm(`Set tax treatment to "${TAX_LABELS[treat]}${treat === 'taxable' ? ' ' + rate + '%' : ''}" on ${inc.length} included item(s)?`)) return;
-    inc.forEach(i => { i.tax.treatment = treat; i.tax.rate = treat === 'taxable' ? rate : ''; i.tax.origin = 'user'; });
+    inc.forEach(i => { i.tax.treatment = treat; i.tax.rate = treat === 'taxable' ? rate : ''; i.tax.origin = 'user'; dropFlag(i, DEFAULT_TAX_FLAG); });
     markDirty(); renderItems(); refreshDerived(); return;
   }
 });
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveDraft(); } });
+document.addEventListener('toggle', e => { const d = e.target; if (d.dataset && d.dataset.spec) d.open ? S.specOpen.add(d.dataset.spec) : S.specOpen.delete(d.dataset.spec); }, true);
 window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
 $('newDraftBtn').addEventListener('click', createDraft);
 

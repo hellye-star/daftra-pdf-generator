@@ -304,10 +304,10 @@ class T5DefaultVat(unittest.TestCase):
         self.assertEqual(calc(draft(priceTaxBasis='unresolved', items=[it]))['totals']['status'], 'tax_unresolved')
 
     def test_origins_validated_and_preserved(self):
-        for origin in ('default', 'user', ''):
+        for origin in ('default', 'user', '', 'extracted'):   # 'extracted' is valid since Phase 2 (stated by the quotation)
             d = po_model.validate_draft(draft(items=[dict(item('it_orig00001'), tax={'treatment': 'exempt', 'rate': '', 'origin': origin})]))
             self.assertEqual(d['items'][0]['tax']['origin'], origin)
-        for bad in ('extracted', 'guess'):
+        for bad in ('guess', 'auto'):
             with self.assertRaises(po_model.DraftInvalid):
                 po_model.validate_draft(draft(items=[dict(item('it_orig00001'), tax={'treatment': 'taxable', 'rate': '15', 'origin': bad})]))
         with self.assertRaises(po_model.DraftInvalid):

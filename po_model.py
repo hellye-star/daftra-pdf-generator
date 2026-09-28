@@ -46,15 +46,41 @@ TAX_TREATMENTS = ('unresolved', 'taxable', 'zero_rated', 'exempt', 'out_of_scope
 #   'default' — proposed standard VAT for a new item; editable
 #   'user'    — set or changed by the user
 #   ''        — legacy/unknown (items saved before origins existed; kept as-is)
-# Phase 2 (quotation import) will add 'extracted' for a tax treatment the
-# supplier's document clearly states; when the document states none, the
-# importer proposes DEFAULT_ITEM_TAX with origin 'default' and flags it for
-# review — it is never presented as extracted.
-TAX_ORIGINS = ('', 'default', 'user')
+#   'extracted' — the supplier's document clearly states it (row tax cell or
+#                 a document-level statement); evidence is in the extraction
+# When an imported quotation states no tax treatment, the importer proposes
+# DEFAULT_ITEM_TAX with origin 'default' plus the review flag
+# DEFAULT_TAX_REVIEW_FLAG — never presented as extracted.
+TAX_ORIGINS = ('', 'default', 'user', 'extracted')
 DEFAULT_ITEM_TAX = {'treatment': 'taxable', 'rate': '15', 'origin': 'default'}
+DEFAULT_TAX_REVIEW_FLAG = 'default_tax_requires_review'
 PRICE_TAX_BASES = ('unresolved', 'exclusive', 'inclusive')
 BALANCE_TRIGGERS = ('undecided', 'delivery', 'delivery_written_acceptance')
-ITEM_SOURCES = ('manual',)          # Phase 2 adds 'extracted'
+ITEM_SOURCES = ('manual', 'extracted')
+
+# Review flags an imported item may carry (copied from the extraction; the
+# user clears the tax one by confirming/changing the tax treatment).
+REVIEW_FLAGS = {
+    DEFAULT_TAX_REVIEW_FLAG, 'low_confidence', 'ambiguous_number', 'unreadable_number',
+    'line_total_mismatch', 'line_total_may_include_tax', 'lump_sum', 'lump_sum_or_missing_breakdown',
+    'possible_duplicate', 'multiline', 'no_numbers', 'optional_selected', 'alternative_selected',
+    'unit_from_quantity_cell', 'continues_next_page', 'tax_amount_without_rate', 'line_discount_present',
+    'same_as_existing_item', 'document_adjustments_unapplied', 'from_incomplete_extraction',
+    'spec_dimension_conflict', 'dash_amount', 'no_amount', 'same_values_as_other_row', 'component_of_item',
+}
+ORIG_KEYS = ('ref', 'description', 'unit', 'qty', 'unitPrice', 'discount', 'lineTotal', 'tax', 'occurrence',
+             'parent', 'dimensions', 'proposedDescription')
+# Flags meaning the quotation has price adjustments the PO does not apply yet:
+# PO totals are then provisional and must not be read as the supplier's payable total.
+ADJUSTMENT_FLAGS = ('line_discount_present', 'document_adjustments_unapplied')
+SOURCE_REF_RE = {'sourceId': re.compile(r'^src_[0-9a-f]{24}$'), 'extractionId': re.compile(r'^ex_[0-9a-f]{24}$'),
+                 'rowId': re.compile(r'^[ro]\d{1,5}$')}
+QUOTATION_STR_KEYS = (
+    'sourceId', 'extractionId', 'appliedAt', 'ref', 'dateRaw', 'dateIso', 'dateHijri', 'dateCalendar',
+    'validity', 'supplierName', 'supplierVat', 'supplierCr', 'supplierEmail', 'supplierPhone',
+    'currency', 'currencyRaw', 'paymentTerms', 'delivery', 'taxBasis', 'taxRate', 'taxStatementRaw',
+    'exclusions', 'notes', 'customerName', 'projectName')
+QUOTATION_TOTAL_KEYS = ('subtotal', 'discount', 'delivery', 'installation', 'vat', 'grandTotal', 'total')
 
 DRAFT_ID_RE = re.compile(r'^po_[A-Za-z0-9]{10,40}$')
 ITEM_ID_RE = re.compile(r'^it_[A-Za-z0-9]{6,40}$')
@@ -78,7 +104,7 @@ SUPPLIER_SNAPSHOT_KEYS = (
 TOP_LEVEL_KEYS = {
     'id', 'schema', 'status', 'title', 'currency', 'priceTaxBasis', 'supplier',
     'items', 'paymentTerms', 'projectRef', 'deliveryLocation', 'notes',
-    'createdAt', 'updatedAt',
+    'createdAt', 'updatedAt', 'quotation', 'photos',
 }
 
 LIMITS = {
@@ -86,8 +112,27 @@ LIMITS = {
     'projectRef': 200, 'deliveryLocation': 500, 'notes': 5000,
     'paymentText': 2000, 'milestoneLabel': 200, 'snapshotField': 500,
     'supplierName': 300, 'supplierNumber': 64, 'timestamp': 40,
-    'items': 500, 'milestones': 6,
+    'items': 500, 'milestones': 6, 'photos': 500, 'photoParent': 400,
+    'itemName': 300, 'dimValue': 32, 'dimUnit': 20, 'dimText': 300,
 }
+
+# Item dimensions: printed labels (W/D/H/L) with their values exactly as printed
+# (a blank cell stays ''), the unit only when printed or entered by the user
+# (never inferred), and a status. Conflicting source values stay
+# 'needs_confirmation' until the user confirms what the PO prints.
+DIM_LABELS = ('W', 'D', 'H', 'L')
+DIM_STATUSES = ('as_printed', 'needs_confirmation', 'confirmed')
+DIM_ORIGINS = ('extracted', 'user')
+
+# Item photos: which stored photo (po_photos) belongs to which item. A photo
+# shared by several priced components of one titled item is attached to that
+# parent ("group") — never guessed onto one component.
+PHOTO_ID_RE = re.compile(r'^ph_[0-9a-f]{24}$')
+PHOTO_ASSOC_ID_RE = re.compile(r'^pa_[A-Za-z0-9]{6,40}$')
+PHOTO_STATUSES = ('suggested', 'uncertain', 'confirmed', 'removed')
+PHOTO_ORIGINS = ('auto', 'user')
+PHOTO_KINDS = ('embedded', 'source_crop')
+PHOTO_REASON_RE = re.compile(r'^[a-z0-9_:.\- ]{1,80}$')
 
 MAX_QTY = Fraction(10**9)
 MAX_PRICE = Fraction(10**12)
@@ -259,8 +304,8 @@ def validate_draft(doc):
         if not isinstance(it, dict):
             errors.append({'path': p, 'message': 'must be an object'})
             continue
-        for k in sorted(set(it) - {'id', 'description', 'unit', 'qty', 'unitPrice', 'included',
-                                    'tax', 'source', 'createdAt', 'excludedAt'}):
+        for k in sorted(set(it) - {'id', 'name', 'description', 'unit', 'qty', 'unitPrice', 'included', 'dimensions',
+                                    'tax', 'source', 'createdAt', 'excludedAt', 'sourceRef', 'orig', 'reviewFlags'}):
             errors.append({'path': f'{p}.{k}', 'message': 'is not a recognised item field'})
         iid = it.get('id')
         if not isinstance(iid, str) or not ITEM_ID_RE.match(iid):
@@ -296,8 +341,9 @@ def validate_draft(doc):
                                'tax rate must be a number above 0 and at most 100, with at most 2 decimals'})
         else:
             rate = ''   # a rate only means something for taxable lines
-        items.append({
+        entry = {
             'id': iid,
+            'name': _str(errors, f'{p}.name', it.get('name'), LIMITS['itemName']),
             'description': _str(errors, f'{p}.description', it.get('description'), LIMITS['description']),
             'unit': _str(errors, f'{p}.unit', it.get('unit'), LIMITS['unit']),
             'qty': _num_field(errors, f'{p}.qty', it.get('qty'), 3, False, MAX_QTY, 'Quantity'),
@@ -307,8 +353,38 @@ def validate_draft(doc):
             'source': source,
             'createdAt': _str(errors, f'{p}.createdAt', it.get('createdAt'), LIMITS['timestamp']),
             'excludedAt': _str(errors, f'{p}.excludedAt', it.get('excludedAt'), LIMITS['timestamp']),
-        })
+            'dimensions': _validate_dimensions(errors, f'{p}.dimensions', it.get('dimensions')),
+        }
+        # imported items: link to the immutable extraction row + a copy of the
+        # original extracted text (edits change the PO values, never these)
+        if source == 'extracted':
+            ref_in = it.get('sourceRef')
+            if not isinstance(ref_in, dict) or set(ref_in) != set(SOURCE_REF_RE):
+                errors.append({'path': f'{p}.sourceRef', 'message': 'imported items need sourceId, extractionId and rowId'})
+                ref_in = {}
+            for k, rx in SOURCE_REF_RE.items():
+                if ref_in and (not isinstance(ref_in.get(k), str) or not rx.match(ref_in[k])):
+                    errors.append({'path': f'{p}.sourceRef.{k}', 'message': 'invalid reference'})
+            entry['sourceRef'] = {k: ref_in.get(k) for k in SOURCE_REF_RE} if ref_in else None
+            orig_in = it.get('orig') or {}
+            if not isinstance(orig_in, dict):
+                errors.append({'path': f'{p}.orig', 'message': 'must be an object'})
+                orig_in = {}
+            for k in sorted(set(orig_in) - set(ORIG_KEYS)):
+                errors.append({'path': f'{p}.orig.{k}', 'message': 'is not a recognised original field'})
+            entry['orig'] = {k: _str(errors, f'{p}.orig.{k}', orig_in.get(k), LIMITS['description']) for k in ORIG_KEYS}
+        elif it.get('sourceRef') is not None or it.get('orig') is not None:
+            errors.append({'path': f'{p}.sourceRef', 'message': 'only imported items carry a source reference'})
+        flags_in = it.get('reviewFlags') or []
+        if not isinstance(flags_in, list) or len(flags_in) > 20 or any(f not in REVIEW_FLAGS for f in flags_in if isinstance(f, str)) \
+                or any(not isinstance(f, str) for f in flags_in):
+            errors.append({'path': f'{p}.reviewFlags', 'message': 'invalid review flags'})
+            flags_in = []
+        if flags_in:
+            entry['reviewFlags'] = sorted(set(flags_in))
+        items.append(entry)
     out['items'] = items
+    out['photos'] = _validate_photos(errors, doc.get('photos'), {it['id'] for it in items if it.get('id')})
 
     # payment terms (editable draft default; trigger stays undecided until chosen)
     pt = doc.get('paymentTerms') or {}
@@ -349,11 +425,189 @@ def validate_draft(doc):
     out['projectRef'] = _str(errors, 'projectRef', doc.get('projectRef'), LIMITS['projectRef'])
     out['deliveryLocation'] = _str(errors, 'deliveryLocation', doc.get('deliveryLocation'), LIMITS['deliveryLocation'])
     out['notes'] = _str(errors, 'notes', doc.get('notes'), LIMITS['notes'])
+
+    # reviewed quotation header fields (copied from an extraction on explicit apply)
+    q = doc.get('quotation')
+    if q is None:
+        out['quotation'] = None
+    elif not isinstance(q, dict):
+        errors.append({'path': 'quotation', 'message': 'must be an object or null'})
+        out['quotation'] = None
+    else:
+        allowed = set(QUOTATION_STR_KEYS) | {'dateAmbiguous', 'totals', 'flags'}
+        for k in sorted(set(q) - allowed):
+            errors.append({'path': f'quotation.{k}', 'message': 'is not a recognised quotation field'})
+        qo = {k: _str(errors, f'quotation.{k}', q.get(k), LIMITS['paymentText']) for k in QUOTATION_STR_KEYS}
+        for k, rx in (('sourceId', SOURCE_REF_RE['sourceId']), ('extractionId', SOURCE_REF_RE['extractionId'])):
+            if not rx.match(qo[k] or ''):
+                errors.append({'path': f'quotation.{k}', 'message': 'invalid reference'})
+        if qo['currency'] and qo['currency'] not in CURRENCY_MINOR_UNITS:
+            qo['currency'] = ''          # an unsupported code stays visible in currencyRaw only
+        if not isinstance(q.get('dateAmbiguous', False), bool):
+            errors.append({'path': 'quotation.dateAmbiguous', 'message': 'must be true or false'})
+        qo['dateAmbiguous'] = bool(q.get('dateAmbiguous', False))
+        tot = q.get('totals') or {}
+        if not isinstance(tot, dict):
+            errors.append({'path': 'quotation.totals', 'message': 'must be an object'})
+            tot = {}
+        for k in sorted(set(tot) - set(QUOTATION_TOTAL_KEYS)):
+            errors.append({'path': f'quotation.totals.{k}', 'message': 'is not a recognised total'})
+        qo['totals'] = {k: _str(errors, f'quotation.totals.{k}', tot.get(k), LIMITS['numeric'] * 8) for k in QUOTATION_TOTAL_KEYS}
+        fl = q.get('flags') or {}
+        if not isinstance(fl, dict) or len(fl) > 40 or any(
+                not isinstance(v, list) or len(v) > 20 or any(not isinstance(x, str) or len(x) > 80 for x in v) for v in fl.values()):
+            errors.append({'path': 'quotation.flags', 'message': 'invalid flags'})
+            fl = {}
+        qo['flags'] = {str(k)[:40]: list(v) for k, v in fl.items()}
+        out['quotation'] = qo
     out['createdAt'] = _str(errors, 'createdAt', doc.get('createdAt'), LIMITS['timestamp'])
     out['updatedAt'] = _str(errors, 'updatedAt', doc.get('updatedAt'), LIMITS['timestamp'])
 
     if errors:
         raise DraftInvalid(errors)
+    return out
+
+
+def _validate_dimensions(errors, p, d):
+    if d is None:
+        return None
+    if not isinstance(d, dict):
+        errors.append({'path': p, 'message': 'must be an object or null'})
+        return None
+    for k in sorted(set(d) - {'values', 'unit', 'status', 'origin', 'conflicts', 'described'}):
+        errors.append({'path': f'{p}.{k}', 'message': 'is not a recognised dimensions field'})
+    # measurements printed in the description, word for word: the item's own size line (main)
+    # and separate parts ("BASE …", "POLE OF 1.5 M") — kept so hiding the description loses nothing
+    des = d.get('described')
+    out_des = {'main': '', 'additional': []}
+    if des is not None:
+        if not isinstance(des, dict) or set(des) - {'main', 'additional'} or not isinstance(des.get('additional', []), list) \
+                or len(des.get('additional', [])) > 8:
+            errors.append({'path': f'{p}.described', 'message': 'must be {main, additional: [..]} (at most 8 parts)'})
+        else:
+            out_des = {'main': _str(errors, f'{p}.described.main', des.get('main'), LIMITS['dimText']),
+                       'additional': [_str(errors, f'{p}.described.additional[{j}]', x, LIMITS['dimText'])
+                                      for j, x in enumerate(des.get('additional', []))]}
+    has_des = bool(out_des['main'] or any(out_des['additional']))
+    vals = d.get('values')
+    out_vals = {}
+    if not isinstance(vals, dict) or (not vals and not has_des) or set(vals) - set(DIM_LABELS):
+        errors.append({'path': f'{p}.values', 'message': 'must map W / D / H / L to the printed values'})
+    else:
+        for k in DIM_LABELS:                                     # printed order W, D, H, L
+            if k in vals:
+                out_vals[k] = _str(errors, f'{p}.values.{k}', vals[k], LIMITS['dimValue'])
+    status = d.get('status')
+    if status not in DIM_STATUSES:
+        errors.append({'path': f'{p}.status', 'message': 'invalid value'})
+    origin = d.get('origin')
+    if origin not in DIM_ORIGINS:
+        errors.append({'path': f'{p}.origin', 'message': 'invalid value'})
+    conflicts = d.get('conflicts') or []
+    out_conf = []
+    if not isinstance(conflicts, list) or len(conflicts) > 8:
+        errors.append({'path': f'{p}.conflicts', 'message': 'invalid conflicts'})
+    else:
+        for j, c in enumerate(conflicts):
+            if not isinstance(c, dict) or set(c) != {'dim', 'column', 'description'} or c.get('dim') not in DIM_LABELS:
+                errors.append({'path': f'{p}.conflicts[{j}]', 'message': 'invalid conflict record'})
+                continue
+            out_conf.append({'dim': c['dim'], 'column': _str(errors, f'{p}.conflicts[{j}].column', c['column'], LIMITS['dimValue']),
+                             'description': _str(errors, f'{p}.conflicts[{j}].description', str(c['description']) if isinstance(c['description'], (int, float)) and not isinstance(c['description'], bool) else c['description'], LIMITS['dimValue'])})
+    out = {'values': out_vals, 'unit': _str(errors, f'{p}.unit', d.get('unit'), LIMITS['dimUnit']),
+           'status': status, 'origin': origin, 'conflicts': out_conf}
+    if des is not None:
+        out['described'] = out_des
+    return out
+
+
+def _validate_photos(errors, photos_in, item_ids):
+    if photos_in is None:
+        return []
+    if not isinstance(photos_in, list) or len(photos_in) > LIMITS['photos']:
+        errors.append({'path': 'photos', 'message': f'must be a list of at most {LIMITS["photos"]}'})
+        return []
+    out, seen_ids, seen_photos = [], set(), set()
+    allowed = {'id', 'photoId', 'sourceId', 'page', 'region', 'kind', 'target', 'status', 'origin',
+               'includeInPdf', 'reasons', 'suggestion', 'updatedAt'}
+    for j, a in enumerate(photos_in):
+        p = f'photos[{j}]'
+        if not isinstance(a, dict):
+            errors.append({'path': p, 'message': 'must be an object'})
+            continue
+        for k in sorted(set(a) - allowed):
+            errors.append({'path': f'{p}.{k}', 'message': 'is not a recognised photo field'})
+        aid, pid = a.get('id'), a.get('photoId')
+        if not isinstance(aid, str) or not PHOTO_ASSOC_ID_RE.match(aid) or aid in seen_ids:
+            errors.append({'path': f'{p}.id', 'message': 'invalid or duplicate id'})
+        if not isinstance(pid, str) or not PHOTO_ID_RE.match(pid):
+            errors.append({'path': f'{p}.photoId', 'message': 'invalid photo reference'})
+        elif pid in seen_photos:
+            errors.append({'path': f'{p}.photoId', 'message': 'a photo can belong to only one item (or parent item)'})
+        seen_ids.add(aid)
+        seen_photos.add(pid)
+        sid = a.get('sourceId')
+        if not isinstance(sid, str) or not SOURCE_REF_RE['sourceId'].match(sid):
+            errors.append({'path': f'{p}.sourceId', 'message': 'invalid reference'})
+        page = a.get('page')
+        if not isinstance(page, int) or isinstance(page, bool) or not 1 <= page <= 10000:
+            errors.append({'path': f'{p}.page', 'message': 'invalid page'})
+        reg = a.get('region')
+        if not isinstance(reg, dict) or set(reg) != {'x', 'y', 'w', 'h'} or any(
+                not isinstance(reg[k], (int, float)) or isinstance(reg[k], bool) or not -1 <= reg[k] <= 20000 for k in reg):
+            errors.append({'path': f'{p}.region', 'message': 'region must be {x, y, w, h} in page points'})
+            reg = {'x': 0, 'y': 0, 'w': 0, 'h': 0}
+        kind = a.get('kind')
+        if kind not in PHOTO_KINDS:
+            errors.append({'path': f'{p}.kind', 'message': 'invalid value'})
+        status = a.get('status')
+        if status not in PHOTO_STATUSES:
+            errors.append({'path': f'{p}.status', 'message': 'invalid value'})
+        origin = a.get('origin')
+        if origin not in PHOTO_ORIGINS:
+            errors.append({'path': f'{p}.origin', 'message': 'invalid value'})
+        t = a.get('target')
+        target = None
+        if t is not None:
+            if not isinstance(t, dict) or t.get('kind') not in ('item', 'group'):
+                errors.append({'path': f'{p}.target', 'message': 'must be null, an item or a parent item'})
+            elif t['kind'] == 'item':
+                if set(t) != {'kind', 'itemId'} or t.get('itemId') not in item_ids:
+                    errors.append({'path': f'{p}.target.itemId', 'message': 'is not an item of this draft'})
+                target = {'kind': 'item', 'itemId': t.get('itemId')}
+            else:
+                parent = t.get('parent')
+                if set(t) != {'kind', 'sourceId', 'parent'} or not isinstance(parent, str) or not parent.strip() \
+                        or len(parent) > LIMITS['photoParent'] or t.get('sourceId') != sid:
+                    errors.append({'path': f'{p}.target', 'message': 'a parent-item target needs its source and printed parent'})
+                target = {'kind': 'group', 'sourceId': t.get('sourceId'), 'parent': parent}
+        if target is None and status in ('suggested', 'confirmed'):
+            errors.append({'path': f'{p}.target', 'message': 'a suggested or confirmed photo must belong to an item'})
+        include = a.get('includeInPdf', False)
+        if not isinstance(include, bool):
+            errors.append({'path': f'{p}.includeInPdf', 'message': 'must be true or false'})
+            include = False
+        reasons = a.get('reasons') or []
+        if not isinstance(reasons, list) or len(reasons) > 10 or any(not isinstance(r, str) or not PHOTO_REASON_RE.match(r) for r in reasons):
+            errors.append({'path': f'{p}.reasons', 'message': 'invalid reasons'})
+            reasons = []
+        sug = a.get('suggestion')
+        sug_out = None
+        if sug is not None:
+            if not isinstance(sug, dict) or set(sug) - {'extractionId', 'rowIds', 'confidence'} \
+                    or not SOURCE_REF_RE['extractionId'].match(str(sug.get('extractionId') or '')) \
+                    or not isinstance(sug.get('rowIds', []), list) or len(sug.get('rowIds', [])) > 60 \
+                    or any(not isinstance(r, str) or not SOURCE_REF_RE['rowId'].match(r) for r in sug.get('rowIds', [])) \
+                    or sug.get('confidence', 'high') not in ('high', 'low'):
+                errors.append({'path': f'{p}.suggestion', 'message': 'invalid suggestion record'})
+            else:
+                sug_out = {'extractionId': sug['extractionId'], 'rowIds': list(sug.get('rowIds', [])),
+                           'confidence': sug.get('confidence', 'high')}
+        out.append({'id': aid, 'photoId': pid, 'sourceId': sid, 'page': page,
+                    'region': {k: round(float(reg[k]), 1) for k in ('x', 'y', 'w', 'h')}, 'kind': kind,
+                    'target': target, 'status': status, 'origin': origin, 'includeInPdf': include,
+                    'reasons': list(reasons), 'suggestion': sug_out,
+                    'updatedAt': _str(errors, f'{p}.updatedAt', a.get('updatedAt'), LIMITS['timestamp'])})
     return out
 
 
@@ -374,7 +628,7 @@ def compute(doc):
                'lineAmount': None, 'net': None, 'tax': None, 'gross': None, 'issues': []}
         q = parse_decimal(it['qty'], 3) if it['qty'] else None
         p = parse_decimal(it['unitPrice'], 4) if it['unitPrice'] != '' else None
-        if not it['description'].strip():
+        if not (it.get('name') or '').strip() and not it['description'].strip():
             row['issues'].append('description missing')
         if not it['unit'].strip():
             row['issues'].append('unit missing')
@@ -453,6 +707,10 @@ def compute(doc):
         'includedCount': len(included),
         'excludedCount': len(doc.get('items', [])) - len(included),
     }
+    # Provisional: the quotation has discounts/charges this PO does not apply yet.
+    adj_items = [it['id'] for it in included if any(f in it.get('reviewFlags', []) for f in ADJUSTMENT_FLAGS)]
+    totals['provisional'] = bool(adj_items)
+    totals['provisionalItems'] = adj_items
 
     # payment milestones on the confirmed total only
     ms_out = []
@@ -490,10 +748,32 @@ def readiness(doc, computed):
     if t['includedCount'] == 0:
         add('no_included_items', 'No included items.')
     if t['invalidItems']:
-        add('item_invalid', f'{len(t["invalidItems"])} included item(s) missing description, unit, quantity or unit price.')
+        add('item_invalid', f'{len(t["invalidItems"])} included item(s) missing name/description, unit, quantity or unit price.')
     if t['taxUnresolvedItems']:
         add('tax_unresolved', f'Tax treatment unresolved on {len(t["taxUnresolvedItems"])} included item(s).')
     pt = doc.get('paymentTerms', {})
+    if t.get('provisional'):
+        add('adjustments_unapplied', f'The quotation has discounts or charges affecting {len(t["provisionalItems"])} included item(s) '
+                                     f'that this PO does not apply yet — PO totals are provisional and are not the quotation\'s payable total.')
+    partial = [it['id'] for it in doc.get('items', [])
+               if it['included'] and 'from_incomplete_extraction' in it.get('reviewFlags', [])]
+    if partial:
+        add('incomplete_source_document', f'{len(partial)} included item(s) come from an extraction that did not read every page '
+                                          f'of the supplier document.')
+    unreviewed = [it['id'] for it in doc.get('items', [])
+                  if it['included'] and DEFAULT_TAX_REVIEW_FLAG in it.get('reviewFlags', [])]
+    if unreviewed:
+        add('default_tax_unreviewed', f'{len(unreviewed)} imported item(s) use the default VAT 15% because the quotation '
+                                      f'states no tax treatment — review and confirm or change it.')
+    dims = [it['id'] for it in doc.get('items', []) if it['included'] and (it.get('dimensions') or {}).get('status') == 'needs_confirmation']
+    if dims:
+        add('dimensions_unconfirmed', f'{len(dims)} included item(s) have conflicting source dimensions — confirm the dimensions '
+                                      f'to print on the PO.')
+    photos = [a for a in doc.get('photos', []) if a['status'] != 'removed']
+    unsure = [a for a in photos if a['status'] == 'uncertain' or (a['includeInPdf'] and a['target'] is None)]
+    if unsure:
+        add('photos_unconfirmed', f'{len(unsure)} item photo(s) have an uncertain or missing item association — '
+                                  f'confirm, reassign or remove them.')
     if pt.get('balanceTrigger', 'undecided') == 'undecided':
         add('payment_trigger_undecided', 'Balance payment trigger (delivery vs delivery + written acceptance) not decided.')
     if not computed['milestonePctValid']:
