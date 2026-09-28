@@ -296,6 +296,12 @@
 
 const CURRENCIES = { SAR:2, USD:2, EUR:2, GBP:2, AED:2, QAR:2, EGP:2, CNY:2, INR:2, TRY:2, KWD:3, BHD:3, OMR:3, JOD:3, JPY:0 };
 const TAX_LABELS = { unresolved:'Unresolved', taxable:'Taxable at rate', zero_rated:'Zero-rated (0%)', exempt:'Exempt', out_of_scope:'Out of scope' };
+// Standard printed PO notes — same text as po_model.DEFAULT_PO_NOTES (the server's value replaces it on load).
+let DEFAULT_PO_NOTES = '1. Conformity: all goods and work must conform to this purchase order and to the approved specifications, drawings, samples, materials and dimensions.\n' +
+  '2. Inspection and acceptance: deliveries and completed work are subject to inspection and written acceptance by the buyer. Delivery, installation or payment alone does not constitute acceptance.\n' +
+  '3. Defective work: defective or non-conforming goods or work shall be corrected or replaced by the supplier at no additional cost, within the time notified by the buyer.\n' +
+  '4. Changes: no change to scope, specifications, quantities, price or delivery is valid without the buyer\'s prior written approval.\n' +
+  '5. Quote this PO number on all delivery notes and invoices.';
 // Fallback only — the server's /api/po/status value (po_model.DEFAULT_ITEM_TAX) is used when available.
 let DEFAULT_ITEM_TAX = { treatment: 'taxable', rate: '15', origin: 'default' };
 const DEFAULT_PAYMENT_TEXT = '50% advance payment; remaining 50% one calendar month after delivery.';
@@ -588,7 +594,8 @@ async function checkConnection() {
   if (status === 200 && json.ok) {
     const dt = json.data.defaults && json.data.defaults.newItemTax;
     if (dt && TAX_LABELS[dt.treatment]) DEFAULT_ITEM_TAX = { treatment: dt.treatment, rate: String(dt.rate || ''), origin: 'default' };
-    el.className = 'conn chip-ok'; el.textContent = `PO storage connected · ${json.data.counts.drafts} draft(s) · no issuance yet`; return true; }
+    if (json.data.defaults && typeof json.data.defaults.poNotes === 'string' && json.data.defaults.poNotes) DEFAULT_PO_NOTES = json.data.defaults.poNotes;
+    el.className = 'conn chip-ok'; el.textContent = `PO storage connected · ${json.data.counts.drafts} draft(s)`; return true; }
   el.className = 'conn chip-bad'; el.textContent = json && json.error ? json.error : 'PO storage unavailable.';
   return false;
 }
@@ -610,7 +617,7 @@ function newDraftDoc() {
     paymentTerms: { text: DEFAULT_PAYMENT_TEXT, isDraftDefault: true, balanceTrigger: 'delivery',
       milestones: [ { id: 'ms_advance', pct: '50', label: 'Advance payment' },
                     { id: 'ms_balance', pct: '50', label: 'Balance — one calendar month after delivery' } ] },
-    projectRef: '', deliveryLocation: '', notes: '', poNotes: '', photos: [], adjustments: [], createdAt: ts, updatedAt: ts,
+    projectRef: '', deliveryLocation: '', notes: '', poNotes: DEFAULT_PO_NOTES, photos: [], adjustments: [], createdAt: ts, updatedAt: ts,
   };
 }
 function newItem() {
@@ -630,6 +637,12 @@ async function openDraft(id, force) {
   const { status, json } = await api('GET', '/api/po/drafts/' + encodeURIComponent(id));
   if (status === 200 && json.ok) {
     applyServer(json.data, true);
+    // drafts saved before printed PO notes existed have no such field at all: give them the
+    // standard notes (never replaces text a user wrote, and never an issued version)
+    if (!('poNotes' in S.draft) && !(S.server && S.server.issued)) {
+      S.draft.poNotes = DEFAULT_PO_NOTES; markDirty(); renderMain();
+      toast('Standard PO notes added to this older draft — review them and save');
+    }
     history.replaceState(null, '', '?draft=' + encodeURIComponent(id));
   } else {
     S.draft = null; renderMain();
@@ -1339,12 +1352,12 @@ async function openIssue() {
   let changes = null;
   if (S.draft.revision) { const r = await api('GET', '/api/po/drafts/' + encodeURIComponent(S.draft.id) + '/changes'); if (r.status === 200 && r.json.ok) changes = r.json.data; }
   S.modal = { type: 'issue', key: rid('iss_', 28), blockers: json.data.readiness, changes, approvedBy: '', reason: '', busy: false, error: '',
-              sup: { status: 'checking' }, ackUnverified: false };
+              sup: { status: 'checking' } };
   renderModal();
   verifySupplier();
 }
-// Re-read the selected supplier from Daftra (GET only) just before issuing: the PO must
-// not go out to a supplier that no longer exists or whose name / VAT number changed.
+// Early warning only: the server re-reads the supplier from Daftra itself on every issue
+// request and blocks real issuance unless it is verified — this check cannot allow anything.
 async function verifySupplier() {
   const m = S.modal, sp = S.draft.supplier; if (!m || !sp) return;
   const { status, json } = await daftraGet(`/suppliers/${encodeURIComponent(sp.daftraId)}.json`);
@@ -1360,7 +1373,8 @@ async function verifySupplier() {
   renderModal();
 }
 function supplierCheckOk(m) {
-  return m.sup.status === 'verified' || m.sup.status === 'test_not_found' || (m.sup.status === 'unavailable' && m.ackUnverified);
+  const test = !!(S.settings || {}).testMode;
+  return m.sup.status === 'verified' || (test && ['test_not_found', 'unavailable'].includes(m.sup.status));
 }
 function issueForm(m) {
   const s = S.settings || {}, rev = S.draft.revision, t = (S.server && S.server.computed && S.server.computed.totals) || {};
@@ -1372,8 +1386,7 @@ function issueForm(m) {
     mismatch: `<span class="chip chip-bad">Supplier changed in Daftra</span> ${esc(m.sup.detail || '')} — select the supplier again before issuing`,
     not_found: '<span class="chip chip-bad">Supplier not found in Daftra</span> — select an existing supplier before issuing',
     test_not_found: '<span class="chip chip-warn">Supplier not in Daftra</span> allowed only because TEST MODE is on (fictional supplier)',
-    unavailable: `<span class="chip chip-warn">Daftra could not be reached</span> ${esc(m.sup.detail || '')}
-      <label class="radio"><input type="checkbox" data-issue-ack="1" ${m.ackUnverified ? 'checked' : ''}><span>Issue without re-checking the supplier in Daftra (recorded with the PO)</span></label>` }[m.sup.status] || '';
+    unavailable: `<span class="chip chip-bad">Daftra could not be reached</span> ${esc(m.sup.detail || '')} — the supplier must be verified before issuing${(S.settings || {}).testMode ? ' (TEST MODE records it instead)' : ''}. The draft is unchanged.` }[m.sup.status] || '';
   return `<div class="card-h"><h3>${rev ? 'Issue revision of ' + esc(rev.baseNo) : 'Issue purchase order'}</h3><button class="btn btn-sm btn-ghost" style="margin-left:auto" data-act="modal-close" data-keep>Close</button></div>
     ${s.testMode ? '<div class="banner banner-bad">TEST MODE — fictional settings. The issued PDF is marked TEST and is not a valid purchase order.</div>' : ''}
     ${m.error ? `<div class="banner banner-bad">${m.error}</div>` : ''}
@@ -1393,8 +1406,7 @@ async function confirmIssue() {
   const m = S.modal; if (!m || m.type !== 'issue' || m.busy) return;
   m.busy = true; m.error = ''; renderModal();
   const { status, json } = await api('POST', '/api/po/drafts/' + encodeURIComponent(S.draft.id) + '/issue',
-    { idempotencyKey: m.key, approvedBy: m.approvedBy, reason: m.reason,
-      supplierCheck: { status: m.sup.status === 'unavailable' ? 'acknowledged_unavailable' : m.sup.status, at: m.sup.at || '', daftraId: S.draft.supplier ? S.draft.supplier.daftraId : '' } }, S.rev);
+    { idempotencyKey: m.key, approvedBy: m.approvedBy, reason: m.reason }, S.rev);        // the server verifies the supplier itself
   m.busy = false;
   if ((status === 201 || status === 200) && json.ok) {
     closeModal();
@@ -1473,7 +1485,6 @@ document.addEventListener('input', e => {
     o[k] = t.type === 'checkbox' ? t.checked : (['seqWidth', 'start'].includes(k) ? (parseInt(normDigits(t.value), 10) || 0) : t.value);
     if (t.type !== 'checkbox' && t.dataset.set.startsWith('numbering.')) { const ex = document.activeElement; renderModal(); const again = document.querySelector(`[data-set="${t.dataset.set}"]`); if (again && ex === t) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } }
   } else if (m && m.type === 'issue' && t.dataset.issue) m[t.dataset.issue] = t.value;
-  else if (m && m.type === 'issue' && t.dataset.issueAck) { m.ackUnverified = t.checked; renderModal(); }
 });
 document.addEventListener('change', e => {
   const t = e.target, m = S.modal;

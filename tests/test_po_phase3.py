@@ -83,6 +83,11 @@ def draft(did='po_P3TESTdraft01', **over):
     return po_model.validate_draft(d)
 
 
+def ok(rev, daftra_id='7'):
+    """The server-side supplier verification result for this draft revision (see po_storage_api.verify_supplier)."""
+    return {'status': 'verified', 'at': '2026-09-28T10:00:00Z', 'daftraId': daftra_id, 'detail': '', 'draftRev': rev}
+
+
 def adj(aid, kind, amount, treat='taxable', rate='15', src=''):
     return {'id': aid, 'kind': kind, 'label': kind.title(), 'amount': amount, 'tax': {'treatment': treat, 'rate': rate}, 'sourceKey': src}
 
@@ -241,14 +246,14 @@ class Issuance(unittest.TestCase):
     def test_atomic_numbering_duplicates_and_locking(self):
         d1, r1 = self.new_draft('po_P3ISSUEdraft1')
         d2, r2 = self.new_draft('po_P3ISSUEdraft2')
-        m1, dup = po_db.issue_draft(d1['id'], r1, 'key-issue-000000001', '', 'Test Approver', 'tester', render)
+        m1, dup = po_db.issue_draft(d1['id'], r1, 'key-issue-000000001', '', 'Test Approver', 'tester', render, ok(r1))
         self.assertFalse(dup)
         self.assertRegex(m1['displayNo'], r'^TEST-PO-\d{4}-\d{4}$')
-        again, dup2 = po_db.issue_draft(d1['id'], r1, 'key-issue-000000001', '', 'Test Approver', 'tester', render)
+        again, dup2 = po_db.issue_draft(d1['id'], r1, 'key-issue-000000001', '', 'Test Approver', 'tester', render, ok(r1))
         self.assertEqual((again['id'], dup2), (m1['id'], True), 'the same request twice → the same issue')
         with self.assertRaises(po_db.DraftIssued):
-            po_db.issue_draft(d1['id'], r1, 'key-issue-000000002', '', 'Test Approver', 'tester', render)
-        m2, _ = po_db.issue_draft(d2['id'], r2, 'key-issue-000000003', '', 'Test Approver', 'tester', render)
+            po_db.issue_draft(d1['id'], r1, 'key-issue-000000002', '', 'Test Approver', 'tester', render, ok(r1))
+        m2, _ = po_db.issue_draft(d2['id'], r2, 'key-issue-000000003', '', 'Test Approver', 'tester', render, ok(r2))
         n1, n2 = int(m1['displayNo'][-4:]), int(m2['displayNo'][-4:])
         self.assertEqual(n2, n1 + 1)
         with self.assertRaises(po_db.DraftIssued):
@@ -259,18 +264,18 @@ class Issuance(unittest.TestCase):
         counters = lambda: sqlite3.connect(po_db.db_path()).execute('SELECT COUNT(*), COALESCE(SUM(next),0) FROM po_counters').fetchone()
         before = counters()
         with self.assertRaises(po_db.NotReady) as cm:
-            po_db.issue_draft(d['id'], r, 'key-issue-000000010', '', 'Someone Else', 'tester', render)
+            po_db.issue_draft(d['id'], r, 'key-issue-000000010', '', 'Someone Else', 'tester', render, ok(r))
         self.assertIn('approval_missing', {b['code'] for b in cm.exception.blockers})
         with self.assertRaises(po_db.RevConflict):
-            po_db.issue_draft(d['id'], r + 5, 'key-issue-000000011', '', 'Test Approver', 'tester', render)
+            po_db.issue_draft(d['id'], r + 5, 'key-issue-000000011', '', 'Test Approver', 'tester', render, ok(r + 5))
 
         def broken(*a):
             raise po_pdf.PdfRenderError('no browser')
         with self.assertRaises(po_pdf.PdfRenderError):
-            po_db.issue_draft(d['id'], r, 'key-issue-000000012', '', 'Test Approver', 'tester', broken)
+            po_db.issue_draft(d['id'], r, 'key-issue-000000012', '', 'Test Approver', 'tester', broken, ok(r))
         self.assertEqual(counters(), before, 'no number consumed')
         self.assertIsNone(po_db.issue_for_draft(d['id']))
-        m, _ = po_db.issue_draft(d['id'], r, 'key-issue-000000013', '', 'test approver', 'tester', render)   # approver match ignores case
+        m, _ = po_db.issue_draft(d['id'], r, 'key-issue-000000013', '', 'test approver', 'tester', render, ok(r))   # approver match ignores case
         self.assertEqual(m['approvedBy'], 'test approver')
 
     def test_snapshot_pdf_and_photo_hashes_are_immutable(self):
@@ -280,7 +285,7 @@ class Issuance(unittest.TestCase):
               'target': {'kind': 'item', 'itemId': 'it_P3item001'}, 'status': 'confirmed', 'origin': 'user', 'includeInPdf': True,
               'reasons': [], 'suggestion': None, 'updatedAt': ''}
         d, r = self.new_draft('po_P3ISSUEdraft4', photos=[ph])
-        m, _ = po_db.issue_draft(d['id'], r, 'key-issue-000000020', '', 'Test Approver', 'tester', render)
+        m, _ = po_db.issue_draft(d['id'], r, 'key-issue-000000020', '', 'Test Approver', 'tester', render, ok(r))
         got = po_db.get_issue(m['id'])
         self.assertEqual(got['snapshot']['photos'][0]['sha256'], pm['sha256'])
         self.assertTrue(got['current'])
@@ -306,7 +311,7 @@ class Issuance(unittest.TestCase):
     def test_revision_workflow(self):
         dims = {'values': {'W': '1.30', 'D': '', 'H': '0.85'}, 'unit': '', 'status': 'as_printed', 'origin': 'extracted', 'conflicts': []}
         d, r = self.new_draft('po_P3REVdraft001', items=[item('it_P3item001', dimensions=dims)])
-        orig, _ = po_db.issue_draft(d['id'], r, 'key-issue-000000030', '', 'Test Approver', 'tester', render)
+        orig, _ = po_db.issue_draft(d['id'], r, 'key-issue-000000030', '', 'Test Approver', 'tester', render, ok(r))
         orig_pdf = po_db.read_issue_pdf(orig['id'])[1]
         rd, rrev = po_db.revise_issue(orig['id'], 'po_P3REVdraft002')
         self.assertEqual(rd['revision'], {'baseId': orig['baseId'], 'baseNo': orig['displayNo'], 'basedOnIssueId': orig['id'], 'basedOnRevision': 0})
@@ -320,9 +325,9 @@ class Issuance(unittest.TestCase):
         self.assertIn(('Item', '2', '3'), [(c['area'], c['before'], c['after']) for c in chg])
         self.assertEqual([c for c in chg if c['label'].endswith('Dimensions')], [], 'unchanged dimensions are not reported')
         with self.assertRaises(po_db.NotReady) as cm:
-            po_db.issue_draft(rd2['id'], rrev2, 'key-issue-000000031', '', 'Test Approver', 'tester', render)
+            po_db.issue_draft(rd2['id'], rrev2, 'key-issue-000000031', '', 'Test Approver', 'tester', render, ok(rrev2))
         self.assertIn('revision_reason_missing', {b['code'] for b in cm.exception.blockers})
-        rev1, _ = po_db.issue_draft(rd2['id'], rrev2, 'key-issue-000000032', 'Quantity increased to 3', 'Test Approver', 'tester', render)
+        rev1, _ = po_db.issue_draft(rd2['id'], rrev2, 'key-issue-000000032', 'Quantity increased to 3', 'Test Approver', 'tester', render, ok(rrev2))
         self.assertEqual(rev1['displayNo'], orig['displayNo'] + ' Rev 1')
         self.assertEqual((rev1['revisionNo'], rev1['previousIssueId'], rev1['baseId']), (1, orig['id'], orig['baseId']))
         old = po_db.get_issue(orig['id'])
@@ -339,16 +344,37 @@ class Issuance(unittest.TestCase):
         self.assertEqual([i['current'] for i in listed['issues']], [True, False])
 
 
-class Http(unittest.TestCase):
+import po_storage_api   # noqa: E402
+
+DAFTRA = {'mode': 'ok', 'calls': 0}
+
+
+def fake_daftra(handler, daftra_id):
+    """Stand-in for this server's /daftra/ route (no network, no credentials)."""
+    DAFTRA['calls'] += 1
+    mode = DAFTRA['mode']
+    if mode == 'down':
+        return 0, None
+    if mode == 'missing':
+        return 404, None
+    return 200, {'id': daftra_id, 'business_name': 'Renamed Supplier' if mode == 'changed' else 'Fictional Supplier Est.', 'bn1': '300000000000003'}
+
+
+class HttpBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        import po_storage_api
         cls.srv, cls.port = po_test_support.start_server()
         cls._real = po_pdf.html_to_pdf
         po_pdf.html_to_pdf = fake_pdf
+        cls._fetch = po_storage_api.fetch_daftra_supplier
+        po_storage_api.fetch_daftra_supplier = fake_daftra          # no network: a stand-in Daftra reply
 
     @classmethod
     def tearDownClass(cls):
+        import po_storage_api
         po_pdf.html_to_pdf = cls._real
+        po_storage_api.fetch_daftra_supplier = cls._fetch
         cls.srv.shutdown()
         cls.srv.server_close()
 
@@ -366,6 +392,9 @@ class Http(unittest.TestCase):
         c.close()
         return (r.status, data, hdr) if raw else (r.status, json.loads(data), hdr)
 
+
+
+class Http(HttpBase):
     def test_settings_preview_issue_reprint_revise(self):
         s, j, _ = self.req('GET', '/api/po/settings')
         sdoc, srev = j['data']['data'], j['data']['rev']
@@ -394,7 +423,9 @@ class Http(unittest.TestCase):
         s, j2, _ = self.req('POST', '/api/po/drafts/po_P3HTTPdraft01/issue', body, {'If-Match': str(rev)})
         self.assertEqual((s, j2['data']['id'], j2['duplicate']), (200, iid, True))
         snap = self.req('GET', f'/api/po/issues/{iid}')[1]['data']['snapshot']
-        self.assertEqual(snap['supplierCheck'], {'status': 'verified', 'at': '2026-09-28T10:00:00Z', 'daftraId': '7'})
+        # the server's OWN verification is recorded; the page's claim in the request body is ignored
+        self.assertEqual((snap['supplierCheck']['status'], snap['supplierCheck']['daftraId'], snap['supplierCheck']['draftRev']), ('verified', '7', rev))
+        self.assertNotEqual(snap['supplierCheck']['at'], '2026-09-28T10:00:00Z')
         self.assertEqual(snap['computed']['totals']['vatMethod'], 'category')
         self.assertEqual(snap['templateVersion'], 'po-pdf-2')
         s, j3, _ = self.req('PUT', '/api/po/drafts/po_P3HTTPdraft01', draft('po_P3HTTPdraft01', title='x'), {'If-Match': str(rev)})
@@ -415,6 +446,79 @@ class Http(unittest.TestCase):
         self.assertEqual(self.req('POST', '/api/po/drafts', forged)[0], 400)
         s, j, _ = self.req('GET', '/api/po/issues')
         self.assertTrue(any(b['openRevisionDraftId'] == 'po_P3HTTPrevise1' for b in j['data']))
+
+
+class SupplierVerifiedServerSide(HttpBase):
+    """Issuing re-reads the supplier from Daftra ON THE SERVER; nothing the page sends can replace it."""
+
+    def set_test_mode(self, on):
+        doc, rev = po_db.get_settings()
+        po_db.put_settings(po_model.validate_settings(dict(doc, testMode=on)), rev)
+
+    def issue(self, did, key, rev, **extra):
+        body = dict({'idempotencyKey': key, 'approvedBy': 'Test Approver', 'reason': ''}, **extra)
+        return self.req('POST', f'/api/po/drafts/{did}/issue', body, {'If-Match': str(rev)})
+
+    def test_real_issuance_requires_a_verified_supplier(self):
+        self.set_test_mode(False)
+        try:
+            s, j, _ = self.req('POST', '/api/po/drafts', draft('po_P3SUPdraft001'))
+            rev = j['data']['rev']
+            counters = sqlite3.connect(po_db.db_path()).execute('SELECT COALESCE(SUM(next),0) FROM po_counters').fetchone()
+            for mode in ('down', 'missing', 'changed'):
+                DAFTRA['mode'] = mode
+                forged = {'supplierCheck': {'status': 'verified', 'at': 'x', 'daftraId': '7'}}     # a page's claim is ignored
+                s, j, _ = self.issue('po_P3SUPdraft001', f'sup-key-{mode}-0000001', rev, **forged)
+                self.assertEqual(s, 422, mode)
+                self.assertIn('supplier_unverified', [b['code'] for b in j['blockers']], mode)
+            self.assertIsNone(po_db.issue_for_draft('po_P3SUPdraft001'), 'nothing issued')
+            self.assertEqual(po_db.get_draft('po_P3SUPdraft001')[1], rev, 'the draft is unchanged')
+            self.assertEqual(sqlite3.connect(po_db.db_path()).execute('SELECT COALESCE(SUM(next),0) FROM po_counters').fetchone(), counters,
+                             'no number used')
+            DAFTRA['mode'] = 'ok'
+            s, j, _ = self.issue('po_P3SUPdraft001', 'sup-key-ok-000000001', rev)
+            self.assertEqual(s, 201, j)
+            snap = self.req('GET', f'/api/po/issues/{j["data"]["id"]}')[1]['data']['snapshot']
+            self.assertEqual((snap['supplierCheck']['status'], snap['supplierCheck']['draftRev']), ('verified', rev))
+            calls = DAFTRA['calls']
+            DAFTRA['mode'] = 'down'                        # a retry of the SAME request returns the issue, no second check
+            s, j2, _ = self.issue('po_P3SUPdraft001', 'sup-key-ok-000000001', rev)
+            self.assertEqual((s, j2['duplicate'], DAFTRA['calls']), (200, True, calls))
+        finally:
+            DAFTRA['mode'] = 'ok'
+            self.set_test_mode(True)
+
+    def test_storage_layer_refuses_without_a_matching_verification(self):
+        doc, rev = po_db.create_draft(draft('po_P3SUPdraft002'))
+        for bad in (None, dict(ok(rev), status='unavailable'), dict(ok(rev), draftRev=rev + 1), ok(rev, daftra_id='8')):
+            self.set_test_mode(False)
+            try:
+                with self.assertRaises(po_db.NotReady):
+                    po_db.issue_draft(doc['id'], rev, 'sup-key-store-00000' + str(id(bad))[-3:], '', 'Test Approver', 'tester', render, bad)
+            finally:
+                self.set_test_mode(True)
+
+    def test_test_mode_records_a_missing_supplier_instead_of_blocking(self):
+        DAFTRA['mode'] = 'missing'
+        try:
+            s, j, _ = self.req('POST', '/api/po/drafts', draft('po_P3SUPdraft003'))
+            s, j, _ = self.issue('po_P3SUPdraft003', 'sup-key-test-0000001', j['data']['rev'])
+            self.assertEqual(s, 201, j)
+            snap = self.req('GET', f'/api/po/issues/{j["data"]["id"]}')[1]['data']['snapshot']
+            self.assertEqual(snap['supplierCheck']['status'], 'not_found')
+        finally:
+            DAFTRA['mode'] = 'ok'
+
+
+class DefaultPoNotes(unittest.TestCase):
+    def test_standard_notes_cover_the_required_clauses(self):
+        n = po_model.DEFAULT_PO_NOTES.lower()
+        for words in (('conform',), ('inspection', 'written acceptance'), ('defective', 'corrected or replaced', 'no additional cost'),
+                      ('scope', 'price', "prior written approval")):
+            for w in words:
+                self.assertIn(w, n)
+        self.assertLessEqual(len(po_model.DEFAULT_PO_NOTES), po_model.LIMITS['poNotes'])
+        self.assertEqual(po_model.validate_draft(draft(poNotes=po_model.DEFAULT_PO_NOTES))['poNotes'], po_model.DEFAULT_PO_NOTES)
 
 
 @unittest.skipUnless(po_pdf.find_browser(), 'no local Edge/Chrome to print PDFs')

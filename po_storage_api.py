@@ -309,7 +309,7 @@ def _status(handler, params, qs):
                   'issuanceAvailable': bool(settings.get('buyerConfirmed') and settings.get('numberingConfirmed')
                                             and settings.get('approvalConfirmed')),
                   'testMode': bool(settings.get('testMode')),
-                  'defaults': {'newItemTax': po_model.DEFAULT_ITEM_TAX},
+                  'defaults': {'newItemTax': po_model.DEFAULT_ITEM_TAX, 'poNotes': po_model.DEFAULT_PO_NOTES},
                   'uploads': {'maxBytes': po_db.SOURCE_MAX_BYTES, 'types': list(po_db.SOURCE_TYPES)},
                   'photos': {'maxBytes': po_db.PHOTO_MAX_BYTES, 'types': list(po_db.PHOTO_TYPES)}})
 
@@ -715,10 +715,27 @@ def _issue_draft(handler, params, qs):
     if len(reason) > po_model.LIMITS['reason'] or len(approved) > 200:
         _err(handler, 400, 'Reason or approver name is too long. Nothing was issued.')
         return
-    sc = body.get('supplierCheck')
-    supplier_check = None
-    if isinstance(sc, dict) and sc.get('status') in ('verified', 'not_found', 'unavailable', 'acknowledged_unavailable', 'test_not_found'):
-        supplier_check = {'status': sc['status'], 'at': str(sc.get('at') or '')[:40], 'daftraId': str(sc.get('daftraId') or '')[:20]}
+    # the same request again (double click / retry): return the issue it created — no second check
+    prior = po_db.issue_for_key(key)
+    if prior:
+        if prior['sourceDraftId'] != params['id']:
+            _err(handler, 400, 'This idempotency key was already used for another draft. Nothing was issued.')
+            return
+        _ok(handler, prior, status=200, extra={'duplicate': True})
+        return
+    # Supplier verification is done HERE, on the server, for every issue request — a value sent
+    # by the page is never trusted. The check is bound to the draft revision that was verified.
+    got = po_db.get_draft(params['id'])
+    if got is None:
+        _err(handler, 404, 'Draft not found. Nothing was issued.')
+        return
+    doc, rev = got
+    if rev != expected:
+        _err(handler, 409, 'This draft was changed since you opened it. Reload, review and issue again. Nothing was issued.',
+             extra={'code': 'rev_conflict', 'currentRev': rev})
+        return
+    supplier_check = verify_supplier(handler, doc.get('supplier'))
+    supplier_check['draftRev'] = rev
     try:
         meta, duplicate = po_db.issue_draft(params['id'], expected, key, reason, approved, _actor(), po_pdf.render, supplier_check)
     except po_db.DraftGone:
@@ -792,3 +809,51 @@ def _revise_issue(handler, params, qs):
         _err(handler, 409, 'This PO already has an open revision draft.', extra={'code': 'open_revision', 'draftId': e.draft_id})
         return
     _ok(handler, _full(doc, rev), status=201)
+
+
+# ── supplier verification (server side, before every issue) ─────────────────
+
+def fetch_daftra_supplier(handler, daftra_id):
+    """(status, supplier-dict | None) from Daftra, through this server's own read-only
+    /daftra/ route (the proxy holds the credentials; nothing new is configured here).
+    status: 200, 404, or 0 when Daftra / the route cannot be reached."""
+    import urllib.request
+    import urllib.error
+    if not re.match(r'^\d{1,12}$', str(daftra_id or '')):
+        return 404, None
+    port = handler.server.server_address[1]
+    req = urllib.request.Request(f'http://127.0.0.1:{port}/daftra/suppliers/{daftra_id}.json',
+                                 headers={'Host': f'127.0.0.1:{port}', 'Accept': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.loads(r.read().decode('utf-8'))
+        sup = ((data or {}).get('data') or {}).get('Supplier')
+        return (200, sup) if isinstance(sup, dict) else (0, None)
+    except urllib.error.HTTPError as e:
+        return (404, None) if e.code == 404 else (0, None)
+    except Exception:  # noqa: BLE001 — unreachable, timeout, malformed: not verified
+        return 0, None
+
+
+def verify_supplier(handler, supplier):
+    """{status, at, daftraId, detail}. 'verified' only when Daftra still has this supplier
+    with the same name and VAT number as the draft. Anything else blocks real issuance."""
+    at = po_db.now_iso()
+    if not supplier:
+        return {'status': 'not_selected', 'at': at, 'daftraId': '', 'detail': 'No supplier selected.'}
+    sid = str(supplier.get('daftraId') or '')
+    status, sup = fetch_daftra_supplier(handler, sid)
+    if status == 404:
+        return {'status': 'not_found', 'at': at, 'daftraId': sid, 'detail': 'The supplier no longer exists in Daftra.'}
+    if status != 200:
+        return {'status': 'unavailable', 'at': at, 'daftraId': sid, 'detail': 'Daftra could not be reached to verify the supplier.'}
+    name = (sup.get('business_name') or '').strip() or ' '.join(x for x in (sup.get('first_name'), sup.get('last_name')) if x).strip()
+    vat = str(sup.get('bn1') or '').strip()
+    diffs = []
+    if name != (supplier.get('name') or '').strip():
+        diffs.append(f'name is now "{name}"')
+    if vat != str((supplier.get('snapshot') or {}).get('vatNumber') or '').strip():
+        diffs.append(f'VAT number is now "{vat or "empty"}"')
+    if diffs:
+        return {'status': 'changed', 'at': at, 'daftraId': sid, 'detail': 'Supplier changed in Daftra: ' + '; '.join(diffs) + '.'}
+    return {'status': 'verified', 'at': at, 'daftraId': sid, 'detail': ''}

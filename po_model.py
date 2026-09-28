@@ -62,6 +62,17 @@ TAX_TREATMENTS = ('unresolved', 'taxable', 'zero_rated', 'exempt', 'out_of_scope
 # DEFAULT_TAX_REVIEW_FLAG — never presented as extracted.
 TAX_ORIGINS = ('', 'default', 'user', 'extracted')
 DEFAULT_ITEM_TAX = {'treatment': 'taxable', 'rate': '15', 'origin': 'default'}
+# Standard notes printed on every new PO (editable per draft; never written over user text).
+DEFAULT_PO_NOTES = (
+    '1. Conformity: all goods and work must conform to this purchase order and to the approved specifications, '
+    'drawings, samples, materials and dimensions.\n'
+    '2. Inspection and acceptance: deliveries and completed work are subject to inspection and written acceptance by '
+    'the buyer. Delivery, installation or payment alone does not constitute acceptance.\n'
+    '3. Defective work: defective or non-conforming goods or work shall be corrected or replaced by the supplier at no '
+    'additional cost, within the time notified by the buyer.\n'
+    '4. Changes: no change to scope, specifications, quantities, price or delivery is valid without the buyer\'s prior '
+    'written approval.\n'
+    '5. Quote this PO number on all delivery notes and invoices.')
 DEFAULT_TAX_REVIEW_FLAG = 'default_tax_requires_review'
 PRICE_TAX_BASES = ('unresolved', 'exclusive', 'inclusive')
 BALANCE_TRIGGERS = ('undecided', 'delivery', 'delivery_written_acceptance')

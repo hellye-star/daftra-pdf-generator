@@ -848,6 +848,16 @@ def issue_draft(draft_id, expected_rev, idempotency_key, reason, approved_by, ac
                 blockers.append({'code': 'approval_missing', 'message': f'Approval by {approver or "the configured approver"} is required to issue.', 'essential': True})
         else:
             approved_by = approved_by[:200]
+        # supplier verified in Daftra for THIS draft revision (done by the caller just before issuing).
+        # Real issuance requires 'verified'; with fictional TEST settings a missing / unreachable
+        # supplier is recorded instead. There is no override.
+        chk = supplier_check or {}
+        test = bool(settings.get('testMode'))
+        sup_ok = (chk.get('status') == 'verified' or (test and chk.get('status') in ('not_found', 'unavailable'))) \
+            and chk.get('draftRev') == r['rev'] and chk.get('daftraId') == str((doc.get('supplier') or {}).get('daftraId') or '')
+        if doc.get('supplier') and not sup_ok:
+            blockers.append({'code': 'supplier_unverified', 'essential': True,
+                             'message': (chk.get('detail') or 'The supplier was not verified in Daftra.') + ' Nothing was issued; the draft is unchanged.'})
         rev_info = doc.get('revision')
         reason = (reason or '').strip()
         if rev_info and len(reason) < 5:
@@ -983,6 +993,19 @@ def list_issues():
                                         gross=json.loads(r['snapshot_json'])['computed']['totals'].get('gross'),
                                         currency=json.loads(r['snapshot_json'])['draft'].get('currency') or '') for r in rows]})
         return out
+    finally:
+        c.close()
+
+
+def issue_for_key(idempotency_key):
+    if not IDEMPOTENCY_RE.match(idempotency_key or ''):
+        return None
+    c = _conn()
+    if c is None:
+        return None
+    try:
+        r = c.execute('SELECT * FROM po_issues WHERE idempotency_key = ?', (idempotency_key,)).fetchone()
+        return _issue_row(r) if r else None
     finally:
         c.close()
 
