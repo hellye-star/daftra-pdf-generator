@@ -211,7 +211,10 @@ class PdfLayout(unittest.TestCase):
         self.assertIn('data:image/png', body.split('</tbody>')[0], 'the item and its photos form one unbreakable block')
         pos = [body.index(x) for x in ('Lobby sign', 'W 1.20 × D — × H 0.90 M', 'BASE W 1.2 M X D 0.20 M', '>2<', '>230.00<' if False else '>200.00<', 'data:image/png')]
         self.assertEqual(pos, sorted(pos), 'name → dimensions → measurements → qty/pricing → photos')
-        self.assertEqual(h.count('data:image/png'), 1, 'only photos ticked "Include in PO PDF"')
+        self.assertEqual(h.count(po_pdf.logo_data_uri()), 1, 'the Vista logo is embedded (no external loading)')
+        self.assertEqual(h.replace(po_pdf.logo_data_uri(), '').count('data:image/png'), 1, 'only photos ticked "Include in PO PDF"')
+        self.assertNotIn('src="http', h)
+        self.assertIn('@top-center', h, 'every draft page carries a DRAFT mark in its margin')
         self.assertNotIn('LONG INTERNAL SPECIFICATION TEXT', h)
         self.assertNotIn('INTERNAL NOTE NEVER PRINTED', h, 'internal notes stay internal')
         self.assertIn('Deliver in working hours.', h, 'PO notes are printed')
@@ -224,6 +227,14 @@ class PdfLayout(unittest.TestCase):
                                    {'displayNo': 'PO-2026-0001 Rev 1', 'revisionNo': 1, 'issuedAt': '2026-09-28T10:00:00Z', 'approvedBy': 'A',
                                     'reason': 'Qty <changed>', 'previous': {'displayNo': 'PO-2026-0001', 'issuedAt': '2026-09-20T10:00:00Z'}}, {})
         self.assertNotIn('>DRAFT<', issued)
+        self.assertNotIn('@top-center', issued)
+        self.assertIn('Vista United', issued)
+        # totals that cannot be calculated are explained, never printed blank or as zero
+        bad = draft(items=[dict(it, unitPrice='')], photos=[])
+        hb = po_pdf.build_html(bad, po_model.compute(bad), FICTIONAL, None, {})
+        self.assertIn('Totals not calculated', hb)
+        self.assertIn('Item 1 (Lobby sign): unit price missing', hb)
+        self.assertNotIn('Total including VAT', hb)
         self.assertIn('supersedes PO-2026-0001', issued)
         self.assertIn('Qty &lt;changed&gt;', issued, 'escaped')
 
@@ -427,7 +438,7 @@ class Http(HttpBase):
         self.assertEqual((snap['supplierCheck']['status'], snap['supplierCheck']['daftraId'], snap['supplierCheck']['draftRev']), ('verified', '7', rev))
         self.assertNotEqual(snap['supplierCheck']['at'], '2026-09-28T10:00:00Z')
         self.assertEqual(snap['computed']['totals']['vatMethod'], 'category')
-        self.assertEqual(snap['templateVersion'], 'po-pdf-2')
+        self.assertEqual(snap['templateVersion'], po_pdf.TEMPLATE_VERSION)
         s, j3, _ = self.req('PUT', '/api/po/drafts/po_P3HTTPdraft01', draft('po_P3HTTPdraft01', title='x'), {'If-Match': str(rev)})
         self.assertEqual((s, j3['code']), (409, 'issued'))
         s, stored, h = self.req('GET', f'/api/po/issues/{iid}/pdf', raw=True)

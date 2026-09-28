@@ -26,7 +26,26 @@ import shutil
 import subprocess
 import tempfile
 
-TEMPLATE_VERSION = 'po-pdf-2'   # po-pdf-1: first issued layout (its stored PDFs are never re-rendered)
+TEMPLATE_VERSION = 'po-pdf-3'   # po-pdf-1/2: earlier layouts (their stored PDFs are never re-rendered)
+
+# The approved Vista United logo (the same logo.png the Delivery Note prints), embedded as a
+# data URI so rendering never loads anything from outside the document.
+_LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logo.png')
+_logo_uri = None
+
+
+def logo_data_uri():
+    global _logo_uri
+    if _logo_uri is None:
+        try:
+            with open(_LOGO_PATH, 'rb') as f:
+                data = f.read()
+        except OSError:
+            raise PdfRenderError('The Vista logo (logo.png) is missing, so the PO PDF cannot be produced.')
+        if not data.startswith(b'\x89PNG'):
+            raise PdfRenderError('The Vista logo (logo.png) is not a PNG image.')
+        _logo_uri = 'data:image/png;base64,' + base64.b64encode(data).decode()
+    return _logo_uri
 
 _BROWSERS = (
     os.path.expandvars(r'%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe'),
@@ -64,8 +83,8 @@ def dims_lines(it):
 
 
 def _money(v):
-    if v is None:
-        return '—'
+    if v is None or v == '':
+        return '—'   # e.g. a missing unit price: the totals block lists it as a missing input
     neg = v.startswith('-')
     whole, _, frac = v.lstrip('-').partition('.')
     whole = f'{int(whole):,}'
@@ -82,6 +101,33 @@ def _date(ts):
 
 
 TAX_TEXT = {'taxable': 'VAT', 'zero_rated': 'Zero-rated', 'exempt': 'Exempt', 'out_of_scope': 'Out of scope'}
+
+
+def missing_inputs(doc, computed):
+    """Why the server could not calculate the totals, as printable lines ([] when complete)."""
+    t = computed['totals']
+    st = t.get('status')
+    if st == 'complete':
+        return []
+    if st == 'currency_unresolved':
+        return ['Currency not selected.']
+    if st == 'no_items':
+        return ['No items are included in this PO.']
+    if st == 'negative_total':
+        return ['The total excluding VAT is negative — check discounts and adjustments.']
+    out = []
+    lines = {ln['id']: ln for ln in computed['lines']}
+    items = [it for it in doc.get('items', []) if it['included']]
+    for n, it in enumerate(items, 1):
+        issues = lines.get(it['id'], {}).get('issues') or []
+        if issues:
+            out.append(f'Item {n} ({item_title(it)}): ' + ', '.join(issues) + '.')
+    adj = {a['id']: a for a in computed.get('adjustments', [])}
+    for a in doc.get('adjustments', []):
+        issues = adj.get(a['id'], {}).get('issues') or []
+        if issues:
+            out.append(f'{a.get("label") or ("Discount" if a["kind"] == "discount" else "Charge")}: ' + ', '.join(issues) + '.')
+    return out or [f'Totals not calculated ({st}).']
 
 
 def item_photos(doc):
@@ -148,6 +194,7 @@ def build_html(doc, computed, settings, issue=None, photo_bytes=None):
         # one table body per item: the item and its photos are never split across pages
         rows.append('<tbody class="blk">' + ''.join(block) + '</tbody>')
 
+    missing = missing_inputs(doc, computed)
     tot = [f'<tr><td>Items subtotal</td><td class="r">{e(_money(t.get("itemsNet")))}</td></tr>'] if doc.get('adjustments') else []
     for a in doc.get('adjustments', []):
         r = adj_rows.get(a['id'], {})
@@ -158,10 +205,15 @@ def build_html(doc, computed, settings, issue=None, photo_bytes=None):
         tot.append(f'<tr><td>{label}</td><td class="r">{e(_money(g["tax"]))}</td></tr>')
     tot.append(f'<tr class="sub"><td>VAT total</td><td class="r">{e(_money(t.get("tax")))}</td></tr>')
     tot.append(f'<tr class="gt"><td>Total including VAT ({e(cur)})</td><td class="r">{e(_money(t.get("gross")))}</td></tr>')
+    if missing:   # never print blank or zero totals: say exactly what is missing instead
+        tot_html = ('<div class="miss"><b>Totals not calculated</b> — missing or unresolved inputs:<ul>'
+                    + ''.join(f'<li dir="auto">{e(x)}</li>' for x in missing) + '</ul></div>')
+    else:
+        tot_html = f'<table class="tot">{"".join(tot)}</table>'
 
     pt = doc.get('paymentTerms') or {}
     ms = {m['id']: m for m in computed.get('milestones', [])}
-    ms_rows = ''.join(f'<tr><td>{e(m["label"])}</td><td class="r">{e(m["pct"])}%</td><td class="r">{e(_money(ms.get(m["id"], {}).get("amount")))}</td></tr>'
+    ms_rows = ''.join(f'<tr><td>{e(m["label"])}</td><td class="r">{e(m["pct"])}%</td><td class="r">{e(_money(ms.get(m["id"], {}).get("amount")) if not missing else "not calculated")}</td></tr>'
                       for m in pt.get('milestones', []))
 
     rev_html = ''
@@ -174,8 +226,11 @@ def build_html(doc, computed, settings, issue=None, photo_bytes=None):
         approval = f'<div>Approved by: <b>{e(issue["approvedBy"])}</b></div>'
     basis = {'exclusive': 'Prices exclude VAT', 'inclusive': 'Prices include VAT'}.get(doc.get('priceTaxBasis'), '')
 
+    DRAFT_PAGE_CSS = (' @top-center {{ content: "DRAFT — NOT ISSUED — NOT A VALID PURCHASE ORDER"; font: 700 8pt "Segoe UI", Arial, sans-serif; color: #b3261e; letter-spacing: .1em; }}'
+                      ' @bottom-center {{ content: "DRAFT — NOT ISSUED"; font: 700 8pt "Segoe UI", Arial, sans-serif; color: #b3261e; letter-spacing: .1em; }}'
+                      ).replace('{{', '{').replace('}}', '}') if is_draft else ''
     return f'''<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Order — Not a Tax Invoice — {number}</title><style>
-@page {{ size: A4; margin: 14mm 12mm 16mm; }}
+@page {{ size: A4; margin: 14mm 12mm 16mm;{DRAFT_PAGE_CSS} }}
 body {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif; font-size: 9.5pt; color: #1c1c1a; margin: 0; }}
 .top {{ display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #1c1c1a; padding-bottom: 8px; }}
 .top h1 {{ font-size: 17pt; margin: 0; letter-spacing: .06em; }} .nti {{ font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; color: #6b6b67; margin-bottom: 4px; }}
@@ -195,13 +250,18 @@ table.tot tr.sub td {{ font-weight: 600; }} table.tot tr.gt td {{ font-weight: 7
 table.ms {{ width: 100%; border-collapse: collapse; margin-top: 4px; }} table.ms td {{ padding: 2px 4px; border-bottom: 1px solid #eeece8; }}
 .rev {{ border: 1px solid #b06b1a; background: #fef3e7; padding: 5px 8px; margin-top: 8px; }}
 .test {{ border: 2px solid #b3261e; color: #b3261e; font-weight: 700; text-align: center; padding: 4px; margin-bottom: 6px; }}
-.wm {{ position: fixed; top: 38%; left: 0; right: 0; text-align: center; font-size: 90pt; color: rgba(179,38,30,.10); transform: rotate(-24deg); font-weight: 700; z-index: -1; }}
+/* fixed = repeated on every printed page; drawn ABOVE photos and rows so no page hides it */
+.wm {{ position: fixed; top: 36%; left: 0; right: 0; text-align: center; font-size: 110pt; letter-spacing: .08em; color: rgba(179,38,30,.16); transform: rotate(-28deg); font-weight: 700; z-index: 10; pointer-events: none; }}
+.logo {{ position: relative; width: 35mm; height: 13.3mm; overflow: hidden; margin-bottom: 4px; }}
+.logo img {{ position: absolute; width: 58.73mm; left: -14.07mm; top: -22.68mm; }}   /* crops the padded 1024px logo.png to the mark, as on the Delivery Note */
+.miss {{ border: 2px solid #b3261e; color: #b3261e; padding: 6px 8px; }} .miss ul {{ margin: 4px 0 0 16px; padding: 0; }}
 .sign {{ display: flex; gap: 24px; margin-top: 22px; page-break-inside: avoid; }} .sign > div {{ flex: 1; border-top: 1px solid #1c1c1a; padding-top: 3px; }}
 .foot {{ margin-top: 14px; font-size: 7pt; color: #6b6b67; }}
 </style></head><body>
 {'<div class="wm">DRAFT</div>' if is_draft else ''}
 {'<div class="test">TEST DOCUMENT — fictional settings — not a valid purchase order</div>' if settings.get('testMode') else ''}
-<div class="top"><div><div style="font-size:12pt;font-weight:700" dir="auto">{e(buyer.get("name"))}</div>
+<div class="top"><div><div class="logo"><img src="{logo_data_uri()}" alt="Vista United"></div>
+  <div style="font-size:12pt;font-weight:700" dir="auto">{e(buyer.get("name"))}</div>
   {f'<div dir="rtl">{e(buyer.get("nameAr"))}</div>' if buyer.get("nameAr") else ''}
   <div class="muted" dir="auto">{e(buyer.get("address"))}</div>
   <div class="muted">VAT {e(buyer.get("vat"))}{(" · CR " + e(buyer.get("cr"))) if buyer.get("cr") else ""}</div>
@@ -223,7 +283,7 @@ table.ms {{ width: 100%; border-collapse: collapse; margin-top: 4px; }} table.ms
 <div class="bottom"><div><div class="lbl">Payment terms</div><div dir="auto" style="white-space:pre-wrap">{e(pt.get("text"))}</div>
   <table class="ms">{ms_rows}</table>
   {f'<div class="lbl" style="margin-top:8px">Notes</div><div dir="auto" style="white-space:pre-wrap">{e(doc.get("poNotes"))}</div>' if doc.get("poNotes") else ''}</div>
-  <div><table class="tot">{"".join(tot)}</table></div></div>
+  <div>{tot_html}</div></div>
 {approval}
 <div class="sign"><div>Authorised signature — {e(buyer.get("name"))}</div><div>Supplier acknowledgement</div></div>
 <div class="foot">{number} · {e(TEMPLATE_VERSION)}{(" · " + e(issue.get("displayNo")) + " issued " + e(_date(issue["issuedAt"]))) if issue else " · draft preview — not issued"}</div>
