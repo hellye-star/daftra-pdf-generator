@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import po_db      # noqa: E402
 import po_model   # noqa: E402
+from tests import po_test_support   # noqa: E402
 
 PROD_DIR = os.path.join(os.path.expanduser('~'), '.vista-platform', 'purchase-orders')
 
@@ -107,14 +108,17 @@ class T1Validation(unittest.TestCase):
 
 
 class T2Calculations(unittest.TestCase):
-    def test_exclusive_rounding_half_up_per_line(self):
+    def test_line_amount_rounding_and_category_vat(self):
         c = calc(draft(items=[item('it_aaaaaa1', qty='3', price='0.335'),      # 1.005 → 1.01
-                              item('it_aaaaaa2', qty='1', price='0.10')]))      # tax 0.015 → 0.02
+                              item('it_aaaaaa2', qty='1', price='0.10')]))
         self.assertEqual(c['lines'][0]['lineAmount'], '1.01')
-        self.assertEqual(c['lines'][1]['tax'], '0.02')
+        self.assertIsNone(c['lines'][1]['tax'], 'VAT is calculated per category, not per line (ZATCA BR-CO-17)')
         t = c['totals']
         self.assertEqual(t['status'], 'complete')
-        self.assertEqual((t['net'], t['tax'], t['gross']), ('1.11', '0.17', '1.28'))
+        self.assertEqual((t['net'], t['tax'], t['gross']), ('1.11', '0.17', '1.28'))   # 1.11 × 15 % = 0.1665 → 0.17
+        # summing rounded line VAT would give 0.02 + 0.02 = 0.04; the category rule gives round(0.20 × 15 %) = 0.03
+        c = calc(draft(items=[item('it_aaaaaa1', qty='1', price='0.10'), item('it_aaaaaa2', qty='1', price='0.10')]))
+        self.assertEqual((c['totals']['net'], c['totals']['tax'], c['totals']['gross']), ('0.20', '0.03', '0.23'))
 
     def test_inclusive_prices(self):
         c = calc(draft(priceTaxBasis='inclusive', items=[item('it_aaaaaa1', qty='1', price='115')]))
@@ -158,12 +162,14 @@ class T2Calculations(unittest.TestCase):
         self.assertFalse(bad['milestonePctValid'])
         self.assertIsNone(bad['milestones'][0]['amount'])
 
-    def test_readiness_always_blocks_in_phase1(self):
+    def test_readiness_blocks_until_settings_are_confirmed(self):
         d = po_model.validate_draft(draft(supplier={'daftraId': '7', 'name': 'S', 'snapshot': {}},
                                           items=[item('it_aaaaaa1')],
                                           paymentTerms=dict(draft()['paymentTerms'], balanceTrigger='delivery_written_acceptance')))
         codes = {b['code'] for b in po_model.readiness(d, po_model.compute(d))}
-        self.assertEqual(codes, {'issuance_not_available', 'buyer_unconfirmed', 'po_number_format_unconfirmed'})
+        self.assertEqual(codes, {'buyer_unconfirmed', 'po_number_format_unconfirmed', 'approval_unconfirmed'})
+        confirmed = dict(po_model.default_settings(), buyerConfirmed=True, numberingConfirmed=True, approvalConfirmed=True)
+        self.assertEqual(po_model.readiness(d, po_model.compute(d), confirmed), [])
         codes = {b['code'] for b in po_model.readiness(po_model.validate_draft(draft()), calc(draft()))}
         self.assertTrue({'supplier_missing', 'no_included_items', 'payment_trigger_undecided'} <= codes)
 
@@ -203,14 +209,17 @@ class T3Storage(unittest.TestCase):
 
 
 class T4Http(unittest.TestCase):
-    """Real proxy.py handler on an ephemeral port → /api/po/* only."""
+    """PO API handler on an ephemeral port → /api/po/* only (proxy.py's own routing
+       is checked from its source in test_proxy_routes_po_api)."""
+
+    def test_proxy_routes_po_api(self):
+        self.assertEqual(po_test_support.proxy_po_routes(),
+                         {'GET': True, 'POST': True, 'PUT': True, 'DELETE_blocked': True, 'PATCH_blocked': True})
 
     @classmethod
     def setUpClass(cls):
-        import proxy
-        cls.srv = ThreadingHTTPServer(('127.0.0.1', 0), proxy.VistaProxyHandler)
-        cls.port = cls.srv.server_address[1]
-        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        # PO API over HTTP without importing proxy.py (no config.json / tokens needed)
+        cls.srv, cls.port = po_test_support.start_server()
 
     @classmethod
     def tearDownClass(cls):

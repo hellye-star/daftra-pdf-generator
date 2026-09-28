@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import po_db      # noqa: E402
 import po_model   # noqa: E402
+from tests import po_test_support   # noqa: E402
 
 _TMP = None
 _PREV = None
@@ -265,10 +266,8 @@ class P2Storage(unittest.TestCase):
 class P2Http(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import proxy
-        cls.srv = ThreadingHTTPServer(('127.0.0.1', 0), proxy.VistaProxyHandler)
-        cls.port = cls.srv.server_address[1]
-        threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
+        # PO API over HTTP without importing proxy.py (no config.json / tokens needed)
+        cls.srv, cls.port = po_test_support.start_server()
         s, j, _ = cls.req(cls, 'POST', '/api/po/drafts', json.dumps(draft(id='po_P2HTTPdraft1')).encode(), 'application/json')
         assert s == 201, j
 

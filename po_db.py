@@ -113,6 +113,69 @@ CREATE TRIGGER IF NOT EXISTS po_photos_immutable_u BEFORE UPDATE ON po_photos
   BEGIN SELECT RAISE(ABORT, 'po_photos rows are immutable'); END;
 CREATE TRIGGER IF NOT EXISTS po_photos_immutable_d BEFORE DELETE ON po_photos
   BEGIN SELECT RAISE(ABORT, 'po_photos rows are immutable'); END;
+
+-- PO settings (buyer identity, numbering, approval): one row, revision-checked.
+CREATE TABLE IF NOT EXISTS po_settings (
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  rev         INTEGER NOT NULL,
+  updated_at  TEXT NOT NULL,
+  data_json   TEXT NOT NULL
+);
+-- next sequence number per number prefix (e.g. per year); advanced only inside an issue transaction
+CREATE TABLE IF NOT EXISTS po_counters (
+  key   TEXT PRIMARY KEY,
+  next  INTEGER NOT NULL
+);
+-- one row per PO: the stable base number and which issued version is current
+CREATE TABLE IF NOT EXISTS po_bases (
+  id                TEXT PRIMARY KEY,
+  base_no           TEXT NOT NULL UNIQUE,
+  created_at        TEXT NOT NULL,
+  current_issue_id  TEXT
+);
+CREATE TRIGGER IF NOT EXISTS po_bases_identity_u BEFORE UPDATE OF id, base_no, created_at ON po_bases
+  BEGIN SELECT RAISE(ABORT, 'po_bases identity is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS po_bases_immutable_d BEFORE DELETE ON po_bases
+  BEGIN SELECT RAISE(ABORT, 'po_bases rows are immutable'); END;
+-- issued versions: frozen snapshot + the rendered PDF (content-addressed, re-hashed on read)
+CREATE TABLE IF NOT EXISTS po_issues (
+  id                TEXT PRIMARY KEY,
+  base_id           TEXT NOT NULL,
+  revision_no       INTEGER NOT NULL,
+  display_no        TEXT NOT NULL UNIQUE,
+  issued_at         TEXT NOT NULL,
+  issued_by         TEXT NOT NULL,
+  approved_by       TEXT NOT NULL,
+  reason            TEXT NOT NULL,
+  previous_issue_id TEXT,
+  source_draft_id   TEXT NOT NULL UNIQUE,
+  idempotency_key   TEXT NOT NULL UNIQUE,
+  snapshot_json     TEXT NOT NULL,
+  snapshot_sha256   TEXT NOT NULL,
+  pdf_sha256        TEXT NOT NULL,
+  pdf_size          INTEGER NOT NULL,
+  pdf_stored_name   TEXT NOT NULL,
+  template_version  TEXT NOT NULL,
+  test_mode         INTEGER NOT NULL,
+  UNIQUE (base_id, revision_no)
+);
+CREATE INDEX IF NOT EXISTS idx_po_issues_base ON po_issues(base_id);
+CREATE TRIGGER IF NOT EXISTS po_issues_immutable_u BEFORE UPDATE ON po_issues
+  BEGIN SELECT RAISE(ABORT, 'po_issues rows are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS po_issues_immutable_d BEFORE DELETE ON po_issues
+  BEGIN SELECT RAISE(ABORT, 'po_issues rows are immutable'); END;
+-- append-only history: issued / superseded
+CREATE TABLE IF NOT EXISTS po_issue_events (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  issue_id  TEXT NOT NULL,
+  event     TEXT NOT NULL CHECK (event IN ('issued', 'superseded')),
+  at        TEXT NOT NULL,
+  detail    TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS po_issue_events_u BEFORE UPDATE ON po_issue_events
+  BEGIN SELECT RAISE(ABORT, 'po_issue_events rows are immutable'); END;
+CREATE TRIGGER IF NOT EXISTS po_issue_events_d BEFORE DELETE ON po_issue_events
+  BEGIN SELECT RAISE(ABORT, 'po_issue_events rows are immutable'); END;
 """
 
 # Original supplier documents
@@ -155,6 +218,32 @@ class PhotoConflict(Exception):
 
 class DraftExists(Exception):
     pass
+
+
+class DraftIssued(Exception):
+    """The draft was issued; it can no longer be edited (revise the issued PO instead)."""
+    def __init__(self, issue):
+        super().__init__('draft already issued')
+        self.issue = issue
+
+
+class NotReady(Exception):
+    def __init__(self, blockers):
+        super().__init__('the draft cannot be issued yet')
+        self.blockers = blockers
+
+
+class StaleRevision(Exception):
+    """The PO was issued again (or revised elsewhere) since this revision draft was made."""
+    def __init__(self, current_issue):
+        super().__init__('the issued PO changed since this revision was started')
+        self.current = current_issue
+
+
+class OpenRevisionExists(Exception):
+    def __init__(self, draft_id):
+        super().__init__('an open revision draft already exists')
+        self.draft_id = draft_id
 
 
 class DraftGone(Exception):
@@ -210,13 +299,17 @@ def list_drafts():
         return []
     try:
         rows = c.execute(
-            'SELECT id, status, title, supplier_id, supplier_name, currency, item_count, '
-            'created_at, updated_at, rev FROM po_drafts ORDER BY updated_at DESC, id').fetchall()
+            'SELECT d.id, d.status, d.title, d.supplier_id, d.supplier_name, d.currency, d.item_count, '
+            'd.created_at, d.updated_at, d.rev, i.display_no AS issued_no, '
+            "json_extract(d.data_json, '$.revision.baseNo') AS rev_base "
+            'FROM po_drafts d LEFT JOIN po_issues i ON i.source_draft_id = d.id '
+            'ORDER BY d.updated_at DESC, d.id').fetchall()
         return [{
-            'id': r['id'], 'status': r['status'], 'title': r['title'] or '',
+            'id': r['id'], 'status': 'issued' if r['issued_no'] else r['status'], 'title': r['title'] or '',
             'supplierId': r['supplier_id'], 'supplierName': r['supplier_name'],
             'currency': r['currency'] or '', 'itemCount': r['item_count'],
             'createdAt': r['created_at'], 'updatedAt': r['updated_at'], 'rev': r['rev'],
+            'issuedNo': r['issued_no'], 'revisionOf': r['rev_base'],
         } for r in rows]
     finally:
         c.close()
@@ -238,6 +331,8 @@ def create_draft(doc):
     """Insert a validated draft. Returns (doc, rev=1). Never overwrites."""
     ts = now_iso()
     doc = dict(doc, createdAt=ts, updatedAt=ts)
+    if doc.get('revision'):         # revision drafts are created only by revise_issue()
+        raise ValueError('revision drafts are created from an issued PO')
     title, sid, sname, cur, n = _summary_cols(doc)
     c = _conn(create=True)          # first legitimate write creates the storage + schema
     try:
@@ -270,13 +365,20 @@ def update_draft(doc, expected_rev):
         raise DraftGone(doc['id'])
     try:
         c.execute('BEGIN IMMEDIATE')
-        r = c.execute('SELECT rev, created_at FROM po_drafts WHERE id = ?', (doc['id'],)).fetchone()
+        r = c.execute('SELECT rev, created_at, data_json FROM po_drafts WHERE id = ?', (doc['id'],)).fetchone()
         if r is None:
             c.execute('ROLLBACK')
             raise DraftGone(doc['id'])
+        issued = c.execute('SELECT * FROM po_issues WHERE source_draft_id = ?', (doc['id'],)).fetchone()
+        if issued:
+            c.execute('ROLLBACK')
+            raise DraftIssued(_issue_row(issued))
         if r['rev'] != expected_rev:
             c.execute('ROLLBACK')
             raise RevConflict(r['rev'])
+        if (json.loads(r['data_json']).get('revision') or None) != (doc.get('revision') or None):
+            c.execute('ROLLBACK')           # which issued PO a revision revises is fixed by the server
+            raise ValueError('the revision reference of a draft cannot be changed')
         ts = now_iso()
         doc = dict(doc, createdAt=r['created_at'], updatedAt=ts)
         title, sid, sname, cur, n = _summary_cols(doc)
@@ -289,7 +391,7 @@ def update_draft(doc, expected_rev):
             raise RevConflict(r['rev'])
         c.execute('COMMIT')
         return doc, expected_rev + 1
-    except (DraftGone, RevConflict):
+    except (DraftGone, RevConflict, DraftIssued):
         raise
     except Exception:
         if c.in_transaction:
@@ -619,3 +721,344 @@ def read_photo_bytes(photo_id_):
     if hashlib.sha256(data).hexdigest() != r['sha256'] or len(data) != r['size_bytes']:
         raise SourceIntegrityError('Stored photo no longer matches its recorded hash.')
     return _photo_row(r), data
+
+
+# ── PO settings ────────────────────────────────────────────────────────────
+
+def get_settings():
+    """(settings, rev). Defaults (nothing confirmed, rev 0) when never saved."""
+    import po_model
+    c = _conn()
+    if c is None:
+        return po_model.default_settings(), 0
+    try:
+        r = c.execute('SELECT data_json, rev FROM po_settings WHERE id = 1').fetchone()
+        return (json.loads(r['data_json']), r['rev']) if r else (po_model.default_settings(), 0)
+    finally:
+        c.close()
+
+
+def put_settings(doc, expected_rev):
+    """Compare-and-swap save of the validated settings. Returns (doc, rev)."""
+    c = _conn(create=True)
+    try:
+        c.execute('BEGIN IMMEDIATE')
+        r = c.execute('SELECT rev FROM po_settings WHERE id = 1').fetchone()
+        current = r['rev'] if r else 0
+        if current != expected_rev:
+            c.execute('ROLLBACK')
+            raise RevConflict(current)
+        ts = now_iso()
+        doc = dict(doc, updatedAt=ts)
+        if r:
+            c.execute('UPDATE po_settings SET rev = rev + 1, updated_at = ?, data_json = ? WHERE id = 1 AND rev = ?',
+                      (ts, json.dumps(doc, ensure_ascii=False), expected_rev))
+        else:
+            c.execute('INSERT INTO po_settings (id, rev, updated_at, data_json) VALUES (1, 1, ?, ?)',
+                      (ts, json.dumps(doc, ensure_ascii=False)))
+        c.execute('COMMIT')
+        return doc, current + 1
+    except RevConflict:
+        raise
+    except Exception:
+        if c.in_transaction:
+            c.execute('ROLLBACK')
+        raise
+    finally:
+        c.close()
+
+
+# ── issued POs (immutable) ─────────────────────────────────────────────────
+
+IDEMPOTENCY_RE = re.compile(r'^[A-Za-z0-9_-]{16,64}$')
+ISSUE_ID_RE = re.compile(r'^poi_[0-9a-f]{24}$')
+_PDF_STORED_RE = re.compile(r'^[0-9a-f]{64}\.pdf$')
+
+
+def issued_dir():
+    return os.path.join(_data_dir(), 'issued')
+
+
+def _issue_row(r):
+    return {'id': r['id'], 'baseId': r['base_id'], 'revisionNo': r['revision_no'], 'displayNo': r['display_no'],
+            'issuedAt': r['issued_at'], 'issuedBy': r['issued_by'], 'approvedBy': r['approved_by'], 'reason': r['reason'],
+            'previousIssueId': r['previous_issue_id'], 'sourceDraftId': r['source_draft_id'],
+            'snapshotSha256': r['snapshot_sha256'], 'pdfSha256': r['pdf_sha256'], 'pdfSize': r['pdf_size'],
+            'templateVersion': r['template_version'], 'testMode': bool(r['test_mode'])}
+
+
+def _write_once(directory, name, data, sha):
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, name)
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            if hashlib.sha256(f.read()).hexdigest() != sha:
+                raise SourceIntegrityError('Stored file does not match its hash.')
+        return
+    tmp = path + '.' + secrets.token_hex(4) + '.tmp'
+    with open(tmp, 'wb') as f:
+        f.write(data)
+    os.replace(tmp, path)
+
+
+def issue_draft(draft_id, expected_rev, idempotency_key, reason, approved_by, actor, render, supplier_check=None):
+    """Issue one draft, atomically. Returns (issue_meta, duplicate).
+
+    Inside ONE `BEGIN IMMEDIATE` transaction: the idempotency key is checked (a
+    repeated request returns the issue it already created), the draft's save
+    revision is checked, the draft is validated and every issuance blocker is
+    re-checked against the confirmed settings, the number is allocated (a new
+    base number, or the next revision number of the PO being revised — only if
+    that PO's current issue is still the one the revision was started from),
+    the snapshot is frozen with the hashes of the printed photos, the PDF is
+    rendered from that snapshot and stored content-addressed, and the issue,
+    its events and the base pointer are written. Any failure rolls everything
+    back — no number is consumed and nothing is stored.
+
+    render(doc, computed, settings, issue, photo_bytes) -> PDF bytes."""
+    import po_model
+    if not IDEMPOTENCY_RE.match(idempotency_key or ''):
+        raise ValueError('idempotency key required')
+    c = _conn(create=True)
+    try:
+        c.execute('BEGIN IMMEDIATE')
+        dup = c.execute('SELECT * FROM po_issues WHERE idempotency_key = ?', (idempotency_key,)).fetchone()
+        if dup:
+            c.execute('ROLLBACK')
+            if dup['source_draft_id'] != draft_id:
+                raise ValueError('idempotency key already used for another draft')
+            return _issue_row(dup), True
+        r = c.execute('SELECT data_json, rev FROM po_drafts WHERE id = ?', (draft_id,)).fetchone()
+        if r is None:
+            raise DraftGone(draft_id)
+        done = c.execute('SELECT * FROM po_issues WHERE source_draft_id = ?', (draft_id,)).fetchone()
+        if done:
+            raise DraftIssued(_issue_row(done))
+        if r['rev'] != expected_rev:
+            raise RevConflict(r['rev'])
+        doc = po_model.validate_draft(json.loads(r['data_json']))
+        computed = po_model.compute(doc)
+        srow = c.execute('SELECT data_json FROM po_settings WHERE id = 1').fetchone()
+        settings = json.loads(srow['data_json']) if srow else po_model.default_settings()
+        blockers = po_model.readiness(doc, computed, settings)
+        approver = (settings.get('approval') or {}).get('approverName', '').strip()
+        approved_by = (approved_by or '').strip()
+        if settings.get('approval', {}).get('required'):
+            if not approved_by or approved_by.casefold() != approver.casefold():
+                blockers.append({'code': 'approval_missing', 'message': f'Approval by {approver or "the configured approver"} is required to issue.', 'essential': True})
+        else:
+            approved_by = approved_by[:200]
+        rev_info = doc.get('revision')
+        reason = (reason or '').strip()
+        if rev_info and len(reason) < 5:
+            blockers.append({'code': 'revision_reason_missing', 'message': 'A revision needs a reason (at least 5 characters).', 'essential': True})
+        if blockers:
+            raise NotReady(blockers)
+
+        ts = now_iso()
+        previous = None
+        if rev_info:
+            base = c.execute('SELECT * FROM po_bases WHERE id = ?', (rev_info['baseId'],)).fetchone()
+            if base is None or base['current_issue_id'] != rev_info['basedOnIssueId']:
+                cur = c.execute('SELECT * FROM po_issues WHERE id = ?', (base['current_issue_id'] if base else '',)).fetchone()
+                raise StaleRevision(_issue_row(cur) if cur else None)
+            previous = c.execute('SELECT * FROM po_issues WHERE id = ?', (base['current_issue_id'],)).fetchone()
+            revision_no = c.execute('SELECT MAX(revision_no) FROM po_issues WHERE base_id = ?', (base['id'],)).fetchone()[0] + 1
+            base_id, base_no = base['id'], base['base_no']
+        else:
+            n = settings['numbering']
+            year = int(ts[:4])
+            # one counter per rendered prefix: a {YYYY} pattern restarts its sequence each year
+            key = n['pattern'].replace('{YYYY}', '%04d' % year).replace('{YY}', '%02d' % (year % 100))
+            row = c.execute('SELECT next FROM po_counters WHERE key = ?', (key,)).fetchone()
+            seq = max(n['start'], row['next'] if row else 1)
+            while True:
+                base_no = po_model.format_po_number(n['pattern'], n['seqWidth'], year, seq)
+                if not c.execute('SELECT 1 FROM po_bases WHERE base_no = ?', (base_no,)).fetchone():
+                    break
+                seq += 1
+            c.execute('INSERT INTO po_counters (key, next) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET next = excluded.next',
+                      (key, seq + 1))
+            base_id, revision_no = 'pob_' + secrets.token_hex(12), 0
+            c.execute('INSERT INTO po_bases (id, base_no, created_at, current_issue_id) VALUES (?,?,?,NULL)', (base_id, base_no, ts))
+        display_no = po_model.revision_label(base_no, revision_no)
+
+        # printed photos: their stored bytes, re-hashed now; the snapshot keeps each hash
+        photo_bytes, photo_list = {}, []
+        for a in doc.get('photos', []):
+            if a['status'] == 'removed' or not a['includeInPdf'] or not a['target']:
+                continue
+            got = read_photo_bytes(a['photoId'])
+            if not got:
+                raise NotReady([{'code': 'photo_missing', 'message': f'Photo {a["photoId"]} is not stored.', 'essential': True}])
+            meta, data = got
+            photo_bytes[a['photoId']] = (meta['mime'], data)
+            photo_list.append({'photoId': a['photoId'], 'sha256': meta['sha256'], 'mime': meta['mime'], 'sourceId': meta['sourceId'],
+                               'page': meta['page'], 'region': meta['region'], 'kind': meta['kind'], 'target': a['target']})
+        prev_info = None
+        chg = []
+        if previous is not None:
+            prev_snap = json.loads(previous['snapshot_json'])
+            prev_info = {'issueId': previous['id'], 'displayNo': previous['display_no'], 'issuedAt': previous['issued_at']}
+            chg = po_model.changes(prev_snap['draft'], doc, prev_snap['computed'], computed)
+        issue_view = {'displayNo': display_no, 'baseNo': base_no, 'revisionNo': revision_no, 'issuedAt': ts,
+                      'approvedBy': approved_by, 'reason': reason, 'previous': prev_info}
+        pdf = render(doc, computed, settings, issue_view, photo_bytes)
+        if not isinstance(pdf, bytes) or not pdf.startswith(b'%PDF-'):
+            raise ValueError('the renderer did not return a PDF')
+        import po_pdf
+        snapshot = {'schema': 1, 'issue': issue_view, 'issuedBy': actor, 'draft': doc, 'computed': computed,
+                    'supplierCheck': supplier_check,   # Daftra re-check made just before issuing (as reported by the page)
+                    'settings': {'buyer': settings['buyer'], 'approval': settings['approval'], 'numbering': settings['numbering'],
+                                 'testMode': bool(settings.get('testMode'))},
+                    'photos': photo_list, 'changes': chg, 'templateVersion': po_pdf.TEMPLATE_VERSION}
+        snap_json = json.dumps(snapshot, ensure_ascii=False, sort_keys=True)
+        pdf_sha = hashlib.sha256(pdf).hexdigest()
+        _write_once(issued_dir(), pdf_sha + '.pdf', pdf, pdf_sha)
+        iid = 'poi_' + secrets.token_hex(12)
+        c.execute('INSERT INTO po_issues (id, base_id, revision_no, display_no, issued_at, issued_by, approved_by, reason, '
+                  'previous_issue_id, source_draft_id, idempotency_key, snapshot_json, snapshot_sha256, pdf_sha256, pdf_size, '
+                  'pdf_stored_name, template_version, test_mode) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (iid, base_id, revision_no, display_no, ts, actor, approved_by, reason, previous['id'] if previous else None,
+                   draft_id, idempotency_key, snap_json, hashlib.sha256(snap_json.encode('utf-8')).hexdigest(), pdf_sha, len(pdf),
+                   pdf_sha + '.pdf', po_pdf.TEMPLATE_VERSION, 1 if settings.get('testMode') else 0))
+        if previous is not None:
+            c.execute('INSERT INTO po_issue_events (issue_id, event, at, detail) VALUES (?,?,?,?)',
+                      (previous['id'], 'superseded', ts, f'superseded by {display_no}'))
+        c.execute('INSERT INTO po_issue_events (issue_id, event, at, detail) VALUES (?,?,?,?)',
+                  (iid, 'issued', ts, f'issued by {actor}' + (f'; reason: {reason}' if reason else '')))
+        c.execute('UPDATE po_bases SET current_issue_id = ? WHERE id = ?', (iid, base_id))
+        row = c.execute('SELECT * FROM po_issues WHERE id = ?', (iid,)).fetchone()
+        c.execute('COMMIT')
+        return _issue_row(row), False
+    except Exception:
+        if c.in_transaction:
+            c.execute('ROLLBACK')
+        raise
+    finally:
+        c.close()
+
+
+def _base_state(c, base_id):
+    b = c.execute('SELECT * FROM po_bases WHERE id = ?', (base_id,)).fetchone()
+    return b['current_issue_id'] if b else None
+
+
+def get_issue(issue_id):
+    """{meta, snapshot, current, events} or None."""
+    if not ISSUE_ID_RE.match(issue_id or ''):
+        return None
+    c = _conn()
+    if c is None:
+        return None
+    try:
+        r = c.execute('SELECT * FROM po_issues WHERE id = ?', (issue_id,)).fetchone()
+        if not r:
+            return None
+        ev = [{'event': x['event'], 'at': x['at'], 'detail': x['detail']} for x in
+              c.execute('SELECT * FROM po_issue_events WHERE issue_id = ? ORDER BY id', (issue_id,))]
+        return {'meta': _issue_row(r), 'snapshot': json.loads(r['snapshot_json']),
+                'current': _base_state(c, r['base_id']) == r['id'], 'events': ev}
+    finally:
+        c.close()
+
+
+def list_issues():
+    """Issued POs: one entry per base number with every issued version (newest first)."""
+    c = _conn()
+    if c is None:
+        return []
+    try:
+        bases = c.execute('SELECT * FROM po_bases ORDER BY created_at DESC, id').fetchall()
+        out = []
+        for b in bases:
+            rows = c.execute('SELECT * FROM po_issues WHERE base_id = ? ORDER BY revision_no DESC', (b['id'],)).fetchall()
+            open_rev = c.execute("SELECT d.id FROM po_drafts d LEFT JOIN po_issues i ON i.source_draft_id = d.id "
+                                 "WHERE json_extract(d.data_json, '$.revision.baseId') = ? AND i.id IS NULL", (b['id'],)).fetchone()
+            out.append({'baseId': b['id'], 'baseNo': b['base_no'], 'currentIssueId': b['current_issue_id'],
+                        'openRevisionDraftId': open_rev['id'] if open_rev else None,
+                        'issues': [dict(_issue_row(r), current=r['id'] == b['current_issue_id'],
+                                        title=(json.loads(r['snapshot_json'])['draft'].get('title') or ''),
+                                        supplierName=((json.loads(r['snapshot_json'])['draft'].get('supplier') or {}).get('name') or ''),
+                                        gross=json.loads(r['snapshot_json'])['computed']['totals'].get('gross'),
+                                        currency=json.loads(r['snapshot_json'])['draft'].get('currency') or '') for r in rows]})
+        return out
+    finally:
+        c.close()
+
+
+def issue_for_draft(draft_id):
+    c = _conn()
+    if c is None:
+        return None
+    try:
+        r = c.execute('SELECT * FROM po_issues WHERE source_draft_id = ?', (draft_id,)).fetchone()
+        return _issue_row(r) if r else None
+    finally:
+        c.close()
+
+
+def read_issue_pdf(issue_id):
+    """(meta, bytes) of the PDF stored when the PO was issued — re-hashed; never re-rendered."""
+    if not ISSUE_ID_RE.match(issue_id or ''):
+        return None
+    c = _conn()
+    if c is None:
+        return None
+    try:
+        r = c.execute('SELECT * FROM po_issues WHERE id = ?', (issue_id,)).fetchone()
+    finally:
+        c.close()
+    if not r:
+        return None
+    if not _PDF_STORED_RE.match(r['pdf_stored_name']):
+        raise SourceIntegrityError('Unexpected stored name.')
+    base = os.path.realpath(issued_dir())
+    path = os.path.realpath(os.path.join(base, r['pdf_stored_name']))
+    if os.path.dirname(path) != base or not os.path.isfile(path):
+        raise SourceIntegrityError('Stored PDF is missing.')
+    with open(path, 'rb') as f:
+        data = f.read()
+    if hashlib.sha256(data).hexdigest() != r['pdf_sha256'] or len(data) != r['pdf_size']:
+        raise SourceIntegrityError('Stored PDF no longer matches its recorded hash.')
+    return _issue_row(r), data
+
+
+def revise_issue(issue_id, new_draft_id):
+    """Open a revision draft from an issued PO's frozen snapshot. Only the CURRENT
+    issue can be revised, and only one open revision draft per PO. The issued
+    version stays current until the revision itself is issued."""
+    import po_model
+    c = _conn(create=True)
+    try:
+        c.execute('BEGIN IMMEDIATE')
+        r = c.execute('SELECT * FROM po_issues WHERE id = ?', (issue_id,)).fetchone()
+        if r is None:
+            raise DraftGone(issue_id)
+        if _base_state(c, r['base_id']) != r['id']:
+            cur = c.execute('SELECT * FROM po_issues WHERE id = ?', (_base_state(c, r['base_id']),)).fetchone()
+            raise StaleRevision(_issue_row(cur) if cur else None)
+        open_rev = c.execute("SELECT d.id FROM po_drafts d LEFT JOIN po_issues i ON i.source_draft_id = d.id "
+                             "WHERE json_extract(d.data_json, '$.revision.baseId') = ? AND i.id IS NULL", (r['base_id'],)).fetchone()
+        if open_rev:
+            raise OpenRevisionExists(open_rev['id'])
+        base_no = c.execute('SELECT base_no FROM po_bases WHERE id = ?', (r['base_id'],)).fetchone()['base_no']
+        snap = json.loads(r['snapshot_json'])
+        doc = dict(snap['draft'])
+        ts = now_iso()
+        doc.update({'id': new_draft_id, 'status': 'draft', 'createdAt': ts, 'updatedAt': ts,
+                    'revision': {'baseId': r['base_id'], 'baseNo': base_no, 'basedOnIssueId': r['id'], 'basedOnRevision': r['revision_no']},
+                    'reconciliation': dict(doc.get('reconciliation') or {}, acceptedTotals=None, acceptedAt='')})
+        doc = po_model.validate_draft(doc)
+        title, sid, sname, cur, n = _summary_cols(doc)
+        c.execute('INSERT INTO po_drafts (id, status, title, supplier_id, supplier_name, currency, item_count, '
+                  'created_at, updated_at, schema_ver, rev, data_json) VALUES (?,?,?,?,?,?,?,?,?,?,1,?)',
+                  (new_draft_id, 'draft', title, sid, sname, cur, n, ts, ts, doc.get('schema', 1), json.dumps(doc, ensure_ascii=False)))
+        c.execute('COMMIT')
+        return doc, 1
+    except Exception:
+        if c.in_transaction:
+            c.execute('ROLLBACK')
+        raise
+    finally:
+        c.close()

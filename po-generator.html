@@ -197,6 +197,21 @@
   .toast { position: fixed; bottom: 20px; right: 20px; background: var(--dark); color: #fff; padding: 10px 16px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 380px; }
   .toast.show { opacity: 1; }
   .phase { border: 1px dashed var(--rule); padding: 12px 14px; color: var(--mid); font-size: 12px; }
+  .adj-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 100px 150px 70px auto; gap: 6px; align-items: center; margin-top: 6px; }
+  @media (max-width: 760px) { .adj-row { grid-template-columns: 1fr 1fr; } }
+  table.recon { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+  table.recon th { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--mid); text-align: left; padding: 4px; border-bottom: 1px solid var(--rule); }
+  table.recon td { padding: 4px; border-bottom: 1px solid #EEECE8; vertical-align: top; overflow-wrap: anywhere; }
+  table.recon td.r, table.recon th.r { text-align: right; white-space: nowrap; }
+  table.recon td.nw { white-space: nowrap; }
+  .recon-adj { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid #EEECE8; font-size: 12px; }
+  .iss-base { border: 1px solid var(--rule); background: var(--cream); padding: 6px 8px; margin-top: 6px; }
+  .iss-base .t { font-weight: 600; font-size: 12px; }
+  .iss-v { padding: 4px 0 2px; border-top: 1px solid #EEECE8; margin-top: 4px; font-size: 11.5px; }
+  .iss-v .s { font-size: 10.5px; color: var(--mid); }
+  .main.locked .item-btns, .main.locked [data-act="add-item"] { display: none; }
+  .pdf-pages { background: #EDEBE7; padding: 4px; max-height: 76vh; overflow: auto; }
+  .pdf-pages canvas { display: block; margin: 0 auto 6px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.15); max-width: 100%; }
   .phs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .ph { border: 1px solid var(--rule); background: #fff; padding: 4px; width: 158px; font-size: 10.5px; }
   .ph.unc { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
@@ -260,6 +275,8 @@
     <h2>Purchase orders</h2>
     <button class="btn" id="newDraftBtn" style="width:100%">+ New PO draft</button>
     <div class="draft-list" id="draftList"></div>
+    <h2 style="margin-top:18px">Issued POs</h2>
+    <div class="draft-list" id="issueList"></div>
     <div class="conn chip-info" id="connState">Checking PO storage…</div>
   </aside>
   <main class="main" id="main"></main>
@@ -300,6 +317,8 @@ const S = {
   rv: null,              // open review {ex, source, tab, page, zoom, highlight, selRows:Set, selOther:Set, headerKeys:Set, applyCurrency, applyTaxBasis}
   ph: { draftId: null, list: [], modal: null },   // stored item photos of this draft's documents; open photo dialog
   specOpen: new Set(),   // items whose internal specification is expanded
+  discOpen: new Set(),   // items whose line-discount field was opened
+  settings: null, settingsRev: 0, modal: null, issues: [], changes: null,
 };
 
 // ── utils ──────────────────────────────────────────────────────────────────
@@ -373,57 +392,88 @@ function clientErrors() {
 }
 
 // ── calculation (mirror of po_model.compute) ───────────────────────────────
+// Line amount = round(qty × unit price) − line discount. Document adjustments
+// (discounts negative, charges positive) carry their own tax treatment.
+// VAT per ZATCA BR-CO-17: per VAT category, VAT = round_half_up(taxable base ×
+// rate) once; document VAT = sum of the category VAT (never summed line VAT).
+function netOf(amount, t, rate, basis, dp) {
+  if (['zero_rated', 'exempt', 'out_of_scope'].includes(t)) return amount;
+  if (t !== 'taxable' || !rate || basis === 'unresolved') return null;
+  if (basis === 'exclusive') return amount;
+  const sign = amount < 0n ? -1n : 1n, a = amount < 0n ? -amount : amount, scale = 10n ** BigInt(dp);
+  return sign * roundHalfUp({ n: a * 100n * rate.d, d: scale * (100n * rate.d + rate.n) }, dp);
+}
+function roundSigned(f, dp) { return f.n < 0n ? -roundHalfUp({ n: -f.n, d: f.d }, dp) : roundHalfUp(f, dp); }
 function compute(doc) {
   const cur = doc.currency || '', dp = CURRENCIES[cur], basis = doc.priceTaxBasis || 'unresolved';
   const lines = {}, invalid = [], taxUnres = [];
-  let net = 0n, tax = 0n, gross = 0n; const groups = {};
+  let itemsNet = 0n, entered = 0n; const groups = {};
+  const group = (t, rate, n) => { const key = t + (t === 'taxable' ? ':' + fmtExact(rate) : '');
+    const g = groups[key] || (groups[key] = { treatment: t, rate: t === 'taxable' ? fmtExact(rate) : '', rateValue: rate, net: 0n, tax: 0n }); g.net += n; };
   for (const it of doc.items) {
-    const row = { exact: null, amount: null, net: null, tax: null, gross: null, issues: [] };
+    const row = { exact: null, amount: null, discount: null, net: null, tax: null, gross: null, issues: [] };
     const q = it.qty ? parseDec(it.qty, 3) : null;
     const p = it.unitPrice !== '' ? parseDec(it.unitPrice, 4) : null;
-    if (!(it.name || '').trim() && !it.description.trim()) row.issues.push('item name missing');
+    const disc = it.discount ? parseDec(it.discount, 4) : null;
+    if (!(it.name || '').trim() && !it.description.trim()) row.issues.push('name missing');
     if (!it.unit.trim()) row.issues.push('unit missing');
     if (!q || isZero(q)) row.issues.push('quantity missing');
     if (!p) row.issues.push('unit price missing');
-    if (q && p) row.exact = fmtExact(mul(q, p));
+    if (q && p) { const qp = mul(q, p); row.exact = !disc || cmp(disc, qp) <= 0 ? fmtExact(disc ? { n: qp.n * disc.d - disc.n * qp.d, d: qp.d * disc.d } : qp) : null; }
     const t = it.tax.treatment, rate = it.tax.rate ? parseDec(it.tax.rate, 2) : null;
     if (t === 'unresolved') row.issues.push('tax treatment unresolved');
     else if (t === 'taxable' && !rate) row.issues.push('tax rate missing');
     else if (t === 'taxable' && basis === 'unresolved') row.issues.push('price tax basis (inclusive/exclusive) unresolved');
-    if (it.included) {
-      if (row.issues.some(x => x.endsWith('missing') && !x.includes('tax'))) invalid.push(it.id);
-      else if (row.issues.some(x => x.includes('tax'))) taxUnres.push(it.id);
-    }
     if (dp != null && q && p) {
-      const amount = roundHalfUp(mul(q, p), dp);
-      row.amount = fmtMinor(amount, dp);
-      const taxOk = ['zero_rated', 'exempt', 'out_of_scope'].includes(t) || (t === 'taxable' && rate && basis !== 'unresolved');
-      if (taxOk) {
-        const scale = 10n ** BigInt(dp); let n, x;
-        if (t !== 'taxable') { n = amount; x = 0n; }
-        else if (basis === 'exclusive') { n = amount; x = roundHalfUp({ n: amount * rate.n, d: scale * rate.d * 100n }, dp); }
-        else { n = roundHalfUp({ n: amount * 100n * rate.d, d: scale * (100n * rate.d + rate.n) }, dp); x = amount - n; }
-        row.net = fmtMinor(n, dp); row.tax = fmtMinor(x, dp); row.gross = fmtMinor(n + x, dp);
-        if (it.included) {
-          net += n; tax += x; gross += n + x;
-          const key = t + (t === 'taxable' ? ':' + fmtExact(rate) : '');
-          const g = groups[key] || (groups[key] = { treatment: t, rate: t === 'taxable' ? fmtExact(rate) : '', net: 0n, tax: 0n });
-          g.net += n; g.tax += x;
-        }
+      const grossAmt = roundHalfUp(mul(q, p), dp), dMinor = disc ? roundHalfUp(disc, dp) : 0n;
+      if (dMinor > grossAmt) row.issues.push('discount larger than the line amount');
+      else {
+        const amount = grossAmt - dMinor;
+        row.amount = fmtMinor(amount, dp); row.discount = disc ? fmtMinor(dMinor, dp) : null;
+        const n = netOf(amount, t, rate, basis, dp);
+        if (n != null) { row.net = fmtMinor(n, dp); if (it.included) { itemsNet += n; entered += amount; group(t, rate, n); } }
       }
+    }
+    if (it.included) {
+      if (row.issues.some(x => (x.endsWith('missing') && !x.includes('tax')) || x.startsWith('discount larger'))) invalid.push(it.id);
+      else if (row.issues.some(x => x.includes('tax'))) taxUnres.push(it.id);
     }
     lines[it.id] = row;
   }
+  const adjRows = {}, adjInvalid = [], adjTaxUnres = [];
+  let adjNet = 0n;
+  for (const a of doc.adjustments || []) {
+    const row = { net: null, tax: null, gross: null, issues: [] };
+    const amt = a.amount ? parseDec(a.amount, 4) : null, t = a.tax.treatment, rate = a.tax.rate ? parseDec(a.tax.rate, 2) : null;
+    if (!amt || isZero(amt)) { row.issues.push('amount missing'); adjInvalid.push(a.id); }
+    if (t === 'unresolved' || (t === 'taxable' && (!rate || basis === 'unresolved'))) { row.issues.push('tax treatment unresolved'); adjTaxUnres.push(a.id); }
+    if (dp != null && amt) {
+      const m = roundHalfUp(amt, dp) * (a.kind === 'discount' ? -1n : 1n), n = netOf(m, t, rate, basis, dp);
+      if (n != null) { row.net = fmtMinor(n, dp); adjNet += n; entered += m; group(t, rate, n); }
+    }
+    adjRows[a.id] = row;
+  }
   const included = doc.items.filter(i => i.included);
-  const status = dp == null ? 'currency_unresolved' : !included.length ? 'no_items' : invalid.length ? 'incomplete' : taxUnres.length ? 'tax_unresolved' : 'complete';
+  let status = dp == null ? 'currency_unresolved' : !included.length ? 'no_items' : (invalid.length || adjInvalid.length) ? 'incomplete'
+    : (taxUnres.length || adjTaxUnres.length) ? 'tax_unresolved' : 'complete';
+  const scale = dp != null ? 10n ** BigInt(dp) : 1n;
+  for (const g of Object.values(groups)) {
+    g.tax = g.treatment === 'taxable' ? roundSigned({ n: g.net * g.rateValue.n, d: scale * g.rateValue.d * 100n }, dp) : 0n;
+    if (g.treatment === 'taxable' && g.net < 0n && status === 'complete') status = 'negative_total';
+  }
+  const net = itemsNet + adjNet, tax = Object.values(groups).reduce((a, g) => a + g.tax, 0n), gross = net + tax;
+  if (status === 'complete' && net < 0n) status = 'negative_total';
   const complete = status === 'complete';
   const totals = { status, currency: cur, dp,
+    itemsNet: complete ? fmtMinor(itemsNet, dp) : null, adjustmentsNet: complete ? fmtMinor(adjNet, dp) : null,
     net: complete ? fmtMinor(net, dp) : null, tax: complete ? fmtMinor(tax, dp) : null, gross: complete ? fmtMinor(gross, dp) : null,
     taxGroups: complete ? Object.values(groups).map(g => ({ treatment: g.treatment, rate: g.rate, net: fmtMinor(g.net, dp), tax: fmtMinor(g.tax, dp) })) : [],
-    invalidItems: invalid, taxUnresolvedItems: taxUnres, includedCount: included.length, excludedCount: doc.items.length - included.length };
-  // provisional: quotation discounts/charges not applied by this PO (mirrors po_model.ADJUSTMENT_FLAGS)
-  totals.provisionalItems = included.filter(i => (i.reviewFlags || []).some(f => f === 'line_discount_present' || f === 'document_adjustments_unapplied')).map(i => i.id);
-  totals.provisional = totals.provisionalItems.length > 0;
+    inclusiveRoundingDifference: complete && basis === 'inclusive' ? fmtMinor(gross - entered, dp) : null,
+    invalidItems: invalid, taxUnresolvedItems: taxUnres, invalidAdjustments: adjInvalid, taxUnresolvedAdjustments: adjTaxUnres,
+    includedCount: included.length, excludedCount: doc.items.length - included.length };
+  totals.provisionalItems = included.filter(i => (i.reviewFlags || []).includes('line_discount_present') && !i.discount).map(i => i.id);
+  totals.unappliedAdjustments = unappliedQuotationAdjustments(doc);
+  totals.provisional = totals.provisionalItems.length > 0 || totals.unappliedAdjustments.length > 0;
   const ms = doc.paymentTerms.milestones || [];
   const pcts = ms.map(m => m.pct ? parseDec(m.pct, 2) : null);
   let pctOk = ms.length > 0 && pcts.every(Boolean);
@@ -433,28 +483,85 @@ function compute(doc) {
     let alloc = 0n; const scale = 10n ** BigInt(dp);
     msOut = ms.map((m, k) => { const a = k === ms.length - 1 ? gross - alloc : roundHalfUp({ n: gross * pcts[k].n, d: scale * pcts[k].d * 100n }, dp); alloc += a; return { id: m.id, pct: m.pct, amount: fmtMinor(a, dp) }; });
   } else msOut = ms.map(m => ({ id: m.id, pct: m.pct, amount: null }));
-  return { lines, totals, milestones: msOut, milestonePctValid: pctOk };
+  const out = { lines, adjustments: adjRows, totals, milestones: msOut, milestonePctValid: pctOk };
+  out.reconciliation = reconcile(doc, out);
+  return out;
+}
+const QUOTATION_ADJ = { 'quotation:discount': ['discount', 'Discount printed on the quotation'],
+  'quotation:delivery': ['charge', 'Delivery / shipping charge printed on the quotation'],
+  'quotation:installation': ['charge', 'Installation charge printed on the quotation'] };
+function unappliedQuotationAdjustments(doc) {
+  const tot = (doc.quotation && doc.quotation.totals) || {};
+  const applied = new Set((doc.adjustments || []).map(a => a.sourceKey).filter(Boolean));
+  const dismissed = new Set(((doc.reconciliation || {}).dismissed || []).map(d => d.key));
+  const out = [];
+  for (const [key, [, label]] of Object.entries(QUOTATION_ADJ)) {
+    const v = tot[key.split(':')[1]] || '';
+    if (v && !applied.has(key) && !dismissed.has(key)) out.push({ key, label, amount: v });
+  }
+  const flagged = doc.items.some(i => i.included && (i.reviewFlags || []).includes('document_adjustments_unapplied'));
+  if (flagged && !Object.keys(QUOTATION_ADJ).some(k => tot[k.split(':')[1]]) && !dismissed.has('quotation:unknown'))
+    out.push({ key: 'quotation:unknown', label: 'The quotation shows discounts or charges whose printed totals were not saved', amount: '' });
+  return out;
+}
+// printed amount → signed fraction (commas and Arabic digits tolerated), null if not a number
+function printedDec(v) {
+  let s = normDigits(String(v || '')).replace(/,/g, '').trim(); const neg = s.startsWith('-'); s = s.replace(/^-/, '');
+  const f = s ? parseDec(s, 8) : null; return f ? (neg ? { n: -f.n, d: f.d } : f) : null;
+}
+function reconcile(doc, c) {
+  const t = c.totals, tot = (doc.quotation && doc.quotation.totals) || {}, rows = [];
+  if (t.status === 'complete') {
+    for (const [key, label, po, printed] of [['subtotal', 'Items subtotal (before document discounts / charges)', t.itemsNet, tot.subtotal],
+      ['vat', 'VAT', t.tax, tot.vat], ['grandTotal', 'Grand total', t.gross, tot.grandTotal || tot.total]]) {
+      const pv = printedDec(printed);
+      if (!pv) { rows.push({ key, label, po, printed: null, difference: null, status: 'not_printed' }); continue; }
+      const pf = printedDec(po), diff = { n: pf.n * pv.d - pv.n * pf.d, d: pf.d * pv.d };
+      const abs = { n: diff.n < 0n ? -diff.n : diff.n, d: diff.d };
+      rows.push({ key, label, po, printed: normDigits(String(printed)).replace(/,/g, '').trim(),   // as printed
+        difference: (diff.n < 0n ? '-' : '') + fmtExact(abs), status: diff.n === 0n ? 'match' : 'differs' });
+    }
+  }
+  const printedAny = rows.some(r => r.status !== 'not_printed');
+  const status = !printedAny ? 'not_available' : rows.some(r => r.status === 'differs') ? 'differs' : 'matched';
+  const rec = doc.reconciliation || {}, acc = rec.acceptedTotals, current = { net: t.net, tax: t.tax, gross: t.gross };
+  const accepted = !!(status === 'differs' && acc && acc.net === current.net && acc.tax === current.tax && acc.gross === current.gross && (rec.note || '').trim());
+  return { status, checks: rows, accepted, currentTotals: current };
+}
+function legacyDimensionItems(doc) {
+  return doc.items.filter(it => it.included && it.source === 'extracted' && it.orig && it.orig.dimensions && !it.dimensions).map(it => it.id);
 }
 function readiness(doc, c) {
-  const b = [];
+  // mirrors po_model.readiness — the server list (returned on every save) is authoritative
+  const b = [], s = S.settings || {};
   const add = (code, message) => b.push({ code, message });
-  add('issuance_not_available', 'Issuing POs is not available in Phase 1 (drafts only).');
-  add('buyer_unconfirmed', 'Buyer company name, VAT number and address have not been confirmed.');
-  add('po_number_format_unconfirmed', 'PO number format and starting number have not been confirmed.');
+  if (!s.buyerConfirmed) add('buyer_unconfirmed', 'Buyer company name, VAT number and address have not been confirmed (PO settings).');
+  if (!s.numberingConfirmed) add('po_number_format_unconfirmed', 'PO number format and starting number have not been confirmed (PO settings).');
+  if (!s.approvalConfirmed) add('approval_unconfirmed', 'The approval requirement has not been confirmed (PO settings).');
   if (!doc.supplier) add('supplier_missing', 'No Daftra supplier selected.');
   if (!doc.currency) add('currency_missing', 'Currency not selected.');
   const t = c.totals;
   if (!t.includedCount) add('no_included_items', 'No included items.');
-  if (t.invalidItems.length) add('item_invalid', `${t.invalidItems.length} included item(s) missing name/description, unit, quantity or unit price.`);
+  if (t.invalidItems.length) add('item_invalid', `${t.invalidItems.length} included item(s) missing name, unit, quantity or unit price (or a discount larger than the line).`);
   if (t.taxUnresolvedItems.length) add('tax_unresolved', `Tax treatment unresolved on ${t.taxUnresolvedItems.length} included item(s).`);
-  // mirrors po_model.readiness (the server list is authoritative)
-  if (t.provisional) add('adjustments_unapplied', `The quotation has discounts or charges affecting ${t.provisionalItems.length} included item(s) that this PO does not apply yet — PO totals are provisional and are not the quotation's payable total.`);
+  if (t.invalidAdjustments.length) add('adjustment_invalid', `${t.invalidAdjustments.length} discount / charge line(s) have no amount.`);
+  if (t.taxUnresolvedAdjustments.length) add('adjustment_tax_unresolved', `Tax treatment unresolved on ${t.taxUnresolvedAdjustments.length} discount / charge line(s).`);
+  if (t.status === 'negative_total') add('negative_total', 'Discounts are larger than the items — the PO total would be negative.');
+  if (t.provisional) {
+    const parts = [];
+    if (t.provisionalItems.length) parts.push(`${t.provisionalItems.length} item line discount(s)`);
+    if (t.unappliedAdjustments.length) parts.push(t.unappliedAdjustments.map(a => a.label.toLowerCase()).join(', '));
+    add('adjustments_unapplied', 'Quotation discounts / charges not applied yet: ' + parts.join('; ') + ' — apply them or mark them not applicable. PO totals are provisional until then.');
+  }
+  if (c.reconciliation.status === 'differs' && !c.reconciliation.accepted) add('totals_unreconciled', 'PO totals differ from the quotation\'s printed totals — correct them or accept the difference with a note.');
   const inc = doc.items.filter(i => i.included && (i.reviewFlags || []).includes('from_incomplete_extraction')).length;
   if (inc) add('incomplete_source_document', `${inc} included item(s) come from an extraction that did not read every page of the supplier document.`);
   const unrev = doc.items.filter(i => i.included && (i.reviewFlags || []).includes(DEFAULT_TAX_FLAG)).length;
   if (unrev) add('default_tax_unreviewed', `${unrev} imported item(s) use the default VAT 15% because the quotation states no tax treatment — review and confirm or change it.`);
   const dimsOpen = doc.items.filter(i => i.included && i.dimensions && i.dimensions.status === 'needs_confirmation').length;
   if (dimsOpen) add('dimensions_unconfirmed', `${dimsOpen} included item(s) have conflicting source dimensions — confirm the dimensions to print on the PO.`);
+  const legacy = legacyDimensionItems(doc).length;
+  if (legacy) add('legacy_dimensions_review', `${legacy} included item(s) were imported before structured dimensions existed — review their dimensions before issue.`);
   const phOpen = (doc.photos || []).filter(a => a.status !== 'removed' && (a.status === 'uncertain' || (a.includeInPdf && !a.target))).length;
   if (phOpen) add('photos_unconfirmed', `${phOpen} item photo(s) have an uncertain or missing item association — confirm, reassign or remove them.`);
   if ((doc.paymentTerms.balanceTrigger || 'undecided') === 'undecided') add('payment_trigger_undecided', 'Balance payment trigger (delivery vs delivery + written acceptance) not decided.');
@@ -490,7 +597,7 @@ async function loadDraftList() {
   if (status === 200 && json.ok) {
     S.drafts = json.data;
     const el = $('connState'); el.className = 'conn chip-ok';
-    el.textContent = `PO storage connected · ${S.drafts.length} draft(s) · no issuance yet`;
+    el.textContent = `PO storage connected · ${S.drafts.length} draft(s)`;
   }
   renderDraftList();
 }
@@ -500,14 +607,14 @@ function newDraftDoc() {
   return {
     id: rid('po_', 20), schema: 1, status: 'draft', title: '', currency: '', priceTaxBasis: 'unresolved',
     supplier: null, items: [],
-    paymentTerms: { text: DEFAULT_PAYMENT_TEXT, isDraftDefault: true, balanceTrigger: 'undecided',
+    paymentTerms: { text: DEFAULT_PAYMENT_TEXT, isDraftDefault: true, balanceTrigger: 'delivery',
       milestones: [ { id: 'ms_advance', pct: '50', label: 'Advance payment' },
                     { id: 'ms_balance', pct: '50', label: 'Balance — one calendar month after delivery' } ] },
-    projectRef: '', deliveryLocation: '', notes: '', photos: [], createdAt: ts, updatedAt: ts,
+    projectRef: '', deliveryLocation: '', notes: '', poNotes: '', photos: [], adjustments: [], createdAt: ts, updatedAt: ts,
   };
 }
 function newItem() {
-  return { id: rid('it_', 12), name: '', description: '', dimensions: null, unit: '', qty: '', unitPrice: '', included: true,
+  return { id: rid('it_', 12), name: '', description: '', dimensions: null, unit: '', qty: '', unitPrice: '', discount: '', included: true,
            tax: { ...DEFAULT_ITEM_TAX }, source: 'manual', createdAt: new Date().toISOString(), excludedAt: '' };
 }
 
@@ -536,8 +643,10 @@ function applyServer(d, replaceDoc) {
     if (S.rv && S.rv.src.draftId !== S.draft.id) S.rv = null;           // a review belongs to one draft
     if (S.rv) S.rv.inDraft = alreadyInDraft(S.rv.ex, S.rv.id);
   }
-  S.rev = d.rev; S.server = { computed: d.computed, readiness: d.readiness, rev: d.rev };
+  S.rev = d.rev; S.server = { computed: d.computed, readiness: d.readiness, rev: d.rev, issued: d.issued || null };
+  if (replaceDoc) S.changes = null;
   renderMain();
+  if (replaceDoc && S.draft.revision) loadChanges();
 }
 
 async function saveDraft() {
@@ -552,12 +661,15 @@ async function saveDraft() {
     const unchangedSince = JSON.stringify(S.draft) === sent;
     S.fieldErrors = {};
     if (unchangedSince) applyServer(json.data, true);
-    else { S.rev = json.data.rev; S.server = { computed: json.data.computed, readiness: json.data.readiness, rev: json.data.rev }; renderMain(); }
+    else { S.rev = json.data.rev; S.server = { computed: json.data.computed, readiness: json.data.readiness, rev: json.data.rev, issued: json.data.issued || null }; renderMain(); }
+    if (S.draft.revision) loadChanges();
     S.banner = null; renderBanner();
     await loadDraftList();
-    toast('Draft saved · revision ' + json.data.rev);
+    toast('Draft saved');
+  } else if (status === 409 && json.code === 'issued') {
+    showBanner('bad', esc(json.error) + ' <button class="link" data-act="reload-latest">Reload</button>');
   } else if (status === 409 && json.code === 'rev_conflict') {
-    showBanner('bad', `<b>Not saved — this draft was changed in another tab or session.</b> The saved version is now revision ${esc(json.currentRev)}; this tab loaded revision ${esc(S.rev)}. Nothing was overwritten, and your unsaved changes are still on this screen.
+    showBanner('bad', `<b>Not saved — this draft was changed in another tab or session.</b> The saved version is now save ${esc(json.currentRev)}; this tab loaded save ${esc(S.rev)}. Nothing was overwritten, and your unsaved changes are still on this screen.
       <div class="acts"><button class="btn btn-sm" data-act="reload-latest">Load latest saved version (discard my changes)</button>
       <button class="btn btn-sm btn-ghost" data-act="download-copy">Download my unsaved copy (JSON)</button></div>`);
     loadDraftList();
@@ -658,7 +770,7 @@ function renderDraftList() {
   el.innerHTML = S.drafts.map(d => `<button class="draft-row ${S.draft && S.draft.id === d.id ? 'active' : ''}" data-act="open" data-id="${esc(d.id)}">
       <div class="t" dir="auto">${esc(d.title || '(untitled draft)')}</div>
       <div class="s" dir="auto">${esc(d.supplierName || 'No supplier')} · ${esc(d.itemCount)} item(s)${d.currency ? ' · ' + esc(d.currency) : ''}</div>
-      <div class="s">Rev ${esc(d.rev)} · ${esc(fmtTime(d.updatedAt))}</div></button>`).join('');
+      <div class="s">${d.issuedNo ? '<span class="chip chip-ok">Issued ' + esc(d.issuedNo) + '</span>' : d.revisionOf ? '<span class="chip chip-warn">Revision of ' + esc(d.revisionOf) + '</span>' : 'Saved ' + esc(fmtTime(d.updatedAt))}</div></button>`).join('');
 }
 
 function showBanner(kind, html) { S.banner = { kind, html }; renderBanner(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -670,7 +782,7 @@ function updateSaveState() {
   const el = $('saveState'); if (!el) return;
   if (S.saving) { el.className = 'savestate'; el.textContent = 'Saving…'; }
   else if (S.dirty) { el.className = 'savestate dirty'; el.textContent = 'Unsaved changes'; }
-  else { el.className = 'savestate'; el.textContent = `Saved · revision ${S.rev}`; }
+  else { el.className = 'savestate'; el.textContent = `Saved · save ${S.rev}`; }   // the save counter — never a PO revision number
   const b = $('saveBtn'); if (b) b.disabled = S.saving || !S.dirty;
 }
 
@@ -680,29 +792,36 @@ function renderMain() {
     m.innerHTML = `<div class="pagehead"><h1>PO Generator</h1></div><div id="bannerArea"></div>
       <div class="card"><div class="card-b">
         <p style="margin-bottom:10px">Create a purchase-order draft, choose the Daftra supplier, enter the items and review totals and payment terms. Drafts are saved on this PC and can be resumed at any time.</p>
-        <p class="muted small" style="margin-bottom:14px">Phase 1: drafts only. Uploading a supplier quotation (Phase 2) and issuing / exporting a final PO come later.</p>
+        <p class="muted small" style="margin-bottom:14px">Upload the supplier quotation, review what was read, check totals and terms, preview the PDF, then issue. Issuing never sends anything to the supplier.</p>
         <button class="btn" data-act="new">+ New PO draft</button></div></div>`;
     renderBanner(); return;
   }
-  const d = S.draft;
+  const d = S.draft, issued = S.server && S.server.issued;
+  const stateChip = issued ? `<span class="chip chip-ok">Issued · ${esc(issued.displayNo)}</span>`
+    : d.revision ? `<span class="chip chip-warn">Revision draft of ${esc(d.revision.baseNo)}</span>` : '<span class="chip chip-warn">Draft · not issued</span>';
   m.innerHTML = `
     <div class="pagehead">
-      <h1>PO draft</h1>
-      <span class="chip chip-warn">Draft · not issued</span>
+      <h1>${issued ? 'Issued PO' : d.revision ? 'PO revision' : 'PO draft'}</h1>
+      ${stateChip}
       <div class="savebar"><span id="saveState" class="savestate"></span><button class="btn" id="saveBtn" data-act="save">Save draft</button></div>
     </div>
     <div id="bannerArea"></div>
+    ${issued ? `<div class="banner banner-info" data-keep style="margin-bottom:12px"><b>Issued as ${esc(issued.displayNo)}</b> on ${esc(fmtTime(issued.issuedAt))}${issued.approvedBy ? ' · approved by ' + esc(issued.approvedBy) : ''}${issued.testMode ? ' · <b>TEST</b>' : ''}.
+        This version is frozen and can no longer be edited. <button class="link" data-act="pdf-issued" data-id="${esc(issued.id)}" data-no="${esc(issued.displayNo)}" data-keep>Open the issued PDF</button>
+        ${(S.issues || []).some(bb => bb.currentIssueId === issued.id && !bb.openRevisionDraftId) ? ` · <button class="link" data-act="issue-revise" data-id="${esc(issued.id)}">Revise this PO</button>` : ''}</div>`
+      : d.revision ? `<div class="banner banner-warn" style="margin-bottom:12px">This is a <b>revision draft</b> of <b>${esc(d.revision.baseNo)}</b> (based on ${d.revision.basedOnRevision ? 'Rev ' + esc(d.revision.basedOnRevision) : 'the original issue'}).
+        The issued version stays current until this revision is issued with a reason. Changes are listed under “Review &amp; issue”.</div>` : ''}
 
     <div class="card"><div class="card-b grid2">
       <label class="field"><span class="lbl">Draft title (internal)</span><input class="inp" dir="auto" data-f="title" maxlength="200" value="${esc(d.title)}" placeholder="e.g. Signage fabrication — Riyadh showroom"></label>
-      <div class="field"><span class="lbl">Draft reference</span><div class="small muted" style="padding-top:6px">${esc(d.id)} · created ${esc(fmtTime(d.createdAt))}<br>No PO number is assigned until final issue (not available in Phase 1).</div></div>
+      <div class="field"><span class="lbl">Draft reference</span><div class="small muted" style="padding-top:6px">${esc(d.id)} · created ${esc(fmtTime(d.createdAt))}<br>${issued ? 'PO number ' + esc(issued.displayNo) : 'The PO number is allocated only when the PO is issued.'}</div></div>
     </div></div>
 
     <div class="card"><div class="card-h"><span class="step">00</span><h3>Supplier quotation</h3><span class="chip chip-info">Read on this PC</span></div>
       <div class="card-b" id="sourceArea"></div></div>
 
-    <div class="card"><div class="card-h"><span class="step">01</span><h3>Buyer</h3><span class="chip chip-warn">Not confirmed</span></div>
-      <div class="card-b small">Buyer company name, VAT number, CR number and address have <b>not been confirmed</b> for purchase orders. They will be set and confirmed before issuing is enabled. Defaults found elsewhere on the platform are not treated as verified.</div></div>
+    <div class="card"><div class="card-h"><span class="step">01</span><h3>Buyer</h3>${S.settings && S.settings.buyerConfirmed ? '<span class="chip chip-ok">Confirmed</span>' : '<span class="chip chip-warn">Not confirmed</span>'}</div>
+      <div class="card-b">${settingsSummary()}</div></div>
 
     <div class="card"><div class="card-h"><span class="step">02</span><h3>Supplier (Daftra)</h3><span id="supChip"></span></div>
       <div class="card-b" id="supplierArea"></div></div>
@@ -714,19 +833,21 @@ function renderMain() {
     <div class="card"><div class="card-h"><span class="step">04</span><h3>Currency, tax &amp; totals</h3></div>
       <div class="card-b" id="totalsArea"></div></div>
 
-    <div class="card"><div class="card-h"><span class="step">05</span><h3>Payment terms</h3><span class="chip chip-warn">Editable draft default · not confirmed</span></div>
+    <div class="card"><div class="card-h"><span class="step">05</span><h3>Payment terms</h3><span class="chip chip-info">Editable</span></div>
       <div class="card-b" id="paymentArea"></div></div>
 
     <div class="card"><div class="card-h"><span class="step">06</span><h3>Delivery &amp; reference</h3></div>
       <div class="card-b grid2">
         <label class="field"><span class="lbl">Project reference (optional)</span><input class="inp" dir="auto" data-f="projectRef" maxlength="200" value="${esc(d.projectRef)}"></label>
         <label class="field"><span class="lbl">Delivery location (optional)</span><input class="inp" dir="auto" data-f="deliveryLocation" maxlength="500" value="${esc(d.deliveryLocation)}"></label>
-        <label class="field" style="grid-column:1/-1"><span class="lbl">Internal notes (not printed)</span><textarea class="inp" dir="auto" rows="3" data-f="notes" maxlength="5000">${esc(d.notes)}</textarea></label>
+        <label class="field" style="grid-column:1/-1"><span class="lbl">PO notes — printed on the PO</span><textarea class="inp" dir="auto" rows="3" data-f="poNotes" maxlength="2000">${esc(d.poNotes || '')}</textarea></label>
+        <label class="field" style="grid-column:1/-1"><span class="lbl">Internal notes — never printed</span><textarea class="inp" dir="auto" rows="2" data-f="notes" maxlength="5000">${esc(d.notes)}</textarea></label>
       </div></div>
 
     <div class="card"><div class="card-h"><span class="step">07</span><h3>Review &amp; issue</h3></div>
-      <div class="card-b" id="readinessArea"></div></div>`;
+      <div class="card-b"><div id="readinessArea"></div><div id="changesArea">${changesHtml()}</div></div></div>`;
   renderBanner(); renderSources(); renderSupplier(); renderItems(); renderTotals(); renderPayment(); refreshDerived(); updateSaveState();
+  if (issued) lockEditor();
 }
 
 function kvSupplier(p) {
@@ -860,6 +981,9 @@ const itemTitle = it => (it.name || '').trim() || String(it.description || '').s
 const dimsText = d => Object.entries(d.values).map(([k, v]) => k + ' ' + (v || '(blank)')).join(' × ') + (d.unit ? ' ' + d.unit : '');
 function dimsHtml(it) {
   const d = it.dimensions;
+  if (!d && it.source === 'extracted' && it.orig && it.orig.dimensions) return `<div class="dims conflict"><span class="lbl">Dimensions — review before issue</span>
+    <div class="small">Imported before structured dimensions existed. Printed columns recorded at import: <b>${esc(it.orig.dimensions)}</b>.</div>
+    <button class="btn btn-sm" data-act="legacy-dims" data-id="${esc(it.id)}" style="margin-top:4px">Review dimensions</button></div>`;
   if (!d) return `<div class="dims"><button class="link" data-act="dims-add" data-id="${esc(it.id)}">Add dimensions</button></div>`;
   const conflict = d.status === 'needs_confirmation', hasConflict = (d.conflicts || []).length > 0;
   const des = d.described || { main: '', additional: [] };
@@ -873,6 +997,8 @@ function dimsHtml(it) {
     ${hasConflict ? `<div class="small" style="margin-top:4px">The quotation disagrees with itself: the dimension columns show <b>${esc(it.orig && it.orig.dimensions || dimsText({ values: d.values, unit: '' }))}</b>,
       the description says “${esc((des.main || String(it.orig && it.orig.description || it.description).split('\n').find(l => /size/i.test(l)) || d.conflicts.map(c => c.dim + ' ' + c.description).join(', ')).trim())}”. Nothing was corrected — set what to print, then confirm.
       <button class="btn btn-sm" data-act="dims-confirm" data-id="${esc(it.id)}" id="dimcf-${esc(it.id)}" ${conflict ? '' : 'hidden'}>Confirm these dimensions</button></div>` : ''}
+    ${conflict && !hasConflict ? `<div class="small" style="margin-top:4px">Check these dimensions against the original, then
+      <button class="btn btn-sm" data-act="dims-confirm" data-id="${esc(it.id)}">Confirm these dimensions</button></div>` : ''}
     ${it.orig && it.orig.dimensions && d.origin === 'user' ? `<div class="raw">printed columns: ${esc(it.orig.dimensions)}</div>` : ''}</div>`;
 }
 function renderItems() {
@@ -887,7 +1013,8 @@ function renderItems() {
         <span class="item-no">${i + 1}</span>
         <div class="item-desc"><input class="inp item-name" dir="auto" data-item="${esc(it.id)}" data-if="name" maxlength="300" value="${esc(it.name || '')}" placeholder="Item name — printed on the PO${it.name ? '' : ' (empty: first line of the specification is used)'}" aria-label="Item name"></div>
         <div class="item-btns"><button class="btn btn-sm btn-ghost" data-act="exclude" data-id="${esc(it.id)}" tabindex="-1" title="Exclude (keyboard: untick the checkbox)">Exclude</button>
-          <button class="btn btn-sm btn-ghost" data-act="ph-add" data-id="${esc(it.id)}" title="Attach a photo from the original">Add photo</button></div>
+          <button class="btn btn-sm btn-ghost" data-act="ph-add" data-id="${esc(it.id)}" title="Attach a photo from the original">Add photo</button>
+          ${it.discount || S.discOpen.has(it.id) || (it.reviewFlags || []).includes('line_discount_present') ? '' : `<button class="link" data-act="item-discount" data-id="${esc(it.id)}">+ line discount</button>`}</div>
       </div>
       <div class="item-body">
         ${dimsHtml(it)}
@@ -895,6 +1022,8 @@ function renderItems() {
           ${f('Unit', `<input class="inp" dir="auto" data-item="${esc(it.id)}" data-if="unit" maxlength="40" value="${esc(it.unit)}" placeholder="pcs">`)}
           ${f('Quantity', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="qty" value="${esc(it.qty)}">`)}
           ${f('Unit price', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="unitPrice" value="${esc(it.unitPrice)}">`)}
+          ${it.discount || S.discOpen.has(it.id) || (it.reviewFlags || []).includes('line_discount_present')
+            ? f('Line discount', `<input class="inp" style="text-align:right" inputmode="decimal" data-item="${esc(it.id)}" data-if="discount" value="${esc(it.discount || '')}" placeholder="${it.orig && it.orig.discount ? 'quotation: ' + esc(it.orig.discount) : '0'}">`) : ''}
           ${f('Tax treatment', taxCell(it), 'ifield-tax')}
           <div class="ifield"><span class="lbl" style="text-align:right">Line amount</span><div class="calc amt" id="amt-${esc(it.id)}"></div></div>
         </div>
@@ -952,7 +1081,9 @@ function renderTotals() {
           <li>Nothing is rounded until a currency is chosen. The server recalculates everything on each save.</li>
         </ul></details>
       <div class="totals" id="totalsBox" style="flex:1;min-width:280px"></div>
-    </div>`;
+    </div>
+    <div id="adjArea"></div><div id="reconArea"></div>`;
+  renderAdjustments();
 }
 
 function autoGrow(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
@@ -993,7 +1124,7 @@ function refreshDerived() {
     const fe = itemFieldErrors(it);
     ['qty', 'unitPrice', 'rate'].forEach(f => { const inp = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="${f}"]`); if (inp) inp.classList.toggle('err', !!fe[f] || !!S.fieldErrors[`items[${d.items.indexOf(it)}].${f === 'rate' ? 'tax.rate' : f}`]); });
     if (el) {
-      if (row.amount != null) el.innerHTML = `${esc(money(row.amount))}<div class="src">calculated</div>` + (row.tax != null ? `<div class="small muted">tax ${esc(money(row.tax))}</div>` : '');
+      if (row.amount != null) el.innerHTML = `${esc(money(row.amount))}<div class="src">calculated</div>`;
       else if (row.exact != null) el.innerHTML = `${esc(row.exact)}<div class="src">exact · choose currency</div>`;
       else el.innerHTML = '<span class="muted">—</span>';
     }
@@ -1007,26 +1138,32 @@ function refreshDerived() {
       tax_unresolved: `Tax treatment unresolved on ${t.taxUnresolvedItems.length} item(s) — tax and total remain unresolved.` };
     let html = `<div class="row"><span>Included items</span><span>${t.includedCount}${t.excludedCount ? ` <span class="muted small">(${t.excludedCount} excluded, not counted)</span>` : ''}</span></div>`;
     if (t.status === 'complete') {
-      html += `<div class="row"><span>Net (before tax)</span><span class="calc">${esc(money(t.net, cur))}</span></div>`;
-      html += t.taxGroups.map(g => `<div class="row small"><span>Tax · ${esc(TAX_LABELS[g.treatment])}${g.rate ? ' ' + esc(g.rate) + '%' : ''} on ${esc(money(g.net))}</span><span class="calc">${esc(money(g.tax, cur))}</span></div>`).join('');
-      html += `<div class="row grand"><span>PO total${t.provisional ? ' <span class="chip chip-bad">Provisional</span>' : ''}</span><span class="calc">${esc(money(t.gross, cur))}</span></div>`;
+      if ((d.adjustments || []).length) {
+        html += `<div class="row"><span>Items subtotal</span><span class="calc">${esc(money(t.itemsNet, cur))}</span></div>`;
+        html += (d.adjustments || []).map(a => `<div class="row small"><span dir="auto">${esc(a.label || (a.kind === 'discount' ? 'Discount' : 'Charge'))}</span><span class="calc">${esc(money((c.adjustments[a.id] || {}).net, cur))}</span></div>`).join('');
+      }
+      html += `<div class="row"><span>Total excluding VAT</span><span class="calc">${esc(money(t.net, cur))}</span></div>`;
+      html += t.taxGroups.map(g => `<div class="row small"><span>${g.treatment === 'taxable' ? 'VAT ' + esc(g.rate) + '%' : esc(TAX_LABELS[g.treatment]) + ' (no VAT)'} on ${esc(money(g.net))}</span><span class="calc">${esc(money(g.tax, cur))}</span></div>`).join('');
+      html += `<div class="row"><span>VAT total</span><span class="calc">${esc(money(t.tax, cur))}</span></div>`;
+      html += `<div class="row grand"><span>Total including VAT${t.provisional ? ' <span class="chip chip-bad">Provisional</span>' : ''}</span><span class="calc">${esc(money(t.gross, cur))}</span></div>`;
+      html += `<div class="small muted" style="margin-top:4px">VAT is calculated once per VAT rate on its taxable base and rounded half-up (ZATCA rule BR-CO-17)${t.inclusiveRoundingDifference && t.inclusiveRoundingDifference !== '0.00' ? ` — ${esc(t.inclusiveRoundingDifference)} different from the sum of the VAT-inclusive prices` : ''}.</div>`;
     } else html += `<div class="banner banner-warn" style="margin:8px 0 0">${esc(msgs[t.status])}</div>`;
     if (t.provisional) {
       const q = d.quotation, qt = q && q.totals && (q.totals.grandTotal || q.totals.total);
-      html += `<div class="banner banner-bad" style="margin:8px 0 0"><b>Provisional:</b> the supplier quotation has discounts or charges that this PO does not apply yet
-        (${t.provisionalItems.length} item(s) affected). This PO total is <b>not</b> the quotation's payable total${qt ? ` (printed on the quotation: ${esc(qt)})` : ''}.
-        The quotation's values are kept with each item for reconciliation.</div>`;
+      html += `<div class="banner banner-bad" style="margin:8px 0 0"><b>Provisional:</b> the supplier quotation has discounts or charges that this PO has not applied or marked not applicable yet
+        (see below). This PO total is <b>not</b> the quotation's payable total${qt ? ` (printed on the quotation: ${esc(qt)})` : ''}.</div>`;
     }
     const sc = S.server && S.server.computed;
     if (sc && !S.dirty) {
       const same = sc.totals.status === t.status && sc.totals.gross === t.gross && sc.totals.net === t.net && sc.totals.tax === t.tax;
-      html += `<div class="small" style="margin-top:8px">${same ? '<span class="chip chip-ok">Server check matches</span>' : '<span class="chip chip-bad">Server calculation differs — do not rely on these totals</span>'} <span class="muted">(revision ${esc(S.server.rev)})</span></div>`;
+      html += `<div class="small" style="margin-top:8px">${same ? '<span class="chip chip-ok">Server check matches</span>' : '<span class="chip chip-bad">Server calculation differs — do not rely on these totals</span>'} <span class="muted">(save ${esc(S.server.rev)})</span></div>`;
     } else if (S.dirty) html += '<div class="small muted" style="margin-top:8px">Server check runs on save.</div>';
     box.innerHTML = html;
   }
   c.milestones.forEach(m => { const el = $('msamt-' + m.id); if (el) el.textContent = m.amount != null ? money(m.amount, cur) : '—'; });
   const note = $('msNote');
   if (note) note.innerHTML = !c.milestonePctValid ? '<span class="chip chip-bad">Percentages must add up to 100%</span>' : c.totals.status !== 'complete' ? '<span class="muted">Amounts appear once the PO total is fully resolved.</span>' : '';
+  const rc = $('reconArea'); if (rc) rc.innerHTML = reconHtml(c);
   const hint = $('wordingHint'), pt = d.paymentTerms;
   if (hint) hint.innerHTML = (pt.balanceTrigger === 'delivery_written_acceptance' && !/acceptance/i.test(pt.text))
     ? '<div class="banner banner-warn" style="margin:6px 0 0">The wording does not mention written acceptance, but that trigger is selected. <button class="link" data-act="acceptance-wording">Use suggested wording</button></div>'
@@ -1034,10 +1171,382 @@ function refreshDerived() {
     ? '<div class="banner banner-warn" style="margin:6px 0 0">The wording mentions acceptance, but the selected trigger is delivery only.</div>' : '';
   const ra = $('readinessArea');
   if (ra) {
-    const blockers = readiness(d, c);
-    ra.innerHTML = `<ul class="blockers">${blockers.map(b => `<li><span class="chip ${b.code === 'issuance_not_available' ? 'chip-info' : 'chip-bad'}">Blocks issue</span><span>${esc(b.message)}</span></li>`).join('')}</ul>
-      <div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="btn" disabled>Issue PO</button><span class="small muted">Issuing, PO numbering and PDF export are not part of Phase 1.</span></div>`;
+    const blockers = readiness(d, c), issued = S.server && S.server.issued;
+    ra.innerHTML = issued ? `<div class="small">Issued as <b>${esc(issued.displayNo)}</b>. <button class="link" data-act="pdf-issued" data-id="${esc(issued.id)}" data-no="${esc(issued.displayNo)}" data-keep>Issued PDF</button></div>`
+      : (blockers.length ? `<ul class="blockers">${blockers.map(b => `<li><span class="chip chip-bad">Blocks issue</span><span>${esc(b.message)}</span></li>`).join('')}</ul>`
+        : '<div class="small"><span class="chip chip-ok">Ready to issue</span> (checked again by the server when you issue)</div>') +
+        `<div class="acts" style="margin-top:12px"><button class="btn btn-ghost" data-act="pdf-preview">Preview PDF</button>
+          <button class="btn" data-act="issue-open">${d.revision ? 'Issue revision…' : 'Issue PO…'}</button>
+          <span class="small muted">The preview shows the <b>saved</b> draft, marked DRAFT. Issuing never sends anything to the supplier.</span></div>`;
   }
+}
+
+// ══ Phase 3 — reconciliation, settings, PDF, issuance, revisions ══════════════
+// Nothing here sends anything to a supplier. Issuing is explicit, happens on the
+// server in one transaction (number, frozen snapshot, stored PDF), and a
+// repeated click re-sends the same idempotency key, so it can never issue twice.
+
+// ── PO settings (buyer identity, numbering, approval) ─────────────────────────
+async function loadSettings() {
+  const { status, json } = await api('GET', '/api/po/settings');
+  if (status === 200 && json.ok) { S.settings = json.data.data; S.settingsRev = json.data.rev; }
+}
+function settingsSummary() {
+  const s = S.settings || {}, b = s.buyer || {};
+  const ok = s.buyerConfirmed && s.numberingConfirmed && s.approvalConfirmed;
+  return `${s.testMode ? '<div class="banner banner-bad" style="margin:0 0 8px"><b>TEST MODE</b> — fictional settings. Every PDF is marked TEST and is not a valid purchase order.</div>' : ''}
+    <div class="small"><b dir="auto">${esc(b.name || 'Buyer name not set')}</b>${b.vat ? ' · VAT ' + esc(b.vat) : ''}${b.cr ? ' · CR ' + esc(b.cr) : ''}</div>
+    <div class="small muted" dir="auto">${esc(b.address || '')}</div>
+    <div class="small" style="margin-top:6px">${['buyerConfirmed', 'numberingConfirmed', 'approvalConfirmed'].map(k => `<span class="chip ${s[k] ? 'chip-ok' : 'chip-bad'}">${esc({ buyerConfirmed: 'Buyer details', numberingConfirmed: 'PO numbering', approvalConfirmed: 'Approval' }[k])} ${s[k] ? 'confirmed' : 'not confirmed'}</span>`).join(' ')}</div>
+    <div class="acts" style="margin-top:8px"><button class="btn btn-sm btn-ghost" data-act="settings-open" data-keep>PO settings…</button>
+      ${ok ? '' : '<span class="small muted">Issuing stays blocked until all three are confirmed.</span>'}</div>`;
+}
+function openSettings() {
+  const s = JSON.parse(JSON.stringify(S.settings || {}));
+  S.modal = { type: 'settings', s, errors: [] }; renderModal();
+}
+function settingsForm(m) {
+  const s = m.s, b = s.buyer, n = s.numbering, a = s.approval;
+  const f = (label, key, v, attrs) => `<label class="field"><span class="lbl">${label}</span><input class="inp" dir="auto" data-set="${key}" value="${esc(v)}" ${attrs || ''}></label>`;
+  let example = '';
+  try { example = n.pattern.includes('{SEQ}') ? n.pattern.replace('{YYYY}', new Date().getFullYear()).replace('{YY}', String(new Date().getFullYear() % 100).padStart(2, '0')).replace('{SEQ}', String(n.start || 1).padStart(n.seqWidth || 1, '0')) : ''; } catch (e) {}
+  return `<div class="card-h"><h3>PO settings</h3><button class="btn btn-sm btn-ghost" style="margin-left:auto" data-act="modal-close" data-keep>Close</button></div>
+    ${m.errors.length ? `<div class="banner banner-bad">${m.errors.map(x => `<div><code>${esc(x.path)}</code> — ${esc(x.message)}</div>`).join('')}</div>` : ''}
+    <div class="lbl" style="margin-top:8px">Buyer (printed on every PO)</div>
+    <div class="grid2">${f('Company name', 'buyer.name', b.name)}${f('Company name (Arabic, optional)', 'buyer.nameAr', b.nameAr)}
+      ${f('VAT number', 'buyer.vat', b.vat)}${f('CR number (optional)', 'buyer.cr', b.cr)}
+      ${f('Address', 'buyer.address', b.address)}${f('Phone (optional)', 'buyer.phone', b.phone)}${f('Email (optional)', 'buyer.email', b.email)}</div>
+    <label class="radio"><input type="checkbox" data-set="buyerConfirmed" ${s.buyerConfirmed ? 'checked' : ''}><span>I confirm these buyer details are correct for purchase orders.</span></label>
+    <div class="lbl" style="margin-top:12px">PO numbering</div>
+    <div class="grid2">${f('Number format — {SEQ} required; {YYYY} or {YY} optional', 'numbering.pattern', n.pattern)}
+      ${f('Sequence digits', 'numbering.seqWidth', n.seqWidth, 'inputmode="numeric"')}${f('First number', 'numbering.start', n.start, 'inputmode="numeric"')}
+      <div class="field"><span class="lbl">Example</span><div style="padding-top:6px"><b>${esc(example || '—')}</b> · a revision prints as <b>${esc(example ? example + ' Rev 1' : '—')}</b></div></div></div>
+    <label class="radio"><input type="checkbox" data-set="numberingConfirmed" ${s.numberingConfirmed ? 'checked' : ''}><span>I confirm this PO number format and starting number.</span></label>
+    <div class="lbl" style="margin-top:12px">Approval</div>
+    <label class="radio"><input type="checkbox" data-set="approval.required" ${a.required ? 'checked' : ''}><span>Issuing requires a named approver</span></label>
+    <div class="grid2">${f('Approver name', 'approval.approverName', a.approverName)}</div>
+    <label class="radio"><input type="checkbox" data-set="approvalConfirmed" ${s.approvalConfirmed ? 'checked' : ''}><span>I confirm this approval requirement.</span></label>
+    <label class="radio" style="margin-top:10px"><input type="checkbox" data-set="testMode" ${s.testMode ? 'checked' : ''}><span><b>Test mode</b> — fictional settings; every PDF is marked TEST (not a valid purchase order)</span></label>
+    <div class="acts" style="margin-top:12px"><button class="btn" data-act="settings-save" data-keep>Save settings</button></div>`;
+}
+async function saveSettings() {
+  const m = S.modal; if (!m || m.type !== 'settings') return;
+  const { status, json } = await api('PUT', '/api/po/settings', m.s, S.settingsRev);
+  if (status === 200 && json.ok) { S.settings = json.data.data; S.settingsRev = json.data.rev; closeModal(); toast('PO settings saved'); renderMain(); return; }
+  m.errors = json.errors || [{ path: '', message: json.error || 'Not saved.' }]; renderModal();
+}
+
+// ── document discounts / charges and reconciliation ───────────────────────────
+function uniformItemTax() {
+  const inc = S.draft.items.filter(i => i.included);
+  const t = inc.length ? inc[0].tax : null;
+  return t && inc.every(i => i.tax.treatment === t.treatment && (i.tax.rate || '') === (t.rate || '')) ? { treatment: t.treatment, rate: t.rate || '' } : { treatment: 'unresolved', rate: '' };
+}
+function renderAdjustments() {
+  const el = $('adjArea'); if (!el || !S.draft) return;
+  const adj = S.draft.adjustments || [];
+  const opts = v => Object.entries(TAX_LABELS).map(([k, l]) => `<option value="${k}" ${v === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  el.innerHTML = `<div class="lbl" style="margin-top:14px">Document discounts &amp; charges</div>
+    ${adj.length ? adj.map(a => `<div class="adj-row">
+      <select class="inp" data-adj="${esc(a.id)}" data-af="kind"><option value="discount" ${a.kind === 'discount' ? 'selected' : ''}>Discount (−)</option><option value="charge" ${a.kind === 'charge' ? 'selected' : ''}>Charge (+)</option></select>
+      <input class="inp" dir="auto" data-adj="${esc(a.id)}" data-af="label" maxlength="200" value="${esc(a.label)}" placeholder="Label printed on the PO">
+      <input class="inp" style="text-align:right" inputmode="decimal" data-adj="${esc(a.id)}" data-af="amount" value="${esc(a.amount)}" placeholder="Amount">
+      <select class="inp" data-adj="${esc(a.id)}" data-af="treatment">${opts(a.tax.treatment)}</select>
+      <input class="inp" style="text-align:right" inputmode="decimal" data-adj="${esc(a.id)}" data-af="rate" value="${esc(a.tax.rate)}" placeholder="%" ${a.tax.treatment === 'taxable' ? '' : 'disabled'}>
+      <button class="link" data-act="adj-remove" data-id="${esc(a.id)}">Remove</button>
+      ${a.sourceKey ? `<span class="small muted" style="grid-column:1/-1">Applied from the quotation (${esc(QUOTATION_ADJ[a.sourceKey] ? QUOTATION_ADJ[a.sourceKey][1].toLowerCase() : a.sourceKey)})</span>` : ''}
+    </div>`).join('') : '<div class="small muted">None. Amounts use the same price basis as the items.</div>'}
+    <div class="acts" style="margin-top:6px"><button class="btn btn-sm btn-ghost" data-act="adj-add" data-kind="discount">+ Discount</button><button class="btn btn-sm btn-ghost" data-act="adj-add" data-kind="charge">+ Charge</button></div>`;
+}
+function reconHtml(c) {
+  const d = S.draft, r = c.reconciliation, t = c.totals, cur = d.currency;
+  let h = '';
+  const open = t.unappliedAdjustments;
+  const dis = (d.reconciliation && d.reconciliation.dismissed) || [];
+  if (open.length || dis.length) {
+    h += `<div class="lbl" style="margin-top:14px">Quotation discounts &amp; charges</div>` + open.map(a => `<div class="recon-adj"><span>${esc(a.label)}${a.amount ? ': <b>' + esc(a.amount) + '</b>' : ''}</span>
+      ${a.key !== 'quotation:unknown' ? `<button class="btn btn-sm" data-act="qadj-apply" data-key="${esc(a.key)}">Apply to this PO</button>` : ''}
+      <input class="inp" id="qadj-reason-${esc(a.key.replace(':', '-'))}" placeholder="Reason it does not apply" style="max-width:240px">
+      <button class="btn btn-sm btn-ghost" data-act="qadj-dismiss" data-key="${esc(a.key)}">Not applicable</button></div>`).join('')
+      + dis.map(x => `<div class="small muted">Marked not applicable: ${esc((QUOTATION_ADJ[x.key] || [null, x.key])[1])} — “${esc(x.reason)}” <button class="link" data-act="qadj-undismiss" data-key="${esc(x.key)}">Undo</button></div>`).join('');
+  }
+  if (r.status === 'not_available') return h + (d.quotation ? `<div class="small muted" style="margin-top:10px">No printed quotation totals to compare${t.status !== 'complete' ? ' until the PO total is fully resolved' : ''}.</div>` : '');
+  h += `<div class="lbl" style="margin-top:14px">Reconciliation with the quotation</div><table class="recon"><tr><th></th><th>This PO</th><th>Quotation (printed)</th><th>Difference</th><th></th></tr>
+    ${r.checks.map(x => `<tr><td>${esc(x.label)}</td><td class="r">${esc(money(x.po))}</td><td class="r">${x.printed != null ? esc(money(x.printed)) : '<span class="muted">not printed</span>'}</td>
+      <td class="r">${x.difference != null ? esc(x.difference) : ''}</td><td>${x.status === 'match' ? '<span class="chip chip-ok">Matches</span>' : x.status === 'differs' ? '<span class="chip chip-bad">Differs</span>' : ''}</td></tr>`).join('')}</table>`;
+  if (r.status === 'matched') return h + '<div class="small" style="margin-top:4px"><span class="chip chip-ok">PO totals match the quotation</span></div>';
+  const rec = d.reconciliation || {};
+  return h + (r.accepted
+    ? `<div class="small" style="margin-top:6px"><span class="chip chip-ok">Difference accepted</span> “${esc(rec.note)}” <button class="link" data-act="recon-withdraw">Withdraw</button></div>`
+    : `<div class="field" style="margin-top:6px"><span class="lbl">Why this PO differs from the quotation (required to accept)</span>
+        <textarea class="inp" dir="auto" rows="2" maxlength="1000" data-f="reconNote">${esc(rec.note || '')}</textarea></div>
+       <button class="btn btn-sm" data-act="recon-accept">Accept this difference for the current totals</button>
+       <span class="small muted">Acceptance applies to these exact totals; any later change re-opens it.</span>`);
+}
+function reconEnsure() { S.draft.reconciliation = S.draft.reconciliation || { note: '', acceptedTotals: null, acceptedAt: '', dismissed: [] }; return S.draft.reconciliation; }
+
+// ── legacy dimensions: review before issue ────────────────────────────────────
+function parsePrintedDims(txt) {
+  const values = {};
+  for (const part of String(txt || '').split('×')) {
+    const m = part.trim().match(/^([WDHL])\s+(.*)$/);
+    if (m) values[m[1]] = m[2].trim() === '(blank)' ? '' : m[2].trim();
+  }
+  return values;
+}
+
+// ── draft PDF preview and issuing ─────────────────────────────────────────────
+function previewPdf() {
+  if (S.dirty) { toast('Save the draft first — the preview shows the saved version'); return; }
+  openPdfViewer('/api/po/drafts/' + encodeURIComponent(S.draft.id) + '/preview.pdf', 'Draft preview — not issued', true);
+}
+// Shows a PDF from the local server inside the page (pdf.js), with a download link.
+async function openPdfViewer(url, title, isDraft) {
+  S.modal = { type: 'pdf', url, title, isDraft, status: 'loading', error: '' }; renderModal();
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) { let msg = 'HTTP ' + r.status; try { msg = (await r.json()).error || msg; } catch (e) {} throw new Error(msg); }
+    const buf = await r.arrayBuffer();
+    if (!S.modal || S.modal.url !== url) return;
+    S.modal.blobUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise;
+    S.modal.status = 'ready'; S.modal.pages = pdf.numPages; renderModal();
+    const wrap = $('pdfPages');
+    for (let n = 1; n <= pdf.numPages && S.modal && S.modal.url === url; n++) {
+      const page = await pdf.getPage(n), vp1 = page.getViewport({ scale: 1 });
+      const scale = Math.min(2, (wrap.clientWidth - 8) / vp1.width) * (window.devicePixelRatio || 1);
+      const vp = page.getViewport({ scale }), cv = document.createElement('canvas');
+      cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height); cv.style.width = Math.round(vp.width / (window.devicePixelRatio || 1)) + 'px';
+      await page.render({ canvasContext: cv.getContext('2d'), viewport: vp, intent: 'print' }).promise;
+      wrap.appendChild(cv);
+    }
+  } catch (err) { if (S.modal && S.modal.url === url) { S.modal.status = 'error'; S.modal.error = err.message || String(err); renderModal(); } }
+}
+function pdfForm(m) {
+  return `<div class="card-h"><h3>${esc(m.title)}</h3>
+      ${m.blobUrl ? `<a class="btn btn-sm btn-ghost" style="margin-left:auto;text-decoration:none" href="${esc(m.blobUrl)}" download="${esc(m.title.replace(/[^A-Za-z0-9 ._-]/g, '_'))}.pdf" data-keep>Download PDF</a>` : ''}
+      <button class="btn btn-sm btn-ghost" ${m.blobUrl ? '' : 'style="margin-left:auto"'} data-act="modal-close" data-keep>Close</button></div>
+    ${m.status === 'loading' ? '<div class="state">Producing the PDF on this PC…</div>' : ''}
+    ${m.status === 'error' ? `<div class="banner banner-bad">The PDF could not be shown: ${esc(m.error)}</div>` : ''}
+    ${m.status === 'ready' ? `<div class="small muted" style="margin:6px 0">${esc(m.pages)} page(s)${m.isDraft ? ' · draft preview, rendered from the saved draft — nothing is stored' : ' · the PDF stored when this PO was issued (never re-rendered)'}</div>` : ''}
+    <div id="pdfPages" class="pdf-pages"></div>`;
+}
+async function openIssue() {
+  if (S.dirty) { toast('Save the draft first'); return; }
+  const { status, json } = await api('GET', '/api/po/drafts/' + encodeURIComponent(S.draft.id));
+  if (status !== 200 || !json.ok) { showBanner('bad', esc(json.error || 'Could not reload the draft.')); return; }
+  applyServer(json.data, true);
+  let changes = null;
+  if (S.draft.revision) { const r = await api('GET', '/api/po/drafts/' + encodeURIComponent(S.draft.id) + '/changes'); if (r.status === 200 && r.json.ok) changes = r.json.data; }
+  S.modal = { type: 'issue', key: rid('iss_', 28), blockers: json.data.readiness, changes, approvedBy: '', reason: '', busy: false, error: '',
+              sup: { status: 'checking' }, ackUnverified: false };
+  renderModal();
+  verifySupplier();
+}
+// Re-read the selected supplier from Daftra (GET only) just before issuing: the PO must
+// not go out to a supplier that no longer exists or whose name / VAT number changed.
+async function verifySupplier() {
+  const m = S.modal, sp = S.draft.supplier; if (!m || !sp) return;
+  const { status, json } = await daftraGet(`/suppliers/${encodeURIComponent(sp.daftraId)}.json`);
+  if (!S.modal || S.modal !== m) return;
+  const at = new Date().toISOString();
+  if (status === 200 && json && json.data && json.data.Supplier) {
+    const now = pickSupplier(json.data.Supplier), diffs = [];
+    if ((now.name || '').trim() !== (sp.name || '').trim()) diffs.push(`name is now “${now.name}”`);
+    if ((now.snapshot.vatNumber || '') !== (sp.snapshot.vatNumber || '')) diffs.push(`VAT number is now “${now.snapshot.vatNumber || 'empty'}”`);
+    m.sup = diffs.length ? { status: 'mismatch', at, detail: diffs.join('; ') } : { status: 'verified', at };
+  } else if (status === 404) m.sup = { status: (S.settings || {}).testMode ? 'test_not_found' : 'not_found', at };
+  else m.sup = { status: 'unavailable', at, detail: daftraError(status, json) };
+  renderModal();
+}
+function supplierCheckOk(m) {
+  return m.sup.status === 'verified' || m.sup.status === 'test_not_found' || (m.sup.status === 'unavailable' && m.ackUnverified);
+}
+function issueForm(m) {
+  const s = S.settings || {}, rev = S.draft.revision, t = (S.server && S.server.computed && S.server.computed.totals) || {};
+  const needApprover = s.approval && s.approval.required;
+  // a missing reason / approver is fixed in this dialog — it never locks the button (the server re-checks both)
+  const ready = !m.blockers.filter(b => !['revision_reason_missing', 'approval_missing'].includes(b.code)).length && supplierCheckOk(m);
+  const supLine = { checking: '<span class="chip chip-info">Checking the supplier in Daftra…</span>',
+    verified: '<span class="chip chip-ok">Supplier verified in Daftra</span> name and VAT number unchanged',
+    mismatch: `<span class="chip chip-bad">Supplier changed in Daftra</span> ${esc(m.sup.detail || '')} — select the supplier again before issuing`,
+    not_found: '<span class="chip chip-bad">Supplier not found in Daftra</span> — select an existing supplier before issuing',
+    test_not_found: '<span class="chip chip-warn">Supplier not in Daftra</span> allowed only because TEST MODE is on (fictional supplier)',
+    unavailable: `<span class="chip chip-warn">Daftra could not be reached</span> ${esc(m.sup.detail || '')}
+      <label class="radio"><input type="checkbox" data-issue-ack="1" ${m.ackUnverified ? 'checked' : ''}><span>Issue without re-checking the supplier in Daftra (recorded with the PO)</span></label>` }[m.sup.status] || '';
+  return `<div class="card-h"><h3>${rev ? 'Issue revision of ' + esc(rev.baseNo) : 'Issue purchase order'}</h3><button class="btn btn-sm btn-ghost" style="margin-left:auto" data-act="modal-close" data-keep>Close</button></div>
+    ${s.testMode ? '<div class="banner banner-bad">TEST MODE — fictional settings. The issued PDF is marked TEST and is not a valid purchase order.</div>' : ''}
+    ${m.error ? `<div class="banner banner-bad">${m.error}</div>` : ''}
+    ${m.blockers.length ? `<div class="banner banner-warn"><b>This PO cannot be issued yet:</b><ul>${m.blockers.map(b => `<li>${esc(b.message)}</li>`).join('')}</ul></div>` : ''}
+    <div class="small" style="margin:8px 0">${supLine}</div>
+    <div class="small" style="margin:8px 0">Supplier <b dir="auto">${esc(S.draft.supplier ? S.draft.supplier.name : '—')}</b> · total <b>${esc(money(t.gross, S.draft.currency))}</b> ·
+      ${rev ? `the next revision number of <b>${esc(rev.baseNo)}</b> is allocated when you issue` : 'the PO number is allocated when you issue'}.
+      Issuing freezes this version and stores its PDF; it is <b>not</b> sent to the supplier.</div>
+    ${rev ? `<div class="lbl">Changes compared with the issued version (Rev ${esc(rev.basedOnRevision)})</div>
+      ${m.changes && m.changes.changes.length ? `<table class="recon">${m.changes.changes.map(c => `<tr><td>${esc(c.area)}</td><td dir="auto">${esc(c.label)}</td><td dir="auto" class="muted ${String(c.before).length <= 16 ? 'nw' : ''}">${esc(c.before || '—')}</td><td>→</td><td dir="auto" class="${String(c.after).length <= 16 ? 'nw' : ''}"><b>${esc(c.after || '—')}</b></td></tr>`).join('')}</table>` : '<div class="small muted">No changes yet.</div>'}
+      <label class="field" style="margin-top:8px"><span class="lbl">Reason for this revision (required, printed on the PO)</span><textarea class="inp" dir="auto" rows="2" maxlength="500" data-issue="reason">${esc(m.reason)}</textarea></label>` : ''}
+    ${needApprover ? `<label class="field" style="margin-top:8px"><span class="lbl">Approved by — type the approver's name (${esc(s.approval.approverName)})</span><input class="inp" dir="auto" data-issue="approvedBy" value="${esc(m.approvedBy)}"></label>` : ''}
+    <div class="acts" style="margin-top:12px"><button class="btn" data-act="issue-confirm" data-keep ${ready && !m.busy ? '' : 'disabled'}>${m.busy ? 'Issuing…' : rev ? 'Issue revision now' : 'Issue PO now'}</button>
+      <span class="small muted">A second click or a retry after a network error re-sends the same request and cannot issue twice.</span></div>`;
+}
+async function confirmIssue() {
+  const m = S.modal; if (!m || m.type !== 'issue' || m.busy) return;
+  m.busy = true; m.error = ''; renderModal();
+  const { status, json } = await api('POST', '/api/po/drafts/' + encodeURIComponent(S.draft.id) + '/issue',
+    { idempotencyKey: m.key, approvedBy: m.approvedBy, reason: m.reason,
+      supplierCheck: { status: m.sup.status === 'unavailable' ? 'acknowledged_unavailable' : m.sup.status, at: m.sup.at || '', daftraId: S.draft.supplier ? S.draft.supplier.daftraId : '' } }, S.rev);
+  m.busy = false;
+  if ((status === 201 || status === 200) && json.ok) {
+    closeModal();
+    toast(`Issued as ${json.data.displayNo}${json.duplicate ? ' (already issued by the first click)' : ''}`);
+    await openDraft(S.draft.id, true); await loadIssues();
+    openPdfViewer('/api/po/issues/' + encodeURIComponent(json.data.id) + '/pdf', json.data.displayNo + ' — issued PDF', false);
+    return;
+  }
+  if (status === 422) { m.blockers = json.blockers || []; m.error = esc(json.error); }
+  else m.error = esc(json.error || 'Not issued.') + (status === 0 ? ' You can press the button again safely — it re-sends the same request.' : '');
+  renderModal();
+}
+
+// ── issued POs: list, reprint, revise ─────────────────────────────────────────
+async function loadIssues() {
+  const { status, json } = await api('GET', '/api/po/issues');
+  S.issues = status === 200 && json.ok ? json.data : [];
+  renderIssueList();
+  if (S.server && S.server.issued && !S.modal) renderMain();      // the issued banner offers "Revise" only for the current version
+}
+function renderIssueList() {
+  const el = $('issueList'); if (!el) return;
+  const list = S.issues || [];
+  el.innerHTML = list.length ? list.map(b => `<div class="iss-base"><div class="t">${esc(b.baseNo)}</div>
+      ${b.issues.map(i => `<div class="iss-v ${i.current ? 'cur' : ''}"><div><b>${esc(i.displayNo)}</b> ${i.current ? '<span class="chip chip-ok">Current</span>' : '<span class="chip chip-info">Superseded</span>'}${i.testMode ? ' <span class="chip chip-bad">TEST</span>' : ''}</div>
+        <div class="s" dir="auto">${esc(i.supplierName)} · ${esc(money(i.gross, i.currency))} · ${esc(fmtTime(i.issuedAt))}</div>
+        <div class="s"><button class="link" data-act="pdf-issued" data-id="${esc(i.id)}" data-no="${esc(i.displayNo)}">Issued PDF</button>
+          · <button class="link" data-act="open" data-id="${esc(i.sourceDraftId)}">View</button>
+          ${i.current ? (b.openRevisionDraftId ? ` · <button class="link" data-act="open" data-id="${esc(b.openRevisionDraftId)}">Open revision draft</button>`
+            : ` · <button class="link" data-act="issue-revise" data-id="${esc(i.id)}">Revise</button>`) : ''}</div></div>`).join('')}</div>`).join('')
+    : '<div class="muted small" style="padding:6px 2px">No issued POs yet.</div>';
+}
+async function reviseIssue(issueId) {
+  if (!confirmDiscard()) return;
+  const { status, json } = await api('POST', '/api/po/issues/' + encodeURIComponent(issueId) + '/revise', { draftId: rid('po_', 20) });
+  if (status === 201 && json.ok) {
+    S.dirty = false; applyServer(json.data, true); history.replaceState(null, '', '?draft=' + encodeURIComponent(json.data.data.id));
+    await loadDraftList(); await loadIssues(); toast('Revision draft created — the issued version stays current until you issue this revision');
+  } else showBanner('bad', esc(json.error || 'Could not create the revision.') + (json.draftId ? ` <button class="link" data-act="open" data-id="${esc(json.draftId)}">Open it</button>` : ''));
+}
+async function loadChanges() {
+  if (!S.draft || !S.draft.revision) { S.changes = null; return; }
+  const { status, json } = await api('GET', '/api/po/drafts/' + encodeURIComponent(S.draft.id) + '/changes');
+  S.changes = status === 200 && json.ok ? json.data : null;
+  const el = $('changesArea'); if (el) el.innerHTML = changesHtml();
+}
+function changesHtml() {
+  const c = S.changes; if (!c) return '';
+  return `<div class="lbl" style="margin-top:12px">Changes compared with the issued version (saved draft)</div>` + (c.changes.length
+    ? `<table class="recon">${c.changes.map(x => `<tr><td>${esc(x.area)}</td><td dir="auto">${esc(x.label)}</td><td dir="auto" class="muted ${String(x.before).length <= 16 ? 'nw' : ''}">${esc(x.before || '—')}</td><td>→</td><td dir="auto" class="${String(x.after).length <= 16 ? 'nw' : ''}"><b>${esc(x.after || '—')}</b></td></tr>`).join('')}</table>`
+    : '<div class="small muted">No changes yet.</div>');
+}
+
+// ── issued drafts are read-only ────────────────────────────────────────────────
+function lockEditor() {
+  const m = $('main'); if (!m) return;
+  m.querySelectorAll('input, textarea, select, button').forEach(el => { if (!el.closest('[data-keep]') && !el.hasAttribute('data-keep')) el.disabled = true; });
+  m.classList.add('locked');
+}
+
+// ── generic modal (settings / issue) ──────────────────────────────────────────
+function renderModal() {
+  const m = S.modal; let el = $('appModal');
+  if (!m) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'appModal'; el.className = 'phm'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); }
+  if (m.type === 'pdf' && m.status === 'ready' && $('pdfPages') && $('pdfPages').childElementCount) return;   // keep rendered pages
+  el.innerHTML = `<div class="phm-b" data-keep>${m.type === 'settings' ? settingsForm(m) : m.type === 'pdf' ? pdfForm(m) : issueForm(m)}</div>`;
+}
+function closeModal() { if (S.modal && S.modal.blobUrl) URL.revokeObjectURL(S.modal.blobUrl); S.modal = null; renderModal(); }
+document.addEventListener('input', e => {
+  const t = e.target, m = S.modal;
+  if (m && m.type === 'settings' && t.dataset.set) {
+    const path = t.dataset.set.split('.'); let o = m.s;
+    for (const k of path.slice(0, -1)) o = o[k];
+    const k = path[path.length - 1];
+    o[k] = t.type === 'checkbox' ? t.checked : (['seqWidth', 'start'].includes(k) ? (parseInt(normDigits(t.value), 10) || 0) : t.value);
+    if (t.type !== 'checkbox' && t.dataset.set.startsWith('numbering.')) { const ex = document.activeElement; renderModal(); const again = document.querySelector(`[data-set="${t.dataset.set}"]`); if (again && ex === t) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } }
+  } else if (m && m.type === 'issue' && t.dataset.issue) m[t.dataset.issue] = t.value;
+  else if (m && m.type === 'issue' && t.dataset.issueAck) { m.ackUnverified = t.checked; renderModal(); }
+});
+document.addEventListener('change', e => {
+  const t = e.target, m = S.modal;
+  if (m && m.type === 'settings' && t.dataset.set && t.type === 'checkbox') {
+    const path = t.dataset.set.split('.'); let o = m.s; for (const k of path.slice(0, -1)) o = o[k]; o[path[path.length - 1]] = t.checked;
+  }
+  if (!S.draft || !t.dataset.adj) return;
+  const a = (S.draft.adjustments || []).find(x => x.id === t.dataset.adj); if (!a) return;
+  if (t.dataset.af === 'kind') { a.kind = t.value; }
+  else if (t.dataset.af === 'treatment') { a.tax.treatment = t.value; if (t.value !== 'taxable') a.tax.rate = ''; else if (!a.tax.rate) a.tax.rate = DEFAULT_ITEM_TAX.rate; renderAdjustments(); }
+  markDirty(); refreshDerived();
+});
+document.addEventListener('input', e => {
+  const t = e.target; if (!S.draft || !t.dataset.adj) return;
+  const a = (S.draft.adjustments || []).find(x => x.id === t.dataset.adj); if (!a) return;
+  if (t.dataset.af === 'label') a.label = t.value;
+  else if (t.dataset.af === 'amount') a.amount = normDigits(t.value);
+  else if (t.dataset.af === 'rate') a.tax.rate = normDigits(t.value);
+  markDirty(); refreshDerived();
+});
+async function handleIssueAction(act, b) {
+  const known = ['settings-open', 'settings-save', 'modal-close', 'adj-add', 'adj-remove', 'qadj-apply', 'qadj-dismiss', 'qadj-undismiss',
+    'recon-accept', 'recon-withdraw', 'pdf-preview', 'pdf-issued', 'issue-open', 'issue-confirm', 'issue-revise', 'legacy-dims', 'item-discount'];
+  if (!known.includes(act)) return false;
+  const d = S.draft;
+  if (act === 'settings-open') return openSettings(), true;
+  if (act === 'settings-save') return saveSettings(), true;
+  if (act === 'modal-close') return closeModal(), true;
+  if (act === 'issue-revise') return reviseIssue(b.dataset.id), true;
+  if (act === 'pdf-issued') return openPdfViewer('/api/po/issues/' + encodeURIComponent(b.dataset.id) + '/pdf', b.dataset.no + ' — issued PDF', false), true;
+  if (!d) return true;
+  if (act === 'pdf-preview') return previewPdf(), true;
+  if (act === 'issue-open') return openIssue(), true;
+  if (act === 'issue-confirm') return confirmIssue(), true;
+  if (act === 'adj-add') {
+    const kind = b.dataset.kind;
+    d.adjustments = d.adjustments || [];
+    d.adjustments.push({ id: rid('adj_', 12), kind, label: kind === 'discount' ? 'Discount' : 'Charge', amount: '', tax: uniformItemTax(), sourceKey: '' });
+    markDirty(); renderAdjustments(); refreshDerived(); return true;
+  }
+  if (act === 'adj-remove') { d.adjustments = (d.adjustments || []).filter(a => a.id !== b.dataset.id); markDirty(); renderAdjustments(); refreshDerived(); return true; }
+  if (act === 'qadj-apply') {
+    const key = b.dataset.key, [kind, label] = QUOTATION_ADJ[key];
+    const printed = printedDec(((d.quotation || {}).totals || {})[key.split(':')[1]]);
+    if (!printed) { toast('The printed amount is not a plain number — add it manually'); return true; }
+    const abs = { n: printed.n < 0n ? -printed.n : printed.n, d: printed.d };
+    d.adjustments = d.adjustments || [];
+    d.adjustments.push({ id: rid('adj_', 12), kind, label: label.replace(' printed on the quotation', ''), amount: fmtExact(abs), tax: uniformItemTax(), sourceKey: key });
+    markDirty(); renderAdjustments(); refreshDerived(); toast('Applied — check its tax treatment, then save'); return true;
+  }
+  if (act === 'qadj-dismiss') {
+    const inp = $('qadj-reason-' + b.dataset.key.replace(':', '-')), reason = inp ? inp.value.trim() : '';
+    if (!reason) { toast('Give a reason why it does not apply'); if (inp) inp.focus(); return true; }
+    const r = reconEnsure(); r.dismissed = r.dismissed.filter(x => x.key !== b.dataset.key).concat([{ key: b.dataset.key, reason }]);
+    markDirty(); refreshDerived(); return true;
+  }
+  if (act === 'qadj-undismiss') { const r = reconEnsure(); r.dismissed = r.dismissed.filter(x => x.key !== b.dataset.key); markDirty(); refreshDerived(); return true; }
+  if (act === 'recon-accept') {
+    const r = reconEnsure(), c = compute(d);
+    if (!(r.note || '').trim()) { toast('Write why the PO differs first'); return true; }
+    r.acceptedTotals = c.reconciliation.currentTotals; r.acceptedAt = new Date().toISOString();
+    markDirty(); refreshDerived(); return true;
+  }
+  if (act === 'recon-withdraw') { const r = reconEnsure(); r.acceptedTotals = null; r.acceptedAt = ''; markDirty(); refreshDerived(); return true; }
+  if (act === 'legacy-dims') {
+    const it = findItem(b.dataset.id); if (!it) return true;
+    it.dimensions = { values: parsePrintedDims(it.orig.dimensions), unit: '', status: 'needs_confirmation', origin: 'user', conflicts: [], described: { main: '', additional: [] } };
+    if (!Object.keys(it.dimensions.values).length) it.dimensions.values = { W: '', D: '', H: '' };
+    markDirty(); renderItems(); refreshDerived(); toast('Check the dimensions against the original, then confirm them'); return true;
+  }
+  if (act === 'item-discount') { S.discOpen.add(b.dataset.id); renderItems(); refreshDerived();         // reveals the field only; nothing is filled in
+    const el = document.querySelector(`[data-item="${CSS.escape(b.dataset.id)}"][data-if="discount"]`); if (el) el.focus(); return true; }
+  return true;
 }
 
 // ══ Phase 2 — supplier quotation: upload, local extraction, review, apply ══
@@ -2096,7 +2605,7 @@ document.addEventListener('change', e => {
     a.origin = 'user'; phTouch(a); toast('Photo moved — press Save');
   } else if (t.dataset.phsrc && S.ph.modal) { S.ph.modal.sourceId = t.value; S.ph.modal.page = 1; S.ph.modal.sel = null; renderPhotoModal(); }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.ph && S.ph.modal) closePhotoModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.ph && S.ph.modal) closePhotoModal(); if (e.key === 'Escape' && S.modal) closeModal(); });
 
 // ── viewer ───────────────────────────────────────────────────────────────────
 async function drawViewer() {
@@ -2232,6 +2741,7 @@ document.addEventListener('input', e => {
   if (t.dataset.f) {
     const f = t.dataset.f, d = S.draft;
     if (f === 'paymentText') { d.paymentTerms.text = t.value; d.paymentTerms.isDraftDefault = false; }
+    else if (f === 'reconNote') reconEnsure().note = t.value;
     else if (f === 'balanceTrigger') d.paymentTerms.balanceTrigger = t.value;
     else d[f] = t.value;
     markDirty(); refreshDerived(); return;
@@ -2275,7 +2785,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {   // normalise Arabic-Indic digits once the field is left
   const t = e.target;
   if (!S.draft) return;
-  if (t.dataset.item && ['qty', 'unitPrice', 'rate'].includes(t.dataset.if)) {
+  if (t.dataset.item && ['qty', 'unitPrice', 'rate', 'discount'].includes(t.dataset.if)) {
     const it = findItem(t.dataset.item); const v = normDigits(t.value);
     if (v !== t.value) { t.value = v; if (t.dataset.if === 'rate') it.tax.rate = v; else it[t.dataset.if] = v; refreshDerived(); }
   }
@@ -2300,6 +2810,7 @@ document.addEventListener('click', async e => {
   if (act === 'dims-confirm') { const it = findItem(id); if (it && it.dimensions) { it.dimensions.status = 'confirmed'; it.dimensions.origin = 'user'; markDirty(); renderItems(); refreshDerived(); toast('Dimensions confirmed for printing — press Save'); } return; }
   if (act === 'dims-add') { const it = findItem(id); if (it && !it.dimensions) { it.dimensions = { values: { W: '', D: '', H: '' }, unit: '', status: 'confirmed', origin: 'user', conflicts: [] }; markDirty(); renderItems(); refreshDerived(); } return; }
   if (act === 'confirm-tax') { const it = findItem(id); if (it) { it.tax.origin = 'user'; dropFlag(it, DEFAULT_TAX_FLAG); markDirty(); updateTaxOrigin(it); updateItemFlags(it); refreshDerived(); toast('VAT confirmed for this item'); } return; }
+  if (await handleIssueAction(act, b)) return;
   if (await handlePhotoAction(act, b)) return;
   if (await handlePhase2Action(act, b, e)) return;
   if (act === 'add-item') { const it = newItem(); S.draft.items.push(it); markDirty(); renderItems(); refreshDerived(); const el = document.querySelector(`[data-item="${CSS.escape(it.id)}"][data-if="name"]`); if (el) el.focus(); return; }
@@ -2325,7 +2836,9 @@ $('newDraftBtn').addEventListener('click', createDraft);
   renderMain();
   const ok = await checkConnection();
   if (!ok) return;
+  await loadSettings();
   await loadDraftList();
+  loadIssues();
   const want = qs.get('draft');
   if (want) await openDraft(want, true);
 })();

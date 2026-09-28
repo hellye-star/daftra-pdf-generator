@@ -44,6 +44,19 @@ Item photos (image regions of an original document, insert-only):
     GET  /api/po/photos/<id>/file        → the image (inline, nosniff, sandbox CSP); re-hashed on every read
 Which item a photo belongs to is part of the draft (draft.photos), saved with
 the draft's revision check.
+
+Issuance (explicit; never sends anything to a supplier):
+    GET  /api/po/settings                → {data, rev} buyer details, numbering, approval (+ confirmations)
+    PUT  /api/po/settings                REQUIRES If-Match: <rev>
+    GET  /api/po/drafts/<id>/preview.pdf → draft PDF (watermarked DRAFT, rendered on demand, not stored)
+    GET  /api/po/drafts/<id>/changes     → revision drafts: before/after list vs the issued version
+    POST /api/po/drafts/<id>/issue       {idempotencyKey, approvedBy, reason} + If-Match: <rev>
+                                           201 issued · 200 same key again (the same issue) · 409 stale /
+                                           already issued / PO revised elsewhere · 422 {blockers}
+    GET  /api/po/issues                  → every PO with all issued versions
+    GET  /api/po/issues/<id>             → {meta, snapshot, current, events}
+    GET  /api/po/issues/<id>/pdf         → the PDF stored at issue (re-hashed; never re-rendered)
+    POST /api/po/issues/<id>/revise      {draftId} → 201 new revision draft of the CURRENT issue
 """
 import json
 import re
@@ -63,6 +76,7 @@ _ID = r'(?P<id>po_[A-Za-z0-9]{10,40})'
 _SRC = r'(?P<id>src_[0-9a-f]{24})'
 _EX = r'(?P<id>ex_[0-9a-f]{24})'
 _PH = r'(?P<id>ph_[0-9a-f]{24})'
+_ISS = r'(?P<id>poi_[0-9a-f]{24})'
 _LOOPBACK = {'127.0.0.1', '::1', '::ffff:127.0.0.1'}
 _LOCAL_HOSTNAMES = {'127.0.0.1', 'localhost', '[::1]'}
 _FORWARD_HEADERS = ('X-Forwarded-For', 'X-Forwarded-Host', 'Forwarded', 'X-Real-IP',
@@ -79,15 +93,24 @@ _GET = [
     (re.compile(r'^/api/po/extractions/' + _EX + r'$'), '_get_extraction'),
     (re.compile(r'^/api/po/photos$'), '_list_photos'),
     (re.compile(r'^/api/po/photos/' + _PH + r'/file$'), '_get_photo_file'),
+    (re.compile(r'^/api/po/settings$'), '_get_settings'),
+    (re.compile(r'^/api/po/drafts/' + _ID + r'/preview\.pdf$'), '_get_preview_pdf'),
+    (re.compile(r'^/api/po/drafts/' + _ID + r'/changes$'), '_get_changes'),
+    (re.compile(r'^/api/po/issues$'), '_list_issues'),
+    (re.compile(r'^/api/po/issues/' + _ISS + r'$'), '_get_issue'),
+    (re.compile(r'^/api/po/issues/' + _ISS + r'/pdf$'), '_get_issue_pdf'),
 ]
 _POST = [  # (pattern, handler, accepted request content types)
     (re.compile(r'^/api/po/drafts$'), '_create_draft', _JSON),
     (re.compile(r'^/api/po/sources$'), '_post_source', _BINARY),
     (re.compile(r'^/api/po/extractions$'), '_post_extraction', _JSON),
     (re.compile(r'^/api/po/photos$'), '_post_photo', tuple(po_db.PHOTO_TYPES)),
+    (re.compile(r'^/api/po/drafts/' + _ID + r'/issue$'), '_issue_draft', _JSON),
+    (re.compile(r'^/api/po/issues/' + _ISS + r'/revise$'), '_revise_issue', _JSON),
 ]
 _PUT = [
     (re.compile(r'^/api/po/drafts/' + _ID + r'$'), '_put_draft', _JSON),
+    (re.compile(r'^/api/po/settings$'), '_put_settings', _JSON),
 ]
 
 
@@ -243,8 +266,10 @@ def _if_match(handler):
 
 def _full(doc, rev):
     computed = po_model.compute(doc)
+    settings = po_db.get_settings()[0]
     return {'data': doc, 'rev': rev, 'computed': computed,
-            'readiness': po_model.readiness(doc, computed)}
+            'readiness': po_model.readiness(doc, computed, settings),
+            'issued': po_db.issue_for_draft(doc['id'])}
 
 
 def _read_valid(handler):
@@ -279,8 +304,11 @@ def handle_put(handler):
 # ── routes ─────────────────────────────────────────────────────────────────
 
 def _status(handler, params, qs):
-    _ok(handler, {'connected': True, 'counts': po_db.counts(), 'phase': 2,
-                  'issuanceAvailable': False,
+    settings = po_db.get_settings()[0]
+    _ok(handler, {'connected': True, 'counts': po_db.counts(), 'phase': 3,
+                  'issuanceAvailable': bool(settings.get('buyerConfirmed') and settings.get('numberingConfirmed')
+                                            and settings.get('approvalConfirmed')),
+                  'testMode': bool(settings.get('testMode')),
                   'defaults': {'newItemTax': po_model.DEFAULT_ITEM_TAX},
                   'uploads': {'maxBytes': po_db.SOURCE_MAX_BYTES, 'types': list(po_db.SOURCE_TYPES)},
                   'photos': {'maxBytes': po_db.PHOTO_MAX_BYTES, 'types': list(po_db.PHOTO_TYPES)}})
@@ -301,6 +329,9 @@ def _get_draft(handler, params, qs):
 def _create_draft(handler, params, qs):
     doc = _read_valid(handler)
     if doc is None:
+        return
+    if doc.get('revision'):
+        _err(handler, 400, 'Revision drafts are created from an issued PO (Revise). Nothing was saved.')
         return
     try:
         doc, rev = po_db.create_draft(doc)
@@ -330,6 +361,13 @@ def _put_draft(handler, params, qs):
     except po_db.RevConflict as e:
         _err(handler, 409, 'This draft was changed in another tab or session. Nothing was overwritten.',
              extra={'code': 'rev_conflict', 'currentRev': e.current})
+        return
+    except po_db.DraftIssued as e:
+        _err(handler, 409, f'This draft was issued as {e.issue["displayNo"]} and can no longer be changed. '
+             'Revise the issued PO to make changes. Nothing was saved.', extra={'code': 'issued', 'issue': e.issue})
+        return
+    except ValueError as e:
+        _err(handler, 400, str(e) + '. Nothing was saved.')
         return
     _ok(handler, _full(doc, rev))
 
@@ -558,3 +596,199 @@ def _get_photo_file(handler, params, qs):
     handler.send_header('Cache-Control', 'private, max-age=31536000, immutable')   # content never changes for an id
     handler.end_headers()
     handler.wfile.write(data)
+
+
+# ── settings, PDFs, issuance, revisions ────────────────────────────────────
+
+def _actor():
+    import getpass
+    try:
+        return (getpass.getuser() or 'local user')[:100]
+    except Exception:  # noqa: BLE001
+        return 'local user'
+
+
+def _send_pdf(handler, data, filename, cache):
+    ascii_name = re.sub(r'[^A-Za-z0-9._ -]', '_', filename)[:120] or 'purchase-order.pdf'
+    handler.send_response(200)
+    handler.send_header('Content-Type', 'application/pdf')
+    handler.send_header('Content-Length', str(len(data)))
+    handler.send_header('Content-Disposition', f'inline; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(filename, safe="")}')
+    handler.send_header('X-Content-Type-Options', 'nosniff')
+    handler.send_header('Cache-Control', cache)
+    handler.end_headers()
+    handler.wfile.write(data)
+
+
+def _get_settings(handler, params, qs):
+    doc, rev = po_db.get_settings()
+    _ok(handler, {'data': doc, 'rev': rev})
+
+
+def _put_settings(handler, params, qs):
+    expected = _if_match(handler)
+    if expected is None:
+        _reject(handler, 428, 'This tab did not send the settings revision. Reload the page. Nothing was saved.', extra={'code': 'rev_required'})
+        return
+    try:
+        body = _json_body(handler)
+    except ValueError:
+        _err(handler, 400, 'Malformed or oversized JSON body.')
+        return
+    try:
+        doc = po_model.validate_settings(body)
+    except po_model.DraftInvalid as e:
+        _err(handler, 400, 'The settings were not saved: some values are invalid.', extra={'code': 'invalid', 'errors': e.errors[:50]})
+        return
+    try:
+        doc, rev = po_db.put_settings(doc, expected)
+    except po_db.RevConflict as e:
+        _err(handler, 409, 'The settings were changed in another tab. Nothing was overwritten.', extra={'code': 'rev_conflict', 'currentRev': e.current})
+        return
+    _ok(handler, {'data': doc, 'rev': rev})
+
+
+def _photo_bytes_for(doc):
+    out = {}
+    for a in doc.get('photos', []):
+        if a['status'] != 'removed' and a['includeInPdf'] and a['target']:
+            got = po_db.read_photo_bytes(a['photoId'])
+            if got:
+                out[a['photoId']] = (got[0]['mime'], got[1])
+    return out
+
+
+def _get_preview_pdf(handler, params, qs):
+    import po_pdf
+    got = po_db.get_draft(params['id'])
+    if got is None:
+        _err(handler, 404, 'Draft not found.')
+        return
+    try:
+        doc = po_model.validate_draft(got[0])
+        pdf = po_pdf.render(doc, po_model.compute(doc), po_db.get_settings()[0], None, _photo_bytes_for(doc))
+    except po_model.DraftInvalid:
+        _err(handler, 400, 'The saved draft is not valid; open and save it first.')
+        return
+    except po_pdf.PdfRenderError as e:
+        _err(handler, 503, str(e), extra={'code': 'pdf_unavailable'})
+        return
+    _send_pdf(handler, pdf, f'DRAFT {doc.get("title") or doc["id"]}.pdf', 'no-store')
+
+
+def _get_changes(handler, params, qs):
+    got = po_db.get_draft(params['id'])
+    if got is None:
+        _err(handler, 404, 'Draft not found.')
+        return
+    doc = po_model.validate_draft(got[0])
+    rev = doc.get('revision')
+    if not rev:
+        _ok(handler, {'revision': None, 'changes': []})
+        return
+    issue = po_db.get_issue(rev['basedOnIssueId'])
+    snap = issue['snapshot']
+    _ok(handler, {'revision': rev, 'basedOn': issue['meta'], 'basedOnCurrent': issue['current'],
+                  'changes': po_model.changes(snap['draft'], doc, snap['computed'], po_model.compute(doc))})
+
+
+def _issue_draft(handler, params, qs):
+    import po_pdf
+    expected = _if_match(handler)
+    if expected is None:
+        _reject(handler, 428, 'This tab did not send the draft revision. Reload the page. Nothing was issued.', extra={'code': 'rev_required'})
+        return
+    try:
+        body = _json_body(handler) or {}
+    except ValueError:
+        _err(handler, 400, 'Malformed JSON body.')
+        return
+    if not isinstance(body, dict):
+        _err(handler, 400, 'Body must be {idempotencyKey, approvedBy, reason}.')
+        return
+    key = body.get('idempotencyKey') if isinstance(body.get('idempotencyKey'), str) else ''
+    if not po_db.IDEMPOTENCY_RE.match(key):
+        _err(handler, 400, 'An idempotency key (16-64 letters, digits, - or _) is required. Nothing was issued.')
+        return
+    reason = body.get('reason') if isinstance(body.get('reason'), str) else ''
+    approved = body.get('approvedBy') if isinstance(body.get('approvedBy'), str) else ''
+    if len(reason) > po_model.LIMITS['reason'] or len(approved) > 200:
+        _err(handler, 400, 'Reason or approver name is too long. Nothing was issued.')
+        return
+    sc = body.get('supplierCheck')
+    supplier_check = None
+    if isinstance(sc, dict) and sc.get('status') in ('verified', 'not_found', 'unavailable', 'acknowledged_unavailable', 'test_not_found'):
+        supplier_check = {'status': sc['status'], 'at': str(sc.get('at') or '')[:40], 'daftraId': str(sc.get('daftraId') or '')[:20]}
+    try:
+        meta, duplicate = po_db.issue_draft(params['id'], expected, key, reason, approved, _actor(), po_pdf.render, supplier_check)
+    except po_db.DraftGone:
+        _err(handler, 404, 'Draft not found. Nothing was issued.')
+        return
+    except po_db.RevConflict as e:
+        _err(handler, 409, 'This draft was changed since you opened it. Reload, review and issue again. Nothing was issued.',
+             extra={'code': 'rev_conflict', 'currentRev': e.current})
+        return
+    except po_db.DraftIssued as e:
+        _err(handler, 409, f'This draft was already issued as {e.issue["displayNo"]}.', extra={'code': 'issued', 'issue': e.issue})
+        return
+    except po_db.StaleRevision as e:
+        _err(handler, 409, 'This PO was issued again since this revision was started — the revision is based on an older version. '
+             'Nothing was issued.', extra={'code': 'stale_revision', 'current': e.current})
+        return
+    except po_db.NotReady as e:
+        _err(handler, 422, 'The PO cannot be issued yet. Nothing was issued and no number was used.',
+             extra={'code': 'not_ready', 'blockers': e.blockers})
+        return
+    except po_pdf.PdfRenderError as e:
+        _err(handler, 503, str(e) + ' Nothing was issued and no number was used.', extra={'code': 'pdf_unavailable'})
+        return
+    _ok(handler, meta, status=200 if duplicate else 201, extra={'duplicate': duplicate})
+
+
+def _list_issues(handler, params, qs):
+    _ok(handler, po_db.list_issues())
+
+
+def _get_issue(handler, params, qs):
+    got = po_db.get_issue(params['id'])
+    if not got:
+        _err(handler, 404, 'Issued PO not found.')
+        return
+    _ok(handler, got)
+
+
+def _get_issue_pdf(handler, params, qs):
+    try:
+        got = po_db.read_issue_pdf(params['id'])
+    except po_db.SourceIntegrityError:
+        _err(handler, 500, 'The stored PDF no longer matches its recorded hash (or is missing). It was not served.', extra={'code': 'integrity'})
+        return
+    if not got:
+        _err(handler, 404, 'Issued PO not found.')
+        return
+    meta, data = got
+    _send_pdf(handler, data, f'{meta["displayNo"]}.pdf', 'private, max-age=31536000, immutable')
+
+
+def _revise_issue(handler, params, qs):
+    try:
+        body = _json_body(handler) or {}
+    except ValueError:
+        _err(handler, 400, 'Malformed JSON body.')
+        return
+    new_id = body.get('draftId') if isinstance(body, dict) else None
+    if not isinstance(new_id, str) or not po_model.DRAFT_ID_RE.match(new_id) or po_db.get_draft(new_id) is not None:
+        _err(handler, 400, 'A new, unused draft id is required.')
+        return
+    try:
+        doc, rev = po_db.revise_issue(params['id'], new_id)
+    except po_db.DraftGone:
+        _err(handler, 404, 'Issued PO not found.')
+        return
+    except po_db.StaleRevision as e:
+        _err(handler, 409, 'Only the current issued version can be revised.', extra={'code': 'not_current', 'current': e.current})
+        return
+    except po_db.OpenRevisionExists as e:
+        _err(handler, 409, 'This PO already has an open revision draft.', extra={'code': 'open_revision', 'draftId': e.draft_id})
+        return
+    _ok(handler, _full(doc, rev), status=201)
