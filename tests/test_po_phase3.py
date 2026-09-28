@@ -235,6 +235,13 @@ class PdfLayout(unittest.TestCase):
         self.assertIn('Totals not calculated', hb)
         self.assertIn('Item 1 (Lobby sign): unit price missing', hb)
         self.assertNotIn('Total including VAT', hb)
+        # a blank unit label: totals are printed, with the gap as a separate review warning
+        nu = draft(items=[dict(it, unit='')], photos=[])
+        hn = po_pdf.build_html(nu, po_model.compute(nu), FICTIONAL, None, {})
+        self.assertNotIn('Totals not calculated', hn)
+        self.assertIn('Total including VAT (SAR)', hn)
+        self.assertIn('Review before issuing', hn)
+        self.assertIn('Unit missing — item(s) 1', hn)
         self.assertIn('supersedes PO-2026-0001', issued)
         self.assertIn('Qty &lt;changed&gt;', issued, 'escaped')
 

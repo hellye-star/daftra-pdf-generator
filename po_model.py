@@ -61,6 +61,9 @@ TAX_TREATMENTS = ('unresolved', 'taxable', 'zero_rated', 'exempt', 'out_of_scope
 # DEFAULT_ITEM_TAX with origin 'default' plus the review flag
 # DEFAULT_TAX_REVIEW_FLAG — never presented as extracted.
 TAX_ORIGINS = ('', 'default', 'user', 'extracted')
+# Item issues that make a line uncalculable, and label-only issues (review / issuance only).
+CALC_ISSUES = ('quantity missing', 'unit price missing', 'discount larger than the line amount')
+LABEL_ISSUES = ('name missing', 'unit missing')
 DEFAULT_ITEM_TAX = {'treatment': 'taxable', 'rate': '15', 'origin': 'default'}
 # Standard notes printed on every new PO (editable per draft; never written over user text).
 DEFAULT_PO_NOTES = (
@@ -764,7 +767,10 @@ def compute(doc):
     dp = CURRENCY_MINOR_UNITS.get(cur)
     basis = doc.get('priceTaxBasis') or 'unresolved'
     lines = []
-    invalid_items, tax_unresolved_items = [], []
+    # invalid_items: a calculation input is missing (quantity / unit price / discount) — no totals.
+    # label_missing_items: only the printed name or unit label is missing — totals are still
+    # calculated; it is a review / issuance requirement, never a calculation one.
+    invalid_items, tax_unresolved_items, label_missing_items = [], [], []
     items_net = 0
     entered = 0                       # sum of the amounts as entered (inclusive drafts: shows the rounding effect)
     tax_groups = {}
@@ -816,10 +822,12 @@ def compute(doc):
                         entered += amount
                         group(treat, rate, net)
         if it['included']:
-            if any(x.endswith('missing') and 'tax' not in x for x in row['issues']) or 'discount larger than the line amount' in row['issues']:
+            if any(x in CALC_ISSUES for x in row['issues']):
                 invalid_items.append(it['id'])
             elif any('tax' in x for x in row['issues']):
                 tax_unresolved_items.append(it['id'])
+            if any(x in LABEL_ISSUES for x in row['issues']):
+                label_missing_items.append(it['id'])
         lines.append(row)
 
     adj_rows, adj_invalid, adj_tax_unresolved = [], [], []
@@ -884,6 +892,7 @@ def compute(doc):
         # VAT-inclusive drafts: total incl. VAT minus the prices as entered (category rounding)
         'inclusiveRoundingDifference': fmt_minor(gross_sum - entered, dp) if complete and basis == 'inclusive' else None,
         'invalidItems': invalid_items,
+        'labelMissingItems': label_missing_items,
         'taxUnresolvedItems': tax_unresolved_items,
         'invalidAdjustments': adj_invalid,
         'taxUnresolvedAdjustments': adj_tax_unresolved,
@@ -1078,7 +1087,9 @@ def readiness(doc, computed, settings=None):
     if t['includedCount'] == 0:
         add('no_included_items', 'No included items.')
     if t['invalidItems']:
-        add('item_invalid', f'{len(t["invalidItems"])} included item(s) missing name, unit, quantity or unit price (or a discount larger than the line).')
+        add('item_invalid', f'{len(t["invalidItems"])} included item(s) missing quantity or unit price (or a discount larger than the line).')
+    if t.get('labelMissingItems'):
+        add('item_label_missing', f'{len(t["labelMissingItems"])} included item(s) have no unit or no name — add them before issuing (totals are not affected).')
     if t['taxUnresolvedItems']:
         add('tax_unresolved', f'Tax treatment unresolved on {len(t["taxUnresolvedItems"])} included item(s).')
     if t.get('invalidAdjustments'):

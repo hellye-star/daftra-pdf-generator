@@ -410,9 +410,12 @@ function netOf(amount, t, rate, basis, dp) {
   return sign * roundHalfUp({ n: a * 100n * rate.d, d: scale * (100n * rate.d + rate.n) }, dp);
 }
 function roundSigned(f, dp) { return f.n < 0n ? -roundHalfUp({ n: -f.n, d: f.d }, dp) : roundHalfUp(f, dp); }
+// same lists as po_model.CALC_ISSUES / LABEL_ISSUES
+const CALC_ISSUES = ['quantity missing', 'unit price missing', 'discount larger than the line amount'];
+const LABEL_ISSUES = ['name missing', 'unit missing'];
 function compute(doc) {
   const cur = doc.currency || '', dp = CURRENCIES[cur], basis = doc.priceTaxBasis || 'unresolved';
-  const lines = {}, invalid = [], taxUnres = [];
+  const lines = {}, invalid = [], taxUnres = [], labelMissing = [];   // labelMissing: name / unit only — totals still calculated
   let itemsNet = 0n, entered = 0n; const groups = {};
   const group = (t, rate, n) => { const key = t + (t === 'taxable' ? ':' + fmtExact(rate) : '');
     const g = groups[key] || (groups[key] = { treatment: t, rate: t === 'taxable' ? fmtExact(rate) : '', rateValue: rate, net: 0n, tax: 0n }); g.net += n; };
@@ -441,8 +444,9 @@ function compute(doc) {
       }
     }
     if (it.included) {
-      if (row.issues.some(x => (x.endsWith('missing') && !x.includes('tax')) || x.startsWith('discount larger'))) invalid.push(it.id);
+      if (row.issues.some(x => CALC_ISSUES.includes(x))) invalid.push(it.id);
       else if (row.issues.some(x => x.includes('tax'))) taxUnres.push(it.id);
+      if (row.issues.some(x => LABEL_ISSUES.includes(x))) labelMissing.push(it.id);
     }
     lines[it.id] = row;
   }
@@ -475,7 +479,7 @@ function compute(doc) {
     net: complete ? fmtMinor(net, dp) : null, tax: complete ? fmtMinor(tax, dp) : null, gross: complete ? fmtMinor(gross, dp) : null,
     taxGroups: complete ? Object.values(groups).map(g => ({ treatment: g.treatment, rate: g.rate, net: fmtMinor(g.net, dp), tax: fmtMinor(g.tax, dp) })) : [],
     inclusiveRoundingDifference: complete && basis === 'inclusive' ? fmtMinor(gross - entered, dp) : null,
-    invalidItems: invalid, taxUnresolvedItems: taxUnres, invalidAdjustments: adjInvalid, taxUnresolvedAdjustments: adjTaxUnres,
+    invalidItems: invalid, labelMissingItems: labelMissing, taxUnresolvedItems: taxUnres, invalidAdjustments: adjInvalid, taxUnresolvedAdjustments: adjTaxUnres,
     includedCount: included.length, excludedCount: doc.items.length - included.length };
   totals.provisionalItems = included.filter(i => (i.reviewFlags || []).includes('line_discount_present') && !i.discount).map(i => i.id);
   totals.unappliedAdjustments = unappliedQuotationAdjustments(doc);
@@ -548,7 +552,8 @@ function readiness(doc, c) {
   if (!doc.currency) add('currency_missing', 'Currency not selected.');
   const t = c.totals;
   if (!t.includedCount) add('no_included_items', 'No included items.');
-  if (t.invalidItems.length) add('item_invalid', `${t.invalidItems.length} included item(s) missing name, unit, quantity or unit price (or a discount larger than the line).`);
+  if (t.invalidItems.length) add('item_invalid', `${t.invalidItems.length} included item(s) missing quantity or unit price (or a discount larger than the line).`);
+  if (t.labelMissingItems.length) add('item_label_missing', `${t.labelMissingItems.length} included item(s) have no unit or no name — add them before issuing (totals are not affected).`);
   if (t.taxUnresolvedItems.length) add('tax_unresolved', `Tax treatment unresolved on ${t.taxUnresolvedItems.length} included item(s).`);
   if (t.invalidAdjustments.length) add('adjustment_invalid', `${t.invalidAdjustments.length} discount / charge line(s) have no amount.`);
   if (t.taxUnresolvedAdjustments.length) add('adjustment_tax_unresolved', `Tax treatment unresolved on ${t.taxUnresolvedAdjustments.length} discount / charge line(s).`);
@@ -1161,6 +1166,7 @@ function refreshDerived() {
       html += `<div class="row grand"><span>Total including VAT${t.provisional ? ' <span class="chip chip-bad">Provisional</span>' : ''}</span><span class="calc">${esc(money(t.gross, cur))}</span></div>`;
       html += `<div class="small muted" style="margin-top:4px">VAT is calculated once per VAT rate on its taxable base and rounded half-up (ZATCA rule BR-CO-17)${t.inclusiveRoundingDifference && t.inclusiveRoundingDifference !== '0.00' ? ` — ${esc(t.inclusiveRoundingDifference)} different from the sum of the VAT-inclusive prices` : ''}.</div>`;
     } else html += `<div class="banner banner-warn" style="margin:8px 0 0">${esc(msgs[t.status])}</div>`;
+    if (t.labelMissingItems.length) html += `<div class="banner banner-warn" style="margin:8px 0 0">Review: ${t.labelMissingItems.length} included item(s) have no unit or no name — required before issuing; totals are not affected.</div>`;
     if (t.provisional) {
       const q = d.quotation, qt = q && q.totals && (q.totals.grandTotal || q.totals.total);
       html += `<div class="banner banner-bad" style="margin:8px 0 0"><b>Provisional:</b> the supplier quotation has discounts or charges that this PO has not applied or marked not applicable yet

@@ -147,6 +147,26 @@ class T2Calculations(unittest.TestCase):
         self.assertEqual(calc(draft(items=[item('it_aaaaaa1', qty='')]))['totals']['status'], 'incomplete')
         self.assertIsNone(calc(draft(items=[item('it_aaaaaa1', treat='unresolved', rate='')]))['totals']['gross'])
 
+    def test_blank_unit_does_not_block_totals(self):
+        # a missing unit label is a review / issuance requirement, never a calculation input
+        d = draft(items=[item('it_aaaaaa1', qty='3', price='100', unit=''), item('it_aaaaaa2', qty='2', price='50.5', unit='')],
+                  paymentTerms={'text': 't', 'isDraftDefault': False, 'balanceTrigger': 'delivery',
+                                'milestones': [{'id': 'ms_aa', 'pct': '50', 'label': 'a'}, {'id': 'ms_bb', 'pct': '50', 'label': 'b'}]})
+        c = calc(d)
+        t = c['totals']
+        self.assertEqual((t['status'], t['net'], t['tax'], t['gross']), ('complete', '401.00', '60.15', '461.15'))
+        self.assertEqual(t['invalidItems'], [])
+        self.assertEqual(t['labelMissingItems'], ['it_aaaaaa1', 'it_aaaaaa2'])
+        self.assertEqual([m['amount'] for m in c['milestones']], ['230.58', '230.57'])
+        self.assertEqual(po_model.validate_draft(d)['items'][0]['unit'], '', 'no unit is invented')
+        codes = {b['code'] for b in po_model.readiness(po_model.validate_draft(d), c)}
+        self.assertIn('item_label_missing', codes, 'still required before issuing')
+        self.assertNotIn('item_invalid', codes)
+        # missing quantity or price is still genuinely uncalculable
+        for bad in (item('it_aaaaaa3', qty='', unit=''), item('it_aaaaaa3', price='', unit='')):
+            t2 = calc(draft(items=[item('it_aaaaaa1', unit=''), bad]))['totals']
+            self.assertEqual((t2['status'], t2['gross'], t2['invalidItems']), ('incomplete', None, ['it_aaaaaa3']))
+
     def test_currency_minor_units(self):
         self.assertEqual(calc(draft(currency='KWD', items=[item('it_aaaaaa1', qty='1', price='1.0005', treat='exempt', rate='')]))['totals']['gross'], '1.001')
         self.assertEqual(calc(draft(currency='JPY', items=[item('it_aaaaaa1', qty='1', price='10.5', treat='exempt', rate='')]))['totals']['gross'], '11')

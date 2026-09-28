@@ -119,7 +119,8 @@ def missing_inputs(doc, computed):
     lines = {ln['id']: ln for ln in computed['lines']}
     items = [it for it in doc.get('items', []) if it['included']]
     for n, it in enumerate(items, 1):
-        issues = lines.get(it['id'], {}).get('issues') or []
+        # a missing name / unit label never blocks the totals (see review_warnings)
+        issues = [x for x in lines.get(it['id'], {}).get('issues') or [] if x not in LABEL_ISSUES]
         if issues:
             out.append(f'Item {n} ({item_title(it)}): ' + ', '.join(issues) + '.')
     adj = {a['id']: a for a in computed.get('adjustments', [])}
@@ -128,6 +129,21 @@ def missing_inputs(doc, computed):
         if issues:
             out.append(f'{a.get("label") or ("Discount" if a["kind"] == "discount" else "Charge")}: ' + ', '.join(issues) + '.')
     return out or [f'Totals not calculated ({st}).']
+
+
+LABEL_ISSUES = ('name missing', 'unit missing')   # same as po_model.LABEL_ISSUES
+
+
+def review_warnings(doc, computed):
+    """Label-only gaps (no unit / no name): printed on a draft next to the totals."""
+    lines = {ln['id']: ln for ln in computed['lines']}
+    items = [it for it in doc.get('items', []) if it['included']]
+    out = []
+    for n, it in enumerate(items, 1):
+        gaps = [x for x in lines.get(it['id'], {}).get('issues') or [] if x in LABEL_ISSUES]
+        if gaps:
+            out.append((n, gaps))
+    return out
 
 
 def item_photos(doc):
@@ -210,6 +226,14 @@ def build_html(doc, computed, settings, issue=None, photo_bytes=None):
                     + ''.join(f'<li dir="auto">{e(x)}</li>' for x in missing) + '</ul></div>')
     else:
         tot_html = f'<table class="tot">{"".join(tot)}</table>'
+    warn = review_warnings(doc, computed) if is_draft else []
+    if warn:
+        by_gap = {}
+        for n, gaps in warn:
+            for g in gaps:
+                by_gap.setdefault(g, []).append(str(n))
+        tot_html += ('<div class="rvw"><b>Review before issuing</b> (totals are not affected):<ul>'
+                     + ''.join(f'<li>{e(g[:1].upper() + g[1:])} — item(s) {e(", ".join(ns))}</li>' for g, ns in by_gap.items()) + '</ul></div>')
 
     pt = doc.get('paymentTerms') or {}
     ms = {m['id']: m for m in computed.get('milestones', [])}
@@ -254,6 +278,7 @@ table.ms {{ width: 100%; border-collapse: collapse; margin-top: 4px; }} table.ms
 .wm {{ position: fixed; top: 36%; left: 0; right: 0; text-align: center; font-size: 110pt; letter-spacing: .08em; color: rgba(179,38,30,.16); transform: rotate(-28deg); font-weight: 700; z-index: 10; pointer-events: none; }}
 .logo {{ position: relative; width: 35mm; height: 13.3mm; overflow: hidden; margin-bottom: 4px; }}
 .logo img {{ position: absolute; width: 58.73mm; left: -14.07mm; top: -22.68mm; }}   /* crops the padded 1024px logo.png to the mark, as on the Delivery Note */
+.rvw {{ border: 1px solid #b06b1a; background: #fef3e7; color: #7a4a12; padding: 5px 8px; margin-top: 8px; }} .rvw ul {{ margin: 3px 0 0 16px; padding: 0; }}
 .miss {{ border: 2px solid #b3261e; color: #b3261e; padding: 6px 8px; }} .miss ul {{ margin: 4px 0 0 16px; padding: 0; }}
 .sign {{ display: flex; gap: 24px; margin-top: 22px; page-break-inside: avoid; }} .sign > div {{ flex: 1; border-top: 1px solid #1c1c1a; padding-top: 3px; }}
 .foot {{ margin-top: 14px; font-size: 7pt; color: #6b6b67; }}
