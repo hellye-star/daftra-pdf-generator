@@ -1182,7 +1182,16 @@ function refreshDerived() {
   c.milestones.forEach(m => { const el = $('msamt-' + m.id); if (el) el.textContent = m.amount != null ? money(m.amount, cur) : '—'; });
   const note = $('msNote');
   if (note) note.innerHTML = !c.milestonePctValid ? '<span class="chip chip-bad">Percentages must add up to 100%</span>' : c.totals.status !== 'complete' ? '<span class="muted">Amounts appear once the PO total is fully resolved.</span>' : '';
-  const rc = $('reconArea'); if (rc) rc.innerHTML = reconHtml(c);
+  // Rebuild the reconciliation panel only when its markup changes. The note's text is not part of the
+  // markup (it is set as the textarea's value), so typing a note never replaces the field being typed in.
+  const rc = $('reconArea');
+  if (rc) {
+    const html = reconHtml(c);
+    if (rc._html !== html) {
+      rc.innerHTML = html; rc._html = html;
+      const n = $('reconNote'); if (n) n.value = (d.reconciliation || {}).note || '';
+    }
+  }
   const hint = $('wordingHint'), pt = d.paymentTerms;
   if (hint) hint.innerHTML = (pt.balanceTrigger === 'delivery_written_acceptance' && !/acceptance/i.test(pt.text))
     ? '<div class="banner banner-warn" style="margin:6px 0 0">The wording does not mention written acceptance, but that trigger is selected. <button class="link" data-act="acceptance-wording">Use suggested wording</button></div>'
@@ -1298,7 +1307,7 @@ function reconHtml(c) {
   return h + (r.accepted
     ? `<div class="small" style="margin-top:6px"><span class="chip chip-ok">Difference accepted</span> “${esc(rec.note)}” <button class="link" data-act="recon-withdraw">Withdraw</button></div>`
     : `<div class="field" style="margin-top:6px"><span class="lbl">Why this PO differs from the quotation (required to accept)</span>
-        <textarea class="inp" dir="auto" rows="2" maxlength="1000" data-f="reconNote">${esc(rec.note || '')}</textarea></div>
+        <textarea class="inp" dir="auto" rows="2" maxlength="1000" id="reconNote" data-f="reconNote"></textarea></div>
        <button class="btn btn-sm" data-act="recon-accept">Accept this difference for the current totals</button>
        <span class="small muted">Acceptance applies to these exact totals; any later change re-opens it.</span>`);
 }
