@@ -11,8 +11,11 @@ Endpoints:
     GET    /api/sarawat/summary             lightweight list for the Saved Quotations browser
                                             ?q=&source=&status=&client=&from=&to=&recent=&sort=&limit=&offset=
                                             (served from the quotation_index table — no photos, no full documents)
+    GET    /api/sarawat/items               saved-item picker: ?q=&limit=  (index only — no photos, no documents)
+    GET    /api/sarawat/quotes/<id>/items   ?idx=0,2  full items (with photos) of the latest revision, only for picked items
     GET    /api/sarawat/quotes/<id>
     GET    /api/sarawat/quotes/<id>/thumb/<n>   small JPEG of the n-th photo of the latest revision
+    POST   /api/sarawat/quotes/<id>/meta    {client?, no?, quotationStatus?} audited header correction / manual status
     PUT    /api/sarawat/quotes/<id>
     DELETE /api/sarawat/quotes/<id>
     POST   /api/sarawat/pdf          body {"html": "<!doctype html>..."} -> application/pdf
@@ -32,6 +35,8 @@ _GET = [
     (re.compile(r'^/api/sarawat/status$'),                 '_status'),
     (re.compile(r'^/api/sarawat/quotes$'),                 '_list_quotes'),
     (re.compile(r'^/api/sarawat/summary$'),                '_summary'),
+    (re.compile(r'^/api/sarawat/items$'),                  '_items_search'),
+    (re.compile(r'^/api/sarawat/quotes/' + _QID + r'/items$'), '_items_full'),
     (re.compile(r'^/api/sarawat/quotes/' + _QID + r'/thumb/(?P<n>\d{1,3})$'), '_thumb'),
     (re.compile(r'^/api/sarawat/quotes/' + _QID + r'$'),   '_get_quote'),
 ]
@@ -40,6 +45,7 @@ _PUT = [
 ]
 _POST = [
     (re.compile(r'^/api/sarawat/pdf$'),                    '_render_pdf'),
+    (re.compile(r'^/api/sarawat/quotes/' + _QID + r'/meta$'), '_update_meta'),
 ]
 _DELETE = [
     (re.compile(r'^/api/sarawat/quotes/' + _QID + r'$'),   '_delete_quote'),
@@ -150,7 +156,26 @@ def _summary(handler, params, qs):
     _ok(handler, sarawat_db.search_quotations(
         q=_qs1(qs, 'q'), source=_qs1(qs, 'source'), status=_qs1(qs, 'status'),
         client=_qs1(qs, 'client'), date_from=_qs1(qs, 'from'), date_to=_qs1(qs, 'to'),
-        recent_days=recent, sort=_qs1(qs, 'sort', 'newest'), limit=limit, offset=offset))
+        recent_days=recent, sort=_qs1(qs, 'sort', 'newest'), limit=limit, offset=offset,
+        qstatus=_qs1(qs, 'qstatus')))
+
+
+def _items_search(handler, params, qs):
+    try:
+        limit = int(_qs1(qs, 'limit', '60') or 60)
+    except ValueError:
+        _err(handler, 400, 'limit must be a number.')
+        return
+    _ok(handler, sarawat_db.search_items(q=_qs1(qs, 'q'), limit=limit))
+
+
+def _items_full(handler, params, qs):
+    try:
+        idx = [int(x) for x in _qs1(qs, 'idx').split(',') if x.strip() != ''][:100]
+    except ValueError:
+        _err(handler, 400, 'idx must be a comma-separated list of item positions.')
+        return
+    _ok(handler, sarawat_db.get_items(params['id'], idx))
 
 
 def _thumb(handler, params, qs):
@@ -191,6 +216,27 @@ def _put_quote(handler, params, qs):
         _err(handler, 400, str(e))
         return
     _ok(handler, {'id': params['id']})
+
+
+def _update_meta(handler, params, qs):
+    try:
+        body = _json_body(handler)
+    except (ValueError, json.JSONDecodeError):
+        _err(handler, 400, 'Malformed JSON body.')
+        return
+    if not isinstance(body, dict) or not (set(body) & {'client', 'no', 'quotationStatus'}):
+        _err(handler, 400, 'Body must contain client, no and/or quotationStatus.')
+        return
+    try:
+        doc = sarawat_db.update_meta(params['id'], {k: body[k] for k in ('client', 'no', 'quotationStatus') if k in body})
+    except ValueError as e:
+        _err(handler, 400, str(e))
+        return
+    if doc is None:
+        _err(handler, 404, 'Quotation not found.')
+        return
+    _ok(handler, {'id': doc['id'], 'no': doc.get('no', ''), 'client': doc.get('client', ''),
+                  'quotationStatus': doc.get('quotationStatus', ''), 'updatedAt': doc.get('updatedAt')})
 
 
 def _delete_quote(handler, params, qs):

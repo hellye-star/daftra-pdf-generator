@@ -92,6 +92,17 @@
   .sq-badge { font-size: 6.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px; border: 1px solid var(--rule); background: var(--cream); color: var(--mid); white-space: nowrap; }
   .sq-badge.st-partial { color: #8a6508; border-color: #e6cf8f; background: #fff8e1; }
   .sq-badge.st-delivered { color: #2e6b45; border-color: #b9dcc7; background: #eef8f1; }
+  .sq-badge.qs-draft { color: #555; }
+  .sq-badge.qs-sent { color: #1f5a8a; border-color: #b6d0e6; background: #eef5fb; }
+  .sq-badge.qs-approved { color: #2e6b45; border-color: #b9dcc7; background: #eef8f1; }
+  .sq-badge.qs-cancelled { color: #a0332a; border-color: #e3b9b4; background: #fcefed; }
+  .sq-pv-status { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 8px; color: var(--mid); }
+  .sq-pv-status label { display: flex; gap: 6px; align-items: center; }
+  .sq-pv-corr { margin-top: 6px; font-size: 7.5px; color: var(--light); line-height: 1.5; }
+  .sq-modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+  .sq-modal-box { background: var(--white); border: 1px solid var(--dark); padding: 18px 20px; width: 100%; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+  .sq-modal-box label { display: block; font-size: 7.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--mid); margin: 10px 0 4px; }
+  .sq-modal-note { font-size: 7.5px; color: var(--light); line-height: 1.6; margin-top: 10px; }
   .sq-thumbs { display: flex; gap: 4px; margin-top: 7px; }
   .sq-thumbs img { width: 34px; height: 34px; object-fit: cover; border: 1px solid var(--rule); background: var(--cream); }
   .sq-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
@@ -118,6 +129,37 @@
   .sq-rev { display: flex; gap: 8px; align-items: center; padding: 6px 7px; font-size: 8px; color: var(--mid); border: 1px solid var(--rule); margin-top: 4px; cursor: pointer; }
   .sq-rev.sel { border-color: var(--dark); background: var(--cream); }
   .sq-pv-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* Start screen — four large choices */
+  .sq-start { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 640px; margin: 28px auto 0; }
+  .sq-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 22px 20px; min-height: 118px; background: var(--white); border: 1px solid var(--rule); color: var(--dark); cursor: pointer; text-align: left; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
+  .sq-tile:hover { border-color: var(--dark); box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .sq-tile svg { color: var(--mid); margin-bottom: 4px; }
+  .sq-tile-t { font-size: 12px; font-weight: 500; letter-spacing: 0.02em; }
+  .sq-tile-s { font-size: 8.5px; font-weight: 300; color: var(--mid); }
+  @media (max-width: 560px) { .sq-start { grid-template-columns: minmax(0, 1fr); } }
+
+  /* Saved-item picker */
+  .sq-pick { margin: 0 0 12px; padding: 12px; background: var(--cream); border: 1px solid var(--rule); }
+  .sq-pick-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--rule); background: var(--white); }
+  .sq-pick-row { display: flex; gap: 9px; align-items: flex-start; padding: 8px 10px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+  .sq-pick-row:hover { background: var(--cream); }
+  .sq-pick-row.on { background: #f1efe9; box-shadow: inset 3px 0 0 var(--dark); }
+  .sq-pick-th { width: 38px; height: 38px; flex-shrink: 0; border: 1px solid var(--rule); background: var(--cream); overflow: hidden; }
+  .sq-pick-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sq-pick-spec { font-size: 8px; color: var(--mid); font-weight: 300; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .sq-pick-from { font-size: 7.5px; color: var(--light); margin-top: 2px; }
+  .sq-pick-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; }
+
+  /* Item card — simplified editing */
+  .sarawat-item-main { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+  .sarawat-item-photo-col { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 64px; flex-shrink: 0; }
+  .sarawat-item-main .sarawat-item-desc { flex: 1; margin-bottom: 0; }
+  .sarawat-more { margin-top: 8px; border-top: 1px solid var(--rule); padding-top: 6px; }
+  .sarawat-more summary { font-size: 8px; color: var(--mid); cursor: pointer; letter-spacing: 0.04em; user-select: none; }
+  .sarawat-more-body { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 2px; }
+  .sarawat-more-row { display: flex; gap: 10px; align-items: center; }
+  .sarawat-more-row .sarawat-item-sno { width: 140px; text-align: left; }
   .badge { font-size: 6.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; white-space: nowrap; }
   .badge-paid { background: #EAF4EE; color: #3A7D52; }
   .badge-unpaid { background: #FEF3E7; color: #B06B1A; }
@@ -702,7 +744,7 @@ let sarawatClientPicker = { open: false, loading: false, clients: null, query: '
 // "Add Item from Saved Quotations" picker — reuses an item (code, name, full
 // specification, photo, last qty/price) from any saved Sarawat quotation. Read
 // fresh from /api/sarawat/quotes on every open; no separate item store exists.
-let sarawatItemPicker = { open: false, loading: false, items: null, query: '', error: '' };
+let sarawatItemPicker = { open: false, loading: false, results: [], matched: 0, truncated: false, picked: {}, adding: false, query: '', error: '', seq: 0, timer: null };
 
 // Logo embedded as base64 so html2canvas renders it without CORS/local-path issues.
 // Regenerate with: base64 -w 0 logo.png  (then prefix with data:image/png;base64,)
@@ -3728,33 +3770,38 @@ function showSarawatQuoteTab() {
   currentTab = 'sarawat_quote';
   if (sarawatState) { renderSarawatForm(); return; }
 
+  // Four large choices. Importing a PDF, Excel sheet or photo is one tile: it opens the
+  // file chooser straight away (the chooser accepts all three), so there is no extra
+  // "which type?" step; the status line below says what was read.
+  const ico = d => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
   $('mainArea').innerHTML = buildTabsHTML() + `
-    <div class="purch-upload-panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-        <div class="sec-title" style="margin-bottom:0;">Upload Supplier Quotation (PDF / Excel)</div>
-        <button class="btn-sm btn-sm-outline" onclick="showSarawatSavedQuotesList()">Saved Quotations</button>
-      </div>
-      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-        <div class="form-group" style="flex:1;min-width:220px;">
-          <div class="form-label">Quotation File — PDF (text or scanned), .xls/.xlsx, or image (.jpg/.png/.webp)</div>
-          <input class="purch-upload-input" type="file" id="sarawatPdfInput"
-            accept="application/pdf,.pdf,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-            multiple
-            onchange="handleSarawatFileUpload(this)">
-        </div>
-      </div>
-      <div id="sarawatUploadStatus" style="margin-top:8px;font-size:8px;color:var(--mid);"></div>
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--rule);">
-        <button class="btn-sm btn-sm-outline" onclick="sarawatStartManualEntry()">Manually Enter Existing Approved Quotation</button>
-        <button class="btn-sm btn-sm-outline" onclick="sarawatStartFromSavedItems()">New Quotation from Saved Items</button>
-        <div style="margin-top:6px;font-size:7.5px;color:var(--light);">For a quotation that was already approved/under production before this database existed — opens a blank copy of the same editor below so you can type in its exact numbers and make it delivery-trackable, with no file parsing involved.</div>
-      </div>
+    <div class="sq-start">
+      <label class="sq-tile" for="sarawatPdfInput">
+        ${ico('<path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/>')}
+        <span class="sq-tile-t">Import File</span>
+        <span class="sq-tile-s">Start from a supplier quotation</span>
+        <input type="file" id="sarawatPdfInput" style="display:none;" multiple
+          accept="application/pdf,.pdf,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+          onclick="document.getElementById('sarawatUploadStatus').textContent='Choose a PDF, an Excel sheet or a photo of the quotation…'"
+          onchange="handleSarawatFileUpload(this)">
+      </label>
+      <button class="sq-tile" onclick="sarawatStartManualEntry()">
+        ${ico('<path d="M12 5v14M5 12h14"/>')}
+        <span class="sq-tile-t">New Blank Quotation</span>
+        <span class="sq-tile-s">Type the items in yourself</span>
+      </button>
+      <button class="sq-tile" onclick="sarawatStartFromSavedItems()">
+        ${ico('<rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15V5a1 1 0 011-1h10"/>')}
+        <span class="sq-tile-t">Reuse Saved Items</span>
+        <span class="sq-tile-s">Pick items from past quotations</span>
+      </button>
+      <button class="sq-tile" onclick="showSarawatSavedQuotesList()">
+        ${ico('<path d="M4 6h16M4 12h16M4 18h10"/>')}
+        <span class="sq-tile-t">Open Saved Quotations</span>
+        <span class="sq-tile-s">Search, preview, edit, duplicate</span>
+      </button>
     </div>
-    <div class="empty-state">
-      <div class="empty-icon"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-      <div class="empty-title">No quotation loaded yet</div>
-      <div class="empty-sub">Upload a supplier quotation (PDF, .xls, or .xlsx) above to extract its data.<br>Extraction is best-effort — you will be able to review and correct every field before exporting.</div>
-    </div>`;
+    <div id="sarawatUploadStatus" style="margin-top:12px;font-size:8.5px;color:var(--mid);text-align:center;"></div>`;
 }
 
 // Starts a blank quotation for manual entry of an ALREADY-APPROVED historic
@@ -6166,50 +6213,122 @@ function selectSarawatDaftraClient(id) {
   renderSarawatForm();
 }
 
-// ── Reuse an item from a saved quotation ─────────────────────────────────────
-// Lists every item in the LATEST revision of each saved Sarawat quotation
-// (identical code+name+specification shown once, newest first). Picking one
-// copies it into the quotation being edited as a brand-new item — fresh
-// itemId/tierIds, so it never shares delivery tracking with its source — with
-// its last quantity/unit price as editable starting values. The source
-// quotation is only read, never modified.
+// ── Reuse saved items (picker) ───────────────────────────────────────────────
+// Phase 3: the picker is served by GET /api/sarawat/items — the lightweight index
+// (item name, code, short specification, last qty/price, thumbnail position and the
+// source quotation's number/client). No documents and no photos are downloaded to
+// show or search the list. The full item (complete specification + photos) is
+// fetched only for the items that were ticked, when "Add" is pressed
+// (GET /api/sarawat/quotes/<id>/items?idx=…). Each picked item becomes a brand-new
+// item — fresh itemId/tierIds, so it never shares delivery tracking with its
+// source — with its last quantity/unit price as editable starting values. The
+// source quotations are only read, never modified.
+const SARAWAT_PICKER_LIMIT = 60;
+
 async function sarawatOpenItemPicker() {
-  sarawatItemPicker.open = true;
-  sarawatItemPicker.loading = true;
-  sarawatItemPicker.error = '';
+  const p = sarawatItemPicker;
+  p.open = true; p.query = ''; p.picked = {}; p.results = []; p.matched = 0; p.truncated = false;
+  p.error = ''; p.adding = false; p.loading = true;
   renderSarawatForm();
+  const panel = $('sarawatPickerPanel');
+  if (panel) panel.scrollIntoView({ block: 'nearest' });
+  const box = $('sarawat-item-search'); if (box) box.focus();
+  await sarawatPickerSearch();
+}
+
+async function sarawatPickerSearch() {
+  const p = sarawatItemPicker, my = ++p.seq;
+  p.loading = true; sarawatPickerPaint();
   try {
-    const r = await fetch('/api/sarawat/quotes');
+    const r = await fetch('/api/sarawat/items?limit=' + SARAWAT_PICKER_LIMIT + '&q=' + encodeURIComponent(p.query.trim()));
     const j = await r.json();
     if (!r.ok || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
-    const seen = new Set();
-    const items = [];
-    (j.data || []).forEach(doc => {   // already newest-first (updated_at DESC)
-      const rev = (doc.revisions || [])[doc.revisions.length - 1];
-      if (!rev) return;
-      (rev.items || []).forEach(it => {
-        const key = [it.sno || '', it.itemName || '', it.description || ''].join('\u0001');
-        if (seen.has(key) || !(it.itemName || it.description)) return;
-        seen.add(key);
-        items.push({ key, item: it, sourceNo: doc.no || '', sourceClient: rev.client || '', sourceDate: rev.quoteDate || '' });
-      });
-    });
-    sarawatItemPicker.items = items;
+    if (my !== p.seq) return;                       // a newer search is already on its way
+    p.results = j.data.items; p.matched = j.data.matched; p.truncated = j.data.truncated; p.error = '';
   } catch (e) {
-    sarawatItemPicker.error = 'Could not load saved quotations — is the local Vista server running? (' + (e.message || e) + ')';
+    if (my !== p.seq) return;
+    p.results = []; p.error = 'Could not load saved items — is the local Vista server running? (' + (e.message || e) + ')';
   }
-  sarawatItemPicker.loading = false;
-  renderSarawatForm();
+  p.loading = false; sarawatPickerPaint();
 }
 
 function closeSarawatItemPicker() {
-  sarawatItemPicker.open = false;
+  sarawatItemPicker.open = false; sarawatItemPicker.picked = {};
   renderSarawatForm();
 }
 
 function filterSarawatItemPicker(query) {
-  sarawatItemPicker.query = query;
-  renderSarawatForm();
+  const p = sarawatItemPicker;
+  p.query = query;
+  clearTimeout(p.timer);
+  p.timer = setTimeout(sarawatPickerSearch, 160);
+}
+
+function sarawatPickerToggle(idx) {
+  const p = sarawatItemPicker, it = p.results[idx];
+  if (!it || p.adding) return;
+  const key = it.qid + ':' + it.i;
+  if (p.picked[key]) delete p.picked[key]; else p.picked[key] = it;
+  sarawatPickerPaint();
+}
+
+function sarawatPickerRowsHtml() {
+  const p = sarawatItemPicker;
+  if (p.error) return `<div style="padding:10px;font-size:8.5px;color:#C0392B;">${escapeHtml(p.error)}</div>`;
+  if (p.loading && !p.results.length) return `<div style="padding:10px;font-size:8.5px;color:var(--mid);">Loading…</div>`;
+  if (!p.results.length) return `<div style="padding:10px;font-size:8.5px;color:var(--light);">No matching saved items.</div>`;
+  return p.results.map((it, idx) => {
+    const on = !!p.picked[it.qid + ':' + it.i];
+    const from = [it.no ? '#' + it.no : 'unnumbered', it.client, it.quoteDate].filter(Boolean).join(' · ');
+    const last = it.qty || it.unit
+      ? ` · last: ${sarawatFmtQty(it.qty)} × SAR ${sarawatMoney(it.unit)}${it.tiers > 1 ? ` (+${it.tiers - 1} more line${it.tiers === 2 ? '' : 's'})` : ''}` : '';
+    return `
+    <div class="sq-pick-row${on ? ' on' : ''}" onclick="sarawatPickerToggle(${idx})">
+      <input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="pointer-events:none;flex-shrink:0;">
+      <div class="sq-pick-th">${it.ph >= 0 ? `<img loading="lazy" alt="" src="/api/sarawat/quotes/${encodeURIComponent(it.qid)}/thumb/${it.ph}?v=${encodeURIComponent(it.v || '')}">` : ''}</div>
+      <div style="min-width:0;flex:1;">
+        <div style="font-size:9px;"><strong>${escapeHtml(it.name || '(no name)')}</strong>${it.sno ? ` <span class="sq-muted">${escapeHtml(it.sno)}</span>` : ''}</div>
+        ${it.spec ? `<div class="sq-pick-spec">${escapeHtml(it.spec)}</div>` : ''}
+        <div class="sq-pick-from">${escapeHtml(from)}${escapeHtml(last)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function sarawatPickerBodyHtml() {
+  const p = sarawatItemPicker, n = Object.keys(p.picked).length;
+  return `
+    <div class="sq-pick-list">${sarawatPickerRowsHtml()}</div>
+    <div class="sq-pick-foot">
+      <span style="font-size:7.5px;color:var(--light);">${p.truncated ? `Showing the newest ${p.results.length} of ${p.matched} — type to narrow. ` : ''}${n ? n + ' selected' : 'Tick one or more items'}</span>
+      <button class="btn-sm btn-sm-dark" ${n && !p.adding ? '' : 'disabled style="opacity:.45;cursor:default;"'} onclick="sarawatAddPickedItems()">${p.adding ? 'Adding…' : (n ? 'Add ' + n + ' item' + (n === 1 ? '' : 's') : 'Add items')}</button>
+    </div>`;
+}
+
+// Repaints only the list/footer (never the whole form), so typing in the search box keeps focus.
+function sarawatPickerPaint() {
+  const body = $('sarawatPickerBody');
+  if (!body) return;
+  const list = body.querySelector('.sq-pick-list');
+  const top = list ? list.scrollTop : 0;
+  body.innerHTML = sarawatPickerBodyHtml();
+  const again = body.querySelector('.sq-pick-list');
+  if (again) again.scrollTop = top;
+}
+
+function sarawatPickerPanelHtml() {
+  const p = sarawatItemPicker;
+  return `
+    <div id="sarawatPickerPanel" class="sq-pick">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">
+        <div class="form-label" style="margin-bottom:0;">Reuse saved items</div>
+        <button type="button" class="sq-ico" title="Close" onclick="closeSarawatItemPicker()" style="font-size:12px;">✕</button>
+      </div>
+      <input class="form-input" id="sarawat-item-search" autocomplete="off" style="margin-bottom:8px;"
+        placeholder="Search client, quotation no., item name or code, specification…"
+        value="${escapeHtml(p.query)}" oninput="filterSarawatItemPicker(this.value)">
+      <div id="sarawatPickerBody">${sarawatPickerBodyHtml()}</div>
+    </div>`;
 }
 
 // A saved item copied for use in a NEW quotation: fresh itemId/tierIds (never
@@ -6231,28 +6350,56 @@ function sarawatCopyItem(src) {
   };
 }
 
-function sarawatAddSavedItem(listIdx) {
-  if (!sarawatState || !sarawatItemPicker.items || !sarawatItemPicker.items[listIdx]) return;
-  const src = sarawatItemPicker.items[listIdx].item;
-  const copy = sarawatCopyItem(src);
-  // A blank placeholder item (fresh manual entry / new-from-saved-items) is
-  // replaced instead of leaving an empty first line in the quotation.
-  const isBlank = it => !it.sno && !it.itemName && !it.description && !it.photo &&
-    (it.tiers || []).every(t => !(parseFloat(t.supplierUnitPrice) || 0) && (t.manualUnitPrice === null || t.manualUnitPrice === undefined || t.manualUnitPrice === ''));
-  if (sarawatState.items.length === 1 && isBlank(sarawatState.items[0])) sarawatState.items = [copy];
-  else sarawatState.items.push(copy);
-  sarawatItemPicker.open = false;
-  recomputeSarawatTotals();
-  renderSarawatForm();
+// Adds every ticked item in ONE action: one request per source quotation, each asking
+// only for the picked item positions.
+async function sarawatAddPickedItems() {
+  const p = sarawatItemPicker;
+  const picks = Object.values(p.picked);
+  if (!picks.length || p.adding || !sarawatState) return;
+  p.adding = true; p.error = ''; sarawatPickerPaint();
+  try {
+    const byQ = {};
+    picks.forEach(it => { (byQ[it.qid] = byQ[it.qid] || []).push(it.i); });
+    const fetched = {};
+    await Promise.all(Object.keys(byQ).map(async qid => {
+      const r = await fetch('/api/sarawat/quotes/' + encodeURIComponent(qid) + '/items?idx=' + byQ[qid].join(','));
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+      fetched[qid] = j.data;
+    }));
+    const copies = picks.map(sel => {
+      const row = (fetched[sel.qid] || []).find(x => x.i === sel.i && String(x.item.itemName || '').trim() === sel.name);
+      if (!row) throw new Error('“' + (sel.name || 'an item') + '” has changed since it was listed — search again');
+      return sarawatCopyItem(row.item);
+    });
+    // A blank placeholder item (fresh manual entry / new-from-saved-items) is
+    // replaced instead of leaving an empty first line in the quotation.
+    const isBlank = it => !it.sno && !it.itemName && !it.description && !it.photo &&
+      (it.tiers || []).every(t => !(parseFloat(t.supplierUnitPrice) || 0) && (t.manualUnitPrice === null || t.manualUnitPrice === undefined || t.manualUnitPrice === ''));
+    if (sarawatState.items.length === 1 && isBlank(sarawatState.items[0])) sarawatState.items = copies;
+    else sarawatState.items.push(...copies);
+    p.open = false; p.picked = {}; p.adding = false;
+    recomputeSarawatTotals();
+    renderSarawatForm();
+  } catch (e) {
+    console.error('[Sarawat] add saved items failed:', e);
+    p.adding = false; p.error = 'Could not add the items: ' + (e.message || e);
+    sarawatPickerPaint();
+  }
 }
 
-// Upload-screen entry point: a NEW quotation (own number, own history) built
-// from saved items — same blank editor as manual entry, then the picker opens.
+// Start-screen entry point: a NEW quotation (own number, own history) built
+// from saved items — same blank editor as manual entry, with the picker open.
 function sarawatStartFromSavedItems() {
   sarawatStartManualEntry();
   sarawatState.fileName = '(new quotation — built from saved items)';
   sarawatState.source = 'saved_items';
   sarawatOpenItemPicker();
+}
+
+// Remembers whether an item's "More options" is open across the editor's re-renders.
+function sarawatMoreToggle(i, open) {
+  if (sarawatState && sarawatState.items[i]) sarawatState.items[i]._moreOpen = !!open;
 }
 
 function toggleSarawatRawText() {
@@ -6278,8 +6425,9 @@ function renderSarawatForm() {
   const activeSelEnd   = (activeId && typeof activeEl.selectionEnd === 'number') ? activeEl.selectionEnd : null;
   const savedScrollY = window.scrollY;
 
-  // One grouped card per product: S.No/name/description shown once, then a
-  // compact table with every quantity tier as its own visible, editable row.
+  // One card per product. Always visible: item name, specification, photo, and every
+  // quantity line with its unit price and total. Everything less frequent (item code,
+  // photo size / extra photos, the supplier's own prices) sits under "More options".
   const itemCards = s.items.map((it, i) => {
     const tierRows = it.tiers.map((t, j) => {
       // Qty / Vista Unit Price: oninput only updates state + the computed cells in
@@ -6295,8 +6443,6 @@ function renderSarawatForm() {
             ? `<div class="sarawat-qty-review" style="font-size:6.5px;color:#B8860B;margin-top:2px;white-space:nowrap;">⚠ verify${it.qtyDisplay ? ' — as printed: ' + escapeHtml(it.qtyDisplay) : ''}</div>`
             : ''}
         </td>
-        <td style="text-align:right;font-size:9px;color:var(--mid);" title="Supplier's original unit price — read-only">${sarawatMoney(t.supplierUnitPrice)}${(s.sourceCurrency && s.sourceCurrency.code === 'USD' && t.sourceUnitPrice != null && t.sourceUnitPrice !== '')
-            ? `<div style="font-size:6.5px;color:var(--light);white-space:nowrap;">USD ${sarawatMoney(t.sourceUnitPrice)}</div>` : ''}</td>
         <td>
           <input class="dn-qty" type="number" id="sarawat-tier-${i}-${j}-manualprice" min="0" step="any"
             value="${sarawatPriceDisplay(t)}" title="Effective Vista unit price — edit to override the calculated markup price"
@@ -6304,50 +6450,76 @@ function renderSarawatForm() {
           <div id="sarawat-tier-${i}-${j}-pricenote">${sarawatPriceNoteHtml(i, j, t)}</div>
         </td>
         <td id="sarawat-tier-${i}-${j}-total" style="text-align:right;font-size:9px;color:var(--dark);">${sarawatMoney(t.total)}</td>
-        <td><button class="btn-sm btn-sm-outline" style="padding:4px 9px;" onclick="removeSarawatTier(${i},${j})">✕</button></td>
+        <td><button class="sq-ico" style="width:22px;height:22px;" title="Remove this quantity line" onclick="removeSarawatTier(${i},${j})">✕</button></td>
       </tr>`;
-    }).join('') || `<tr><td colspan="5" style="padding:10px 0;font-size:8.5px;color:var(--light);">No quantity lines — add one below.</td></tr>`;
+    }).join('') || `<tr><td colspan="4" style="padding:10px 0;font-size:8.5px;color:var(--light);">No quantity lines — add one below.</td></tr>`;
+
+    const supplierLines = (it.tiers || []).map(t => `
+      <div style="font-size:8px;color:var(--mid);">Qty ${sarawatFmtQty(t.qty)} — supplier price SAR ${sarawatMoney(t.supplierUnitPrice)}${(s.sourceCurrency && s.sourceCurrency.code === 'USD' && t.sourceUnitPrice != null && t.sourceUnitPrice !== '')
+        ? ` <span style="color:var(--light);">(USD ${sarawatMoney(t.sourceUnitPrice)})</span>` : ''}</div>`).join('');
 
     return `
     <div class="sarawat-item-card">
       <div class="sarawat-item-card-head">
-        <input class="form-input sarawat-item-sno" id="sarawat-item-${i}-sno" value="${escapeHtml(it.sno || '')}" placeholder="S.No" title="Item code / source reference"
-          oninput="updateSarawatItemField(${i},'sno',this.value)">
         <input class="form-input sarawat-item-name" id="sarawat-item-${i}-name" value="${escapeHtml(it.itemName || '')}" placeholder="Item name"
           ${it._itemReview && it._raw ? `title="Parser guess — raw source text: ${escapeHtml(it._raw)}"` : ''}
           oninput="updateSarawatItemField(${i},'itemName',this.value)">
-        <button class="btn-sm btn-sm-outline" onclick="removeSarawatItemGroup(${i})">✕ Remove Item</button>
+        <button class="sq-ico" title="Remove this item" onclick="removeSarawatItemGroup(${i})">✕</button>
       </div>
       ${it._itemReview
-        ? `<div style="font-size:6.5px;color:#B8860B;margin:-6px 0 8px;">⚠ verify — ${it._reviewNote ? escapeHtml(it._reviewNote) : it._ocrLowConfidence ? 'low-confidence OCR reading, please double-check Qty/Price' : 'Item/Description split was a best-effort guess'}${it._raw ? '. As parsed: “' + escapeHtml(it._raw) + '”' : ''}</div>`
+        ? `<div style="font-size:6.5px;color:#B8860B;margin:-4px 0 8px;">⚠ verify — ${it._reviewNote ? escapeHtml(it._reviewNote) : it._ocrLowConfidence ? 'low-confidence OCR reading, please double-check Qty/Price' : 'Item/Description split was a best-effort guess'}${it._raw ? '. As parsed: “' + escapeHtml(it._raw) + '”' : ''}</div>`
         : ''}
-      <div class="sarawat-item-photo-row">
-        <div class="sarawat-item-photo-thumb">${it.photo ? `<img src="${it.photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
-        ${it.photo ? `<select class="purch-tag-sel" title="Photo Size" onchange="setSarawatItemPhotoSize(${i}, this.value)">${Object.keys(QUO_PHOTO_SIZES).map(k => `<option value="${k}"${(it.photoSize || QUO_PHOTO_SIZE_DEFAULT) === k ? ' selected' : ''}>${QUO_PHOTO_SIZES[k].label}</option>`).join('')}</select>` : ''}
-        <label class="btn-sm btn-sm-outline quo-photo-btn">${it.photo ? 'Replace Photo' : 'Add Photo'}
-          <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onSarawatItemPhotoSelected(${i}, this)">
-        </label>
-        ${it.photo ? `<button class="btn-sm btn-sm-outline" onclick="removeSarawatItemPhoto(${i})">Remove Photo</button>` : ''}
-        ${(it.extraPhotos || []).map((src, k) => `
-          <div class="sarawat-item-photo-thumb" style="position:relative;" title="Additional photo ${k + 2}">
-            <img src="${src}" alt="">
-            <button type="button" title="Remove this photo" onclick="removeSarawatExtraPhoto(${i},${k})"
-              style="position:absolute;top:-6px;right:-6px;width:16px;height:16px;padding:0;border-radius:50%;border:1px solid var(--rule);background:var(--white);font-size:9px;line-height:14px;cursor:pointer;">✕</button>
-          </div>`).join('')}
-        ${it.photo ? `<label class="btn-sm btn-sm-outline quo-photo-btn">Add Another Photo
-          <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onSarawatExtraPhotoSelected(${i}, this)">
-        </label>` : ''}
+      <div class="sarawat-item-main">
+        <div class="sarawat-item-photo-col">
+          <div class="sarawat-item-photo-thumb">${it.photo ? `<img src="${it.photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
+          <label class="sq-link quo-photo-btn" style="cursor:pointer;">${it.photo ? 'Replace photo' : 'Add photo'}
+            <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onSarawatItemPhotoSelected(${i}, this)">
+          </label>
+        </div>
+        <textarea class="sarawat-item-desc" id="sarawat-item-${i}-desc" placeholder="Specification / description"
+          rows="${Math.min(24, Math.max(3, String(it.description || '').split('\n').length))}"
+          oninput="updateSarawatItemField(${i},'description',this.value)">${escapeHtml(it.description || '')}</textarea>
       </div>
-      <textarea class="sarawat-item-desc" id="sarawat-item-${i}-desc" placeholder="Full description / specifications"
-        rows="${Math.min(24, Math.max(2, String(it.description || '').split('\n').length))}"
-        oninput="updateSarawatItemField(${i},'description',this.value)">${escapeHtml(it.description || '')}</textarea>
       <table class="dn-items-table sarawat-tier-table">
-        <thead><tr><th>Qty</th><th>Supplier Price</th><th>Vista Unit Price</th><th>Total (ex-VAT)</th><th></th></tr></thead>
+        <thead><tr><th>Qty</th><th>Unit Price</th><th>Total (ex-VAT)</th><th></th></tr></thead>
         <tbody>${tierRows}</tbody>
       </table>
-      <button class="btn-sm btn-sm-outline" style="margin-top:8px;" onclick="addSarawatTier(${i})">+ Add Quantity Line</button>
+      <button class="sq-link" style="margin-top:6px;" onclick="addSarawatTier(${i})">+ Add quantity line</button>
+      <details class="sarawat-more" ${it._moreOpen ? 'open' : ''} ontoggle="sarawatMoreToggle(${i}, this.open)">
+        <summary>More options</summary>
+        <div class="sarawat-more-body">
+          <div class="sarawat-more-row">
+            <span class="form-label" style="margin:0;min-width:96px;">Item code / S.No</span>
+            <input class="form-input sarawat-item-sno" id="sarawat-item-${i}-sno" value="${escapeHtml(it.sno || '')}" placeholder="S.No" title="Item code / source reference"
+              oninput="updateSarawatItemField(${i},'sno',this.value)">
+          </div>
+          ${it.photo ? `
+          <div class="sarawat-more-row" style="flex-wrap:wrap;">
+            <span class="form-label" style="margin:0;min-width:96px;">Photo</span>
+            <select class="purch-tag-sel" title="Photo Size" onchange="setSarawatItemPhotoSize(${i}, this.value)">${Object.keys(QUO_PHOTO_SIZES).map(k => `<option value="${k}"${(it.photoSize || QUO_PHOTO_SIZE_DEFAULT) === k ? ' selected' : ''}>${QUO_PHOTO_SIZES[k].label}</option>`).join('')}</select>
+            <button class="sq-link" onclick="removeSarawatItemPhoto(${i})">Remove photo</button>
+            <label class="sq-link" style="cursor:pointer;">Add another photo
+              <input type="file" accept="${QUO_PHOTO_ACCEPT}" style="display:none;" onchange="onSarawatExtraPhotoSelected(${i}, this)">
+            </label>
+          </div>` : ''}
+          ${(it.extraPhotos || []).length ? `
+          <div class="sarawat-more-row" style="flex-wrap:wrap;">
+            <span class="form-label" style="margin:0;min-width:96px;">More photos</span>
+            ${(it.extraPhotos || []).map((src, k) => `
+            <div class="sarawat-item-photo-thumb" style="position:relative;" title="Additional photo ${k + 2}">
+              <img src="${src}" alt="">
+              <button type="button" title="Remove this photo" onclick="removeSarawatExtraPhoto(${i},${k})"
+                style="position:absolute;top:-6px;right:-6px;width:16px;height:16px;padding:0;border-radius:50%;border:1px solid var(--rule);background:var(--white);font-size:9px;line-height:14px;cursor:pointer;">✕</button>
+            </div>`).join('')}
+          </div>` : ''}
+          <div class="sarawat-more-row" style="align-items:flex-start;">
+            <span class="form-label" style="margin:0;min-width:96px;">Supplier price</span>
+            <div>${supplierLines || '<span style="font-size:8px;color:var(--light);">—</span>'}</div>
+          </div>
+        </div>
+      </details>
     </div>`;
-  }).join('') || `<div style="padding:14px 0;font-size:8.5px;color:var(--light);">No items extracted — add one manually below.</div>`;
+  }).join('') || `<div style="padding:14px 0;font-size:8.5px;color:var(--light);">No items yet — add one below.</div>`;
 
   $('mainArea').innerHTML = buildTabsHTML() + `
     <div class="purch-upload-panel">
@@ -6489,45 +6661,10 @@ function renderSarawatForm() {
           </span>
         </div>
 
+        ${sarawatItemPicker.open ? sarawatPickerPanelHtml() : ''}
         ${itemCards}
         <button class="btn-sm btn-sm-outline" style="margin-top:4px;" onclick="addSarawatItem()">+ Add Item</button>
-        <button class="btn-sm btn-sm-outline" style="margin-top:4px;" onclick="sarawatOpenItemPicker()">+ Add Item from Saved Quotations</button>
-        ${sarawatItemPicker.open ? `
-        <div style="margin-top:10px;padding:12px;background:var(--cream);border:1px solid var(--rule);">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">
-            <div class="form-label" style="margin-bottom:0;">Reuse an Item from a Saved Quotation</div>
-            <button type="button" class="btn-sm btn-sm-outline" onclick="closeSarawatItemPicker()">✕ Close</button>
-          </div>
-          ${sarawatItemPicker.loading
-            ? `<div style="font-size:8.5px;color:var(--mid);">Loading saved quotations…</div>`
-            : sarawatItemPicker.error
-              ? `<div style="font-size:8.5px;color:#C0392B;">${escapeHtml(sarawatItemPicker.error)}</div>`
-              : `
-                <input class="form-input" id="sarawat-item-search" placeholder="Search by item code, name or specification…"
-                  value="${escapeHtml(sarawatItemPicker.query)}" oninput="filterSarawatItemPicker(this.value)" style="margin-bottom:8px;">
-                <div style="max-height:260px;overflow-y:auto;border:1px solid var(--rule);background:var(--white);">
-                  ${(() => {
-                    const q = sarawatItemPicker.query.trim().toLowerCase();
-                    const rows = (sarawatItemPicker.items || []).map((e, idx) => ({ e, idx }))
-                      .filter(({ e }) => !q || [e.item.sno, e.item.itemName, e.item.description].join(' ').toLowerCase().includes(q));
-                    if (!rows.length) return `<div style="padding:10px;font-size:8.5px;color:var(--light);">No matching saved items.</div>`;
-                    return rows.map(({ e, idx }) => {
-                      const t0 = (e.item.tiers || [])[0];
-                      const firstLine = String(e.item.description || '').split('\n').find(l => l.trim()) || '';
-                      return `
-                      <div onclick="sarawatAddSavedItem(${idx})"
-                        style="padding:7px 10px;font-size:8.5px;cursor:pointer;border-bottom:1px solid var(--rule);"
-                        onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background=''">
-                        <div style="font-weight:500;color:var(--dark);">${escapeHtml((e.item.sno ? e.item.sno + ' — ' : '') + (e.item.itemName || '(no name)'))}</div>
-                        <div style="color:var(--light);margin-top:2px;">${escapeHtml(firstLine.slice(0, 90))}${String(e.item.description || '').split('\n').length > 1 ? ' …' : ''}</div>
-                        <div style="color:var(--light);margin-top:2px;">From ${escapeHtml(e.sourceNo || 'unnumbered quotation')}${e.sourceClient ? ' · ' + escapeHtml(e.sourceClient) : ''}${e.sourceDate ? ' · ' + escapeHtml(e.sourceDate) : ''}${t0 ? ' · last: ' + (parseFloat(t0.qty) || 0) + ' × SAR ' + sarawatMoney((parseFloat(t0.unitPrice) || 0)) : ''}</div>
-                      </div>`;
-                    }).join('');
-                  })()}
-                </div>
-                <div style="font-size:6.5px;color:var(--light);margin-top:6px;">Adds a copy with its full specification; quantity and unit price start at the last saved values and stay editable. The saved quotation it comes from is not changed.</div>`
-          }
-        </div>` : ''}
+        <button class="btn-sm btn-sm-outline" style="margin-top:4px;" onclick="sarawatOpenItemPicker()">+ Add from Saved Items</button>
       </div>
 
       ${s.supplierNotes ? `
@@ -6858,6 +6995,7 @@ async function sarawatSaveQuotation() {
         // Approved Quotation" from a normally parsed upload.
         source: ['manual_existing', 'saved_items', 'duplicate'].includes(sarawatState.source) ? sarawatState.source : 'upload',
         ...(['pdf', 'excel', 'image'].includes(sarawatState.importKind) && !sarawatState.source ? { importKind: sarawatState.importKind } : {}),
+        quotationStatus: 'draft',
         createdAt: Date.now(), updatedAt: Date.now(), currentRevision: 0, revisions: [], deliveries: [] }
     : sarawatSaved;
   const nextRev = isNew ? 0 : (doc.revisions[doc.revisions.length - 1].rev + 1);
@@ -7026,7 +7164,8 @@ function sqQueryString() {
   const b = sarawatBrowse, p = new URLSearchParams();
   if (b.q.trim()) p.set('q', b.q.trim());
   if (b.source) p.set('source', b.source);
-  if (b.status) p.set('status', b.status);
+  if (b.status.startsWith('q:')) p.set('qstatus', b.status.slice(2));
+  else if (b.status.startsWith('d:')) p.set('status', b.status.slice(2));
   if (b.client) p.set('client', b.client);
   if (b.from) p.set('from', b.from);
   if (b.to) p.set('to', b.to);
@@ -7119,8 +7258,12 @@ function sqRenderBar() {
   if (d) {
     const f = d.facets;
     set('sqClient', opt('', 'Client: all', b.client) + f.clients.map(c => opt(c, c.length > 34 ? c.slice(0, 34) + '…' : c, b.client)).join(''));
-    const stL = { quoted: 'Quoted', partial: 'Partly delivered', delivered: 'Delivered' };
-    set('sqStatus', opt('', 'Status: all', b.status) + Object.keys(stL).filter(k => f.statuses[k] || b.status === k).map(k => opt(k, `${stL[k]} (${f.statuses[k] || 0})`, b.status)).join(''));
+    const stL = { quoted: 'Not delivered yet', partial: 'Partly delivered', delivered: 'Delivered' };
+    const qsL = { draft: 'Draft', sent: 'Sent', approved: 'Approved', cancelled: 'Cancelled' };
+    const fq = f.qstatuses || {};
+    set('sqStatus', opt('', 'Status: all', b.status)
+      + '<optgroup label="Quotation">' + Object.keys(qsL).map(k => opt('q:' + k, `${qsL[k]} (${fq[k] || 0})`, b.status)).join('') + '</optgroup>'
+      + '<optgroup label="Delivery">' + Object.keys(stL).map(k => opt('d:' + k, `${stL[k]} (${f.statuses[k] || 0})`, b.status)).join('') + '</optgroup>');
     const soL = { manual: 'Manual', pdf: 'PDF Import', excel: 'Excel Import', image: 'Image Import', saved_items: 'Saved Items', duplicate: 'Duplicate' };
     set('sqSource', opt('', 'Source: all', b.source) + Object.keys(soL).filter(k => f.sources[k] || b.source === k).map(k => opt(k, `${soL[k]} (${f.sources[k] || 0})`, b.source)).join(''));
     const c = $('sqCount'); if (c) c.textContent = sqFiltersActive() ? `· ${d.total} of ${f.all}` : `· ${f.all}`;
@@ -7155,7 +7298,8 @@ function sqCardHtml(it) {
         <span>${sqDateLabel(it)}</span>
         <span class="dot">${it.itemCount} item${it.itemCount === 1 ? '' : 's'}</span>
         <span class="dot">Rev ${it.rev}</span>
-        <span class="sq-badge st-${escapeHtml(it.status)}">${escapeHtml(it.statusLabel)}</span>
+        ${it.qstatus ? `<span class="sq-badge qs-${escapeHtml(it.qstatus)}">${escapeHtml(it.qstatusLabel)}</span>` : ''}
+        ${it.status !== 'quoted' ? `<span class="sq-badge st-${escapeHtml(it.status)}">${escapeHtml(it.statusLabel)}</span>` : ''}
         <span class="sq-badge">${escapeHtml(it.sourceLabel)}</span>
       </div>
       <div class="sq-prev">${prev}</div>
@@ -7171,6 +7315,7 @@ function sqCardHtml(it) {
         <button class="sq-ico" title="More actions" onclick="sqToggleMenu('${id}')">${SQ_ICON.more}</button>
         ${b.menuId === it.id ? `
         <div class="sq-menu">
+          <button onclick="sqEditDetails('${id}')">${SQ_ICON.edit} Edit client &amp; number…</button>
           <button onclick="sqDuplicate('${id}')">${SQ_ICON.copy} Duplicate as New Quotation</button>
           <button onclick="sqShowHistory('${id}')">${SQ_ICON.hist} Revisions / History${it.revCount > 1 ? ' (' + it.revCount + ')' : ''}</button>
           <button onclick="sqCloseMenu();sarawatShowDeliverScreen('${id}', ${it.rev})">${SQ_ICON.truck} Deliveries</button>
@@ -7286,10 +7431,24 @@ function sqRenderPreview() {
           <span><strong>${doc.no ? '#' + escapeHtml(doc.no) : 'no number'}</strong></span>
           <span class="dot">${rev.quoteDate ? escapeHtml(rev.quoteDate) : '—'}</span>
           <span class="dot">Rev ${rev.rev}${isLatest ? '' : ' (older)'}</span>
-          ${sum ? `<span class="sq-badge st-${escapeHtml(sum.status)}">${escapeHtml(sum.statusLabel)}</span><span class="sq-badge">${escapeHtml(sum.sourceLabel)}</span>` : ''}
+          ${sum ? `<span class="sq-badge">${escapeHtml(sum.sourceLabel)}</span>` : ''}
         </div>
+        <div class="sq-pv-status">
+          <label>Quotation status
+            <select class="sq-select" onchange="sqSetQStatus('${id}', this.value)">
+              ${doc.quotationStatus ? '' : '<option value="" selected disabled>Not set</option>'}
+              ${[['draft', 'Draft'], ['sent', 'Sent'], ['approved', 'Approved'], ['cancelled', 'Cancelled']].map(([v, l]) => `<option value="${v}"${doc.quotationStatus === v ? ' selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </label>
+          <span>Delivery: ${sum ? `<span class="sq-badge st-${escapeHtml(sum.status)}">${escapeHtml(sum.status === 'quoted' ? 'None yet' : sum.statusLabel)}</span>` : '—'}</span>
+        </div>
+        ${(doc.corrections || []).length ? `<div class="sq-pv-corr">${doc.corrections.slice(-3).reverse().map(c =>
+          `Corrected ${c.field === 'client' ? 'client' : 'number'}: “${escapeHtml(c.from || '—')}” → “${escapeHtml(c.to || '—')}” · ${escapeHtml(new Date(c.at).toLocaleDateString())}`).join('<br>')}</div>` : ''}
       </div>
-      <button class="sq-ico" title="Close preview" onclick="sqClosePreview()" style="font-size:12px;">✕</button>
+      <div style="display:flex;gap:4px;">
+        <button class="sq-ico" title="Edit client &amp; number" onclick="sqEditDetails('${id}')">${SQ_ICON.edit}</button>
+        <button class="sq-ico" title="Close preview" onclick="sqClosePreview()" style="font-size:12px;">✕</button>
+      </div>
     </div>
     <div style="margin-top:10px;display:flex;justify-content:flex-end;gap:16px;font-size:8px;color:var(--mid);">
       <span>Subtotal SAR ${sarawatMoney(rev.subtotal)}</span><span>VAT ${escapeHtml(String(rev.vatRate ?? ''))}% SAR ${sarawatMoney(rev.vatAmount)}</span>
@@ -7393,6 +7552,102 @@ function sqNewFromSelected() {
   sarawatState.items = idx.map(i => sarawatCopyItem(rev.items[i]));
   recomputeSarawatTotals();
   renderSarawatForm();
+}
+
+// ── Quick correction of client name / quotation number ──
+// Header-only, audited, no editor: POST /api/sarawat/quotes/<id>/meta. The quotation number is a
+// series-level field no revision contains; the client name is corrected on the LATEST revision
+// only (older revisions keep what they were saved with). Each change appends the old and new
+// value to the document's append-only corrections[] log, so nothing is overwritten silently.
+// Items, prices, totals, photos, revision numbers and delivery records are not touched.
+async function sqEditDetails(id) {
+  sqCloseMenu();
+  let doc;
+  try {
+    const r = await fetch('/api/sarawat/quotes/' + encodeURIComponent(id));
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+    doc = j.data;
+  } catch (e) { alert('Could not load that quotation: ' + (e.message || e)); return; }
+  const latest = doc.revisions[doc.revisions.length - 1] || {};
+  const hasDeliveries = (doc.deliveries || []).some(d => (d.events || []).length);
+  sqCloseModal();
+  sqEdOrig = { id: id, client: latest.client || doc.client || '', no: doc.no || '' };
+  const m = document.createElement('div');
+  m.id = 'sqModal'; m.className = 'sq-modal';
+  m.setAttribute('onclick', 'if(event.target===this)sqCloseModal()');
+  m.innerHTML = `
+    <div class="sq-modal-box">
+      <div class="sec-title" style="margin-bottom:0;">Edit client &amp; number</div>
+      <label for="sqEdClient">Client name</label>
+      <input class="form-input" id="sqEdClient" value="${escapeHtml(latest.client || doc.client || '')}" autocomplete="off">
+      <label for="sqEdNo">Quotation number</label>
+      <input class="form-input" id="sqEdNo" value="${escapeHtml(doc.no || '')}" autocomplete="off">
+      <div class="sq-modal-note">Corrects the header only — items, prices, totals and earlier revisions are not changed, and the previous value is kept in the quotation's correction log.${hasDeliveries ? ' Delivery notes already issued keep their own numbers.' : ''}</div>
+      <div id="sqEdErr" style="font-size:8px;color:#C0392B;margin-top:8px;"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+        <button class="btn-sm btn-sm-outline" onclick="sqCloseModal()">Cancel</button>
+        <button class="btn-sm btn-sm-dark" id="sqEdSave" onclick="sqSaveDetails()">Save</button>
+      </div>
+    </div>`;
+  m.addEventListener('keydown', e => {
+    if (e.key === 'Escape') sqCloseModal();
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') { const b = $('sqEdSave'); if (b) b.click(); }
+  });
+  document.body.appendChild(m);
+  const c = $('sqEdClient'); if (c) { c.focus(); c.select(); }
+}
+
+function sqCloseModal() { const m = $('sqModal'); if (m) m.remove(); }
+
+let sqEdOrig = null;
+async function sqSaveDetails() {
+  if (!sqEdOrig) return;
+  const id = sqEdOrig.id, oldClient = sqEdOrig.client, oldNo = sqEdOrig.no;
+  const client = ($('sqEdClient').value || '').trim().replace(/\s+/g, ' ');
+  const no = ($('sqEdNo').value || '').trim().replace(/\s+/g, ' ');
+  const body = {};
+  if (client !== oldClient) body.client = client;
+  if (no !== oldNo) body.no = no;
+  if (!Object.keys(body).length) { sqCloseModal(); return; }
+  const err = $('sqEdErr'); if (err) err.textContent = '';
+  try {
+    if (body.no) {   // warn (don't block) when another quotation already uses this number
+      const r0 = await fetch('/api/sarawat/summary?q=' + encodeURIComponent(body.no));
+      const j0 = await r0.json();
+      const dup = r0.ok && j0.ok && j0.data.items.some(x => x.id !== id && String(x.no).trim().toLowerCase() === body.no.toLowerCase());
+      if (dup && !confirm('Another saved quotation already has the number "' + body.no + '". Use it anyway?')) return;
+    }
+    await sqPostMeta(id, body);
+  } catch (e) { if (err) err.textContent = 'Could not save: ' + (e.message || e); return; }
+  sqCloseModal();
+  await sqAfterMetaChange(id);
+}
+
+async function sqPostMeta(id, body) {
+  const r = await fetch('/api/sarawat/quotes/' + encodeURIComponent(id) + '/meta', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+  return j.data;
+}
+
+// Refresh the list (the cached document is dropped because its updatedAt changed) and the open preview.
+async function sqAfterMetaChange(id) {
+  delete sarawatBrowse.docs[id];
+  await sqLoad();
+  if (sarawatBrowse.selectedId === id) {
+    try { await sqFetchDoc(id); sqRenderPreview(); } catch (e) { /* preview refreshes on next click */ }
+  }
+}
+
+// ── Manual quotation status (Draft / Sent / Approved / Cancelled) ──
+// Stored as doc.quotationStatus (+ append-only statusLog[]); independent of the delivery status.
+async function sqSetQStatus(id, value) {
+  try { await sqPostMeta(id, { quotationStatus: value }); }
+  catch (e) { alert('Could not change the status: ' + (e.message || e)); return; }
+  await sqAfterMetaChange(id);
 }
 
 // ── Delete (confirmed) ──

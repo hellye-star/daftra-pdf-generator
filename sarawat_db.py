@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS quotation_index (
   source        TEXT,              -- manual | pdf | excel | image | saved_items | duplicate
   photo_count   INTEGER,
   preview_json  TEXT,              -- first item names of the latest revision
-  search_text   TEXT               -- normalised searchable text of the latest revision
+  search_text   TEXT,              -- normalised searchable text of the latest revision
+  qstatus       TEXT,              -- manual quotation status (draft|sent|approved|cancelled|'' = not set)
+  items_json    TEXT               -- lightweight per-item summaries of the latest revision (item picker)
 );
 CREATE INDEX IF NOT EXISTS idx_qi_sort_date ON quotation_index(sort_date);
 CREATE INDEX IF NOT EXISTS idx_qi_updated   ON quotation_index(updated_at);
@@ -91,12 +93,15 @@ CREATE INDEX IF NOT EXISTS idx_qi_status    ON quotation_index(status);
 
 # Bump when the derivation logic below changes — every index row built with an
 # older version is rebuilt (from data_json) on the next start.
-INDEX_VER = 1
+INDEX_VER = 2
 PREVIEW_ITEMS = 4
 
 SOURCE_LABELS = {'manual': 'Manual', 'pdf': 'PDF Import', 'excel': 'Excel Import',
                  'image': 'Image Import', 'saved_items': 'Saved Items', 'duplicate': 'Duplicate'}
 STATUS_LABELS = {'quoted': 'Quoted', 'partial': 'Partly delivered', 'delivered': 'Delivered'}
+# Manual quotation status (Phase 3) — independent of the delivery-derived status above.
+# Stored on the quotation document as `quotationStatus`; absent = not set (older quotations).
+QSTATUS_LABELS = {'draft': 'Draft', 'sent': 'Sent', 'approved': 'Approved', 'cancelled': 'Cancelled'}
 
 
 def _conn():
@@ -110,10 +115,20 @@ def init_db():
     c = _conn()
     try:
         c.executescript(_SCHEMA)
+        _ensure_index_columns(c)
         c.commit()
         rebuild_index(c, only_stale=True)
     finally:
         c.close()
+
+
+def _ensure_index_columns(c):
+    """Backward-compatible migration: an index table created by Phase 2 lacks the Phase 3
+    columns. They are added (nullable) in place; the INDEX_VER bump then rebuilds every row."""
+    have = {r[1] for r in c.execute("PRAGMA table_info(quotation_index)")}
+    for col in ('qstatus', 'items_json'):
+        if col not in have:
+            c.execute('ALTER TABLE quotation_index ADD COLUMN ' + col + ' TEXT')
 
 
 def db_path():
@@ -197,6 +212,62 @@ def upsert_quotation(doc: dict):
         c.commit()
     finally:
         c.close()
+
+
+def update_meta(quotation_id, changes):
+    """Header-level corrections and the manual status, applied atomically on the server so a
+    quick edit never re-uploads (or races with) a whole document.
+
+    changes may hold: client, no, quotationStatus.
+      * quotationStatus / no are series-level fields — no revision snapshot contains them.
+      * client lives in each revision snapshot; only the LATEST revision (the current one)
+        is corrected, older revisions are never touched.
+    Nothing is overwritten silently: every change appends {at, field, from, to[, rev]} to the
+    document's append-only `corrections[]` (client / number) or `statusLog[]` (status).
+    Items, prices, totals, photos, revision numbers and deliveries are untouched.
+    Returns the updated document, or None if the quotation does not exist."""
+    doc = get_quotation(quotation_id)
+    if doc is None:
+        return None
+    now = int(datetime.datetime.utcnow().timestamp() * 1000)
+    revs = doc.get('revisions') or []
+    latest = revs[-1] if revs else None
+    changed = False
+
+    def clean(v, label):
+        v = ' '.join(str(v).split())
+        if len(v) > 200:
+            raise ValueError(label + ' is too long (max 200 characters)')
+        return v
+
+    if 'client' in changes and latest is not None:
+        new = clean(changes['client'], 'client')
+        old = str(latest.get('client') or doc.get('client') or '')
+        if new != old:
+            doc.setdefault('corrections', []).append({'at': now, 'field': 'client', 'from': old, 'to': new, 'rev': latest.get('rev')})
+            latest['client'] = new
+            doc['client'] = new
+            changed = True
+    if 'no' in changes:
+        new = clean(changes['no'], 'quotation number')
+        old = str(doc.get('no') or '')
+        if new != old:
+            doc.setdefault('corrections', []).append({'at': now, 'field': 'quotationNo', 'from': old, 'to': new})
+            doc['no'] = new
+            changed = True
+    if 'quotationStatus' in changes:
+        new = changes['quotationStatus']
+        if new not in QSTATUS_LABELS:
+            raise ValueError('quotationStatus must be one of: ' + ', '.join(QSTATUS_LABELS))
+        old = doc.get('quotationStatus') or ''
+        if new != old:
+            doc.setdefault('statusLog', []).append({'at': now, 'from': old, 'to': new})
+            doc['quotationStatus'] = new
+            changed = True
+    if changed:
+        doc['updatedAt'] = now
+        upsert_quotation(doc)
+    return doc
 
 
 def delete_quotation(quotation_id):
@@ -321,6 +392,39 @@ def iter_photos(rev):
     return out
 
 
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _item_summaries(rev):
+    """Small per-item records of a revision for the saved-item picker: no photos, only the
+    position of the main photo in iter_photos() order (-1 = none) so a thumbnail can be
+    requested for it. `q` is the normalised searchable text of the item."""
+    out, pos = [], 0
+    for i, it in enumerate(rev.get('items') or []):
+        ph = -1
+        if it.get('photo'):
+            ph = pos
+            pos += 1
+        pos += sum(1 for x in (it.get('extraPhotos') or []) if x)
+        name = str(it.get('itemName') or '').strip()
+        desc = str(it.get('description') or '')
+        if not (name or desc.strip()):
+            continue
+        tiers = it.get('tiers') or []
+        t0 = tiers[0] if tiers else {}
+        out.append({
+            'i': i, 'sno': str(it.get('sno') or ''), 'name': name,
+            'spec': _WS.sub(' ', desc).strip()[:220],
+            'qty': _num(t0.get('qty')), 'unit': _num(t0.get('unitPrice')), 'tiers': len(tiers), 'ph': ph,
+            'q': norm_text(' '.join([str(it.get('sno') or ''), name, desc])),
+        })
+    return out
+
+
 def _index_values(doc, created_at, updated_at):
     revs = doc.get('revisions') or []
     rev = revs[-1] if revs else {}
@@ -332,7 +436,8 @@ def _index_values(doc, created_at, updated_at):
     source = _derive_source(doc, revs)
     status = _derive_status(doc, rev.get('rev'))
     iso = parse_quote_date(rev.get('quoteDate'))
-    parts += [iso, SOURCE_LABELS.get(source), STATUS_LABELS.get(status)]
+    qstatus = doc.get('quotationStatus') if doc.get('quotationStatus') in QSTATUS_LABELS else ''
+    parts += [iso, SOURCE_LABELS.get(source), STATUS_LABELS.get(status), QSTATUS_LABELS.get(qstatus)]
     sort_date = iso or (created_at or updated_at or '')[:10]
     try:
         total = float(rev.get('grandTotal') or 0)
@@ -348,12 +453,14 @@ def _index_values(doc, created_at, updated_at):
         'status': status, 'source': source, 'photo_count': len(iter_photos(rev)),
         'preview_json': json.dumps(names[:PREVIEW_ITEMS], ensure_ascii=False),
         'search_text': norm_text(' \n '.join(str(p) for p in parts if p)),
+        'qstatus': qstatus,
+        'items_json': json.dumps(_item_summaries(rev), ensure_ascii=False),
     }
 
 
 _INDEX_COLS = ['id', 'idx_ver', 'src_updated', 'no', 'client', 'quote_date', 'sort_date', 'created_at',
                'updated_at', 'grand_total', 'item_count', 'rev', 'rev_count', 'status', 'source',
-               'photo_count', 'preview_json', 'search_text']
+               'photo_count', 'preview_json', 'search_text', 'qstatus', 'items_json']
 
 
 def _write_index_row(c, doc, created_at, updated_at):
@@ -397,7 +504,7 @@ def rebuild_index(c=None, only_stale=False):
 
 
 def search_quotations(q='', source='', status='', client='', date_from='', date_to='',
-                      recent_days=0, sort='newest', limit=200, offset=0):
+                      recent_days=0, sort='newest', limit=200, offset=0, qstatus=''):
     """Filtered/sorted lightweight summaries straight from quotation_index —
     never touches data_json. Every search word must match (in any field)."""
     where, args = [], []
@@ -412,6 +519,8 @@ def search_quotations(q='', source='', status='', client='', date_from='', date_
         where.append('status = ?'); args.append(status)
     if client:
         where.append('client = ?'); args.append(client)
+    if qstatus:
+        where.append('qstatus = ?'); args.append(qstatus)
     if date_from:
         where.append('sort_date >= ?'); args.append(date_from)
     if date_to:
@@ -432,7 +541,7 @@ def search_quotations(q='', source='', status='', client='', date_from='', date_
     try:
         total = c.execute('SELECT COUNT(*) FROM quotation_index' + sql_where, args).fetchone()[0]
         rows = c.execute('SELECT id,no,client,quote_date,sort_date,created_at,updated_at,grand_total,item_count,'
-                         'rev,rev_count,status,source,photo_count,preview_json FROM quotation_index' +
+                         'rev,rev_count,status,source,photo_count,preview_json,qstatus FROM quotation_index' +
                          sql_where + ' ORDER BY ' + order + ' LIMIT ? OFFSET ?',
                          args + [max(1, min(int(limit), 500)), max(0, int(offset))]).fetchall()
         items = []
@@ -444,6 +553,7 @@ def search_quotations(q='', source='', status='', client='', date_from='', date_
                 'grandTotal': r['grand_total'], 'itemCount': r['item_count'], 'rev': r['rev'],
                 'revCount': r['rev_count'], 'status': r['status'],
                 'statusLabel': STATUS_LABELS.get(r['status'], r['status']),
+                'qstatus': r['qstatus'] or '', 'qstatusLabel': QSTATUS_LABELS.get(r['qstatus'] or '', ''),
                 'source': r['source'], 'sourceLabel': SOURCE_LABELS.get(r['source'], r['source']),
                 'photoCount': r['photo_count'], 'preview': names,
                 'moreItems': max(0, r['item_count'] - len(names)),
@@ -453,11 +563,60 @@ def search_quotations(q='', source='', status='', client='', date_from='', date_
                 "SELECT DISTINCT client FROM quotation_index WHERE client != '' ORDER BY client COLLATE NOCASE")],
             'sources': {r[0]: r[1] for r in c.execute('SELECT source, COUNT(*) FROM quotation_index GROUP BY source')},
             'statuses': {r[0]: r[1] for r in c.execute('SELECT status, COUNT(*) FROM quotation_index GROUP BY status')},
+            'qstatuses': {r[0]: r[1] for r in c.execute(
+                "SELECT qstatus, COUNT(*) FROM quotation_index WHERE IFNULL(qstatus,'') != '' GROUP BY qstatus")},
             'all': c.execute('SELECT COUNT(*) FROM quotation_index').fetchone()[0],
         }
         return {'items': items, 'total': total, 'facets': facets}
     finally:
         c.close()
+
+
+def search_items(q='', limit=60):
+    """Saved-item picker search, served from quotation_index only (no documents, no photos).
+    Every word must match the item's own text (code, name, specification) or its quotation's
+    number / client / date. Identical code+name+specification appears once, newest quotation
+    first. Returns {items, matched, truncated}."""
+    toks = [t for t in norm_text(q).split(' ') if t]
+    limit = max(1, min(int(limit), 200))
+    c = _conn()
+    try:
+        rows = c.execute('SELECT id,no,client,quote_date,updated_at,rev,items_json FROM quotation_index '
+                         'ORDER BY created_at DESC, updated_at DESC').fetchall()
+    finally:
+        c.close()
+    seen, out, matched = set(), [], 0
+    for r in rows:
+        head = norm_text(' '.join([r['no'] or '', r['client'] or '', r['quote_date'] or '']))
+        try:
+            items = json.loads(r['items_json'] or '[]')
+        except ValueError:
+            continue
+        for it in items:
+            key = (it['sno'], it['name'], it['spec'])
+            if key in seen:
+                continue
+            hay = head + ' ' + it['q']
+            if not all(t in hay for t in toks):
+                continue
+            seen.add(key)
+            matched += 1
+            if len(out) < limit:
+                out.append({'qid': r['id'], 'i': it['i'], 'sno': it['sno'], 'name': it['name'], 'spec': it['spec'],
+                            'qty': it['qty'], 'unit': it['unit'], 'tiers': it['tiers'], 'ph': it['ph'],
+                            'no': r['no'] or '', 'client': r['client'] or '', 'quoteDate': r['quote_date'] or '',
+                            'rev': r['rev'], 'v': r['updated_at']})
+    return {'items': out, 'matched': matched, 'truncated': matched > len(out)}
+
+
+def get_items(quotation_id, indexes):
+    """Full items (with photos) of a quotation's LATEST revision by position — fetched only
+    for the items the user actually picked. Returns [] for unknown quotations."""
+    doc = get_quotation(quotation_id)
+    if not doc or not doc.get('revisions'):
+        return []
+    items = doc['revisions'][-1].get('items') or []
+    return [{'i': i, 'item': items[i]} for i in indexes if 0 <= i < len(items)]
 
 
 _THUMB_CACHE = {}          # (id, n, updated_at) -> (bytes, mime); a few KB each
