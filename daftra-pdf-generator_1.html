@@ -156,6 +156,24 @@
   .sarawat-item-photo-col { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 64px; flex-shrink: 0; }
   .sarawat-item-main .sarawat-item-desc { flex: 1; margin-bottom: 0; }
   .sarawat-more { margin-top: 8px; border-top: 1px solid var(--rule); padding-top: 6px; }
+  /* Editor header: sticky action bar, primary fields, collapsible extras */
+  .sarawat-actionbar { position: sticky; top: 0; z-index: 25; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; margin-bottom: 8px; background: var(--cream); border-bottom: 1px solid var(--rule); }
+  .sarawat-savestate { font-size: 8px; font-weight: 500; color: var(--dark); }
+  .sarawat-savemsg { font-size: 8px; color: var(--mid); }
+  .sarawat-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+  .sarawat-oldrev { display: flex; gap: 6px 14px; align-items: baseline; flex-wrap: wrap; padding: 9px 12px; margin: 0 0 10px; background: #fff3cd; border: 1px solid #f0c36d; border-left: 4px solid #d99a00; color: #5c4400; font-size: 9px; }
+  .sarawat-oldrev strong { font-size: 10px; letter-spacing: .01em; }
+  .sarawat-oldrev span { font-size: 8px; color: #7a5c00; }
+  .sarawat-importline { font-size: 8px; color: var(--mid); min-height: 0; margin-bottom: 8px; }
+  .sarawat-importline:empty { display: none; }
+  .sarawat-importline.warn { padding: 6px 10px; background: #fff3cd; border: 1px solid #f0c36d; color: #7a5c00; }
+  .sarawat-primary { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px 12px; }
+  .sarawat-primary .sarawat-span2 { grid-column: span 2; }
+  .sarawat-adv { margin-top: 12px; }
+  .sarawat-adv > summary { font-size: 8.5px; }
+  @media (max-width: 520px) { .sarawat-primary .sarawat-span2 { grid-column: auto; } .sarawat-actions { margin-left: 0; width: 100%; } .sarawat-actions .btn-sm { flex: 1 1 auto; } }
+  /* Narrow windows: the Daftra sidebar stacks above the content instead of squeezing it */
+  @media (max-width: 820px) { .main { grid-template-columns: minmax(0, 1fr); } .sidebar { border-right: none; border-bottom: 1px solid var(--rule); padding: 18px 16px; } }
   .sarawat-src-note { font-size: 7.5px; color: var(--mid); margin: -2px 0 8px; }
   .sarawat-src-note .warn { color: #B8860B; font-weight: 600; }
   .sarawat-more summary { font-size: 8px; color: var(--mid); cursor: pointer; letter-spacing: 0.04em; user-select: none; }
@@ -3816,7 +3834,8 @@ function showSarawatQuoteTab() {
 function sarawatStartManualEntry() {
   sarawatSaved = null; sarawatSavedViewRev = null; sarawatLastSaveMsg = ''; sarawatItemPicker.open = false;
   sarawatState = {
-    fileName: '(manually entered — existing approved quotation)',
+    fileName: 'New quotation',
+    quotationStatus: 'draft',
     source: 'manual_existing',
     quoteNo: '', quoteDate: '', client: '',
     clientVat: '', clientCr: '', vatRate: 15, globalMarkupPct: '', deliveryDays: '',
@@ -3835,6 +3854,7 @@ function sarawatStartManualEntry() {
     })),
   };
   recomputeSarawatTotals();
+  sarawatPendingFocus = 'sarawat-client';
   renderSarawatForm();
 }
 
@@ -5992,7 +6012,7 @@ function updateSarawatField(field, val) {
   if (!sarawatState) return;
   sarawatState[field] = val;
   recomputeSarawatTotals();
-  renderSarawatForm();
+  sarawatRefreshComputed();   // in place — the field being typed in is never rebuilt
 }
 
 // Delivery Timeline uses its own onchange handler (not updateSarawatField) so the
@@ -6015,7 +6035,7 @@ function updateSarawatItemField(itemIdx, field, val) {
   if (field === 'sno') it.sno = val;
   else if (field === 'itemName') it.itemName = val;
   else if (field === 'description') it.description = val;
-  renderSarawatForm();
+  sarawatRefreshComputed();   // in place — the field being typed in is never rebuilt
 }
 
 // Per-tier fields — quantity is independently editable for every visible
@@ -6143,15 +6163,23 @@ function sarawatHasManualPrice(t) {
   return t.manualUnitPrice !== null && t.manualUnitPrice !== undefined && t.manualUnitPrice !== '';
 }
 
+// Unit prices are shown with the precision they actually have — at least 2 decimals, at most 6:
+// 430 -> 430.00, 430.5 -> 430.50, 48.387 -> 48.387, 447.333 -> 447.333. DISPLAY ONLY: nothing
+// is rounded or truncated in the stored value. toPrecision(12) only strips binary float noise
+// (17.550000000001 -> 17.55). Totals and SAR summaries keep using sarawatMoney (exactly 2 dp).
+function sarawatPriceText(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return '0.00';
+  const clean = Number(v.toPrecision(12));
+  const dec = Math.min(6, Math.max(2, (String(clean).split('.')[1] || '').length));
+  return clean.toFixed(dec);
+}
+
 function sarawatPriceDisplay(t) {
-  // A typed (manual) price keeps its own precision in the editable field (at least
-  // 2 decimals: 430.5 -> 430.50, 447.333 stays 447.333) so the field never hides
-  // the value actually stored; a calculated markup price is shown to 2 decimals.
-  if (sarawatHasManualPrice(t)) {
-    const v = parseFloat(t.manualUnitPrice) || 0;
-    return sarawatRound2(v) === v ? v.toFixed(2) : String(v);
-  }
-  return sarawatRound2(t.unitPrice).toFixed(2);
+  // The editable Vista unit price: a typed (manual) price shows exactly what was typed (min.
+  // 2 decimals); a calculated one (supplier price, plus markup if any) shows its own precision.
+  if (sarawatHasManualPrice(t)) return sarawatPriceText(parseFloat(t.manualUnitPrice) || 0);
+  return sarawatPriceText(t.unitPrice);
 }
 
 // Import metadata kept on each quantity line (t.source): shown only when the supplier's printed
@@ -6173,9 +6201,9 @@ function sarawatPriceNoteHtml(itemIdx, tierIdx, t) {
   return sarawatHasManualPrice(t)
     ? `<div style="display:flex;align-items:center;gap:5px;margin-top:2px;white-space:nowrap;">
          <span style="font-size:6.5px;color:#B8860B;font-weight:600;letter-spacing:0.04em;">● Manual</span>
-         <span style="font-size:6.5px;color:var(--mid);text-decoration:underline;cursor:pointer;" onclick="resetSarawatTierToMarkup(${itemIdx},${tierIdx})">Reset to Markup Price</span>
+         <span style="font-size:6.5px;color:var(--mid);text-decoration:underline;cursor:pointer;" title="Go back to the supplier price (plus markup, if any)" onclick="resetSarawatTierToMarkup(${itemIdx},${tierIdx})">Reset</span>
        </div>`
-    : `<div style="font-size:6.5px;color:var(--light);margin-top:2px;white-space:nowrap;">calculated (markup)</div>`;
+    : `<div style="font-size:6.5px;color:var(--light);margin-top:2px;white-space:nowrap;">${(parseFloat(sarawatState && sarawatState.globalMarkupPct) || 0) ? 'supplier price + markup' : 'supplier price'}</div>`;
 }
 
 // Updates every computed value on screen from sarawatState without touching any
@@ -6190,7 +6218,7 @@ function sarawatRefreshComputed() {
     const tot = $(`sarawat-tier-${i}-${j}-total`); if (tot) tot.textContent = fmt(t.total);
     const note = $(`sarawat-tier-${i}-${j}-pricenote`); if (note) note.innerHTML = sarawatPriceNoteHtml(i, j, t);
     const pe = $(`sarawat-tier-${i}-${j}-manualprice`);
-    if (pe && pe !== active && !sarawatHasManualPrice(t)) pe.value = sarawatRound2(t.unitPrice).toFixed(2);
+    if (pe && pe !== active && !sarawatHasManualPrice(t)) pe.value = sarawatPriceText(t.unitPrice);
   }));
   const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
   set('sarawat-subtotal', 'SAR ' + fmt(s.subtotal));
@@ -6219,6 +6247,7 @@ function addSarawatItem() {
   if (!sarawatState) return;
   sarawatState.items.push({ itemId: uid(), sno: '', itemName: '', description: '', qtyDisplay: '', qtyReview: false, photo: '', photoSize: '', tiers: [{ qty: 1, supplierUnitPrice: 0, manualUnitPrice: null, unitPrice: 0, total: 0 }] });
   recomputeSarawatTotals();
+  sarawatPendingFocus = 'sarawat-item-' + (sarawatState.items.length - 1) + '-name';
   renderSarawatForm();
 }
 
@@ -6297,6 +6326,7 @@ function addSarawatTier(itemIdx) {
   if (!sarawatState || !sarawatState.items[itemIdx]) return;
   sarawatState.items[itemIdx].tiers.push({ tierId: uid(), qty: 1, supplierUnitPrice: 0, manualUnitPrice: null, unitPrice: 0, total: 0 });
   recomputeSarawatTotals();
+  sarawatPendingFocus = `sarawat-tier-${itemIdx}-${sarawatState.items[itemIdx].tiers.length - 1}-qty`;
   renderSarawatForm();
 }
 
@@ -6494,7 +6524,7 @@ function sarawatPickerRowsHtml() {
     const on = !!p.picked[it.qid + ':' + it.i];
     const from = [it.no ? '#' + it.no : 'unnumbered', it.client, it.quoteDate].filter(Boolean).join(' · ');
     const last = it.qty || it.unit
-      ? ` · last: ${sarawatFmtQty(it.qty)} × SAR ${sarawatMoney(it.unit)}${it.tiers > 1 ? ` (+${it.tiers - 1} more line${it.tiers === 2 ? '' : 's'})` : ''}` : '';
+      ? ` · last: ${sarawatFmtQty(it.qty)} × SAR ${sarawatPriceText(it.unit)}${it.tiers > 1 ? ` (+${it.tiers - 1} more line${it.tiers === 2 ? '' : 's'})` : ''}` : '';
     return `
     <div class="sq-pick-row${on ? ' on' : ''}" onclick="sarawatPickerToggle(${idx})">
       <input type="checkbox" ${on ? 'checked' : ''} tabindex="-1" style="pointer-events:none;flex-shrink:0;">
@@ -6605,7 +6635,7 @@ async function sarawatAddPickedItems() {
 // from saved items — same blank editor as manual entry, with the picker open.
 function sarawatStartFromSavedItems() {
   sarawatStartManualEntry();
-  sarawatState.fileName = '(new quotation — built from saved items)';
+  sarawatState.fileName = 'New quotation (from saved items)';
   sarawatState.source = 'saved_items';
   sarawatOpenItemPicker();
 }
@@ -6668,8 +6698,11 @@ function renderSarawatForm() {
     }).join('') || `<tr><td colspan="4" style="padding:10px 0;font-size:8.5px;color:var(--light);">No quantity lines — add one below.</td></tr>`;
 
     const supplierLines = (it.tiers || []).map(t => `
-      <div style="font-size:8px;color:var(--mid);">Qty ${sarawatFmtQty(t.qty)} — supplier price SAR ${sarawatMoney(t.supplierUnitPrice)}${(s.sourceCurrency && s.sourceCurrency.code === 'USD' && t.sourceUnitPrice != null && t.sourceUnitPrice !== '')
-        ? ` <span style="color:var(--light);">(USD ${sarawatMoney(t.sourceUnitPrice)})</span>` : ''}</div>`).join('');
+      <div style="font-size:8px;color:var(--mid);">Qty ${sarawatFmtQty(t.qty)} — supplier price SAR ${sarawatPriceText(t.supplierUnitPrice)}${(s.sourceCurrency && s.sourceCurrency.code === 'USD' && t.sourceUnitPrice != null && t.sourceUnitPrice !== '')
+        ? ` <span style="color:var(--light);">(USD ${sarawatPriceText(t.sourceUnitPrice)})</span>` : ''}</div>`).join('');
+
+    const srcLines = (it.tiers || []).filter(t => t.source && t.source.reconciliationStatus !== 'rounding' && t.source.reconciliationStatus !== 'mismatch').map(t => `
+      <div style="font-size:8px;color:var(--mid);">Printed: ${sarawatFmtQty(t.source.quantity)} × ${t.source.unitPrice === null ? '—' : escapeHtml(String(t.source.unitPrice))} = ${sarawatMoney(t.source.lineTotal)} <span style="color:var(--light);">(${t.source.reconciliationStatus === 'matched' ? 'adds up' : 'not checked'})</span></div>`).join('');
 
     return `
     <div class="sarawat-item-card">
@@ -6730,92 +6763,105 @@ function renderSarawatForm() {
             <span class="form-label" style="margin:0;min-width:96px;">Supplier price</span>
             <div>${supplierLines || '<span style="font-size:8px;color:var(--light);">—</span>'}</div>
           </div>
+          ${srcLines ? `<div class="sarawat-more-row" style="align-items:flex-start;">
+            <span class="form-label" style="margin:0;min-width:96px;">As printed</span>
+            <div>${srcLines}</div>
+          </div>` : ''}
         </div>
       </details>
     </div>`;
   }).join('') || `<div style="padding:14px 0;font-size:8.5px;color:var(--light);">No items yet — add one below.</div>`;
 
-  $('mainArea').innerHTML = buildTabsHTML() + `
-    <div class="purch-upload-panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
-        <div class="sec-title" style="margin-bottom:0;">Supplier Quotation — ${escapeHtml(s.fileName)}</div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <span style="font-size:7.5px;color:var(--light);">Replace file:</span>
-          <input class="purch-upload-input" style="width:auto;" type="file" id="sarawatPdfInput"
-            accept="application/pdf,.pdf,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-            multiple
-            onchange="handleSarawatFileUpload(this)">
-        </div>
-      </div>
-      <div id="sarawatUploadStatus" style="margin-top:8px;font-size:8px;color:var(--mid);">${escapeHtml(s.importStatus || '')}</div>
-    </div>
+  // ── Header state for the action bar / primary fields ──
+  const savedDoc = sarawatSaved;
+  const latestRev = savedDoc ? savedDoc.revisions[savedDoc.revisions.length - 1] : null;
+  const olderView = !!(savedDoc && latestRev && sarawatSavedViewRev !== latestRev.rev);
+  const saveStateText = savedDoc
+    ? `Saved · Rev ${sarawatSavedViewRev}`
+    : 'Not saved yet';
+  const qStatus = savedDoc ? (savedDoc.quotationStatus || '') : (s.quotationStatus || 'draft');
+  // Only the warning part of the import summary stays visible; the full text is under Advanced Options.
+  const importWarn = String(s.importStatus || '').split(' — ').filter(p => /⚠/.test(p)).join(' — ');
+  const hasSrc = sarawatHasSourcePrices(s);
+  const cur = s.sourceCurrency || { code: '' };
 
+  $('mainArea').innerHTML = buildTabsHTML() + `
     <div class="sarawat-form-panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-        <div class="sec-title" style="margin-bottom:0;">Extracted Quotation Details — Review &amp; Correct Before Export</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn-sm btn-sm-outline" onclick="showSarawatSavedQuotesList()">Saved Quotations</button>
-          <button class="btn-sm btn-sm-outline" onclick="resetSarawatToOriginal()">Reset to Original Uploaded Data</button>
+
+      <div class="sarawat-actionbar">
+        <button class="sq-link" onclick="showSarawatSavedQuotesList()">← Saved Quotations</button>
+        <span class="sarawat-savestate" id="sarawatSaveState">${escapeHtml(saveStateText)}</span>
+        <span id="sarawatSaveStatus" class="sarawat-savemsg">${escapeHtml(sarawatLastSaveMsg)}</span>
+        <div class="sarawat-actions">
+          <button class="btn-sm btn-sm-dark" onclick="sarawatSaveQuotation()">Save</button>
+          <button class="btn-sm btn-sm-outline" onclick="sarawatDownloadPdf()">Download PDF</button>
+          <button class="btn-sm btn-sm-outline" onclick="exportVistaQuotationFromSarawat()">Preview</button>
+          <div class="sq-actions" id="sarawatMoreWrap">
+            <button class="btn-sm btn-sm-outline" onclick="sarawatToggleMore(event)" aria-haspopup="true">Actions ▾</button>
+            <div class="sq-menu" id="sarawatMoreMenu" style="display:none;">
+              <button onclick="sarawatMoreAction('duplicate')">${SQ_ICON.copy} Duplicate as new quotation</button>
+              <button onclick="sarawatMoreAction('replace')">${SQ_ICON.pdf} Replace source file…</button>
+              ${s.original ? `<button onclick="sarawatMoreAction('reset')">${SQ_ICON.hist} Reset to original imported data</button>` : ''}
+              <button onclick="sarawatMoreAction('sarawatpdf')">${SQ_ICON.pdf} Download Sarawat-style PDF</button>
+              ${savedDoc ? `<button class="danger" onclick="sarawatMoreAction('delete')">${SQ_ICON.trash} Delete quotation…</button>` : ''}
+            </div>
+          </div>
         </div>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:9px 12px;background:var(--cream);border:1px solid var(--rule);">
-        <div style="font-size:8px;color:var(--mid);">
-          ${sarawatSaved
-            ? `Saved as <strong>${escapeHtml(sarawatSaved.no || sarawatSaved.id)}</strong> · Rev ${sarawatSavedViewRev} of ${sarawatSaved.revisions.length} — saving again creates Rev ${sarawatSaved.revisions[sarawatSaved.revisions.length-1].rev + 1}, never overwrites this one.`
-            : `Not saved yet — this quotation exists only in this editor until you save it.`}
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span id="sarawatSaveStatus" style="font-size:8px;color:var(--mid);">${escapeHtml(sarawatLastSaveMsg)}</span>
-          <button class="btn-sm btn-sm-dark" onclick="sarawatSaveQuotation()">${sarawatSaved ? 'Save Revision' : 'Save Quotation'}</button>
-        </div>
-      </div>
+      ${olderView ? `<div class="sarawat-oldrev" role="status"><strong>Viewing Rev ${sarawatSavedViewRev} — Latest is Rev ${latestRev.rev}</strong><span>Saving adds Rev ${latestRev.rev + 1} from what you see here; the older revisions are kept.</span></div>` : ''}
+      <input type="file" id="sarawatPdfInput" style="display:none;" multiple
+        accept="application/pdf,.pdf,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        onchange="handleSarawatFileUpload(this)">
+      <div id="sarawatUploadStatus" class="sarawat-importline${importWarn ? ' warn' : ''}">${escapeHtml(importWarn)}</div>
       ${s.usedOcr ? `<div style="background:#fff3cd;border:1px solid #f0c36d;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:8.5px;color:#7a5c00;">
-        <strong>Source: OCR</strong> — this quotation had no extractable text layer (page(s) ${(s.ocrPageNumbers||[]).join(', ')}) and was read using image recognition. Please verify highlighted fields, especially quantities and prices, before exporting.
+        <strong>Read by image recognition (OCR)</strong> — this file had no text layer (page(s) ${(s.ocrPageNumbers||[]).join(', ')}). Please check the quantities and prices before sending.
       </div>` : ''}
-      <div class="dn-form-row">
+
+      <div class="sec-title" style="margin-bottom:8px;">Quotation Details</div>
+      <div class="sarawat-primary">
+        <div class="form-group sarawat-span2">
+          <div class="form-label" style="display:flex;justify-content:space-between;">Client <button type="button" class="sq-link" onclick="fetchDaftraClientsForSarawat()">Pick from Daftra</button></div>
+          <input class="form-input" id="sarawat-client" value="${escapeHtml(s.client)}" placeholder="Client name" autocomplete="off"
+            oninput="updateSarawatField('client',this.value)">
+        </div>
         <div class="form-group">
-          <div class="form-label">Quotation Number</div>
-          <input class="form-input" id="sarawat-quoteNo" value="${escapeHtml(s.quoteNo)}" placeholder="Not detected — enter manually"
+          <div class="form-label">Quotation No.</div>
+          <input class="form-input" id="sarawat-quoteNo" value="${escapeHtml(s.quoteNo)}" placeholder="e.g. 43761" autocomplete="off"
             oninput="updateSarawatField('quoteNo',this.value)">
         </div>
         <div class="form-group">
-          <div class="form-label">Quotation Date</div>
-          <input class="form-input" id="sarawat-quoteDate" value="${escapeHtml(s.quoteDate)}" placeholder="Not detected — enter manually"
+          <div class="form-label">Date</div>
+          <input class="form-input" id="sarawat-quoteDate" value="${escapeHtml(s.quoteDate)}" placeholder="dd/mm/yyyy" autocomplete="off"
             oninput="updateSarawatField('quoteDate',this.value)">
         </div>
         <div class="form-group">
-          <div class="form-label">Customer / Client</div>
-          <input class="form-input" id="sarawat-client" value="${escapeHtml(s.client)}" placeholder="Not detected — enter manually"
-            oninput="updateSarawatField('client',this.value)">
-          <button type="button" class="btn-sm btn-sm-outline" style="width:100%;margin-top:6px;" onclick="fetchDaftraClientsForSarawat()">Fetch Daftra Clients</button>
-        </div>
-        <div class="form-group">
-          <div class="form-label">VAT Number</div>
-          <input class="form-input" id="sarawat-clientVat" value="${escapeHtml(s.clientVat || '')}" placeholder="Not detected — enter manually"
-            oninput="updateSarawatField('clientVat',this.value)">
-        </div>
-        <div class="form-group">
-          <div class="form-label">CR Number</div>
-          <input class="form-input" id="sarawat-clientCr" value="${escapeHtml(s.clientCr || '')}" placeholder="Not detected — enter manually"
-            oninput="updateSarawatField('clientCr',this.value)">
-        </div>
-        <div class="form-group" style="max-width:110px;">
-          <div class="form-label">VAT Rate %</div>
+          <div class="form-label">VAT %</div>
           <input class="form-input" id="sarawat-vatRate" type="number" min="0" step="0.01" value="${escapeHtml(s.vatRate)}"
             oninput="sarawatLiveNumberField('vatRate',this.value)">
         </div>
-        <div class="form-group" style="max-width:170px;">
-          <div class="form-label">Delivery Timeline (Working Days)</div>
-          <input class="form-input" id="sarawat-deliveryDays" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 10"
-            value="${escapeHtml(String(s.deliveryDays || ''))}" onchange="onSarawatDeliveryDaysChanged(this)">
+        <div class="form-group">
+          <div class="form-label">Status</div>
+          <select class="form-input" id="sarawat-qstatus" onchange="sarawatSetQuotationStatus(this.value)">
+            ${savedDoc && !qStatus ? '<option value="" selected disabled>Not set</option>' : ''}
+            ${[['draft', 'Draft'], ['sent', 'Sent'], ['approved', 'Approved'], ['cancelled', 'Cancelled']].map(([v, l]) => `<option value="${v}"${qStatus === v ? ' selected' : ''}>${l}</option>`).join('')}
+          </select>
         </div>
+        ${hasSrc ? `
+        <div class="form-group" title="${escapeHtml(cur.code === 'USD' ? `Fixed rate 1 USD = ${SARAWAT_USD_SAR_RATE} SAR; always recalculated from the stored USD prices, never converted twice.` : 'Choose the currency of the supplier prices before sending.')}">
+          <div class="form-label">Supplier prices in</div>
+          <select class="form-input" id="sarawat-sourceCurrency" style="${cur.code ? '' : 'border-color:#f0c36d;background:#fff3cd;'}" onchange="sarawatSetSourceCurrency(this.value)">
+            <option value=""${!cur.code ? ' selected' : ''}>Choose currency…</option>
+            <option value="USD"${cur.code === 'USD' ? ' selected' : ''}>USD → SAR</option>
+            <option value="SAR"${cur.code === 'SAR' ? ' selected' : ''}>SAR</option>
+          </select>
+        </div>` : ''}
       </div>
 
       ${sarawatClientPicker.open ? `
       <div style="margin-top:10px;padding:12px;background:var(--cream);border:1px solid var(--rule);">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">
           <div class="form-label" style="margin-bottom:0;">Select a Daftra Client</div>
-          <button type="button" class="btn-sm btn-sm-outline" onclick="closeSarawatClientPicker()">✕ Close</button>
+          <button type="button" class="sq-ico" title="Close" onclick="closeSarawatClientPicker()" style="font-size:12px;">✕</button>
         </div>
         ${sarawatClientPicker.loading
           ? `<div style="font-size:8.5px;color:var(--mid);">Fetching clients from Daftra…</div>`
@@ -6841,52 +6887,55 @@ function renderSarawatForm() {
         }
       </div>` : ''}
 
-      <div style="margin-top:14px;">
-        <div class="sec-title" style="margin-bottom:6px;">Items — Supplier Price + Global Markup, or Override Vista Unit Price Per Line</div>
-
-        ${sarawatHasSourcePrices(s) ? (() => {
-          const sc = s.sourceCurrency || { code: '' };
-          return `
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:${sc.code ? 'var(--cream)' : '#fff3cd'};border:1px solid ${sc.code ? 'var(--rule)' : '#f0c36d'};">
-          <div class="form-group" style="max-width:190px;">
-            <div class="form-label">Supplier Price Currency</div>
-            <select class="form-input" id="sarawat-sourceCurrency" onchange="sarawatSetSourceCurrency(this.value)">
-              <option value=""${!sc.code ? ' selected' : ''}>Not set — unconverted</option>
-              <option value="USD"${sc.code === 'USD' ? ' selected' : ''}>USD → convert to SAR</option>
-              <option value="SAR"${sc.code === 'SAR' ? ' selected' : ''}>SAR — no conversion</option>
-            </select>
+      <details class="sarawat-more sarawat-adv" ${sarawatUi.advOpen ? 'open' : ''} ontoggle="sarawatUi.advOpen = this.open">
+        <summary>Advanced Options</summary>
+        <div class="sarawat-more-body">
+          <div class="sarawat-primary">
+            <div class="form-group">
+              <div class="form-label">Client VAT No.</div>
+              <input class="form-input" id="sarawat-clientVat" value="${escapeHtml(s.clientVat || '')}" placeholder="optional" autocomplete="off"
+                oninput="updateSarawatField('clientVat',this.value)">
+            </div>
+            <div class="form-group">
+              <div class="form-label">Client CR No.</div>
+              <input class="form-input" id="sarawat-clientCr" value="${escapeHtml(s.clientCr || '')}" placeholder="optional" autocomplete="off"
+                oninput="updateSarawatField('clientCr',this.value)">
+            </div>
+            <div class="form-group">
+              <div class="form-label">Delivery (working days)</div>
+              <input class="form-input" id="sarawat-deliveryDays" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 10"
+                value="${escapeHtml(String(s.deliveryDays || ''))}" onchange="onSarawatDeliveryDaysChanged(this)">
+            </div>
+            <div class="form-group" title="Added to every supplier price automatically, except lines whose Vista unit price you typed yourself.">
+              <div class="form-label">Global markup %</div>
+              <input class="form-input" type="number" id="sarawatGlobalMarkupPct" min="0" step="0.01" placeholder="e.g. 30"
+                value="${escapeHtml(String(s.globalMarkupPct ?? ''))}" oninput="sarawatLiveNumberField('globalMarkupPct',this.value)">
+            </div>
           </div>
-          <span style="font-size:7.5px;color:var(--light);align-self:center;">
-            ${sc.code === 'USD'
-              ? `Fixed rate 1 USD = ${SARAWAT_USD_SAR_RATE} SAR. Supplier prices = the workbook's original USD prices × ${SARAWAT_USD_SAR_RATE} — always recalculated from the stored USD values, never converted twice.`
-              : sc.code === 'SAR' ? 'Supplier prices are used exactly as imported.'
-              : 'The supplier price currency is not confirmed for this workbook' + (sc.hint ? ' (' + escapeHtml(sc.hint) + ')' : '') + ' — amounts below are shown unconverted. Choose the currency before issuing.'}
-          </span>
-        </div>`; })() : ''}
-
-        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:var(--cream);border:1px solid var(--rule);">
-          <div class="form-group" style="max-width:120px;">
-            <div class="form-label">Global Markup %</div>
-            <input class="form-input" type="number" id="sarawatGlobalMarkupPct" min="0" step="0.01" placeholder="e.g. 30"
-              value="${escapeHtml(String(s.globalMarkupPct ?? ''))}" oninput="sarawatLiveNumberField('globalMarkupPct',this.value)">
+          <div style="font-size:8px;color:var(--mid);line-height:1.6;">
+            <div><strong>Source:</strong> ${escapeHtml(s.fileName || '—')}</div>
+            ${s.importStatus ? `<div style="margin-top:2px;">${escapeHtml(s.importStatus)}</div>` : ''}
           </div>
-          <span style="font-size:7.5px;color:var(--light);align-self:center;">
-            Applied to every quantity line's Supplier Price automatically, live — except lines with a manual Vista Unit Price override (marked <span style="color:#B8860B;font-weight:600;">● Manual</span> below).
-          </span>
+          ${s.supplierNotes ? `
+          <div style="padding:10px 12px;background:var(--cream);border:1px solid var(--rule);">
+            <div class="sec-title" style="margin-bottom:6px;">Notes from the supplier file</div>
+            <div style="font-size:8px;color:var(--mid);white-space:pre-wrap;line-height:1.6;">${escapeHtml(s.supplierNotes)}</div>
+            <div style="font-size:6.5px;color:var(--light);margin-top:6px;">Kept for reference only — never treated as quotation items.</div>
+          </div>` : ''}
+          <div>
+            <button class="sq-link" onclick="toggleSarawatRawText()">Show / hide the text read from the file</button>
+            <div id="sarawatRawTextBox" style="display:none;margin-top:8px;max-height:220px;overflow:auto;background:var(--cream);border:1px solid var(--rule);padding:10px;font-size:8px;white-space:pre-wrap;font-family:monospace;color:var(--mid);">${escapeHtml(s.rawText)}</div>
+          </div>
         </div>
+      </details>
 
+      <div style="margin-top:16px;">
+        <div class="sec-title" style="margin-bottom:6px;">Items</div>
         ${sarawatItemPicker.open ? sarawatPickerPanelHtml() : ''}
         ${itemCards}
         <button class="btn-sm btn-sm-outline" style="margin-top:4px;" onclick="addSarawatItem()">+ Add Item</button>
         <button class="btn-sm btn-sm-outline" style="margin-top:4px;" onclick="sarawatOpenItemPicker()">+ Add from Saved Items</button>
       </div>
-
-      ${s.supplierNotes ? `
-      <div style="margin-top:14px;padding:12px 14px;background:var(--cream);border:1px solid var(--rule);">
-        <div class="sec-title" style="margin-bottom:6px;">Supplier Notes / Extra Notes</div>
-        <div style="font-size:8px;color:var(--mid);white-space:pre-wrap;line-height:1.6;">${escapeHtml(s.supplierNotes)}</div>
-        <div style="font-size:6.5px;color:var(--light);margin-top:6px;">From the source file (text after a Notes/Terms heading) and import notices — kept for reference only, never treated as quotation items.</div>
-      </div>` : ''}
 
       <div style="margin-top:14px;max-width:280px;margin-left:auto;">
         <div class="pp-t-row">
@@ -6903,23 +6952,16 @@ function renderSarawatForm() {
         </div>
       </div>
 
-      <div style="margin-top:16px;">
-        <button class="btn-sm btn-sm-outline" onclick="toggleSarawatRawText()">Show / Hide Raw Extracted Text</button>
-        <div id="sarawatRawTextBox" style="display:none;margin-top:8px;max-height:220px;overflow:auto;background:var(--cream);border:1px solid var(--rule);padding:10px;font-size:8px;white-space:pre-wrap;font-family:monospace;color:var(--mid);">${escapeHtml(s.rawText)}</div>
-      </div>
-
-      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-sm btn-sm-dark" onclick="exportSarawatQuotePDF()">Export Improved Sarawat Quotation PDF</button>
-        <button class="btn-sm btn-sm-outline" onclick="exportVistaQuotationFromSarawat()">Export Vista Quotation PDF</button>
-      </div>
-    </div>
-
-    <div class="preview-wrap" style="margin-top:16px;">
-      <div class="pdf-bg">
-        <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
-          <div class="pdf-page" id="sarawatPdfPage">${buildSarawatQuotePDFHTML(s)}</div>
+      <details class="sarawat-more sarawat-adv" style="margin-top:18px;" ${sarawatUi.layoutOpen ? 'open' : ''} ontoggle="sarawatUi.layoutOpen = this.open">
+        <summary>Sarawat-style layout preview</summary>
+        <div class="preview-wrap" style="margin-top:12px;">
+          <div class="pdf-bg">
+            <div style="transform:scale(1.8);transform-origin:top center;margin-bottom:674px;">
+              <div class="pdf-page" id="sarawatPdfPage">${buildSarawatQuotePDFHTML(s)}</div>
+            </div>
+          </div>
         </div>
-      </div>
+      </details>
     </div>`;
 
   // Restore focus/selection/scroll captured at the top of this function — the
@@ -6936,6 +6978,15 @@ function renderSarawatForm() {
     }
   }
   window.scrollTo(0, savedScrollY);
+  if (sarawatPendingFocus) {
+    const pf = document.getElementById(sarawatPendingFocus);
+    sarawatPendingFocus = null;
+    if (pf) {
+      pf.focus({ preventScroll: true });
+      if (typeof pf.select === 'function' && pf.type !== 'file') { try { pf.select(); } catch (e) {} }
+      pf.scrollIntoView({ block: 'nearest' });
+    }
+  }
 }
 
 // Clean Sarawat-branded quotation layout — reuses the app's existing pp-* print
@@ -7070,8 +7121,8 @@ async function exportSarawatQuotePDF() {
 // hands it to the EXISTING Vista pipeline (buildInvoicePDFPageHTML → renderPreview
 // → Print/Download buttons → downloadPDF) completely unmodified — no duplicated
 // PDF-building logic. Field names match exactly what renderQuoRow() already reads.
-function exportVistaQuotationFromSarawat() {
-  if (!sarawatState) return;
+function sarawatBuildVistaDoc() {
+  if (!sarawatState) return null;
   const rate = (parseFloat(sarawatState.vatRate) || 0) / 100;
   // renderQuoRow() (the existing, unmodified Vista quotation row renderer)
   // already reads `item` as the bold name and `description` as a separate
@@ -7126,7 +7177,12 @@ function exportVistaQuotationFromSarawat() {
     _items: items,
     _nativePdf: true,   // Download PDF -> selectable-text path, see nativeQuotationPdf()
   };
-  currentDoc = { doc, type: 'estimates' };
+  return doc;
+}
+
+function exportVistaQuotationFromSarawat() {
+  if (!sarawatState) return;
+  currentDoc = { doc: sarawatBuildVistaDoc(), type: 'estimates' };
   renderPreview();
 }
 
@@ -7198,12 +7254,43 @@ function sarawatBuildRevisionSnapshot(rev) {
 // saved -> always the NEXT revision number (never overwrites), regardless of
 // which past revision is currently loaded in the editor — same rule the TP
 // quotation "Revise" flow uses.
+// ══════════════════════════════════════════════════════════════════════════════
+// QUOTATION EDITOR — action bar, one-button Save, one-click PDF (Phase 3 final)
+// ──────────────────────────────────────────────────────────────────────────────
+// UI-only helpers around the unchanged data model, revision snapshots and PDF code.
+
+// Open/closed state of the editor's collapsible sections survives re-renders.
+const sarawatUi = { advOpen: false, layoutOpen: false };
+// Element id to focus after the next renderSarawatForm() (new item, new quantity line, new quotation).
+let sarawatPendingFocus = null;
+
+// The editor's INPUT content (never the computed totals) in a comparable form — works on the
+// editor state and on a saved revision alike, so "did anything change since the last revision?"
+// can be answered without the user having to think about revisions.
+function sarawatEditorKey(x) {
+  const n = v => (v === null || v === undefined || v === '') ? null : Number(v);
+  return JSON.stringify({
+    d: x.quoteDate || '', c: x.client || '', v: x.clientVat || '', r: x.clientCr || '',
+    vat: n(x.vatRate), dd: String(x.deliveryDays || ''), mk: n(x.globalMarkupPct), notes: x.supplierNotes || '',
+    cur: x.sourceCurrency ? (x.sourceCurrency.code || '') : null,
+    items: (x.items || []).map(it => [it.sno || '', it.itemName || '', it.description || '', it.photo || '', it.photoSize || '',
+      it.extraPhotos || [],
+      (it.tiers || []).map(t => [n(t.qty), n(t.supplierUnitPrice), n(t.manualUnitPrice), n(t.sourceUnitPrice), t.source || null])]),
+  });
+}
+
+// ── SAVE (one button) ─────────────────────────────────────────────────────────
+// New quotation → creates it (Rev 0). Existing quotation → compares the editor with the LATEST
+// saved revision: anything commercial/content changed → a new revision is appended (the old
+// ones are never touched, exactly as before); only the number changed → audited number
+// correction; nothing changed → says so and saves nothing.
 async function sarawatSaveQuotation() {
   if (!sarawatState) return;
   sarawatStatusMsg('Saving…', false);
   const isNew = !sarawatSaved;
-  const doc = isNew
-    ? { id: uid(), no: sarawatState.quoteNo || '', client: sarawatState.client || '',
+  let doc;
+  if (isNew) {
+    doc = { id: uid(), no: sarawatState.quoteNo || '', client: sarawatState.client || '',
         clientVat: sarawatState.clientVat || '', clientCr: sarawatState.clientCr || '',
         // Internal-only provenance marker — never read by any PDF/print path,
         // only by the Saved Quotations list (see sarawatSourceTagHtml()).
@@ -7211,9 +7298,35 @@ async function sarawatSaveQuotation() {
         // Approved Quotation" from a normally parsed upload.
         source: ['manual_existing', 'saved_items', 'duplicate'].includes(sarawatState.source) ? sarawatState.source : 'upload',
         ...(['pdf', 'excel', 'image'].includes(sarawatState.importKind) && !sarawatState.source ? { importKind: sarawatState.importKind } : {}),
-        quotationStatus: 'draft',
-        createdAt: Date.now(), updatedAt: Date.now(), currentRevision: 0, revisions: [], deliveries: [] }
-    : sarawatSaved;
+        quotationStatus: sarawatState.quotationStatus || 'draft',
+        createdAt: Date.now(), updatedAt: Date.now(), currentRevision: 0, revisions: [], deliveries: [] };
+  } else {
+    // Work from the stored document, not a copy loaded when the editor opened: a delivery
+    // note, status change or number correction made meanwhile must not be overwritten.
+    try {
+      const r0 = await fetch('/api/sarawat/quotes/' + encodeURIComponent(sarawatSaved.id));
+      const j0 = await r0.json();
+      if (!r0.ok || !j0.ok) throw new Error((j0 && j0.error) || ('HTTP ' + r0.status));
+      doc = j0.data;
+    } catch (e) {
+      sarawatStatusMsg('Could not save — is the local Vista server running? (' + (e.message || e) + ')', true);
+      return;
+    }
+    const latest = doc.revisions[doc.revisions.length - 1];
+    if (sarawatEditorKey(sarawatState) === sarawatEditorKey(latest)) {
+      if ((sarawatState.quoteNo || '') !== (doc.no || '')) {
+        try { await sqPostMeta(doc.id, { no: sarawatState.quoteNo || '' }); }
+        catch (e) { sarawatStatusMsg('Could not save the number: ' + (e.message || e), true); return; }
+        try { const r1 = await fetch('/api/sarawat/quotes/' + encodeURIComponent(doc.id)); const j1 = await r1.json(); if (r1.ok && j1.ok) sarawatSaved = j1.data; } catch (e) { /* refreshed on next open */ }
+        sarawatLastSaveMsg = 'Saved — number updated';
+        renderSarawatForm();
+        return;
+      }
+      sarawatSaved = doc;
+      sarawatStatusMsg('No changes to save', false);
+      return;
+    }
+  }
   const nextRev = isNew ? 0 : (doc.revisions[doc.revisions.length - 1].rev + 1);
   const snapshot = sarawatBuildRevisionSnapshot(nextRev);
   doc.revisions.push(snapshot);
@@ -7237,9 +7350,124 @@ async function sarawatSaveQuotation() {
 
   sarawatSaved = doc;
   sarawatSavedViewRev = nextRev;
-  sarawatLastSaveMsg = (doc.no || 'Quotation') + ' — Rev ' + nextRev + ' saved.';
+  sarawatLastSaveMsg = isNew ? 'Saved' : 'Saved as Rev ' + nextRev;
   renderSarawatForm();
 }
+
+// Manual quotation status from the editor. A saved quotation is updated at once (audited,
+// via the same endpoint the Saved Quotations list uses); an unsaved one remembers the choice
+// and writes it when first saved.
+async function sarawatSetQuotationStatus(value) {
+  if (!sarawatState) return;
+  if (!sarawatSaved) { sarawatState.quotationStatus = value; return; }
+  try {
+    await sqPostMeta(sarawatSaved.id, { quotationStatus: value });
+    const r = await fetch('/api/sarawat/quotes/' + encodeURIComponent(sarawatSaved.id));
+    const j = await r.json();
+    if (r.ok && j.ok) sarawatSaved = j.data;
+    sarawatStatusMsg('Status: ' + (value.charAt(0).toUpperCase() + value.slice(1)), false);
+  } catch (e) {
+    sarawatStatusMsg('Could not change the status: ' + (e.message || e), true);
+    renderSarawatForm();
+  }
+}
+
+// ── Actions ▾ menu ───────────────────────────────────────────────────────────────
+function sarawatToggleMore(ev) {
+  if (ev) ev.stopPropagation();
+  const m = $('sarawatMoreMenu');
+  if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', e => {
+  const m = $('sarawatMoreMenu');
+  if (m && m.style.display !== 'none' && !(e.target.closest && e.target.closest('#sarawatMoreWrap'))) m.style.display = 'none';
+});
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const m = $('sarawatMoreMenu'); if (m) m.style.display = 'none';
+});
+
+function sarawatMoreAction(kind) {
+  const m = $('sarawatMoreMenu'); if (m) m.style.display = 'none';
+  if (!sarawatState) return;
+  if (kind === 'duplicate') sarawatDuplicateCurrent();
+  else if (kind === 'replace') {
+    if (!confirm('Replace the source file?\n\nThe new file starts a NEW quotation in this editor. ' +
+      (sarawatSaved ? 'The saved quotation stays exactly as it is.' : 'Anything not saved here will be lost.'))) return;
+    const input = $('sarawatPdfInput'); if (input) input.click();
+  }
+  else if (kind === 'reset') resetSarawatToOriginal();
+  else if (kind === 'sarawatpdf') exportSarawatQuotePDF();
+  else if (kind === 'delete') sarawatDeleteFromEditor();
+}
+
+// A new, unsaved quotation holding a copy of what is in the editor right now (including edits
+// not yet saved). The original saved quotation is not touched.
+function sarawatDuplicateCurrent() {
+  if (!sarawatState) return;
+  const orig = sarawatState.quoteNo ? '#' + sarawatState.quoteNo : 'this quotation';
+  const copy = JSON.parse(JSON.stringify(sarawatState));
+  copy.items.forEach(it => { it.itemId = uid(); (it.tiers || []).forEach(t => { t.tierId = uid(); }); });
+  copy.source = 'duplicate'; copy.quoteNo = ''; copy.quotationStatus = 'draft';
+  copy.fileName = 'Duplicate of ' + orig;
+  sarawatState = copy; sarawatSaved = null; sarawatSavedViewRev = null; sarawatItemPicker.open = false;
+  sarawatLastSaveMsg = 'Duplicate of ' + orig + ' — set the number, then Save. The original is unchanged.';
+  sarawatPendingFocus = 'sarawat-quoteNo';
+  renderSarawatForm();
+}
+
+async function sarawatDeleteFromEditor() {
+  if (!sarawatSaved) return;
+  const d = sarawatSaved;
+  const label = (d.no ? '#' + d.no : 'this quotation') + (d.client ? ' — ' + d.client : '');
+  const hasDeliveries = (d.deliveries || []).some(x => (x.events || []).length);
+  if (!confirm('Delete ' + label + ' and all ' + d.revisions.length + ' revision(s)?' +
+    (hasDeliveries ? '\n\nIts delivery records will also be deleted.' : '') + '\n\nThis cannot be undone.')) return;
+  try {
+    const r = await fetch('/api/sarawat/quotes/' + encodeURIComponent(d.id), { method: 'DELETE' });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+  } catch (e) { alert('Could not delete: ' + (e.message || e)); return; }
+  sarawatState = null; sarawatSaved = null; sarawatSavedViewRev = null; sarawatLastSaveMsg = '';
+  showSarawatSavedQuotesList();
+}
+
+// ── DOWNLOAD PDF (one click) ──────────────────────────────────────────────────
+// Produces the SAME native-text Vista quotation PDF the Preview screen's "Download PDF" does —
+// same document builder, same page markup, same layout passes, same renderer — but without
+// opening the Preview screen: the page is laid out in an off-screen host just long enough to
+// be printed by the server. Preview stays available as a separate button.
+async function sarawatDownloadPdf() {
+  if (!sarawatState) return;
+  const prevDoc = currentDoc;
+  let host = null;
+  try {
+    status('Generating PDF…');
+    const doc = sarawatBuildVistaDoc();
+    currentDoc = { doc, type: 'estimates' };
+    host = document.createElement('div');
+    host.id = 'sarawatPdfHost';
+    host.setAttribute('aria-hidden', 'true');
+    host.style.cssText = 'position:fixed;left:-12000px;top:0;visibility:hidden;pointer-events:none;';
+    host.innerHTML = `<div class="preview-wrap"><div class="pdf-bg"><div style="transform:scale(1.8);transform-origin:top center;">
+      <div class="pdf-page pdf-page-quo" id="pdfPage">
+          ${buildInvoicePDFPageHTML(doc, 'estimates', co())}
+        </div></div></div></div>`;
+    document.body.appendChild(host);
+    rewrapQuoDescriptions();   // same two layout passes renderPreview() runs
+    layoutQuoClosing();
+    await nativeQuotationPdf(host.querySelector('#pdfPage'), `quotation-${doc.no || doc.id || '001'}.pdf`);
+    status('', 'clear');
+  } catch (err) {
+    console.error('[Sarawat] one-click PDF failed:', err);
+    status('', 'clear');
+    alert('The PDF could not be produced: ' + (err.message || err));
+  } finally {
+    if (host) host.remove();
+    currentDoc = prevDoc;
+  }
+}
+
 
 // Rebuilds the editor (sarawatState) from one saved revision. Never mutates
 // the saved document — a fresh deep copy, so editing after reopening can
@@ -7634,7 +7862,7 @@ function sqRenderPreview() {
               ${spec ? `<div class="spec">${escapeHtml(spec.length > 140 ? spec.slice(0, 140) + '…' : spec)}</div>` : ''}</div>
           </div>` : ''}</td>
         <td>${sarawatFmtQty(t.qty)}</td>
-        <td>${sarawatMoney(t.unitPrice)}</td>
+        <td>${sarawatPriceText(t.unitPrice)}</td>
         <td>${sarawatMoney(t.total)}</td>
       </tr>`).join('');
   }).join('');
