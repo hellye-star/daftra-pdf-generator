@@ -156,6 +156,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith('/api/tp/'):
             import tp_storage_api
             tp_storage_api.handle_get(self)
+        elif self.path.startswith('/api/sarawat/'):
+            import sarawat_storage_api
+            sarawat_storage_api.handle_get(self)
         elif self.path.startswith('/daftra/'):
             self._proxy_daftra()
         else:
@@ -182,6 +185,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         if self.path.startswith('/api/po/'):
             import po_storage_api
             return po_storage_api.handle_post(self)
+        if self.path.startswith('/api/sarawat/'):
+            import sarawat_storage_api
+            return sarawat_storage_api.handle_post(self)
         if self.path.startswith('/purchasing-invoices/combine'):
             self._combine_purchasing()
         elif self.path.startswith('/purchasing-invoices/upload'):
@@ -221,6 +227,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith('/api/tp/'):
             import tp_storage_api
             tp_storage_api.handle_delete(self)
+        elif self.path.startswith('/api/sarawat/'):
+            import sarawat_storage_api
+            sarawat_storage_api.handle_delete(self)
         else:
             self._block_daftra_write()
     def do_PUT(self):
@@ -233,6 +242,9 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith('/api/tp/'):
             import tp_storage_api
             tp_storage_api.handle_put(self)
+        elif self.path.startswith('/api/sarawat/'):
+            import sarawat_storage_api
+            sarawat_storage_api.handle_put(self)
         else:
             self._block_daftra_write()
     def do_PATCH(self):
@@ -2176,6 +2188,8 @@ class VistaProxyHandler(SimpleHTTPRequestHandler):
             print(f'  [setup]  {self.command} {self.path}  ->  {fmt % args}')
         elif '/api/tp/' in self.path:
             print(f'  [tp]     {self.command} {self.path}  ->  {fmt % args}')
+        elif '/api/sarawat/' in self.path:
+            print(f'  [sarawat]{self.command} {self.path}  ->  {fmt % args}')
 
 
 # ── SQI AI proxy auto-start ──────────────────────────────────────────────────
