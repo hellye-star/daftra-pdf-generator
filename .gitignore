@@ -8,3 +8,7 @@ logo.png.png.png
 
 # macOS artifacts
 .DS_Store
+
+# Real client quotation PDFs used as local-only parser fixtures — never commit
+tests/fixtures/sarawat/
+tests/.pdfjs/

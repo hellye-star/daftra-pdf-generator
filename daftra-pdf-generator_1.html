@@ -156,6 +156,8 @@
   .sarawat-item-photo-col { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 64px; flex-shrink: 0; }
   .sarawat-item-main .sarawat-item-desc { flex: 1; margin-bottom: 0; }
   .sarawat-more { margin-top: 8px; border-top: 1px solid var(--rule); padding-top: 6px; }
+  .sarawat-src-note { font-size: 7.5px; color: var(--mid); margin: -2px 0 8px; }
+  .sarawat-src-note .warn { color: #B8860B; font-weight: 600; }
   .sarawat-more summary { font-size: 8px; color: var(--mid); cursor: pointer; letter-spacing: 0.04em; user-select: none; }
   .sarawat-more-body { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 2px; }
   .sarawat-more-row { display: flex; gap: 10px; align-items: center; }
@@ -4068,8 +4070,18 @@ function parseSarawatHeaderFields(text) {
   // stops the capture before that field bleeds into the client name.
   const toLabelRe = /^to\s+(.+?)(?:\s+(?:date|mobile|fax\.?|pages|email)\b.*)?$/i;
 
-  let quoteNo = '', quoteDate = '', client = '';
+  let quoteNo = '', quoteDate = '', client = '', project = '', pageCount = '';
   lines.forEach((line, i) => {
+    // "Project  Pages 2": the project name is printed on the line just above its label.
+    if (!project && /^project\b/i.test(line)) {
+      const rest = line.replace(/^project\b\s*:?\s*/i, '');
+      const pm = rest.match(/^(.*?)\s*\bpages?\b\s*:?\s*(\d+)\s*$/i);
+      let val = pm ? pm[1].trim() : rest.trim();
+      if (pm) pageCount = pm[2];
+      const prev = lines[i - 1];
+      if (!val && prev && !/^(?:to|attn\.?|mobile|fax\.?|e-?mail|date|est\.?\s*no|estimate)\b/i.test(prev)) val = prev;
+      project = val;
+    }
     if (!quoteNo) {
       const m = line.match(noRe);
       if (m && /\d/.test(m[1])) {
@@ -4081,13 +4093,17 @@ function parseSarawatHeaderFields(text) {
         // "43761" landing on its own separate reconstructed line right after). Use the
         // next line if it reads as a standalone code.
         const next = lines[i + 1];
+        const prev = lines[i - 1];
         if (next && bareCodeRe.test(next) && /\d/.test(next)) quoteNo = next;
+        // Same split the other way round: the number sits a few points ABOVE its
+        // "EST.No" label, so pdf.js reconstructs it as the PRECEDING line.
+        else if (prev && bareCodeRe.test(prev) && /\d/.test(prev)) quoteNo = prev;
       }
     }
     if (!quoteDate) { const m = line.match(dateRe); if (m) quoteDate = m[0]; }
     if (!client) {
       const m = line.match(clientRe);
-      if (m && m[1].trim().length > 1 && !dateRe.test(m[1])) {
+      if (m && m[1].trim().length > 1 && !dateRe.test(m[1]) && !/^(?:mobile|fax\.?|e-?mail|tel\.?|phone|date|pages?|project)\b/i.test(m[1].trim())) {
         client = m[1].trim().replace(/[:#]+$/, '').trim();
       } else {
         const m2 = line.match(toLabelRe);
@@ -4095,7 +4111,7 @@ function parseSarawatHeaderFields(text) {
       }
     }
   });
-  return { quoteNo, quoteDate, client };
+  return { quoteNo, quoteDate, client, project, pages: pageCount };
 }
 
 // PRIMARY item-table parser — uses POSITIONED text (x/y from pdf.js), not reconstructed
@@ -4143,20 +4159,27 @@ function parseSarawatItemsFromRows(pages) {
   // ANYWHERE inside a token, not require the whole token to be just that word.
   const UNIT_WORD_RE = /\b(copies|copy|pcs\.?|pieces?|kinds?|units?|nos?\.?)\b/i;
   const toNum = s => parseFloat(String(s).replace(/,/g, '')) || 0;
+  const MONEY_RE = /^\d[\d,]*(?:\.\d+)?$/;   // a bare amount as printed: "161.29", "5,000.00", "48.387"
 
   function isHeaderRow(tokens) {
     const txt = tokens.map(t => t.str.toLowerCase()).join(' ');
     let hits = 0;
     if (/\bdescription\b/.test(txt)) hits++;
     if (/\bquantity\b/.test(txt)) hits++;
-    if (/\bcost\b/.test(txt)) hits++;
+    if (/\b(?:cost|price)\b/.test(txt)) hits++;
     return hits >= 2;
   }
 
-  // Column boundaries are derived from THIS page's own header row — the first "Total"
-  // token precedes "Quantity" (Total Quantity column), "Unit" starts the Unit Cost
-  // column, and the second "Total" token precedes "Cost" (Total Cost column). Falls
-  // back to fixed defaults (matching Sarawat's standard template) only if a page has
+  // Column boundaries are derived from THIS page's own header row — a repeated header on
+  // every page re-derives them. Two header shapes are understood:
+  //  • split labels  ("Total" "Quantity" | "Unit" "Cost" | "Total" "Cost"): the first
+  //    "Total" token precedes "Quantity", "Unit" starts the Unit Cost column and the
+  //    second "Total" precedes "Cost";
+  //  • combined labels ("Total Quantity" | "Unit Price" | "Total Price" — one text run
+  //    each, as in "S. No. / Description / Total Quantity / Unit Price / Total Price").
+  // Numbers in the price columns are right-aligned, so a long amount STARTS left of its
+  // header label; the combined-label bounds therefore leave a wider margin.
+  // Falls back to fixed defaults (matching Sarawat's standard template) only if a page has
   // no detectable header row of its own (e.g. a continuation page without a repeat).
   function columnBoundsFromHeader(tokens) {
     const totals = tokens.filter(t => t.str.trim().toLowerCase() === 'total').sort((a, b) => a.x - b.x);
@@ -4164,13 +4187,21 @@ function parseSarawatItemsFromRows(pages) {
     if (totals.length >= 2 && unitTok) {
       return { descEnd: totals[0].x - COL_PAD, qtyEnd: unitTok.x - COL_PAD, unitEnd: totals[1].x - COL_PAD };
     }
+    const lc = t => t.str.trim().toLowerCase();
+    const qtyTok = tokens.find(t => /^total\s+(quantity|qty)\b/.test(lc(t)));
+    const unitLbl = tokens.find(t => /^unit\s+(price|cost|rate)\b/.test(lc(t)));
+    const totLbl = tokens.find(t => /^total\s+(price|cost|amount)\b/.test(lc(t)));
+    if (qtyTok && unitLbl && totLbl) {
+      return { descEnd: qtyTok.x - COL_PAD, qtyEnd: unitLbl.x - 25, unitEnd: totLbl.x - 30 };
+    }
     return null;
   }
 
   // Resolves the numeric quantity from ONE option's Total Quantity text.
-  // Supports: "5,000 Copies" / "5000 pcs" / "2 Copies" (plain leading number),
-  // "500X22 Kinds" (multiply — no explicit total given on the line), and
-  // "500 x 2 = 1000" / "2000X5 = 10,000" (an explicit "=" result always wins).
+  // Supports: "5,000 Copies" / "5000 pcs" / "2 Copies" (plain leading number —
+  // the unit word never stays in the number), "500X22 Kinds" (multiply — no
+  // explicit total given on the line), and "500 x 2 = 1000" / "2000X5 = 10,000"
+  // (an explicit "=" result always wins).
   function parseQuantityValue(display) {
     if (!display) return { qty: 0, review: true };
     const eq = display.match(/=\s*([\d,]+(?:\.\d+)?)\s*$/);
@@ -4198,21 +4229,95 @@ function parseSarawatItemsFromRows(pages) {
     return segments.length ? segments : [''];
   }
 
-  // The item's bold title line sits immediately above "Cover Section
-  // Details" (or, for a couple of items, "Inside Section details" / "Other
-  // Sec N" when there's no separate cover section) in the source PDF —
-  // everything from that label onward is technical specification text, not
-  // part of the name. The label itself marks the split point; it's never
-  // part of either the name or treated as if it were.
+  // A recognised section label (older Sarawat templates). When one exists, any title
+  // text rows ABOVE it still belong to the item name (a wrapped title).
   const SECTION_LABEL_RE = /\b(cover section details|inside section details?|other sec(?:tion)?\s*\d*)\b/i;
-  function splitTitleAndDescription(descParts) {
-    const full = descParts.join(' ').replace(/\s+/g, ' ').trim();
-    const m = full.match(SECTION_LABEL_RE);
-    if (m && m.index > 0) return { itemName: full.slice(0, m.index).trim(), description: full.slice(m.index).trim() };
-    // No recognizable section label found — nothing to safely split on, so
-    // the whole text becomes the name rather than guessing where a
-    // description might start.
-    return { itemName: full, description: '' };
+
+  // ── Name vs specification ────────────────────────────────────────────────────
+  // Name = the first meaningful text after the S.No code (the text on the code's own
+  // row). Everything after it is the specification, rebuilt from the table's own
+  // geometry so it keeps its structure instead of being flattened into one line:
+  //   • a row with a label and a value  ("Finish Size" | "21.00 X 29.70") → "Label: value"
+  //   • a lone value-column row (wrapped value, e.g. "140 gsm") → appended to the
+  //     previous field; if it sits within a few points ABOVE a label-only row (pdf.js
+  //     splits the two when the text baselines differ by a hair) it is that label's value
+  //   • a lone left-column row with no value ("Wrapper", "Text", "Cover Section
+  //     Details") → a section heading; sections are separated by a blank line.
+  // A document with no label/value rows at all keeps the previous flat text.
+  function buildItemText(it) {
+    const rows = it.rows.filter(r => r.toks.length);
+    let i = 0;
+    const nameParts = [];
+    if (rows.length && rows[0].isSno) { rows[0].toks.forEach(t => nameParts.push(t.str.trim())); i = 1; }
+    if (!nameParts.length && i < rows.length) { rows[i].toks.forEach(t => nameParts.push(t.str.trim())); i++; }
+    // wrapped title: single left-column rows before a recognised section label
+    let j = i;
+    while (j < rows.length && !(rows[j].toks.length === 1 && SECTION_LABEL_RE.test(rows[j].toks[0].str))) j++;
+    if (j < rows.length && j > i && rows.slice(i, j).every(r => r.toks.length === 1)) {
+      rows.slice(i, j).forEach(r => nameParts.push(r.toks[0].str.trim()));
+      i = j;
+    }
+    const itemName = nameParts.join(' ').replace(/\s+/g, ' ').trim();
+    const rest = rows.slice(i).filter(r => !r.isSno);   // a repeated S.No mini-header's title is not specification
+
+    const seconds = rest.filter(r => r.toks.length >= 2).map(r => r.toks[1].x).sort((a, b) => a - b);
+    if (!seconds.length) {   // no label/value geometry — previous flat behaviour
+      return { itemName, description: rest.map(r => r.toks.map(t => t.str.trim()).join(' ')).join(' ').replace(/\s+/g, ' ').trim() };
+    }
+    const valueX = seconds[Math.floor(seconds.length / 2)];
+    const isValueOnly = r => r.toks.length === 1 && r.toks[0].x >= valueX - 8;
+    const sections = [];
+    let sec = null, last = null, pending = null;
+    const ensureSec = () => { if (!sec) { sec = { head: '', lines: [] }; sections.push(sec); } return sec; };
+    const addField = (label, value) => { ensureSec(); last = { label, value }; sec.lines.push(last); };
+    const flushPending = () => {
+      if (!pending) return;
+      if (last) last.value = (last.value ? last.value + ' ' : '') + pending.text;
+      else addField('', pending.text);
+      pending = null;
+    };
+    for (let k = 0; k < rest.length; k++) {
+      const r = rest[k], toks = r.toks;
+      if (toks.length >= 2) {
+        flushPending();
+        addField(toks[0].str.trim(), toks.slice(1).map(t => t.str.trim()).join(' '));
+        continue;
+      }
+      const text = toks[0].str.trim();
+      if (isValueOnly(r)) { flushPending(); pending = { text, y: r.y }; continue; }
+      if (pending && Math.abs(pending.y - r.y) <= 6) { addField(text, pending.text); pending = null; continue; }
+      flushPending();
+      const next = rest[k + 1];
+      if (next && isValueOnly(next)) { addField(text, ''); continue; }   // label whose value starts on the next row
+      sec = { head: text, lines: [] }; sections.push(sec); last = null;  // section heading
+    }
+    flushPending();
+    const description = sections
+      .map(s => [s.head, ...s.lines.map(l => l.label ? (l.value ? l.label + ': ' + l.value : l.label) : l.value)].filter(Boolean).join('\n'))
+      .filter(Boolean).join('\n\n');
+    return { itemName, description };
+  }
+
+  // Footer / totals block (after the last item): "VAT +15%  1,200.00", an optional
+  // "Sub Total", and the grand total (often a bare amount on its own row, away from the
+  // VAT row). Read-only — used for reconciliation, never for item data.
+  const footer = { subtotal: null, vat: null, vatPct: null, grand: null };
+  function scanFooter(tokens, unitEnd) {
+    const txt = tokens.map(t => t.str).join(' ');
+    const amounts = tokens.filter(t => MONEY_RE.test(t.str.trim()));
+    const last = amounts.length ? toNum(amounts[amounts.length - 1].str) : null;
+    if (last === null) return;
+    if (/sub-?total/i.test(txt)) { if (footer.subtotal === null) footer.subtotal = last; }
+    else if (/\bvat\b/i.test(txt)) {
+      if (footer.vat === null) { footer.vat = last; const m = txt.match(/(\d+(?:\.\d+)?)\s*%/); if (m) footer.vatPct = parseFloat(m[1]); }
+    }
+    else if (/grand\s*total|amount\s*due|total\s*amount/i.test(txt)) { if (footer.grand === null) footer.grand = last; }
+    else if (footer.vat !== null && footer.grand === null) {
+      // The grand total is printed as a bare amount in the Total column — alone on its row,
+      // or beside the spelled-out amount ("SAUDI RIYALS … ONLY  169,797.50").
+      const inTotalCol = amounts.filter(t => t.x >= unitEnd - 5);
+      if (inTotalCol.length && (tokens.length === 1 || /\bonly\b|riyals?/i.test(txt))) footer.grand = toNum(inTotalCol[inTotalCol.length - 1].str);
+    }
   }
 
   let bounds = { descEnd: 360, qtyEnd: 458, unitEnd: 522 };
@@ -4230,47 +4335,65 @@ function parseSarawatItemsFromRows(pages) {
   const pushCurrent = () => { if (current) items.push(current); current = null; };
 
   pages.forEach(page => {
-    if (stopped) return;
     page.rows.forEach(row => {
-      if (stopped) return;
       const tokens = row.tokens;
+      if (stopped) { scanFooter(tokens, bounds.unitEnd); return; }   // after the item table: totals only, nothing attaches to an item
 
       if (isHeaderRow(tokens)) { const b = columnBoundsFromHeader(tokens); if (b) { bounds = b; boundsFromHeader = true; } return; }
-      if (STOP_RE.test(tokens.map(t => t.str).join(' '))) { stopped = true; return; }
+      if (STOP_RE.test(tokens.map(t => t.str).join(' '))) { stopped = true; scanFooter(tokens, bounds.unitEnd); return; }
 
       const snoTok = tokens.find(t => t.x < SNO_MAX && SNO_RE.test(t.str.trim()));
       if (snoTok) {
         const snoVal = snoTok.str.trim();
-        if (!current || current.sno !== snoVal) { pushCurrent(); current = { sno: snoVal, descParts: [], qtyParts: [], totalParts: [] }; }
+        if (!current || current.sno !== snoVal) {
+          const prevItem = current;
+          pushCurrent();
+          current = { sno: snoVal, rows: [], qtyParts: [], unitParts: [], totalParts: [] };
+          // An item title can be printed a few points ABOVE its own S.No code, so it
+          // is read as the LAST row of the previous item. If this code's row carries
+          // no title of its own and that row is one lone left-column line sitting
+          // within a few points above the code, it is this item's title.
+          if (prevItem && !tokens.some(t => t !== snoTok && t.x < bounds.descEnd)) {
+            const lr = prevItem.rows[prevItem.rows.length - 1];
+            if (lr && !lr.isSno && lr.toks.length === 1 && lr.toks[0].x < 120 && lr.y - row.y >= -1 && lr.y - row.y <= 6) {
+              prevItem.rows.pop();
+              current.rows.push({ y: lr.y, toks: lr.toks, isSno: true });
+            }
+          }
+        }
         // else: same S.No repeating as a mini-header for an overflow block of
         // quantity options (same page or after a page break) — keep
         // accumulating into the existing item instead of starting a new one.
       }
       if (!current) return; // stray content before the first S.No (letterhead/customer block) — not item data
 
+      const descToks = [];
       tokens.forEach(t => {
         if (t === snoTok) return;
-        if (t.x < bounds.descEnd) current.descParts.push(t.str);
+        if (t.x < bounds.descEnd) descToks.push(t);
         else if (t.x < bounds.qtyEnd) current.qtyParts.push(t.str);
-        else if (t.x < bounds.unitEnd) { /* Unit Cost column — discarded on purpose: unit price is always re-derived as total/qty, never taken from extraction, see recomputeSarawatTotals() */ }
+        else if (t.x < bounds.unitEnd) current.unitParts.push(t.str);   // Unit Price column — the printed value is kept alongside the derived one
         else current.totalParts.push(t.str);
       });
+      current.rows.push({ y: row.y, toks: descToks, isSno: !!snoTok });
     });
   });
   pushCurrent();
 
+  const round2 = n => Math.round(n * 100) / 100;
   const mapped = items.map(it => {
-    const { itemName, description } = splitTitleAndDescription(it.descParts);
+    const { itemName, description } = buildItemText(it);
     const qtyDisplay = it.qtyParts.join(' ').replace(/\s+/g, ' ').trim();
     const segments = splitQtySegments(it.qtyParts);
     const totals = it.totalParts.map(toNum);
+    const printedUnits = it.unitParts.map(s => s.trim()).filter(s => MONEY_RE.test(s));
     const n = Math.min(segments.length, totals.length);
 
     let tiers, qtyReview;
     if (n === 0) {
       // Nothing usable in either column — one placeholder tier flagged for review.
       const { qty, review } = parseQuantityValue(qtyDisplay);
-      tiers = [{ qty, unitPrice: 0, total: 0, applyAdjust: true, itemAdjustPct: '' }];
+      tiers = [{ qty, unitPrice: 0, printedUnitPrice: null, total: 0, applyAdjust: true, itemAdjustPct: '' }];
       qtyReview = review || true;
     } else {
       tiers = [];
@@ -4279,7 +4402,31 @@ function parseSarawatItemsFromRows(pages) {
         const { qty, review } = parseQuantityValue(segments[i]);
         const total = totals[i];
         if (review) qtyReview = true;
-        tiers.push({ qty, unitPrice: qty > 0 ? Math.round((total / qty) * 10000) / 10000 : 0, total, applyAdjust: true, itemAdjustPct: '' });
+        // SUPPLIER VALUES ARE KEPT EXACTLY AS PRINTED — quantity, unit price (never
+        // rounded: 48.387 stays 48.387) and line total. A value is never changed just
+        // to make qty × unit price equal the printed total; where they disagree the
+        // line is FLAGGED instead (`reconcile`):
+        //   • 'rounding'  — the gap is explained by the printed unit price having been
+        //                   rounded for display (e.g. 31 × 161.29 = 4,999.99 vs 5,000.00);
+        //   • 'mismatch'  — the gap is larger than any rounding of the printed unit
+        //                   price could explain (e.g. "4 X 12 = 45" against a total of
+        //                   12 × the unit price): the quantity or price needs checking.
+        // Only when the document prints NO unit price for the line is it derived
+        // (total ÷ qty, 4 decimals) — `unitDerived` says so.
+        const printed = printedUnits.length === n ? toNum(printedUnits[i]) : null;
+        const derived = qty > 0 ? Math.round((total / qty) * 10000) / 10000 : 0;
+        const unitPrice = printed !== null ? printed : derived;
+        let reconcile = null;
+        if (printed !== null && qty > 0 && total > 0) {
+          const expected = round2(qty * printed);
+          if (expected !== round2(total)) {
+            const dec = (String(printedUnits[i]).split('.')[1] || '').length;
+            const explained = Math.abs(qty * printed - total) <= qty * 0.5 * Math.pow(10, -Math.max(dec, 2)) + 1e-9;
+            reconcile = { kind: explained ? 'rounding' : 'mismatch', expected, printedTotal: round2(total), diff: round2(expected - total) };
+            if (!explained) qtyReview = true;
+          }
+        }
+        tiers.push({ qty, unitPrice, printedUnitPrice: printed, unitDerived: printed === null, total, reconcile, applyAdjust: true, itemAdjustPct: '' });
       }
     }
     // One grouped item per product — every quantity tier stays visible and
@@ -4287,7 +4434,7 @@ function parseSarawatItemsFromRows(pages) {
     // this one S.No/name/description instead of repeating it per tier.
     return { sno: it.sno, itemName, description, tiers, qtyDisplay, qtyReview };
   });
-  return { items: mapped, boundsFromHeader };
+  return { items: mapped, boundsFromHeader, footer };
 }
 
 // FALLBACK item-table parser — used only when the primary S.No-column parser above
@@ -5383,15 +5530,66 @@ function sarawatFinalizeSmartItems(items) {
 // it correctly finds zero items and falls through to numbered-row-mode
 // exactly as before — verified with the same synthetic Jazaaco-shaped
 // regression test used when this pipeline was first built.
+// What the supplier's PDF printed for ONE quantity line, kept separately from Vista's own
+// editable quantity / unit price so it survives saving, reopening and later price edits:
+//   quantity, unitPrice (null when the document prints none), lineTotal  — exactly as printed;
+//   priceDerived                — true only when no unit price was printed and one was derived;
+//   reconciliationStatus        — 'matched' | 'rounding' | 'mismatch' | 'unverified';
+//   reconciliationDifference    — qty × printed unit price − printed line total (null if unverified).
+// Stored as a plain optional object (`source`) inside the existing tier JSON — deliberately NOT
+// `sourceUnitPrice`, which already means "supplier price in the Excel source currency" and drives
+// the currency-conversion logic.
+function sarawatSourceLine(t) {
+  const hasUnit = t.printedUnitPrice !== null && t.printedUnitPrice !== undefined;
+  const checkable = hasUnit && t.qty > 0 && t.total > 0;
+  return {
+    quantity: t.qty,
+    unitPrice: hasUnit ? t.printedUnitPrice : null,
+    lineTotal: t.total,
+    priceDerived: !hasUnit,
+    reconciliationStatus: !checkable ? 'unverified' : (t.reconcile ? t.reconcile.kind : 'matched'),
+    reconciliationDifference: !checkable ? null : (t.reconcile ? t.reconcile.diff : 0),
+  };
+}
+
 function parseSarawatDocumentFromPdf(fullText, pages) {
   const template = parseSarawatItemsFromRows(pages);
-  const mapTemplate = () => ({
-    items: template.items.map(it => ({
+  const mapTemplate = () => {
+    // Each quantity line carries `source` — what the supplier document printed, kept exactly
+    // (see sarawatSourceLine). The editable qty / unit price start from those values; the
+    // editor's own total is qty × unit price and is never forced to equal the printed total.
+    const items = template.items.map(it => ({
       sno: it.sno, itemName: it.itemName, description: it.description, qtyDisplay: it.qtyDisplay, qtyReview: it.qtyReview,
-      tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.unitPrice, manualUnitPrice: null, unitPrice: 0, total: t.total })),
-    })),
-    supplierNotes: '', source: 'sarawat-template',
-  });
+      tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.unitPrice, manualUnitPrice: null, unitPrice: 0, total: t.total,
+        source: sarawatSourceLine(t) })),
+    }));
+    // Totals printed under the item table (VAT row, grand total) — read for
+    // reconciliation only. Subtotal = the printed one, else grand total − VAT.
+    const f = template.footer || {};
+    const r2 = n => Math.round(n * 100) / 100;
+    const lineTotalsSum = r2(template.items.reduce((s, it) => s + it.tiers.reduce((a, t) => a + t.total, 0), 0));
+    const subtotal = f.subtotal != null ? f.subtotal
+      : (f.grand != null && f.vat != null ? r2(f.grand - f.vat)
+        : (f.vat != null && f.vatPct ? r2(f.vat / (f.vatPct / 100)) : null));
+    const sourceTotals = { subtotal, vat: f.vat, vatPct: f.vatPct, grandTotal: f.grand, lineTotalsSum };
+    // Only judged when every item has a single quantity line — items with several
+    // quantity OPTIONS are alternatives, so their totals are not meant to add up.
+    const notes = [];
+    if (subtotal != null && template.items.length && template.items.every(it => it.tiers.length === 1)) {
+      notes.push(Math.abs(subtotal - lineTotalsSum) <= 0.01
+        ? `source subtotal SAR ${sarawatMoney(subtotal)} reconciled with the ${template.items.length} imported item(s)`
+        : `⚠ source subtotal SAR ${sarawatMoney(subtotal)} ≠ imported items SAR ${sarawatMoney(lineTotalsSum)} — check quantities and prices`);
+    }
+    const flagged = template.items.reduce((n, it) => n + it.tiers.filter(t => t.reconcile).length, 0);
+    if (flagged) {
+      // qty × the printed unit price is what the quotation will total — say how that compares
+      // with the supplier's printed line totals instead of hiding the difference.
+      const computed = r2(template.items.reduce((s, it) => s + it.tiers.reduce((a, t) => a + t.qty * t.unitPrice, 0), 0));
+      notes.push(`⚠ ${flagged} line(s) do not multiply out to the printed line total (marked on the item) — printed values kept; qty × printed price totals SAR ${sarawatMoney(computed)} vs SAR ${sarawatMoney(lineTotalsSum)} printed`);
+    }
+    const sheetNote = notes.join(' — ');
+    return { items, supplierNotes: '', source: 'sarawat-template', sourceTotals, sheetNote };
+  };
   // Only trust the S.No-template result outright when its column bounds
   // actually came from THIS document's own header row. A document that uses
   // the same "01_01"-style S.No numbering but a different table shape (no
@@ -5753,7 +5951,7 @@ async function handleSarawatFileUpload(input) {
       // Photos taken from the source file itself (spreadsheet imports) are part
       // of the original data; none exist at this point for PDF imports.
       photo: it.photo || '', photoSize: it.photoSize || '', extraPhotos: (it.extraPhotos || []).slice(),
-      tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.supplierUnitPrice, ...(t.sourceUnitPrice != null && t.sourceUnitPrice !== '' ? { sourceUnitPrice: t.sourceUnitPrice } : {}) })),
+      tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.supplierUnitPrice, ...(t.sourceUnitPrice != null && t.sourceUnitPrice !== '' ? { sourceUnitPrice: t.sourceUnitPrice } : {}), ...(t.source ? { source: { ...t.source } } : {}) })),
     })),
   };
   recomputeSarawatTotals();
@@ -5956,6 +6154,21 @@ function sarawatPriceDisplay(t) {
   return sarawatRound2(t.unitPrice).toFixed(2);
 }
 
+// Import metadata kept on each quantity line (t.source): shown only when the supplier's printed
+// quantity × unit price does not reproduce its printed line total. Manual items and cleanly
+// matching imports show nothing. Read-only — it never changes what the editor calculates.
+function sarawatSourceNoteHtml(it) {
+  const tiers = it.tiers || [];
+  return tiers.map((t, j) => {
+    const sr = t.source;
+    if (!sr || (sr.reconciliationStatus !== 'rounding' && sr.reconciliationStatus !== 'mismatch')) return '';
+    const tip = (sr.reconciliationStatus === 'rounding' ? 'Rounding difference' : 'Does not multiply out — check the quantity and price')
+      + ': quantity × printed unit price differs from the printed line total by ' + sarawatMoney(Math.abs(Number(sr.reconciliationDifference) || 0))
+      + '. The source values are kept exactly as printed.';
+    return `<div class="sarawat-src-note" title="${escapeHtml(tip)}"><span class="warn">⚠ verify</span> ${tiers.length > 1 ? 'Line ' + (j + 1) + ' — ' : ''}Source: ${sarawatFmtQty(sr.quantity)} × ${escapeHtml(String(sr.unitPrice))} | Printed total ${sarawatMoney(sr.lineTotal)}</div>`;
+  }).join('');
+}
+
 function sarawatPriceNoteHtml(itemIdx, tierIdx, t) {
   return sarawatHasManualPrice(t)
     ? `<div style="display:flex;align-items:center;gap:5px;margin-top:2px;white-space:nowrap;">
@@ -6118,7 +6331,7 @@ function resetSarawatToOriginal() {
     qtyDisplay: it.qtyDisplay || '', qtyReview: !!it.qtyReview,
     ...(it.photo ? { photo: it.photo, photoSize: it.photoSize || QUO_PHOTO_SIZE_DEFAULT } : {}),
     ...((it.extraPhotos || []).length ? { extraPhotos: it.extraPhotos.slice() } : {}),
-    tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.supplierUnitPrice, manualUnitPrice: null, unitPrice: 0, total: 0, ...(t.sourceUnitPrice != null && t.sourceUnitPrice !== '' ? { sourceUnitPrice: t.sourceUnitPrice } : {}) })),
+    tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.supplierUnitPrice, manualUnitPrice: null, unitPrice: 0, total: 0, ...(t.sourceUnitPrice != null && t.sourceUnitPrice !== '' ? { sourceUnitPrice: t.sourceUnitPrice } : {}), ...(t.source ? { source: { ...t.source } } : {}) })),
   }));
   sarawatState.globalMarkupPct = '';   // clear the global markup too — no adjustment carries over
   // Supplier-price currency back to the original one; SAR prices are re-derived
@@ -6469,6 +6682,7 @@ function renderSarawatForm() {
       ${it._itemReview
         ? `<div style="font-size:6.5px;color:#B8860B;margin:-4px 0 8px;">⚠ verify — ${it._reviewNote ? escapeHtml(it._reviewNote) : it._ocrLowConfidence ? 'low-confidence OCR reading, please double-check Qty/Price' : 'Item/Description split was a best-effort guess'}${it._raw ? '. As parsed: “' + escapeHtml(it._raw) + '”' : ''}</div>`
         : ''}
+      ${sarawatSourceNoteHtml(it)}
       <div class="sarawat-item-main">
         <div class="sarawat-item-photo-col">
           <div class="sarawat-item-photo-thumb">${it.photo ? `<img src="${it.photo}" alt="">` : `<span class="quo-photo-empty">No photo</span>`}</div>
@@ -6972,6 +7186,8 @@ function sarawatBuildRevisionSnapshot(rev) {
         tierId: t.tierId, qty: t.qty, supplierUnitPrice: t.supplierUnitPrice, manualUnitPrice: t.manualUnitPrice,
         unitPrice: t.unitPrice, total: t.total,
         ...(t.sourceUnitPrice != null && t.sourceUnitPrice !== '' ? { sourceUnitPrice: t.sourceUnitPrice } : {}),
+        // what the supplier document printed — written once at import, never edited afterwards
+        ...(t.source ? { source: JSON.parse(JSON.stringify(t.source)) } : {}),
       })),
     })),
     subtotal: s.subtotal, vatAmount: s.vatAmount, grandTotal: s.grandTotal,
@@ -7059,7 +7275,7 @@ function sarawatLoadRevisionIntoEditor(doc, rev) {
     items: sarawatState.items.map(it => ({
       sno: it.sno || '', itemName: it.itemName || '', description: it.description || '',
       qtyDisplay: '', qtyReview: false,
-      tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.supplierUnitPrice, ...(t.sourceUnitPrice != null && t.sourceUnitPrice !== '' ? { sourceUnitPrice: t.sourceUnitPrice } : {}) })),
+      tiers: it.tiers.map(t => ({ qty: t.qty, supplierUnitPrice: t.supplierUnitPrice, ...(t.sourceUnitPrice != null && t.sourceUnitPrice !== '' ? { sourceUnitPrice: t.sourceUnitPrice } : {}), ...(t.source ? { source: { ...t.source } } : {}) })),
     })),
   };
   sarawatSaved = doc;
