@@ -1465,12 +1465,12 @@ function renderVATPanel(outputVAT, inputVATpur, inputVATexp, vatPosition, allAva
 
 function renderVatExportButtons(periodKey, label) {
   var shortLabel = String(label).replace(/\s*\([^)]*\)\s*$/, '');   // "Q1 2026 (Jan–Mar)" -> "Q1 2026"
-  var zatcaLabel    = periodKey === 'all' ? 'Export Historical ZATCA VAT PDF'          : 'Export ' + shortLabel + ' ZATCA VAT PDF';
+  var zatcaLabel    = periodKey === 'all' ? 'Export Historical ZATCA Report'            : 'Export ' + shortLabel + ' ZATCA Report';
   var personalLabel = periodKey === 'all' ? 'Export Historical Personal Transfers PDF' : 'Export ' + shortLabel + ' Personal Transfers PDF';
   return '<div class="vat-export-actions">'
     + '<button class="btn-export" onclick="exportVatPdf()">' + esc(zatcaLabel) + '</button>'
     + '<button class="btn-export" onclick="exportPersonalTransfersPdf()">' + esc(personalLabel) + '</button>'
-    + '<div class="vat-export-note">ZATCA VAT PDF: internal reconciliation working paper for accounting review — not an automatic ZATCA submission. '
+    + '<div class="vat-export-note">ZATCA Report: VAT return supporting report (native-text PDF) for accountant review and ZATCA supporting documentation — not an automatic ZATCA submission. '
     + 'Personal Transfers PDF: internal management report only, not for ZATCA submission.</div>'
     + '</div>';
 }
@@ -1910,16 +1910,337 @@ function buildVatPdfDocument(model) {
     + '</body></html>';
 }
 
-// Opens a real browser print window instead of rendering an offscreen element
-// to a canvas — the previous html2canvas-based approach produced a blank page
-// because the source container was positioned at left:-10000px, outside the
-// area html2canvas actually captures. The print window is opened synchronously
-// (same click) to avoid popup blockers, and print() is deferred until the
-// window's own load event plus a short render delay.
-function exportVatPdf() {
+// ═══════════════════════════════════════════════════════════════════════════
+// VAT RETURN SUPPORTING REPORT (native-text PDF)
+// ───────────────────────────────────────────────────────────────────────────
+// PRESENTATION ONLY. Every amount below is read from the export model
+// (buildVatExportModel() → lastVAT, i.e. the exact figures already shown in the
+// VAT card / VAT Position panel). Nothing here fetches, classifies or
+// recalculates — it only lays the existing numbers out as a formal document.
+//
+// The HTML is sent to the local Vista server (POST /api/sarawat/pdf → headless
+// Edge/Chrome, the same native-text renderer the Sarawat quotations use), so
+// every word and number in the PDF is real, searchable text; only the logo is an
+// image. Page numbers and the running footer are CSS @page margin boxes, so they
+// are real text too.
+
+// Taxpayer identity — the same company profile defaults the Document Generator
+// prints on every Vista invoice/quotation (daftra-pdf-generator_1.html → co()).
+// No Arabic company name is stored anywhere in Vista, so none is shown.
+var VISTA_TAXPAYER = {
+  nameEn:  'Vista United Co.',
+  vat:     '314573358300003',
+  cr:      '7053413683',
+  address: 'Jeddah, KSA, Al Muhammadiya Dist, Muhammad Ibn 23625 Hatib Street',
+};
+
+// 2-decimals amount, thousands separators; negatives in brackets (accounting style).
+function vrAmt(n) {
+  var v = Number(n) || 0;
+  var s = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v < -0.005 ? '(' + s + ')' : s;
+}
+
+// A CSS string literal (for @page margin-box content).
+function vrCssStr(s) {
+  return '"' + String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ') + '"';
+}
+
+function vrStyles(model) {
+  var tp = VISTA_TAXPAYER;
+  return ''
+    + '@page { size: A4 portrait; margin: 15mm 14mm 20mm 14mm;'
+    + ' @bottom-left   { content: ' + vrCssStr(tp.nameEn + '  |  VAT Registration No.: ' + tp.vat + '  |  Tax Period: ' + model.periodLabel) + '; font: 7.5pt Arial, Tahoma, sans-serif; color: #444; vertical-align: top; padding-top: 4mm; }'
+    + ' @bottom-right  { content: "Page " counter(page) " of " counter(pages); font: 7.5pt Arial, Tahoma, sans-serif; color: #444; vertical-align: top; padding-top: 4mm; }'
+    + ' @top-right     { content: "CONFIDENTIAL / TAX RECORD  —  سري / سجل ضريبي"; font: 7pt Arial, Tahoma, sans-serif; color: #666; vertical-align: bottom; padding-bottom: 3mm; }'
+    + ' }'
+    + '* { box-sizing: border-box; }'
+    + 'html, body { margin: 0; padding: 0; background: #fff; }'
+    + 'body { font-family: Arial, Tahoma, "Segoe UI", sans-serif; font-size: 9pt; color: #1a1a1a; line-height: 1.35; }'
+    + '.ar { font-family: Tahoma, Arial, "Segoe UI", sans-serif; direction: rtl; unicode-bidi: isolate; }'
+    + '.hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; }'
+    + '.hdr .logo { width: 120px; height: 46px; overflow: hidden; position: relative; }'
+    + '.hdr .logo img { position: absolute; width: 198px; height: 198px; left: -46px; top: -75px; }'
+    + '.hdr .co { font-size: 10.5pt; font-weight: 700; letter-spacing: 0.04em; margin-top: 4px; }'
+    + '.hdr .co-sub { font-size: 8pt; color: #444; }'
+    + '.title { text-align: center; margin: 14px 0 2px; }'
+    + '.title .en { font-size: 15pt; font-weight: 700; letter-spacing: 0.06em; }'
+    + '.title .prep { font-size: 8.5pt; color: #333; margin-top: 5px; }'
+    + '.status { display: inline-block; border: 1px solid #555; padding: 2px 8px; font-size: 7.5pt; font-weight: 700; margin-top: 6px; }'
+    + 'h2.sec { font-size: 9.5pt; font-weight: 700; margin: 16px 0 5px; padding: 3px 0; border-bottom: 1px solid #1a1a1a; display: flex; justify-content: space-between; break-after: avoid; }'
+    + 'h3.sub { font-size: 8.8pt; font-weight: 700; margin: 10px 0 3px; display: flex; justify-content: space-between; break-after: avoid; }'
+    + 'table { width: 100%; border-collapse: collapse; }'
+    + 'table.kv td { border: 1px solid #999; padding: 4px 7px; vertical-align: top; }'
+    + 'table.kv td.k { width: 26%; background: #f2f2f2; font-weight: 700; }'
+    + 'table.kv td.v { width: 24%; }'
+    + 'table.kv td.ka { width: 26%; background: #f2f2f2; font-weight: 700; text-align: right; }'
+    + 'table.kv td.ka.ar { text-align: right; }'
+    + 'table.sum { table-layout: fixed; } table.sum th:nth-child(1) { width: 38%; } table.sum th:nth-child(2) { width: 38%; } table.sum th:nth-child(3) { width: 24%; }'
+    + 'table.sum td, table.sum th { border: 1px solid #999; padding: 4px 7px; overflow-wrap: anywhere; }'
+    + 'table.sum th { background: #e9e9e9; font-size: 8pt; text-align: left; }'
+    + 'table.sum td.lbl-ar, table.sum th.lbl-ar { text-align: right; }'
+    + 'table.sum td.num, table.sum th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }'
+    + 'table.sum tr.tot td { font-weight: 700; background: #f2f2f2; }'
+    + 'table.sum tr.net td { font-weight: 700; font-size: 10pt; background: #e4e4e4; border-top: 2px solid #1a1a1a; border-bottom: 2px solid #1a1a1a; padding: 7px 7px; }'
+    + 'table.sched { font-size: 7.8pt; table-layout: fixed; }'
+    + 'table.sched thead { display: table-header-group; }'
+    + 'table.sched tr { break-inside: avoid; }'
+    + 'table.sched th { background: #e9e9e9; border: 1px solid #888; padding: 3px 4px; text-align: left; vertical-align: bottom; }'
+    + 'table.sched th small { display: block; font-weight: 400; color: #444; font-size: 7pt; text-align: right; }'
+    + 'table.sched td { border: 1px solid #aaa; padding: 3px 4px; vertical-align: top; overflow-wrap: anywhere; }'
+    + 'table.sched td.num, table.sched th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }'
+    + 'table.sched td:nth-child(2) { white-space: nowrap; }'
+    + 'table.sched tr.tot td { font-weight: 700; background: #f2f2f2; border-top: 2px solid #1a1a1a; }'
+    + '.note { font-size: 8pt; color: #333; margin-top: 5px; line-height: 1.45; }'
+    + '.empty { font-size: 8.5pt; color: #555; font-style: italic; margin: 4px 0; }'
+    + 'ul.rn { margin: 4px 0 0; padding-left: 16px; } ul.rn li { margin: 0 0 5px; break-inside: avoid; }'
+    + 'ul.rn li .ar { display: block; color: #333; margin-top: 1px; }'
+    + '.keep { break-inside: avoid; }'
+    + '.decl { margin-top: 18px; border: 1px solid #777; padding: 9px 11px; font-size: 8.3pt; line-height: 1.5; break-inside: avoid; }'
+    + '.decl .ar { display: block; margin-top: 6px; }'
+    + '.sig { display: flex; gap: 30px; margin-top: 22px; font-size: 8pt; break-inside: avoid; }'
+    + '.sig div { flex: 1; border-top: 1px solid #333; padding-top: 3px; }';
+}
+
+// Bilingual 3-column summary row: English | Arabic | Amount (SAR).
+function vrSumRow(en, ar, val, cls) {
+  return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + esc(en) + '</td>'
+    + '<td class="lbl-ar ar" dir="rtl">' + esc(ar) + '</td>'
+    + '<td class="num">' + esc(vrAmt(val)) + '</td></tr>';
+}
+function vrSumHead(enHead, arHead) {
+  return '<thead><tr><th>' + esc(enHead) + '</th><th class="lbl-ar ar" dir="rtl">' + esc(arHead)
+    + '</th><th class="num">Amount (SAR)<br><span class="ar" dir="rtl">المبلغ (ريال)</span></th></tr></thead>';
+}
+function vrSec(n, en, ar) {
+  return '<h2 class="sec"><span>' + esc(n + '. ' + en) + '</span><span class="ar" dir="rtl">' + esc(ar) + '</span></h2>';
+}
+function vrSub(en, ar) {
+  return '<h3 class="sub"><span>' + esc(en) + '</span><span class="ar" dir="rtl">' + esc(ar) + '</span></h3>';
+}
+function vrKv(kEn, kAr, v) {
+  return '<td class="k">' + esc(kEn) + '</td><td class="v">' + v + '</td>';
+}
+
+// Detailed schedule. rows = [{ date, no, party, net, vat, gross, extra }]; totals come
+// from the model (the dashboard's own headline figures), never from summing rows.
+function vrScheduleTable(rows, totals, opts) {
+  var cols = opts.cols;   // [{ h, ar, cls, w }]
+  var head = '<thead><tr>' + cols.map(function(c) {
+    return '<th class="' + (c.cls || '') + '" style="width:' + c.w + '%;">' + esc(c.h) + '<small class="ar" dir="rtl">' + esc(c.ar) + '</small></th>';
+  }).join('') + '</tr></thead>';
+  var body = rows.map(function(r, i) {
+    var cells = [String(i + 1), r.date, r.no, r.party];
+    if (opts.extraCol) cells.push(r.extra);
+    var h = '<tr>' + cells.map(function(c) { return '<td>' + esc(c) + '</td>'; }).join('')
+      + '<td class="num">' + esc(vrAmt(r.net)) + '</td><td class="num">' + esc(vrAmt(r.vat)) + '</td><td class="num">' + esc(vrAmt(r.gross)) + '</td></tr>';
+    return h;
+  }).join('');
+  var span = 4 + (opts.extraCol ? 1 : 0);
+  var foot = '<tr class="tot"><td colspan="' + span + '">' + esc(opts.totalLabel) + '</td>'
+    + '<td class="num">' + esc(vrAmt(totals.net)) + '</td><td class="num">' + esc(vrAmt(totals.vat)) + '</td><td class="num">' + esc(vrAmt(totals.gross)) + '</td></tr>';
+  return '<table class="sched">' + head + '<tbody>' + body + foot + '</tbody></table>';
+}
+
+function vrByDateThenNo(a, b) {
+  return (a.date || '').localeCompare(b.date || '') || String(a.no || '').localeCompare(String(b.no || ''), 'en', { numeric: true });
+}
+
+function buildVatReportHtml(model) {
+  var tp = VISTA_TAXPAYER;
+  var bounds = model.bounds;
+  var periodAr = periodArLabel(model);
+  var from = bounds ? fmtDateShort(bounds.start) : 'All available data';
+  var to   = bounds ? fmtDateShort(bounds.end)   : 'All available data';
+  var genDate = fmtDateShort(model.generatedAt) + ' ' + String(model.generatedAt.getHours()).padStart(2, '0') + ':' + String(model.generatedAt.getMinutes()).padStart(2, '0');
+
+  var sales = model.sales, purch = model.purch, exp = model.exp;
+  var totalInput = model.inputVATpur + model.inputVATexp;
+  var net = model.vatPosition;
+  var netLabelEn = 'NET VAT PAYABLE / (REFUNDABLE)';
+  var netLabelAr = 'صافي ضريبة القيمة المضافة المستحقة / (القابلة للاسترداد)';
+
+  // ── 1. Taxpayer information ──
+  var taxpayer = '<table class="kv">'
+    + '<tr>' + vrKv('Taxpayer / Company Name', '', esc(tp.nameEn)) + vrKv('VAT Registration No.', '', esc(tp.vat)) + '</tr>'
+    + '<tr>' + vrKv('Commercial Registration No.', '', esc(tp.cr)) + vrKv('Currency', '', 'SAR — Saudi Riyal') + '</tr>'
+    + '<tr>' + vrKv('Tax Period', '', esc(model.periodLabel) + '<br><span class="ar" dir="rtl">' + esc(periodAr) + '</span>') + vrKv('Report Generated', '', esc(genDate)) + '</tr>'
+    + '<tr>' + vrKv('Period From', '', esc(from)) + vrKv('Period To', '', esc(to)) + '</tr>'
+    + '<tr><td class="k">Address</td><td class="v" colspan="3">' + esc(tp.address) + '</td></tr>'
+    + '<tr><td class="k">Data Source</td><td class="v" colspan="3">Daftra accounting records — imported ' + esc(model.fetchTimestamp ? fmtDateShort(model.fetchTimestamp) + ' ' + String(model.fetchTimestamp.getHours()).padStart(2, '0') + ':' + String(model.fetchTimestamp.getMinutes()).padStart(2, '0') : 'in this session') + '</td></tr>'
+    + '</table>';
+
+  // ── 2. VAT return summary ──
+  var salesSum = '<table class="sum">' + vrSumHead('Description', 'البيان')
+    + vrSumRow('Sales as recorded in Daftra — excluding VAT (taxable amount)', 'المبيعات كما هي مسجلة في دفترة — قبل الضريبة (المبلغ الخاضع للضريبة)', sales.salesExVAT)
+    + vrSumRow('Output VAT on sales', 'ضريبة المخرجات على المبيعات', model.outputVAT, 'tot')
+    + vrSumRow('Sales including VAT', 'المبيعات شاملة الضريبة', sales.salesIncVAT)
+    + '</table>';
+  var purSum = '<table class="sum">' + vrSumHead('Description', 'البيان')
+    + vrSumRow('Business purchase invoices — excluding VAT', 'فواتير مشتريات الأعمال — قبل الضريبة', purch.purchExVAT)
+    + vrSumRow('Recoverable input VAT on purchase invoices', 'ضريبة المدخلات القابلة للاسترداد على فواتير المشتريات', model.inputVATpur)
+    + vrSumRow('Expenses — excluding VAT', 'المصروفات — قبل الضريبة', exp.expExVAT)
+    + vrSumRow('Recoverable input VAT on expenses', 'ضريبة المدخلات القابلة للاسترداد على المصروفات', model.inputVATexp)
+    + vrSumRow('Total deductible Input VAT', 'إجمالي ضريبة المدخلات القابلة للخصم', totalInput, 'tot')
+    + '</table>';
+  var settle = '<table class="sum">' + vrSumHead('VAT Settlement', 'تسوية ضريبة القيمة المضافة')
+    + vrSumRow('Total Output VAT', 'إجمالي ضريبة المخرجات', model.outputVAT)
+    + vrSumRow('Less: Deductible Input VAT', 'ناقصاً: ضريبة المدخلات القابلة للخصم', totalInput)
+    + vrSumRow(netLabelEn, netLabelAr, net, 'net')
+    + '</table>'
+    + '<div class="note">Brackets denote a negative amount: a negative net position is VAT refundable / carried as a credit. '
+    + 'Net VAT = Total Output VAT − Deductible Input VAT, exactly as shown on the Financial Dashboard VAT Position panel. Amounts are rounded to 2 decimals from full-precision source values, so a total may differ by 0.01 from the sum of the rounded lines.'
+    + '<span class="ar" dir="rtl" style="display:block;">الأقواس تعني مبلغاً سالباً: الصافي السالب يعني ضريبة قابلة للاسترداد / رصيداً دائناً. صافي الضريبة = إجمالي ضريبة المخرجات − ضريبة المدخلات القابلة للخصم، كما في لوحة مركز ضريبة القيمة المضافة. المبالغ مقربة إلى منزلتين عشريتين من القيم الأصلية الكاملة، لذا قد يختلف الإجمالي بمقدار 0.01 عن مجموع السطور المقربة.</span></div>';
+
+  // ── 3. Reconciliation ──
+  function recon(title, titleAr, rowsHtml) {
+    return vrSub(title, titleAr) + '<table class="sum">'
+      + '<thead><tr><th>Measure</th><th class="lbl-ar ar" dir="rtl">البيان</th><th class="num">Value</th></tr></thead>' + rowsHtml + '</table>';
+  }
+  function rcRow(en, ar, valHtml) { return '<tr><td>' + esc(en) + '</td><td class="lbl-ar ar" dir="rtl">' + esc(ar) + '</td><td class="num">' + valHtml + '</td></tr>'; }
+  var reconHtml = '<div class="keep">'
+    + recon('Sales Reconciliation', 'تسوية المبيعات',
+        rcRow('Number of sales invoices', 'عدد فواتير المبيعات', esc(String(sales.count)))
+      + rcRow('Taxable amount (SAR)', 'المبلغ الخاضع للضريبة (ريال)', esc(vrAmt(sales.salesExVAT)))
+      + rcRow('Output VAT (SAR)', 'ضريبة المخرجات (ريال)', esc(vrAmt(model.outputVAT)))
+      + rcRow('Gross amount incl. VAT (SAR)', 'الإجمالي شامل الضريبة (ريال)', esc(vrAmt(sales.salesIncVAT)))) + '</div>'
+    + '<div class="keep">'
+    + recon('Purchase Reconciliation — Supplier Invoices', 'تسوية المشتريات — فواتير الموردين',
+        rcRow('Number of supplier invoices', 'عدد فواتير الموردين', esc(String(purch.count)))
+      + rcRow('Taxable amount (SAR)', 'المبلغ الخاضع للضريبة (ريال)', esc(vrAmt(purch.purchExVAT)))
+      + rcRow('Input VAT (SAR)', 'ضريبة المدخلات (ريال)', esc(vrAmt(model.inputVATpur)))
+      + rcRow('Gross amount incl. VAT (SAR)', 'الإجمالي شامل الضريبة (ريال)', esc(vrAmt(purch.purchIncVAT)))) + '</div>'
+    + '<div class="keep">'
+    + recon('Purchase Reconciliation — Expenses', 'تسوية المشتريات — المصروفات',
+        rcRow('Number of expense entries', 'عدد قيود المصروفات', esc(String(exp.count)))
+      + rcRow('Taxable amount (SAR)', 'المبلغ الخاضع للضريبة (ريال)', esc(vrAmt(exp.expExVAT)))
+      + rcRow('Input VAT (SAR)', 'ضريبة المدخلات (ريال)', esc(vrAmt(model.inputVATexp)))
+      + rcRow('Gross amount incl. VAT (SAR)', 'الإجمالي شامل الضريبة (ريال)', esc(vrAmt(exp.expGross)))) + '</div>';
+
+  // ── 4. Detailed schedules (same rows as the dashboard's own appendices) ──
+  var salesRows = model.salesRows.map(function(r) {
+    var n = toNum(r.summary_subtotal), g = toNum(r.summary_total);
+    return { date: r.date || '', no: r.no || r.number || r.id || '', party: r.client_business_name || r.client_first_name || '—', net: n, vat: g - n, gross: g };
+  }).sort(vrByDateThenNo);
+  var purRows = model.purRows.map(function(x) {
+    return { date: x.r.date || '', no: x.r.no || x.r.number || x.r.id || '', party: x.r.supplier_business_name || '—',
+      net: x.vat.netAmt, vat: x.vat.vatAmt, gross: x.vat.grossAmt, extra: x.vat.treatment };
+  }).sort(vrByDateThenNo);
+  var expRows = model.expRows.map(function(x) {
+    return { date: x.r.date || '', no: x.r.expense_number || x.r.id || '', party: (x.r.vendor || '—') + (x.r.category ? ' — ' + x.r.category : ''),
+      net: x.vat.netAmt, vat: x.vat.vatAmt, gross: x.vat.grossAmt, extra: x.vat.treatment };
+  }).sort(vrByDateThenNo);
+
+  var baseCols = function(partyEn, partyAr, extra) {
+    var c = [
+      { h: '#', ar: '', w: 4 }, { h: 'Date', ar: 'التاريخ', w: 10.5 }, { h: 'Document No.', ar: 'رقم المستند', w: extra ? 10 : 11 },
+      { h: partyEn, ar: partyAr, w: extra ? 24.5 : 30.5 },
+    ];
+    if (extra) c.push({ h: 'VAT Treatment', ar: 'المعاملة الضريبية', w: 13 });
+    c.push({ h: 'Taxable', ar: 'الخاضع للضريبة', cls: 'num', w: extra ? 12.5 : 15 });
+    c.push({ h: 'VAT', ar: 'الضريبة', cls: 'num', w: extra ? 11.5 : 13 });
+    c.push({ h: 'Total incl. VAT', ar: 'الإجمالي شامل الضريبة', cls: 'num', w: extra ? 14 : 16 });
+    return c;
+  };
+  var schedHtml = ''
+    + '<div class="note" style="margin:0 0 2px;">All amounts in SAR. <span class="ar" dir="rtl">جميع المبالغ بالريال السعودي.</span></div>'
+    + vrSub('4.1  Sales Invoices', 'فواتير المبيعات')
+    + (salesRows.length ? vrScheduleTable(salesRows, { net: sales.salesExVAT, vat: model.outputVAT, gross: sales.salesIncVAT },
+        { cols: baseCols('Client', 'العميل', false), totalLabel: 'Total — ' + salesRows.length + ' sales invoice(s)' })
+      : '<div class="empty">No sales invoices in the selected period. <span class="ar" dir="rtl">لا توجد فواتير مبيعات في الفترة المحددة.</span></div>')
+    + vrSub('4.2  Supplier Invoices (Business Purchases)', 'فواتير الموردين (مشتريات الأعمال)')
+    + (purRows.length ? vrScheduleTable(purRows, { net: purch.purchExVAT, vat: model.inputVATpur, gross: purch.purchIncVAT },
+        { cols: baseCols('Supplier', 'المورد', true), extraCol: true, totalLabel: 'Total — ' + purRows.length + ' supplier invoice(s)' })
+      : '<div class="empty">No business purchase invoices in the selected period. <span class="ar" dir="rtl">لا توجد فواتير مشتريات تجارية في الفترة المحددة.</span></div>')
+    + vrSub('4.3  Expenses', 'المصروفات')
+    + (expRows.length ? vrScheduleTable(expRows, { net: exp.expExVAT, vat: model.inputVATexp, gross: exp.expGross },
+        { cols: baseCols('Payee — Category', 'المستفيد — الفئة', true), extraCol: true, totalLabel: 'Total — ' + expRows.length + ' expense entr' + (expRows.length === 1 ? 'y' : 'ies') })
+      : '<div class="empty">No expenses in the selected period. <span class="ar" dir="rtl">لا توجد مصروفات في الفترة المحددة.</span></div>')
+    + '<div class="note">Schedule totals are the dashboard\'s own period totals. Individual rows are displayed rounded to 2 decimal places; '
+    + 'all calculations use full source precision before final rounding, so a column of displayed rows may differ from its total by a few halalas.'
+    + '<span class="ar" dir="rtl" style="display:block;">مجاميع الجداول هي مجاميع الفترة في لوحة المعلومات. تُعرض الصفوف مقربة إلى منزلتين عشريتين، وتُجرى الحسابات بالدقة الكاملة قبل التقريب النهائي، لذا قد يختلف مجموع الصفوف المعروضة عن الإجمالي بفروق طفيفة.</span></div>';
+
+  // ── 5. Review / reconciliation notes — only what the dashboard already tracks ──
+  var notes = [];
+  function addNote(en, ar) { notes.push('<li>' + esc(en) + '<span class="ar" dir="rtl">' + esc(ar) + '</span></li>'); }
+  addNote('Report status: ' + model.status.label + '.', 'حالة التقرير: ' + model.status.labelAr + '.');
+  if (model.zeroVatPurCount > 0) addNote(model.zeroVatPurCount + ' supplier invoice(s) with no VAT (taxable amount SAR ' + vrAmt(model.zeroVatPurTotal) + ') — included in the totals above; marked "No VAT" in schedule 4.2.',
+    model.zeroVatPurCount + ' فاتورة مورد بدون ضريبة (المبلغ الخاضع ' + vrAmt(model.zeroVatPurTotal) + ' ريال) — مشمولة في المجاميع أعلاه ومعلّمة "No VAT" في الجدول 4.2.');
+  if (model.zeroVatExpCount > 0) addNote(model.zeroVatExpCount + ' expense entr' + (model.zeroVatExpCount === 1 ? 'y' : 'ies') + ' with no VAT (amount SAR ' + vrAmt(model.zeroVatExpTotal) + ') — included in the totals above; marked "No VAT" in schedule 4.3.',
+    model.zeroVatExpCount + ' قيد مصروفات بدون ضريبة (المبلغ ' + vrAmt(model.zeroVatExpTotal) + ' ريال) — مشمولة في المجاميع أعلاه ومعلّمة "No VAT" في الجدول 4.3.');
+  if (model.malformedCount > 0) addNote(model.malformedCount + ' record(s) have unclear or malformed VAT data and need manual review (shown as "Unknown / Manual review needed").',
+    model.malformedCount + ' سجل ببيانات ضريبة غير واضحة أو غير صالحة تحتاج مراجعة يدوية.');
+  var drafts = (model.draftsInv || 0) + (model.draftsPur || 0) + (model.draftsExp || 0);
+  if (drafts > 0) addNote(drafts + ' draft record(s) in Daftra are excluded from all totals (sales ' + (model.draftsInv || 0) + ', purchase invoices ' + (model.draftsPur || 0) + ', expenses ' + (model.draftsExp || 0) + ').',
+    'تم استبعاد ' + drafts + ' سجل مسودة في دفترة من جميع المجاميع (مبيعات ' + (model.draftsInv || 0) + '، مشتريات ' + (model.draftsPur || 0) + '، مصروفات ' + (model.draftsExp || 0) + ').');
+  if (model.missingDateTotal > 0) addNote(model.missingDateTotal + ' record(s) excluded because the date is missing or unreadable.',
+    'تم استبعاد ' + model.missingDateTotal + ' سجل لعدم وجود تاريخ أو لتعذر قراءته.');
+  if (model.personalCount > 0) addNote(model.personalCount + ' Personal Transfer record(s) (SAR ' + vrAmt(model.personalTotalExVAT) + ' excl. VAT / SAR ' + vrAmt(model.personalTotalIncVAT) + ' incl. VAT) are excluded from all business and VAT figures.',
+    'تم استبعاد ' + model.personalCount + ' تحويل شخصي (' + vrAmt(model.personalTotalExVAT) + ' ريال قبل الضريبة / ' + vrAmt(model.personalTotalIncVAT) + ' ريال شامل الضريبة) من جميع أرقام الأعمال والضريبة.');
+  (model.warningsForExport || []).forEach(function(w) {
+    if (/pagination incomplete/i.test(w)) addNote('Data completeness: ' + w, 'اكتمال البيانات: لم يتم تحميل كل الصفحات من دفترة — قد تكون المجاميع أقل من الفعلي.');
+  });
+  addNote('Basis of preparation: sales, purchases and expenses are reported as recorded in Daftra. The source data does not classify transactions as standard-rated, zero-rated, exempt, imports or adjustments, so those categories are not presented separately.',
+    'أساس الإعداد: المبيعات والمشتريات والمصروفات معروضة كما هي مسجلة في دفترة. لا تصنّف بيانات المصدر المعاملات إلى خاضعة للنسبة الأساسية أو صفرية أو معفاة أو واردات أو تسويات، لذا لا تُعرض هذه الفئات منفصلة.');
+
+  var declaration = '<div class="keep"><div class="decl">'
+    + 'This report was prepared from accounting records imported from Daftra for the stated tax period and is intended as a supporting reconciliation document for VAT return preparation/submission.'
+    + '<span class="ar" dir="rtl">أُعد هذا التقرير من السجلات المحاسبية المستوردة من دفترة عن الفترة الضريبية المذكورة، وهو مخصص كمستند تسوية داعم لإعداد/تقديم إقرار ضريبة القيمة المضافة.</span>'
+    + '</div>'
+    + '<div class="sig"><div>Prepared by / أعده</div><div>Reviewed by / راجعه</div><div>Date / التاريخ</div></div></div>';
+
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><base href="' + esc(location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '')) + '">'
+    + '<title>' + esc(vatExportFilename(model, 'pdf', 'zatca')) + '</title>'
+    + '<style>' + vrStyles(model) + '</style></head><body>'
+    + '<div class="hdr"><div><div class="logo"><img src="logo.png" alt=""></div><div class="co">VISTA UNITED CO.</div><div class="co-sub">Brand Experience Studio</div></div>'
+    + '<div style="text-align:right;font-size:8pt;color:#333;">Report date: ' + esc(fmtDateShort(model.generatedAt)) + '</div></div>'
+    + '<div class="title"><div class="en">VAT RETURN SUPPORTING REPORT</div><span class="ar" dir="rtl" style="display:block;font-size:14pt;font-weight:700;text-align:center;margin-top:2px;">تقرير داعم لإقرار ضريبة القيمة المضافة</span>'
+    + '<div class="prep">Prepared for ZATCA Submission &nbsp;|&nbsp; <span class="ar" dir="rtl">مُعد لدعم التقديم إلى هيئة الزكاة والضريبة والجمارك</span></div>'
+    + '<span class="status">' + esc(model.status.label) + ' &nbsp;/&nbsp; <span class="ar" dir="rtl">' + esc(model.status.labelAr) + '</span></span></div>'
+    + vrSec(1, 'Taxpayer Information', 'بيانات المكلّف') + taxpayer
+    + vrSec(2, 'VAT Return Summary', 'ملخص إقرار ضريبة القيمة المضافة')
+    + '<div class="keep">' + vrSub('2.1  VAT on Sales', 'ضريبة المخرجات / المبيعات') + salesSum + '</div>'
+    + '<div class="keep">' + vrSub('2.2  VAT on Purchases', 'ضريبة المدخلات / المشتريات') + purSum + '</div>'
+    + '<div class="keep">' + vrSub('2.3  VAT Settlement Summary', 'ملخص تسوية ضريبة القيمة المضافة') + settle + '</div>'
+    + vrSec(3, 'Reconciliation', 'التسوية') + reconHtml
+    + vrSec(4, 'Detailed Transaction Schedule', 'الجدول التفصيلي للمعاملات') + schedHtml
+    + vrSec(5, 'Review / Reconciliation Notes', 'ملاحظات المراجعة والتسوية') + '<ul class="rn">' + notes.join('') + '</ul>'
+    + vrSec(6, 'Declaration', 'إقرار') + declaration
+    + '</body></html>';
+}
+
+// Native-text PDF: the HTML above is printed by the local server's headless
+// Edge/Chrome (same renderer as the Sarawat quotation PDF) and downloaded.
+// If the local PDF service is unavailable, the previous browser print-window
+// export is still offered as a fallback.
+async function exportVatPdf() {
   var model = exportVatPreflight();
   if (!model) return;
+  try {
+    var html = buildVatReportHtml(model);
+    var r = await fetch('/api/sarawat/pdf', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: html }),
+    });
+    if (!r.ok) {
+      var j = await r.json().catch(function() { return null; });
+      throw new Error((j && j.error) || ('HTTP ' + r.status));
+    }
+    var blob = await r.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = vatExportFilename(model, 'pdf', 'zatca');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+  } catch (e) {
+    console.error('[VAT report] native PDF failed:', e);
+    if (confirm('The native-text PDF could not be produced (' + (e.message || e) + ').\n\nOpen the older print-window version instead?')) {
+      exportVatPdfLegacyPrint(model);
+    }
+  }
+}
 
+// Previous export path — unchanged apart from taking the already-built model.
+function exportVatPdfLegacyPrint(model) {
   var printWin = window.open('', '_blank', 'width=900,height=1000');
   if (!printWin) {
     alert('The print window was blocked by your browser.\n\nPlease allow popups for this page and click the export button again.');
